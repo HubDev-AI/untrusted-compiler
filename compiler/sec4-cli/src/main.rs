@@ -13,6 +13,7 @@ use sec4_core::{
 };
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -7641,6 +7642,29 @@ struct LasmClusterState {
     next_port: u16,
 }
 
+struct ScopedEnvVarOverride {
+    name: &'static str,
+    previous: Option<OsString>,
+}
+
+impl ScopedEnvVarOverride {
+    fn set_u64(name: &'static str, value: u64) -> Self {
+        let previous = std::env::var_os(name);
+        std::env::set_var(name, value.to_string());
+        Self { name, previous }
+    }
+}
+
+impl Drop for ScopedEnvVarOverride {
+    fn drop(&mut self) {
+        if let Some(value) = self.previous.take() {
+            std::env::set_var(self.name, value);
+        } else {
+            std::env::remove_var(self.name);
+        }
+    }
+}
+
 fn compute_lasm_cluster_base_port(listen_port: u16, max_instances: usize) -> Result<u16, String> {
     let base_port = u32::from(listen_port) + 100;
     let needed_span = u32::try_from(max_instances.saturating_sub(1))
@@ -10797,29 +10821,30 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    let mut scoped_db_timeout_overrides = Vec::with_capacity(4);
     if let Some(timeout_ms) = db_postgres_statement_timeout_ms {
-        std::env::set_var(
+        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
-            timeout_ms.to_string(),
-        );
+            timeout_ms,
+        ));
     }
     if let Some(timeout_ms) = db_postgres_lock_timeout_ms {
-        std::env::set_var(
+        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS",
-            timeout_ms.to_string(),
-        );
+            timeout_ms,
+        ));
     }
     if let Some(timeout_ms) = db_postgres_connect_timeout_ms {
-        std::env::set_var(
+        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS",
-            timeout_ms.to_string(),
-        );
+            timeout_ms,
+        ));
     }
     if let Some(timeout_ms) = db_sqlite_busy_timeout_ms {
-        std::env::set_var(
+        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
-            timeout_ms.to_string(),
-        );
+            timeout_ms,
+        ));
     }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
