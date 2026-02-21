@@ -11,6 +11,10 @@
   },
   "proxy": {
     "pass": true,
+    "run": {
+      "clusterRelayDispatchSaturationShortCircuitTotal": 18,
+      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1
+    },
     "observed": {
       "requestsPerSec": 76000.0,
       "p99": "7.20ms",
@@ -19,6 +23,10 @@
   },
   "fixed": {
     "pass": true,
+    "run": {
+      "clusterRelayDispatchSaturationShortCircuitTotal": null,
+      "clusterRelayDispatchSaturationShortCircuitPerSec": null
+    },
     "observed": {
       "requestsPerSec": 121000.0,
       "p99": "2.90ms",
@@ -31,6 +39,11 @@
     "requestsPerSecGainPctVsProxy": 59.21,
     "p99ProxyMs": 7.2,
     "p99FixedMs": 2.9,
-    "peakRssDeltaKb": -1200
+    "peakRssDeltaKb": -1200,
+    "relayDispatchShortCircuitTotalProxy": 18,
+    "relayDispatchShortCircuitTotalFixed": null,
+    "relayDispatchShortCircuitPerSecProxy": 3.1,
+    "relayDispatchShortCircuitPerSecFixed": null,
+    "relayDispatchShortCircuitTotalDelta": null
   }
 }

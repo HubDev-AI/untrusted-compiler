@@ -37,7 +37,9 @@ cat >"${matrix}" <<'JSON'
       "clusterRelayWorkersResolved": 2,
       "clusterAcceptWorkersResolved": 2,
       "clusterRelayAcceptBatchMaxResolved": 64,
-      "clusterRelayPumpBatchMaxResolved": 256
+      "clusterRelayPumpBatchMaxResolved": 256,
+      "clusterRelayDispatchSaturationShortCircuitTotal": 18,
+      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1
     },
     {
       "saturationBoostStep": 6,
@@ -70,7 +72,9 @@ cat >"${analysis}" <<'JSON'
       "clusterRelayWorkersResolved": 2,
       "clusterAcceptWorkersResolved": 2,
       "clusterRelayAcceptBatchMaxResolved": 64,
-      "clusterRelayPumpBatchMaxResolved": 256
+      "clusterRelayPumpBatchMaxResolved": 256,
+      "clusterRelayDispatchSaturationShortCircuitTotal": 18,
+      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1
     },
     {
       "saturationBoostStep": 2,
@@ -102,7 +106,9 @@ cat >"${verify}" <<'JSON'
     "clusterRelayAcceptBatchMaxResolved": 64,
     "clusterRelayPumpBatchMaxResolved": 256,
     "clusterRelayQueueCapacityResolved": 2048,
-    "clusterRelayQueueShardCapacityResolved": 1024
+    "clusterRelayQueueShardCapacityResolved": 1024,
+    "clusterRelayDispatchSaturationShortCircuitTotal": 22,
+    "clusterRelayDispatchSaturationShortCircuitPerSec": 2.8
   },
   "observed": {
     "requests": 1280000,
@@ -132,7 +138,7 @@ if ! grep -q '^- Relay pump batch max: 256$' "${out}"; then
   echo "summary missing probe profile relay pump batch line" >&2
   exit 1
 fi
-if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 | 256 |' "${out}"; then
+if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 | 256 | 18 | 3.1 |' "${out}"; then
   echo "summary missing ranked run row for recommended step" >&2
   exit 1
 fi
@@ -150,6 +156,14 @@ if ! grep -q '^- Relay workers (resolved): 2$' "${out}"; then
 fi
 if ! grep -q '^- Relay pump batch max (resolved): 256$' "${out}"; then
   echo "summary missing verification relay pump batch line" >&2
+  exit 1
+fi
+if ! grep -q '^- Relay dispatch short-circuit total (resolved): 22$' "${out}"; then
+  echo "summary missing verification short-circuit total line" >&2
+  exit 1
+fi
+if ! grep -q '^- Relay dispatch short-circuit per sec (resolved): 2.8$' "${out}"; then
+  echo "summary missing verification short-circuit per-sec line" >&2
   exit 1
 fi
 

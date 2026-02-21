@@ -386,6 +386,8 @@ for step in "${boost_steps[@]}"; do
       --argjson clusterRelayPumpBatchMaxResolved "$(jq '.run.clusterRelayPumpBatchMaxResolved // null' "${step_out}")" \
       --argjson clusterRelayQueueCapacityResolved "$(jq '.run.clusterRelayQueueCapacityResolved // null' "${step_out}")" \
       --argjson clusterRelayQueueShardCapacityResolved "$(jq '.run.clusterRelayQueueShardCapacityResolved // null' "${step_out}")" \
+      --argjson clusterRelayDispatchSaturationShortCircuitTotal "$(jq '.run.clusterRelayDispatchSaturationShortCircuitTotal // null' "${step_out}")" \
+      --argjson clusterRelayDispatchSaturationShortCircuitPerSec "$(jq '.run.clusterRelayDispatchSaturationShortCircuitPerSec // null' "${step_out}")" \
       '{
         saturationBoostStep: $saturationBoostStep,
         summaryFile: $summaryFile,
@@ -399,7 +401,9 @@ for step in "${boost_steps[@]}"; do
         clusterRelayAcceptBatchMaxResolved: $clusterRelayAcceptBatchMaxResolved,
         clusterRelayPumpBatchMaxResolved: $clusterRelayPumpBatchMaxResolved,
         clusterRelayQueueCapacityResolved: $clusterRelayQueueCapacityResolved,
-        clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved
+        clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved,
+        clusterRelayDispatchSaturationShortCircuitTotal: $clusterRelayDispatchSaturationShortCircuitTotal,
+        clusterRelayDispatchSaturationShortCircuitPerSec: $clusterRelayDispatchSaturationShortCircuitPerSec
       }'
     )"
     runs_json="$(jq --argjson item "${run_item}" '. + [$item]' <<<"${runs_json}")"

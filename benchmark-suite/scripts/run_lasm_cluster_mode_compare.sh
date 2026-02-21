@@ -416,7 +416,18 @@ jq -n \
       ),
       p99ProxyMs: p99_to_ms($proxy.observed.p99 // ""),
       p99FixedMs: p99_to_ms($fixed.observed.p99 // ""),
-      peakRssDeltaKb: (($fixed.observed.peakRssKb // 0) - ($proxy.observed.peakRssKb // 0))
+      peakRssDeltaKb: (($fixed.observed.peakRssKb // 0) - ($proxy.observed.peakRssKb // 0)),
+      relayDispatchShortCircuitTotalProxy: ($proxy.run.clusterRelayDispatchSaturationShortCircuitTotal // null),
+      relayDispatchShortCircuitTotalFixed: ($fixed.run.clusterRelayDispatchSaturationShortCircuitTotal // null),
+      relayDispatchShortCircuitPerSecProxy: ($proxy.run.clusterRelayDispatchSaturationShortCircuitPerSec // null),
+      relayDispatchShortCircuitPerSecFixed: ($fixed.run.clusterRelayDispatchSaturationShortCircuitPerSec // null),
+      relayDispatchShortCircuitTotalDelta: (
+        if ($proxy.run.clusterRelayDispatchSaturationShortCircuitTotal // null) == null
+           or ($fixed.run.clusterRelayDispatchSaturationShortCircuitTotal // null) == null
+        then null
+        else (($fixed.run.clusterRelayDispatchSaturationShortCircuitTotal // 0) - ($proxy.run.clusterRelayDispatchSaturationShortCircuitTotal // 0))
+        end
+      )
     }
   }
   ' > "${out_path}"
