@@ -1202,5 +1202,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1230-m39-lasm-cluster-cached-selected-worker-port-count.md`
 - `1231-m39-lasm-cluster-worker-port-snapshot-replace-handoff.md`
 - `1232-m39-lasm-cluster-connect-warning-port-and-reservation-branch-simplification.md`
+- `1233-m39-lasm-cluster-trivial-worker-count-selection-lookup-bypass.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -9325,13 +9325,20 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             || (!selection_lookup_is_identity
                                 && selection_lookup.len() != worker_port_count)
                         {
-                            (selection_has_healthy_backends, selection_lookup_is_identity) =
-                                rebuild_lasm_cluster_backend_selection_lookup(
-                                    worker_port_count,
-                                    unhealthy_ports_until_by_index.as_slice(),
-                                    unhealthy_port_count,
-                                    &mut selection_lookup,
-                                );
+                            if worker_port_count <= 1 {
+                                selection_lookup.clear();
+                                selection_has_healthy_backends =
+                                    worker_port_count == 1 && unhealthy_port_count == 0;
+                                selection_lookup_is_identity = true;
+                            } else {
+                                (selection_has_healthy_backends, selection_lookup_is_identity) =
+                                    rebuild_lasm_cluster_backend_selection_lookup(
+                                        worker_port_count,
+                                        unhealthy_ports_until_by_index.as_slice(),
+                                        unhealthy_port_count,
+                                        &mut selection_lookup,
+                                    );
+                            }
                             selection_lookup_dirty = false;
                         }
                     }

@@ -1083,6 +1083,10 @@ Post-alpha track acceptance anchors:
      - relay worker connect-failure warning now uses already-selected `backend_addr.port()` instead of re-indexing selected worker-port snapshots,
      - relay reservation refill in multi-backend path now assigns `base % worker_port_count` directly (removing an unreachable `worker_port_count <= 1` branch).
      - documented in `docs/book/1232-m39-lasm-cluster-connect-warning-port-and-reservation-branch-simplification.md`.
+   - [x] Added trivial-worker-count selection-lookup bypass in relay loop:
+     - relay loop now skips `rebuild_lasm_cluster_backend_selection_lookup(...)` when selected worker-port count is `0` or `1`,
+     - for those trivial counts, it sets deterministic healthy/identity flags directly and clears lookup storage, avoiding unnecessary lookup rebuild calls in the hot path.
+     - documented in `docs/book/1233-m39-lasm-cluster-trivial-worker-count-selection-lookup-bypass.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
