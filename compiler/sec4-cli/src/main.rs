@@ -12512,6 +12512,13 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
+            let postgres_statement_timeout_ms =
+                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS");
+            let postgres_lock_timeout_ms =
+                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS");
+            let postgres_connect_timeout_ms =
+                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS");
+            let sqlite_busy_timeout_ms = parse_lasm_env_u64("SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS");
             let affected_rows_total = records
                 .iter()
                 .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
@@ -12525,6 +12532,12 @@ fn apply_lasm_dynamic_response_materialization(
                     "adapter": adapter,
                     "txHandleCount": tx_handle_count,
                     "txHandleCapacity": tx_handle_capacity,
+                    "dbTimeoutsMs": {
+                        "postgresStatement": postgres_statement_timeout_ms,
+                        "postgresLock": postgres_lock_timeout_ms,
+                        "postgresConnect": postgres_connect_timeout_ms,
+                        "sqliteBusy": sqlite_busy_timeout_ms,
+                    },
                     "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),
                 }),
             );
@@ -12712,6 +12725,15 @@ fn parse_lasm_env_bool(name: &str) -> Option<bool> {
         return Some(false);
     }
     None
+}
+
+fn parse_lasm_env_u64(name: &str) -> Option<u64> {
+    let value = std::env::var(name).ok()?;
+    value
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
 }
 
 fn lasm_effective_csrf_enabled(policy_enabled: bool, policy_mode: &str) -> bool {

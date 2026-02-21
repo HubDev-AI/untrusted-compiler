@@ -16499,6 +16499,7 @@ fn main() effects { net } -> Int {
         list_response.contains("\"count\":1")
             && list_response.contains("\"txHandleCount\":1")
             && list_response.contains("\"txHandleCapacity\":1")
+            && list_response.contains("\"dbTimeoutsMs\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("alpha")
             && !list_response.contains("beta"),
