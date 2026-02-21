@@ -8958,6 +8958,7 @@ fn run_lasm_cluster_accept_loop(
     } else {
         Vec::new()
     };
+    let relay_has_next_live_sender_lookup = !relay_next_live_sender_lookup.is_empty();
     let mut relay_live_sender_count = relay_sender_count;
     let mut relay_all_senders_live = relay_sender_count > 1;
     let mut relay_single_live_sender_index: Option<usize> = None;
@@ -9240,12 +9241,13 @@ fn run_lasm_cluster_accept_loop(
                                         (stream, false)
                                     }
                                 };
-                                let fallback_next_live_lookup =
-                                    if relay_next_live_sender_lookup.is_empty() {
-                                        None
-                                    } else {
-                                        Some(relay_next_live_sender_lookup.as_slice())
-                                    };
+                                let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
+                                    && relay_live_sender_count > 2
+                                {
+                                    Some(relay_next_live_sender_lookup.as_slice())
+                                } else {
+                                    None
+                                };
                                 let dispatch_result = if !relay_all_senders_live
                                     && relay_live_sender_count == 2
                                 {
@@ -9355,7 +9357,7 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_dual_live_sender_indices,
                                     );
                                     if relay_live_sender_count > 2
-                                        && !relay_next_live_sender_lookup.is_empty()
+                                        && relay_has_next_live_sender_lookup
                                     {
                                         refresh_lasm_cluster_next_live_sender_lookup(
                                             relay_sender_live.as_slice(),
