@@ -261,18 +261,18 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     *relay_live_sender_count,
                 );
             }
-            let second_start_index = lasm_cluster_next_index_wrapped(first_live_index, sender_count);
-            let second_live_index = if relay_sender_live[second_start_index]
-                == LASM_CLUSTER_RELAY_SENDER_LIVE
-            {
-                Some(second_start_index)
-            } else {
-                resolve_lasm_cluster_next_live_sender_index(
-                    relay_sender_live,
-                    relay_next_live_sender_lookup,
-                    second_start_index,
-                )
-            };
+            let second_start_index =
+                lasm_cluster_next_index_wrapped(first_live_index, sender_count);
+            let second_live_index =
+                if relay_sender_live[second_start_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                    Some(second_start_index)
+                } else {
+                    resolve_lasm_cluster_next_live_sender_index(
+                        relay_sender_live,
+                        relay_next_live_sender_lookup,
+                        second_start_index,
+                    )
+                };
             if let Some(second_live_index) = second_live_index {
                 return dispatch_lasm_cluster_relay_stream_fallback_single_live(
                     client_stream,

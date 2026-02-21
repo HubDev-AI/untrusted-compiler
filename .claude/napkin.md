@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-21 | self | I accidentally triggered the web tool again during a local-only LASM module-extraction loop. | Keep implementation slices strictly on local tools (`functions.exec_command`, `functions.apply_patch`) unless external web research is explicitly required. |
+| 2026-02-21 | self | I started this continuation with git branch/status checks before the mandatory standalone `.claude/napkin.md` read again. | Treat continuation start as a strict hard gate: run `cat .claude/napkin.md` as the first command, then run any git/status/search commands. |
 | 2026-02-21 | self | After merging the previous PR, I continued the next topology-extraction slice on local `dev` again before creating a `codex/*` branch. | Immediately after every merge, run `git branch --show-current`; if it is `dev`, create the next `codex/*` branch before opening/editing any file. |
 | 2026-02-21 | self | While extracting shared fallback send-attempt logic, I initially updated `scan_live_target_dynamic` on every non-dispatch attempt (including `Full`), which changed degraded-scan behavior. | When refactoring shared attempt helpers, gate dynamic live-target updates on actual live-count changes only (`before != after`) to preserve disconnect-only semantics. |
 | 2026-02-21 | self | I used a double-quoted `gh pr create --body` string containing backticks and zsh treated parts as command substitution again (`= not found` noise). | For PR bodies with backticks, write body text to a temp file or single-quoted heredoc and pass `--body-file` to `gh pr create`. |

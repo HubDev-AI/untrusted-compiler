@@ -1407,6 +1407,14 @@ Post-alpha track acceptance anchors:
       - `LasmClusterRelayDispatchError` is now defined in `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
       - `main.rs` and relay send helpers import the enum through module boundaries, reducing fallback type ownership in the CLI entry file.
       - documented in `docs/book/1311-m39-lasm-fallback-error-enum-module-ownership.md`.
+   - [x] Extracted accept-dispatch helpers into dedicated module:
+      - moved cluster unavailable response helpers, saturation/dispatch/active counter flush helpers, and `handle_lasm_cluster_accept_dispatch_error(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`,
+      - accept-loop and relay-worker call sites now import this helper surface through module boundaries without changing saturation/unavailable response semantics.
+      - documented in `docs/book/1312-m39-lasm-accept-dispatch-module-extraction.md`.
+   - [x] Extracted cluster status snapshot/json writer into dedicated module:
+      - moved `LasmClusterStatusSnapshot` and `write_lasm_cluster_status_json(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_json.rs`,
+      - status-writer thread now depends on a dedicated status-json module while preserving unchanged-snapshot skip behavior and deterministic payload shape.
+      - documented in `docs/book/1313-m39-lasm-cluster-status-json-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
