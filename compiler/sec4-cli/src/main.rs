@@ -135,6 +135,8 @@ enum Commands {
         #[arg(long)]
         cluster_relay_accept_batch_max: Option<usize>,
         #[arg(long)]
+        cluster_relay_pump_batch_max: Option<usize>,
+        #[arg(long)]
         cluster_backend_connect_timeout_ms: Option<u64>,
         #[arg(long)]
         cluster_backend_connect_cooldown_ms: Option<u64>,
@@ -510,6 +512,7 @@ fn main() {
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_relay_pump_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json,
@@ -546,6 +549,7 @@ fn main() {
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_relay_pump_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json.as_deref(),
@@ -7075,6 +7079,7 @@ fn cmd_run(
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: Option<usize>,
+    cluster_relay_pump_batch_max: Option<usize>,
     cluster_backend_connect_timeout_ms: Option<u64>,
     cluster_backend_connect_cooldown_ms: Option<u64>,
     cluster_status_json: Option<&Path>,
@@ -7132,6 +7137,10 @@ fn cmd_run(
     }
     if cluster_relay_accept_batch_max == Some(0) {
         eprintln!("run failed: --cluster-relay-accept-batch-max must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_pump_batch_max == Some(0) {
+        eprintln!("run failed: --cluster-relay-pump-batch-max must be >= 1");
         return Err(2);
     }
     if cluster_backend_connect_timeout_ms == Some(0) {
@@ -7313,6 +7322,12 @@ fn cmd_run(
         );
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_relay_pump_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-pump-batch-max is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_backend_connect_timeout_ms.is_some() {
         eprintln!(
             "run failed: --cluster-backend-connect-timeout-ms is only supported with --backend lasm"
@@ -7350,6 +7365,12 @@ fn cmd_run(
     if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_accept_batch_max.is_some() {
         eprintln!(
             "run failed: --cluster-relay-accept-batch-max requires cluster mode (--instances > 1)"
+        );
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_pump_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-pump-batch-max requires cluster mode (--instances > 1)"
         );
         return Err(2);
     }
@@ -7427,6 +7448,7 @@ fn cmd_run(
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_relay_pump_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json,
@@ -7776,6 +7798,7 @@ struct LasmClusterConfig {
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: usize,
+    cluster_relay_pump_batch_max: usize,
     cluster_backend_connect_timeout_ms: u64,
     cluster_backend_connect_cooldown_ms: u64,
     cluster_status_json: Option<PathBuf>,
@@ -8149,6 +8172,10 @@ fn lasm_cluster_relay_accept_batch_max(config: &LasmClusterConfig) -> usize {
     config.cluster_relay_accept_batch_max.max(1)
 }
 
+fn lasm_cluster_relay_pump_batch_max(config: &LasmClusterConfig) -> usize {
+    config.cluster_relay_pump_batch_max.max(1)
+}
+
 enum LasmClusterUnavailableReason {
     NoHealthyWorkers,
     WorkerUnavailable,
@@ -8204,6 +8231,7 @@ struct LasmClusterStatusSnapshot {
     relay_saturation_events_total: u64,
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
+    relay_pump_batch_max: usize,
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
@@ -8233,6 +8261,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_saturation_events_total == other.relay_saturation_events_total
             && self.relay_saturation_events_per_sec == other.relay_saturation_events_per_sec
             && self.relay_accept_batch_max == other.relay_accept_batch_max
+            && self.relay_pump_batch_max == other.relay_pump_batch_max
             && self.relay_accept_workers == other.relay_accept_workers
             && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
             && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
@@ -8267,6 +8296,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_saturation_events_total: u64,
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
+    relay_pump_batch_max: usize,
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
@@ -8330,6 +8360,7 @@ fn write_lasm_cluster_status_json(
         relay_saturation_events_total: snapshot.relay_saturation_events_total,
         relay_saturation_events_per_sec: snapshot.relay_saturation_events_per_sec,
         relay_accept_batch_max: snapshot.relay_accept_batch_max,
+        relay_pump_batch_max: snapshot.relay_pump_batch_max,
         relay_accept_workers: snapshot.relay_accept_workers,
         relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
         relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
@@ -9168,6 +9199,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
+    let relay_pump_batch_max = lasm_cluster_relay_pump_batch_max(shared_config.as_ref());
     let relay_queue_shard_capacity = relay_queue_capacity
         .saturating_add(relay_worker_count.saturating_sub(1))
         / relay_worker_count.max(1);
@@ -9197,14 +9229,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_backend_connect_timeout = relay_backend_connect_timeout;
         let relay_backend_connect_cooldown = relay_backend_connect_cooldown;
         let relay_accept_batch_max = relay_accept_batch_max;
+        let relay_pump_batch_max = relay_pump_batch_max;
         relay_handles.push(std::thread::spawn(move || {
             let relay_buffer_pool_max = relay_accept_batch_max.saturating_mul(4).max(64);
-            let relay_pump_batch_max = relay_accept_batch_max
-                .saturating_mul(LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER)
-                .clamp(
-                    LASM_CLUSTER_RELAY_PUMP_BATCH_MIN,
-                    LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
-                );
             let mut relay_connections: Vec<LasmClusterRelayPump> =
                 Vec::with_capacity(relay_accept_batch_max.max(1));
             let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> =
@@ -9733,6 +9760,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     relay_saturation_events_total: saturation_total,
                     relay_saturation_events_per_sec: saturation_per_sec,
                     relay_accept_batch_max: status_config.cluster_relay_accept_batch_max,
+                    relay_pump_batch_max: status_config.cluster_relay_pump_batch_max,
                     relay_accept_workers: status_relay_accept_workers,
                     relay_backend_connect_timeout_ms: status_config
                         .cluster_backend_connect_timeout_ms,
@@ -10093,6 +10121,7 @@ fn cmd_run_lasm_backend(
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: Option<usize>,
+    cluster_relay_pump_batch_max: Option<usize>,
     cluster_backend_connect_timeout_ms_override: Option<u64>,
     cluster_backend_connect_cooldown_ms_override: Option<u64>,
     cluster_status_json: Option<&Path>,
@@ -10294,6 +10323,10 @@ fn cmd_run_lasm_backend(
     );
     let effective_cluster_relay_accept_batch_max =
         resolve_lasm_cluster_relay_accept_batch_max(cluster_relay_accept_batch_max);
+    let effective_cluster_relay_pump_batch_max = resolve_lasm_cluster_relay_pump_batch_max(
+        cluster_relay_pump_batch_max,
+        effective_cluster_relay_accept_batch_max,
+    );
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
@@ -10330,6 +10363,12 @@ fn cmd_run_lasm_backend(
     if fixed_cluster_reuse_port_mode && cluster_relay_accept_batch_max.is_some() {
         eprintln!(
             "run failed: --cluster-relay-accept-batch-max is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode && cluster_relay_pump_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-pump-batch-max is not used in fixed reuse-port cluster mode"
         );
         return Err(2);
     }
@@ -10377,6 +10416,7 @@ fn cmd_run_lasm_backend(
             cluster_relay_queue: None,
             cluster_accept_workers: None,
             cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
+            cluster_relay_pump_batch_max: effective_cluster_relay_pump_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: None,
@@ -10416,6 +10456,7 @@ fn cmd_run_lasm_backend(
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
+            cluster_relay_pump_batch_max: effective_cluster_relay_pump_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: cluster_status_json.map(Path::to_path_buf),
@@ -11349,6 +11390,34 @@ fn resolve_lasm_cluster_relay_accept_batch_max(explicit_override: Option<usize>)
         .ok()
         .filter(|parsed| *parsed > 0)
         .map(|parsed| parsed.clamp(1, 4_096))
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_cluster_relay_pump_batch_max(
+    explicit_override: Option<usize>,
+    relay_accept_batch_max: usize,
+) -> usize {
+    let default_value = relay_accept_batch_max
+        .saturating_mul(LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER)
+        .clamp(
+            LASM_CLUSTER_RELAY_PUMP_BATCH_MIN,
+            LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
+        );
+    if let Some(value) = explicit_override {
+        return value.clamp(1, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX);
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_RELAY_PUMP_BATCH_MAX") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(1, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX))
         .unwrap_or(default_value)
 }
 

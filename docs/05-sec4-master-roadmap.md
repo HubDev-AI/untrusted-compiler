@@ -1146,6 +1146,11 @@ Post-alpha track acceptance anchors:
      - when active relay connections exceed that threshold, workers switch to a cursor-based capped pump budget to bound per-loop scan cost and reduce O(n) hot-loop pressure under high keep-alive fan-in,
      - short capacity probes (`20s`, `8t/256c`, `/health`) remained stable in the current range (`~75.8k req/s`, repeat `~75.4k req/s`) while keeping deterministic pass behavior,
      - documented in `docs/book/1247-m39-lasm-cluster-relay-hybrid-pump-scheduling.md`.
+   - [x] Added explicit relay-pump batch override control for LASM cluster tuning:
+     - `sec4 run --backend lasm` now accepts `--cluster-relay-pump-batch-max <n>` (cluster-proxy mode only) with deterministic LASM-only / lower-bound / cluster-mode / fixed-reuse-port guard diagnostics,
+     - runtime status telemetry now reports `relayPumpBatchMax` so resolved runtime behavior is visible in status snapshots,
+     - capacity probe script now supports `--cluster-relay-pump-batch-max` (and env counterpart), includes requested/resolved pump-batch values in summary artifacts, and keeps dry-run contract visibility.
+     - documented in `docs/book/1248-m39-lasm-cluster-relay-pump-batch-override-and-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
