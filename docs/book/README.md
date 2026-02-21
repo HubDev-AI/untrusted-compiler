@@ -1288,5 +1288,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1316-m39-lasm-cluster-backend-selection-module-extraction.md`
 - `1317-m39-lasm-cluster-runtime-config-module-extraction.md`
 - `1318-m39-lasm-cluster-lifecycle-module-extraction.md`
+- `1319-m39-lasm-cluster-relay-worker-loop-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
