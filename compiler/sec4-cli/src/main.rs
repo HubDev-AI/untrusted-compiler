@@ -9209,12 +9209,8 @@ fn run_lasm_cluster_accept_loop(
                                         relay_live_sender_count =
                                             relay_live_sender_count.saturating_sub(1);
                                         relay_all_senders_live = false;
-                                        refresh_lasm_cluster_live_sender_hints(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
-                                            &mut relay_single_live_sender_index,
-                                            &mut relay_dual_live_sender_indices,
-                                        );
+                                        relay_single_live_sender_index = None;
+                                        relay_dual_live_sender_indices = None;
                                         (stream, false)
                                     }
                                 };

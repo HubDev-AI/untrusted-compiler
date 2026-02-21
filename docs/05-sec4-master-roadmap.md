@@ -1279,6 +1279,10 @@ Post-alpha track acceptance anchors:
      - accept-loop now allocates/maintains `relay_next_live_sender_lookup` only when relay pool size is greater than two,
      - liveness-change refresh now skips next-live lookup rebuild once degraded live-shard count drops to `<=2`, where dedicated single/dual paths already handle dispatch.
      - documented in `docs/book/1279-m39-lasm-next-live-lookup-sparse-activation.md`.
+   - [x] Simplified primary-disconnect hint handling in accept-loop fallback:
+     - on primary relay-sender disconnect, accept-loop fallback now invalidates cached single/dual live-hint slots immediately instead of refreshing them in-place,
+     - hint refresh remains centralized in existing post-fallback live-count-change path, avoiding duplicate disconnect-path hint scans while preserving deterministic fallback selection.
+     - documented in `docs/book/1280-m39-lasm-disconnect-hint-invalidation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
