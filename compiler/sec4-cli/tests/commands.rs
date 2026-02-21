@@ -26790,6 +26790,13 @@ fn main() effects { net } -> Int {
             .is_some(),
         "first status json should include relayDispatchSaturationShortCircuitPerSec"
     );
+    assert!(
+        first_status
+            .get("relayLiveSenderCount")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayLiveSenderCount"
+    );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")
         .and_then(serde_json::Value::as_u64)
