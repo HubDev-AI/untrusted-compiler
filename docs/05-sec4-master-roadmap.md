@@ -1239,6 +1239,10 @@ Post-alpha track acceptance anchors:
      - accept-loop fallback handling now tracks live-shard count before fallback and refreshes single/dual-live hints plus `relay_live_sender_count` telemetry only when fallback actually changes live-shard count,
      - removes repeated live-hint scans and `fetch_min` atomics on saturated-but-live fallback paths while preserving degraded/disconnect correctness.
      - documented in `docs/book/1269-m39-lasm-accept-fallback-live-hint-refresh-elision.md`.
+   - [x] Reused cached degraded-mode single/dual-live sender hints in accept dispatch:
+     - when degraded mode has one or two live relay shards, accept dispatch now reuses cached `relay_single_live_sender_index` / `relay_dual_live_sender_indices` and refreshes only when missing,
+     - avoids repeated per-request hint rescans in degraded steady state while preserving deterministic unavailable fallback behavior if cached hints are absent.
+     - documented in `docs/book/1270-m39-lasm-degraded-single-dual-hint-cache-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
