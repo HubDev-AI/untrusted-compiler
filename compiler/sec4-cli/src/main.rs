@@ -9238,19 +9238,29 @@ fn run_lasm_cluster_accept_loop(
                             Err(send_error) => {
                                 listener_dispatch_fallback_total_local += 1;
                                 let live_count_before_fallback = relay_live_sender_count;
-                                let (stream, saw_live_sender) = match send_error {
-                                    TrySendError::Full(stream) => (stream, true),
-                                    TrySendError::Disconnected(stream) => {
-                                        relay_sender_live[stream_dispatch_start] =
-                                            LASM_CLUSTER_RELAY_SENDER_DEAD;
-                                        relay_live_sender_count =
-                                            relay_live_sender_count.saturating_sub(1);
-                                        relay_all_senders_live = false;
-                                        relay_single_live_sender_index = None;
-                                        relay_dual_live_sender_indices = None;
-                                        (stream, false)
-                                    }
-                                };
+                                let (stream, saw_live_sender, primary_disconnected) =
+                                    match send_error {
+                                        TrySendError::Full(stream) => (stream, true, false),
+                                        TrySendError::Disconnected(stream) => {
+                                            relay_sender_live[stream_dispatch_start] =
+                                                LASM_CLUSTER_RELAY_SENDER_DEAD;
+                                            relay_live_sender_count =
+                                                relay_live_sender_count.saturating_sub(1);
+                                            relay_all_senders_live = false;
+                                            relay_single_live_sender_index = None;
+                                            relay_dual_live_sender_indices = None;
+                                            (stream, false, true)
+                                        }
+                                    };
+                                if primary_disconnected
+                                    && relay_has_next_live_sender_lookup
+                                    && relay_live_sender_count > 2
+                                {
+                                    refresh_lasm_cluster_next_live_sender_lookup(
+                                        relay_sender_live.as_slice(),
+                                        relay_next_live_sender_lookup.as_mut_slice(),
+                                    );
+                                }
                                 let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
                                     && relay_live_sender_count > 2
                                 {

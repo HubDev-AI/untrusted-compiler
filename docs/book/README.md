@@ -1254,5 +1254,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1282-m39-lasm-fallback-cache-eligibility-gating.md`
 - `1283-m39-lasm-next-live-resolver-runtime-check-elision.md`
 - `1284-m39-lasm-fallback-dead-slot-jump-ahead.md`
+- `1285-m39-lasm-primary-disconnect-immediate-next-live-refresh.md`
 
 As milestones progress, chapters will be added and linked from this index.

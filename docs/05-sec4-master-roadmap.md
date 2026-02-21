@@ -1299,6 +1299,10 @@ Post-alpha track acceptance anchors:
      - in fallback-multi `scan_live_target > 2` path, dead-slot encounters now jump to next live candidate using the existing next-live resolver instead of stepping one dead slot at a time,
      - reduces repeated dead-slot checks in degraded sparse-live pools while preserving deterministic fallback bounds and saturated/unavailable outcomes.
      - documented in `docs/book/1284-m39-lasm-fallback-dead-slot-jump-ahead.md`.
+   - [x] Refreshed next-live cache immediately on primary-disconnect before fallback dispatch:
+     - when primary relay send fails with `Disconnected`, accept-loop now refreshes next-live lookup cache before entering fallback dispatch (for eligible multi-live cache states),
+     - reduces stale-cache fallback scans within the same request’s fallback path while preserving post-fallback live-count refresh behavior.
+     - documented in `docs/book/1285-m39-lasm-primary-disconnect-immediate-next-live-refresh.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
