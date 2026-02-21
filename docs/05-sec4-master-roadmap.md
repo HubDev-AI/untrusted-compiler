@@ -1137,6 +1137,10 @@ Post-alpha track acceptance anchors:
      - `run_lasm_cluster_capacity_probe.sh` now cleans per-run status-json artifacts unless `--keep-cluster-status-json` is set,
      - dry-run plan/test flow now makes keep-mode explicit for deterministic operator usage.
      - documented in `docs/book/1245-m39-lasm-capacity-probe-status-artifact-cleanup-default.md`.
+   - [x] Upgraded saturation summary markdown with p99 + resolved runtime columns:
+     - ranked runs table, recommendation line, and verification section now expose p99 and resolved relay/accept/queue fields directly from analysis/probe artifacts,
+     - keeps top-level operator report actionable without manual raw JSON inspection.
+     - documented in `docs/book/1246-m39-lasm-saturation-summary-p99-resolved-columns.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
