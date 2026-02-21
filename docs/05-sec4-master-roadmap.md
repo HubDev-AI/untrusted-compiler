@@ -1311,6 +1311,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi degraded scan loop now advances `scanned_slots` by wrapped jump distance when cursor jumps to next live candidate (dead-slot and post-attempt advancement paths),
      - preserves bounded traversal semantics while reducing repeated loop iterations in sparse-live degraded pools.
      - documented in `docs/book/1287-m39-lasm-fallback-jump-distance-accounting.md`.
+   - [x] Added next-slot-live fast paths in degraded fallback jump advancement:
+     - fallback-multi dead-slot and post-attempt jump paths now check wrapped `next_scan_start` liveness directly before invoking next-live resolver,
+     - avoids resolver/cache dispatch overhead when the immediate wrapped next slot is already live.
+     - documented in `docs/book/1288-m39-lasm-fallback-next-slot-live-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
