@@ -30,6 +30,7 @@ Options:
   --cluster-relay-queue <n>                        Optional relay queue override
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
+  --keep-cluster-status-json                       Keep raw cluster status json artifact after probe
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
   --skip-build                                     Skip sec4 binary rebuild
   --dry-run                                        Print execution plan only
@@ -66,6 +67,7 @@ cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
 skip_build="false"
 dry_run="false"
+keep_cluster_status_json="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -156,6 +158,10 @@ while [ "$#" -gt 0 ]; do
     --out)
       out_rel="${2:-}"
       shift 2
+      ;;
+    --keep-cluster-status-json)
+      keep_cluster_status_json="true"
+      shift
       ;;
     --skip-build)
       skip_build="true"
@@ -259,6 +265,7 @@ sec4 LASM cluster capacity probe plan:
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   clusterStatusJson=${status_json_file}
+  keepClusterStatusJson=${keep_cluster_status_json}
   skipBuild=$skip_build
   out=$out_path
 PLAN
@@ -521,6 +528,10 @@ jq -n \
       clusterStatusJson: $statusJsonFile
     }
   }' >"$out_path"
+
+if [ "$keep_cluster_status_json" != "true" ]; then
+  rm -f "$status_json_file"
+fi
 
 echo "wrote $out_path"
 if [ "$overall_pass" != "true" ]; then
