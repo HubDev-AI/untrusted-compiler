@@ -1203,6 +1203,10 @@ Post-alpha track acceptance anchors:
      - multi-sender fallback dispatch now tracks scanned live shards and stops after it has attempted all remaining live non-primary shards (`relay_live_sender_count - 1`),
      - avoids wasting fallback-loop iterations on known-dead shards while preserving saturated vs unavailable error semantics.
      - documented in `docs/book/1260-m39-lasm-fallback-live-shard-scan-budget.md`.
+   - [x] Added all-live relay pool fast path for primary dispatch selection:
+     - multi-sender accept dispatch now bypasses live-shard lookup scans while all relay sender shards are known live and uses direct cursor dispatch,
+     - runtime flips to live-scan mode only after first observed relay sender disconnection (`TrySendError::Disconnected`), preserving degraded-state correctness while trimming healthy-path dispatch overhead.
+     - documented in `docs/book/1261-m39-lasm-all-live-relay-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
