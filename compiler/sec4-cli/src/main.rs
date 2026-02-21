@@ -9850,9 +9850,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             };
                             if should_mark_unhealthy {
                                 unhealthy_port_count += 1;
+                                selection_lookup_dirty = true;
                             }
                             *unhealthy_entry = Some(unhealthy_until);
-                            selection_lookup_dirty = true;
                             if unhealthy_prune_next_at.is_none() && unhealthy_port_count > 0 {
                                 unhealthy_prune_next_at = Some(now + unhealthy_prune_interval);
                             }
