@@ -8829,24 +8829,28 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     *relay_live_sender_count,
                 );
             }
-            if let Some(second_live_index) = resolve_lasm_cluster_next_live_sender_index(
-                relay_sender_live,
-                relay_next_live_sender_lookup,
-                lasm_cluster_next_index_wrapped(first_live_index, sender_count),
-            ) {
-                match relay_senders[second_live_index].try_send(client_stream) {
-                    Ok(()) => return Ok(()),
-                    Err(TrySendError::Full(next_stream)) => {
-                        saw_live_sender = true;
-                        client_stream = next_stream;
-                    }
-                    Err(TrySendError::Disconnected(next_stream)) => {
-                        relay_sender_live[second_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-                        *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-                        *relay_all_senders_live = false;
-                        client_stream = next_stream;
-                    }
-                }
+            let second_start_index = lasm_cluster_next_index_wrapped(first_live_index, sender_count);
+            let second_live_index = if relay_sender_live[second_start_index]
+                == LASM_CLUSTER_RELAY_SENDER_LIVE
+            {
+                Some(second_start_index)
+            } else {
+                resolve_lasm_cluster_next_live_sender_index(
+                    relay_sender_live,
+                    relay_next_live_sender_lookup,
+                    second_start_index,
+                )
+            };
+            if let Some(second_live_index) = second_live_index {
+                return dispatch_lasm_cluster_relay_stream_fallback_single_live(
+                    client_stream,
+                    relay_senders,
+                    relay_sender_live,
+                    relay_live_sender_count,
+                    relay_all_senders_live,
+                    second_live_index,
+                    saw_live_sender,
+                );
             }
         }
         return lasm_cluster_fallback_terminal_dispatch_error(
