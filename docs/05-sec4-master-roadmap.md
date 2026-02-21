@@ -1359,6 +1359,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi `scan_live_target == 2` path now returns immediately before second-live resolution when first-attempt disconnect handling drops `relay_live_sender_count` to zero,
      - avoids unnecessary resolver/lookup work on terminal no-live transitions while preserving deterministic fallback outcomes.
      - documented in `docs/book/1299-m39-lasm-fallback-dual-attempt-no-live-guard.md`.
+   - [x] Reused single-live helper for two-sender fallback path:
+     - fallback-multi now routes `sender_count == 2` dispatch through `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)` instead of maintaining an inline duplicate two-sender branch body,
+     - preserves deterministic send/disconnect semantics while reducing duplicate fallback logic.
+     - documented in `docs/book/1300-m39-lasm-fallback-two-sender-single-helper-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

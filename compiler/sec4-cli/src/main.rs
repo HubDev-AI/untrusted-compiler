@@ -8744,26 +8744,14 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
     if sender_count == 2 {
-        let alternate_index = start_index_wrapped;
-        if relay_sender_live[alternate_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
-            match relay_senders[alternate_index].try_send(client_stream) {
-                Ok(()) => return Ok(()),
-                Err(TrySendError::Full(next_stream)) => {
-                    saw_live_sender = true;
-                    client_stream = next_stream;
-                }
-                Err(TrySendError::Disconnected(next_stream)) => {
-                    relay_sender_live[alternate_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-                    *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-                    *relay_all_senders_live = false;
-                    client_stream = next_stream;
-                }
-            }
-        }
-        return lasm_cluster_fallback_terminal_dispatch_error(
+        return dispatch_lasm_cluster_relay_stream_fallback_single_live(
             client_stream,
+            relay_senders,
+            relay_sender_live,
+            relay_live_sender_count,
+            relay_all_senders_live,
+            start_index_wrapped,
             saw_live_sender,
-            *relay_live_sender_count,
         );
     }
     let mut scan_index = start_index_wrapped;
