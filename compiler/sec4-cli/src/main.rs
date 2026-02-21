@@ -8882,6 +8882,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let mut scanned_live = 0usize;
     while scanned_slots < scan_slot_limit && scanned_live < scan_live_target_dynamic {
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
+            if scanned_slots.saturating_add(1) >= scan_slot_limit {
+                break;
+            }
             let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
@@ -8910,6 +8913,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
         }
         if scanned_live >= scan_live_target_dynamic {
+            break;
+        }
+        if scanned_slots.saturating_add(1) >= scan_slot_limit {
             break;
         }
         let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
