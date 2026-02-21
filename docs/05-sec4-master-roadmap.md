@@ -1423,6 +1423,10 @@ Post-alpha track acceptance anchors:
       - moved `LasmClusterRelayPumpStep` and `LasmClusterRelayPump` (+ impl) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_pump.rs`,
       - relay worker loop now consumes relay pump types through module boundaries while preserving proxy relay buffer/pump semantics.
       - documented in `docs/book/1315-m39-lasm-cluster-relay-pump-module-extraction.md`.
+   - [x] Extracted backend-selection/remap helpers into dedicated module:
+      - moved `LASM_CLUSTER_SELECTION_LOOKUP_NONE`, `rebuild_lasm_cluster_backend_selection_lookup(...)`, `rebuild_lasm_cluster_worker_backend_addrs(...)`, and `remap_lasm_cluster_relay_port_state_by_index(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`,
+      - relay worker loop now imports backend-selection/remap helpers from module boundaries while preserving deterministic healthy/unhealthy backend mapping behavior.
+      - documented in `docs/book/1316-m39-lasm-cluster-backend-selection-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
