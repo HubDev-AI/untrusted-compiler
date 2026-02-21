@@ -1403,6 +1403,10 @@ Post-alpha track acceptance anchors:
       - moved fallback dispatch enum + helpers (`dispatch_lasm_cluster_relay_stream_fallback_*` and scan-advance internals) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
       - `main.rs` now imports fallback dispatch functions from module boundaries while retaining accept-loop orchestration and error handling.
       - documented in `docs/book/1310-m39-lasm-fallback-dispatch-module-extraction.md`.
+   - [x] Moved fallback dispatch error enum ownership into fallback module:
+      - `LasmClusterRelayDispatchError` is now defined in `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
+      - `main.rs` and relay send helpers import the enum through module boundaries, reducing fallback type ownership in the CLI entry file.
+      - documented in `docs/book/1311-m39-lasm-fallback-error-enum-module-ownership.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

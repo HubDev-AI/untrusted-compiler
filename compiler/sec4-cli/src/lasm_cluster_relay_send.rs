@@ -1,7 +1,8 @@
 use crossbeam_channel::{Sender, TrySendError};
 use std::net::TcpStream;
 
-use crate::{LasmClusterRelayDispatchError, LASM_CLUSTER_RELAY_SENDER_DEAD};
+use crate::lasm_cluster_fallback_dispatch::LasmClusterRelayDispatchError;
+use crate::LASM_CLUSTER_RELAY_SENDER_DEAD;
 
 #[inline(always)]
 pub(crate) fn attempt_lasm_cluster_relay_send(
