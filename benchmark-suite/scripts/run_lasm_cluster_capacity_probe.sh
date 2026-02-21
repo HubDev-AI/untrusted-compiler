@@ -30,6 +30,7 @@ Options:
   --cluster-relay-queue <n>                        Optional relay queue override
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
+  --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
   --keep-cluster-status-json                       Keep raw cluster status json artifact after probe
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
   --skip-build                                     Skip sec4 binary rebuild
@@ -64,6 +65,7 @@ cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
+cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
 skip_build="false"
 dry_run="false"
@@ -155,6 +157,10 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_accept_batch_max="${2:-}"
       shift 2
       ;;
+    --cluster-relay-pump-batch-max)
+      cluster_relay_pump_batch_max="${2:-}"
+      shift 2
+      ;;
     --out)
       out_rel="${2:-}"
       shift 2
@@ -204,6 +210,10 @@ if [ -n "$cluster_accept_workers" ] && ! is_number "$cluster_accept_workers"; th
 fi
 if [ -n "$cluster_relay_accept_batch_max" ] && ! is_number "$cluster_relay_accept_batch_max"; then
   echo "cluster-relay-accept-batch-max must be numeric, got: $cluster_relay_accept_batch_max" >&2
+  exit 2
+fi
+if [ -n "$cluster_relay_pump_batch_max" ] && ! is_number "$cluster_relay_pump_batch_max"; then
+  echo "cluster-relay-pump-batch-max must be numeric, got: $cluster_relay_pump_batch_max" >&2
   exit 2
 fi
 if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
@@ -264,6 +274,7 @@ sec4 LASM cluster capacity probe plan:
   clusterRelayQueue=${cluster_relay_queue:-auto}
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
+  clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   clusterStatusJson=${status_json_file}
   keepClusterStatusJson=${keep_cluster_status_json}
   skipBuild=$skip_build
@@ -320,6 +331,9 @@ if [ -n "$cluster_accept_workers" ]; then
 fi
 if [ -n "$cluster_relay_accept_batch_max" ]; then
   run_args+=(--cluster-relay-accept-batch-max "$cluster_relay_accept_batch_max")
+fi
+if [ -n "$cluster_relay_pump_batch_max" ]; then
+  run_args+=(--cluster-relay-pump-batch-max "$cluster_relay_pump_batch_max")
 fi
 
 server_pid=""
@@ -391,6 +405,7 @@ p99=""
 resolved_relay_worker_count="null"
 resolved_relay_accept_workers="null"
 resolved_relay_accept_batch_max="null"
+resolved_relay_pump_batch_max="null"
 resolved_relay_queue_capacity="null"
 resolved_relay_queue_shard_capacity="null"
 if [ -f "$raw_file" ]; then
@@ -425,6 +440,10 @@ if [ -f "$status_json_file" ]; then
   status_relay_accept_batch_max="$(jq -r '.relayAcceptBatchMax // empty' "$status_json_file" 2>/dev/null || true)"
   if is_number "$status_relay_accept_batch_max"; then
     resolved_relay_accept_batch_max="$status_relay_accept_batch_max"
+  fi
+  status_relay_pump_batch_max="$(jq -r '.relayPumpBatchMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_pump_batch_max"; then
+    resolved_relay_pump_batch_max="$status_relay_pump_batch_max"
   fi
   status_relay_queue_capacity="$(jq -r '.relayQueueCapacity // empty' "$status_json_file" 2>/dev/null || true)"
   if is_number "$status_relay_queue_capacity"; then
@@ -477,12 +496,14 @@ jq -n \
   --argjson resolvedRelayWorkerCount "$resolved_relay_worker_count" \
   --argjson resolvedRelayAcceptWorkers "$resolved_relay_accept_workers" \
   --argjson resolvedRelayAcceptBatchMax "$resolved_relay_accept_batch_max" \
+  --argjson resolvedRelayPumpBatchMax "$resolved_relay_pump_batch_max" \
   --argjson resolvedRelayQueueCapacity "$resolved_relay_queue_capacity" \
   --argjson resolvedRelayQueueShardCapacity "$resolved_relay_queue_shard_capacity" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
   --arg relayAcceptBatchMax "${cluster_relay_accept_batch_max:-auto}" \
+  --arg relayPumpBatchMax "${cluster_relay_pump_batch_max:-auto}" \
   '{
     impl: $impl,
     projectPath: $projectPath,
@@ -510,9 +531,11 @@ jq -n \
       clusterRelayQueue: $relayQueue,
       clusterAcceptWorkers: $acceptWorkers,
       clusterRelayAcceptBatchMax: $relayAcceptBatchMax,
+      clusterRelayPumpBatchMax: $relayPumpBatchMax,
       clusterRelayWorkersResolved: $resolvedRelayWorkerCount,
       clusterAcceptWorkersResolved: $resolvedRelayAcceptWorkers,
       clusterRelayAcceptBatchMaxResolved: $resolvedRelayAcceptBatchMax,
+      clusterRelayPumpBatchMaxResolved: $resolvedRelayPumpBatchMax,
       clusterRelayQueueCapacityResolved: $resolvedRelayQueueCapacity,
       clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity
     },

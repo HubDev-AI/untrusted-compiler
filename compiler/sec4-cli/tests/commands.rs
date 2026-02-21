@@ -25796,6 +25796,118 @@ fn run_command_rejects_cluster_relay_accept_batch_max_without_cluster_mode() {
 }
 
 #[test]
+fn run_command_rejects_cluster_relay_pump_batch_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-cluster-relay-pump-batch-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--cluster-relay-pump-batch-max",
+        "512",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --cluster-relay-pump-batch-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --cluster-relay-pump-batch-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only cluster-relay-pump-batch-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_cluster_relay_pump_batch_max() {
+    let project_dir = temp_dir("sec4-run-command-cluster-relay-pump-batch-max-zero");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--cluster-relay-pump-batch-max",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --cluster-relay-pump-batch-max is zero"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --cluster-relay-pump-batch-max must be >= 1"),
+        "stderr should include deterministic cluster-relay-pump-batch-max lower-bound guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_cluster_relay_pump_batch_max_without_cluster_mode() {
+    let project_dir = temp_dir("sec4-run-command-cluster-relay-pump-batch-max-single-instance");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--cluster-relay-pump-batch-max",
+        "512",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --cluster-relay-pump-batch-max is used outside cluster mode"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --cluster-relay-pump-batch-max requires cluster mode (--instances > 1)"
+        ),
+        "stderr should include deterministic cluster-mode guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_cluster_backend_connect_timeout_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-cluster-connect-timeout-c-backend");
     let project_path = project_dir
