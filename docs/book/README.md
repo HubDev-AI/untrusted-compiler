@@ -1235,5 +1235,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1263-m39-lasm-degraded-live-cursor-realignment.md`
 - `1264-m39-lasm-single-live-shard-dispatch-fast-path.md`
 - `1265-m39-lasm-relay-live-byte-flag-tracking.md`
+- `1266-m39-lasm-cluster-status-relay-live-shard-telemetry.md`
 
 As milestones progress, chapters will be added and linked from this index.

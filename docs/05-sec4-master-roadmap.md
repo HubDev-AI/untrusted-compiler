@@ -1223,6 +1223,10 @@ Post-alpha track acceptance anchors:
      - multi-sender liveness tracking now uses `Vec<u8>` (`LIVE=1` / `DEAD=0`) instead of `Vec<bool>` specialized bitset storage for relay dispatch and fallback checks,
      - keeps liveness semantics unchanged while avoiding `Vec<bool>` proxy/bitset overhead in tight accept/fallback loops.
      - documented in `docs/book/1265-m39-lasm-relay-live-byte-flag-tracking.md`.
+   - [x] Added relay live-shard telemetry to LASM cluster status snapshots:
+     - status writer now includes `relayLiveSenderCount` in cluster status JSON payloads so relay-shard degradation is directly observable during load/probe runs,
+     - value is sourced from shared accept-loop liveness counters and exposed alongside existing relay dispatch fallback/short-circuit telemetry.
+     - documented in `docs/book/1266-m39-lasm-cluster-status-relay-live-shard-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
