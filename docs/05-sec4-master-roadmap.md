@@ -1207,6 +1207,10 @@ Post-alpha track acceptance anchors:
      - multi-sender accept dispatch now bypasses live-shard lookup scans while all relay sender shards are known live and uses direct cursor dispatch,
      - runtime flips to live-scan mode only after first observed relay sender disconnection (`TrySendError::Disconnected`), preserving degraded-state correctness while trimming healthy-path dispatch overhead.
      - documented in `docs/book/1261-m39-lasm-all-live-relay-fast-path.md`.
+   - [x] Added two-sender fallback fast path in relay dispatch:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now handles the common `sender_count == 2` case with a direct alternate-shard `try_send` path,
+     - preserves disconnected-shard liveness updates and saturated/unavailable mapping while avoiding generic fallback scan-loop overhead in two-shard clusters.
+     - documented in `docs/book/1262-m39-lasm-two-sender-fallback-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
