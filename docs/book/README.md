@@ -1194,5 +1194,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1222-m39-lasm-cluster-status-writer-typed-payload-serialization.md`
 - `1223-m39-lasm-cluster-accept-try-send-error-branch-unification.md`
 - `1224-m39-lasm-cluster-status-writer-streamed-tempfile-serialization.md`
+- `1225-m39-lasm-cluster-status-parent-readiness-cache.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1051,6 +1051,10 @@ Post-alpha track acceptance anchors:
      - status writer now writes changed payloads via `serde_json::to_writer` into a buffered temp file and flushes before atomic rename,
      - removes changed-write `to_vec` allocation/copy path while preserving atomic file replacement semantics.
      - documented in `docs/book/1224-m39-lasm-cluster-status-writer-streamed-tempfile-serialization.md`.
+   - [x] Added cached status-parent directory readiness with `NotFound` recovery:
+     - status writer now caches successful parent-directory readiness and avoids repeated `create_dir_all` on each changed write,
+     - tempfile creation now retries parent-dir initialization when `NotFound` occurs (for parent-dir removal recovery).
+     - documented in `docs/book/1225-m39-lasm-cluster-status-parent-readiness-cache.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
