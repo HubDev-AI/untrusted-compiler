@@ -32,6 +32,7 @@ mod lasm_db_runtime_dispatch;
 mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_sqlite;
 mod lasm_dynamic_state;
+mod lasm_sql_safety;
 
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
@@ -44,6 +45,7 @@ pub(crate) use lasm_dynamic_state::{
     build_lasm_dynamic_response_state, persist_lasm_dynamic_users_to_disk, LasmDbRecord,
     LasmDbRecordsAdapter, LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
+pub(crate) use lasm_sql_safety::has_lasm_sql_non_trailing_statement_separator;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -1246,87 +1248,6 @@ const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 const LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
-
-pub(crate) fn has_lasm_sql_non_trailing_statement_separator(query_template: &str) -> bool {
-    let bytes = query_template.as_bytes();
-    let mut index = 0usize;
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    let mut in_line_comment = false;
-    let mut block_comment_depth = 0usize;
-    while index < bytes.len() {
-        if in_line_comment {
-            if bytes[index] == b'\n' {
-                in_line_comment = false;
-            }
-            index += 1;
-            continue;
-        }
-        if block_comment_depth > 0 {
-            if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
-                block_comment_depth += 1;
-                index += 2;
-                continue;
-            }
-            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
-                block_comment_depth = block_comment_depth.saturating_sub(1);
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-        if in_single_quote {
-            if bytes[index] == b'\'' {
-                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
-                    index += 2;
-                    continue;
-                }
-                in_single_quote = false;
-            }
-            index += 1;
-            continue;
-        }
-        if in_double_quote {
-            if bytes[index] == b'"' {
-                if index + 1 < bytes.len() && bytes[index + 1] == b'"' {
-                    index += 2;
-                    continue;
-                }
-                in_double_quote = false;
-            }
-            index += 1;
-            continue;
-        }
-        if index + 1 < bytes.len() && bytes[index] == b'-' && bytes[index + 1] == b'-' {
-            in_line_comment = true;
-            index += 2;
-            continue;
-        }
-        if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
-            block_comment_depth = 1;
-            index += 2;
-            continue;
-        }
-        if bytes[index] == b'\'' {
-            in_single_quote = true;
-            index += 1;
-            continue;
-        }
-        if bytes[index] == b'"' {
-            in_double_quote = true;
-            index += 1;
-            continue;
-        }
-        if bytes[index] == b';' {
-            if !query_template[index + 1..].trim().is_empty() {
-                return true;
-            }
-        }
-        index += 1;
-    }
-    false
-}
 
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
