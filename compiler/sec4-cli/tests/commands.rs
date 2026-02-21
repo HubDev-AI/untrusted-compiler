@@ -26776,6 +26776,20 @@ fn main() effects { net } -> Int {
         .expect("first status json snapshot should be readable");
     let first_status: serde_json::Value =
         serde_json::from_str(&first_status_json).expect("first status json should parse");
+    assert!(
+        first_status
+            .get("relayDispatchSaturationShortCircuitTotal")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayDispatchSaturationShortCircuitTotal"
+    );
+    assert!(
+        first_status
+            .get("relayDispatchSaturationShortCircuitPerSec")
+            .and_then(serde_json::Value::as_f64)
+            .is_some(),
+        "first status json should include relayDispatchSaturationShortCircuitPerSec"
+    );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")
         .and_then(serde_json::Value::as_u64)

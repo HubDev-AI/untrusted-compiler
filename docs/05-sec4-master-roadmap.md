@@ -1178,6 +1178,10 @@ Post-alpha track acceptance anchors:
      - in multi-sender proxy mode, when one fallback scan confirms all relay sender shards are saturated for the current accept batch, subsequent `TrySendError::Full` dispatches in that same batch skip redundant full fallback scans and immediately return deterministic saturation handling,
      - successful dispatches reset the batch-saturation hint so recovery back to normal fallback behavior stays immediate once capacity frees up.
      - documented in `docs/book/1254-m39-lasm-cluster-accept-fallback-saturation-short-circuit.md`.
+   - [x] Added status-json telemetry for relay saturation short-circuit events:
+     - cluster status snapshots now expose `relayDispatchSaturationShortCircuitTotal` and `relayDispatchSaturationShortCircuitPerSec` alongside existing dispatch fallback telemetry,
+     - accept-loop short-circuit handling now increments and flushes a dedicated counter so saturation shortcut behavior is observable during probe tuning.
+     - documented in `docs/book/1255-m39-lasm-cluster-short-circuit-status-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
