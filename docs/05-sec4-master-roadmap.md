@@ -1347,6 +1347,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi degraded general scan now exits before calling scan-index advancement helper when `scanned_slots + 1` already reaches `scan_slot_limit`,
      - applies to both dead-slot and post-attempt advancement branches to avoid terminal helper lookups that cannot feed another loop iteration.
      - documented in `docs/book/1296-m39-lasm-fallback-skip-final-scan-advance.md`.
+   - [x] Merged duplicated single-attempt fallback branches:
+     - fallback-multi now handles `scan_live_target <= 1` with one shared single-attempt branch instead of duplicated `== 0` and `== 1` blocks,
+     - preserves deterministic saturated/unavailable outcomes while reducing hot-path branch depth and duplicate send/disconnect handling logic.
+     - documented in `docs/book/1297-m39-lasm-fallback-single-attempt-branch-merge.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
