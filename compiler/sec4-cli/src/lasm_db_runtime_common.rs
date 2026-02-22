@@ -147,6 +147,9 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
             .prepare(query_template)
             .map_err(|err| format!("postgres prepare failed: {err}"))?
     };
+    if state.db_records_postgres_statement_cache.len() >= state.db_postgres_statement_cache_max {
+        state.db_records_postgres_statement_cache.clear();
+    }
     state
         .db_records_postgres_statement_cache
         .insert(query_template.to_string(), statement.clone());
