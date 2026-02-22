@@ -1447,6 +1447,10 @@ Post-alpha track acceptance anchors:
       - moved autoscale thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs` (`spawn_lasm_cluster_autoscale_loop`, `LasmClusterAutoscaleLoopConfig`),
       - cluster orchestration now wires autoscale dependencies through module config while preserving dynamic boost behavior, cooldown tracking, and worker lifecycle update semantics.
       - documented in `docs/book/1321-m39-lasm-cluster-autoscale-loop-module-extraction.md`.
+   - [x] Extracted LASM cluster accept-worker orchestration into dedicated module:
+      - moved accept-worker thread orchestration (listener clones, worker thread spawn/join, primary accept-loop run) from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_accept_workers.rs` (`run_lasm_cluster_accept_workers`, `LasmClusterAcceptWorkersConfig`),
+      - cluster orchestration now delegates accept-worker lifecycle through module boundary while preserving deterministic accept-loop error reporting and stop-flag shutdown behavior.
+      - documented in `docs/book/1322-m39-lasm-cluster-accept-workers-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
