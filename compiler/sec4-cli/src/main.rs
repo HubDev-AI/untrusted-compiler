@@ -157,6 +157,8 @@ enum Commands {
         #[arg(long)]
         db_max_tx_handles: Option<u64>,
         #[arg(long)]
+        db_records_max: Option<u64>,
+        #[arg(long)]
         db_postgres_statement_timeout_ms: Option<u64>,
         #[arg(long)]
         db_postgres_lock_timeout_ms: Option<u64>,
@@ -555,6 +557,7 @@ fn main() {
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_max_tx_handles,
+            db_records_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -596,6 +599,7 @@ fn main() {
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_max_tx_handles,
+            db_records_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -6856,6 +6860,7 @@ fn cmd_run(
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_max_tx_handles: Option<u64>,
+    db_records_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -7013,6 +7018,10 @@ fn cmd_run(
         eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_records_max.is_some() {
+        eprintln!("run failed: --db-records-max is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && db_postgres_statement_timeout_ms.is_some() {
         eprintln!(
             "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
@@ -7037,6 +7046,10 @@ fn cmd_run(
     }
     if db_max_tx_handles == Some(0) {
         eprintln!("run failed: --db-max-tx-handles must be >= 1");
+        return Err(2);
+    }
+    if db_records_max == Some(0) {
+        eprintln!("run failed: --db-records-max must be >= 1");
         return Err(2);
     }
     if db_postgres_statement_timeout_ms == Some(0) {
@@ -7289,6 +7302,7 @@ fn cmd_run(
             effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
             db_max_tx_handles,
+            db_records_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -7642,6 +7656,7 @@ struct LasmClusterConfig {
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<String>,
     db_max_tx_handles: Option<u64>,
+    db_records_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -7944,6 +7959,7 @@ fn cmd_run_lasm_backend(
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
     db_max_tx_handles: Option<u64>,
+    db_records_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -8174,7 +8190,7 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
-    let mut scoped_db_timeout_overrides = Vec::with_capacity(4);
+    let mut scoped_db_timeout_overrides = Vec::with_capacity(5);
     if let Some(timeout_ms) = db_postgres_statement_timeout_ms {
         scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
@@ -8197,6 +8213,12 @@ fn cmd_run_lasm_backend(
         scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
             "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
             timeout_ms,
+        ));
+    }
+    if let Some(records_max) = db_records_max {
+        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
+            "SEC4_RT_LASM_DB_RECORDS_MAX",
+            records_max,
         ));
     }
     if max_instances < instances {
@@ -8269,6 +8291,7 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_records_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -8317,6 +8340,7 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_records_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,

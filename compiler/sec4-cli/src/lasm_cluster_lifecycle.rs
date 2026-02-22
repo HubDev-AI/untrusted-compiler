@@ -76,6 +76,7 @@ fn spawn_lasm_cluster_worker(
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
     push_optional_u64_run_arg(&mut cmd, "--db-max-tx-handles", config.db_max_tx_handles);
+    push_optional_u64_run_arg(&mut cmd, "--db-records-max", config.db_records_max);
     push_optional_u64_run_arg(
         &mut cmd,
         "--db-postgres-statement-timeout-ms",

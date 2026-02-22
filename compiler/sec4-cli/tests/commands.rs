@@ -16610,6 +16610,78 @@ fn run_command_rejects_zero_db_max_tx_handles_override() {
 }
 
 #[test]
+fn run_command_rejects_db_records_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-records-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-records-max",
+        "8",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-records-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-records-max is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-records-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_records_max_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-records-max");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-records-max",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-records-max override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-records-max must be >= 1"),
+        "stderr should include deterministic db-records-max validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_statement_timeout_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-statement-timeout-c-backend");
     let project_path = project_dir
