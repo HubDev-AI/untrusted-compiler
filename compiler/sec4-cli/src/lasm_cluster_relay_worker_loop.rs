@@ -119,19 +119,25 @@ struct LasmClusterRelayPumpDispatchOutcome {
 
 struct LasmClusterRelayPumpModeResolution {
     full_scan_pump_mode: bool,
+    initial_cursor: usize,
     pump_budget: usize,
 }
 
 fn resolve_lasm_cluster_relay_pump_mode(
     relay_count: usize,
     relay_pump_batch_max: usize,
-    relay_pump_cursor: &mut usize,
+    relay_pump_cursor: usize,
 ) -> LasmClusterRelayPumpModeResolution {
     let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
-    if full_scan_pump_mode {
-        *relay_pump_cursor = 0;
+    let initial_cursor = if full_scan_pump_mode {
+        0
     } else {
-        let _ = normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count);
+        let mut cursor = relay_pump_cursor;
+        let _ = normalize_lasm_cluster_relay_pump_cursor(&mut cursor, relay_count);
+        cursor
+    };
+    if full_scan_pump_mode {
+        debug_assert_eq!(initial_cursor, 0);
     }
     let pump_budget = if full_scan_pump_mode {
         relay_count
@@ -140,6 +146,7 @@ fn resolve_lasm_cluster_relay_pump_mode(
     };
     LasmClusterRelayPumpModeResolution {
         full_scan_pump_mode,
+        initial_cursor,
         pump_budget,
     }
 }
@@ -209,13 +216,14 @@ fn pump_lasm_cluster_relay_connections(
     let mut progressed = false;
     let mut relay_count = relay_connections.len();
     let pump_mode =
-        resolve_lasm_cluster_relay_pump_mode(relay_count, relay_pump_batch_max, relay_pump_cursor);
+        resolve_lasm_cluster_relay_pump_mode(relay_count, relay_pump_batch_max, *relay_pump_cursor);
+    let mut relay_scan_cursor = pump_mode.initial_cursor;
     let mut pump_budget = pump_mode.pump_budget;
     while pump_budget > 0 {
         let relay_len_before_step = relay_count;
         let pump_outcome = pump_lasm_cluster_relay_connection_once(
             relay_connections,
-            *relay_pump_cursor,
+            relay_scan_cursor,
             relay_buffer_pool,
             relay_buffer_pool_max,
             pump_warning_next_allowed,
@@ -228,15 +236,17 @@ fn pump_lasm_cluster_relay_connections(
         pump_budget -= 1;
         if pump_outcome.removed {
             relay_count -= 1;
-            if normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count) {
+            if normalize_lasm_cluster_relay_pump_cursor(&mut relay_scan_cursor, relay_count) {
                 break;
             }
             continue;
         }
-        advance_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_len_before_step);
+        advance_lasm_cluster_relay_pump_cursor(&mut relay_scan_cursor, relay_len_before_step);
     }
     if pump_mode.full_scan_pump_mode {
         *relay_pump_cursor = 0;
+    } else {
+        *relay_pump_cursor = relay_scan_cursor;
     }
     progressed
 }

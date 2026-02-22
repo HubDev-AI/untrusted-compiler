@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I committed the local-cursor relay-pump slice directly on `dev` (`dcc09950`) before creating a `codex/*` branch. | Keep a hard pre-commit gate (`git branch --show-current`) and if it is `dev`, branch first; if missed, recover immediately by branching from the commit and resetting local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I treated a single `run_command_lasm_cluster_status_json_skips_unchanged_snapshots` failure (`exit status: 2`) as possible regression before confirming it was transient on rerun. | For this cluster status-json command test, rerun once and do a quick manual `sec4 run --backend lasm --cluster-status-json ...` reproduction before reverting code. |
 | 2026-02-22 | self | I passed `&SocketAddr` into the new fallback-attempt helper that expects `SocketAddr`, causing a quick compile break. | When extracting helper signatures from inlined code, re-check call sites for by-value vs by-reference argument ownership before the first compile run. |
 | 2026-02-22 | self | I committed the shared-selection-recompute slice on local `dev` again before creating the PR branch. | Run `git branch --show-current` immediately before staging/commit; if on `dev`, branch first. If missed, branch from commit and force local `dev` back to `origin/dev` before pushing. |
