@@ -1721,6 +1721,10 @@ Post-alpha track acceptance anchors:
       - when cluster mode is active, `--reuse-port` now forces fixed reuse-port cluster path even if `--autoscale-max-instances` is higher than `--instances`,
       - this keeps proxy-relay path available by default while allowing explicit performance-mode opt-in without reworking autoscale flag sets.
       - documented in `docs/book/1391-m39-lasm-cluster-reuse-port-fast-path-override.md`.
+   - [x] Hardened LASM capacity probe for stable tuning runs:
+      - `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` now supports `--build-profile debug|release` and `--samples <n>`, executes multiple wrk samples, and reports the best sample plus all sample metrics in summary JSON,
+      - this reduces tuning noise when local loadgen variance is high and keeps profile selection explicit for performance investigations.
+      - documented in `docs/book/1392-m39-lasm-capacity-probe-build-profile-and-samples.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

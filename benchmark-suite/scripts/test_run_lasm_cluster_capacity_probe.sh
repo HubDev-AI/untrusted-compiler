@@ -27,6 +27,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --cluster-accept-workers 4 \
   --cluster-relay-accept-batch-max 321 \
   --cluster-relay-pump-batch-max 654 \
+  --build-profile debug \
+  --samples 3 \
   --out results/summaries/custom-lasm-capacity.json \
   2>&1)"
 
@@ -80,6 +82,14 @@ if ! grep -q 'clusterRelayAcceptBatchMax=321' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayPumpBatchMax=654' <<<"$out"; then
   echo "lasm capacity probe dry-run missing relay pump batch output" >&2
+  exit 1
+fi
+if ! grep -q 'buildProfile=debug' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing build profile output" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing samples output" >&2
   exit 1
 fi
 if ! grep -q "out=${root_dir}/results/summaries/custom-lasm-capacity.json" <<<"$out"; then
@@ -160,6 +170,22 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --cluster-
 fi
 if ! grep -q "cluster-relay-pump-batch-max must be numeric" /tmp/lasm-capacity-probe-invalid-pump-batch.log; then
   echo "lasm capacity probe invalid relay pump batch error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --samples 0 >/tmp/lasm-capacity-probe-invalid-samples.log 2>&1; then
+  echo "lasm capacity probe accepted invalid samples value" >&2
+  exit 1
+fi
+if ! grep -q "samples must be >= 1" /tmp/lasm-capacity-probe-invalid-samples.log; then
+  echo "lasm capacity probe invalid samples error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --build-profile fast >/tmp/lasm-capacity-probe-invalid-profile.log 2>&1; then
+  echo "lasm capacity probe accepted invalid build profile value" >&2
+  exit 1
+fi
+if ! grep -q "build-profile must be one of: debug, release" /tmp/lasm-capacity-probe-invalid-profile.log; then
+  echo "lasm capacity probe invalid build profile error missing" >&2
   exit 1
 fi
 
