@@ -9823,10 +9823,34 @@ fn apply_lasm_dynamic_response_materialization(
             );
         }
         "DbListRecordsResponse" => {
+            let records_limit = if let Some(raw_limit) = request.query_params.get("limit") {
+                let trimmed = raw_limit.trim();
+                match trimmed.parse::<usize>() {
+                    Ok(value) if value >= 1 => Some(value),
+                    _ => {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.RECORDS_LIMIT_INVALID",
+                                "validation",
+                                "db records limit must be an integer >= 1",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
             let (
                 records,
+                records_total,
                 records_capacity,
                 records_dropped_total,
+                affected_rows_total,
                 adapter,
                 tx_handle_count,
                 tx_handle_capacity,
@@ -9839,22 +9863,40 @@ fn apply_lasm_dynamic_response_materialization(
                 postgres_connect_timeout_ms,
                 sqlite_busy_timeout_ms,
             ) = match dynamic_state.lock() {
-                Ok(state) => (
-                    state.db_records.clone(),
-                    state.db_records_max,
-                    state.db_records_dropped_total,
-                    lasm_db_records_adapter_label(state.db_records_adapter),
-                    state.db_tx_handles.len(),
-                    state.db_tx_max_handles,
-                    state.db_records_postgres_statement_cache.len(),
-                    state.db_postgres_statement_cache_max,
-                    state.db_postgres_placeholder_max_cache.len(),
-                    state.db_postgres_placeholder_cache_max,
-                    state.db_postgres_statement_timeout_ms,
-                    state.db_postgres_lock_timeout_ms,
-                    state.db_postgres_connect_timeout_ms,
-                    state.db_sqlite_busy_timeout_ms,
-                ),
+                Ok(state) => {
+                    let total = state.db_records.len();
+                    let records = if let Some(limit) = records_limit {
+                        state
+                            .db_records
+                            .iter()
+                            .skip(total.saturating_sub(limit))
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    } else {
+                        state.db_records.clone()
+                    };
+                    (
+                        records,
+                        total,
+                        state.db_records_max,
+                        state.db_records_dropped_total,
+                        state
+                            .db_records
+                            .iter()
+                            .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows)),
+                        lasm_db_records_adapter_label(state.db_records_adapter),
+                        state.db_tx_handles.len(),
+                        state.db_tx_max_handles,
+                        state.db_records_postgres_statement_cache.len(),
+                        state.db_postgres_statement_cache_max,
+                        state.db_postgres_placeholder_max_cache.len(),
+                        state.db_postgres_placeholder_cache_max,
+                        state.db_postgres_statement_timeout_ms,
+                        state.db_postgres_lock_timeout_ms,
+                        state.db_postgres_connect_timeout_ms,
+                        state.db_sqlite_busy_timeout_ms,
+                    )
+                }
                 Err(_) => {
                     set_lasm_json_response(
                         response,
@@ -9870,15 +9912,13 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
-            let affected_rows_total = records
-                .iter()
-                .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
             set_lasm_json_response(
                 response,
                 200,
                 &serde_json::json!({
                     "ok": true,
                     "count": records.len(),
+                    "recordsTotal": records_total,
                     "recordsCapacity": records_capacity,
                     "recordsDroppedTotal": records_dropped_total,
                     "affectedRowsTotal": affected_rows_total,

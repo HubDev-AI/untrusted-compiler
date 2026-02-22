@@ -15475,6 +15475,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":3")
+            && list_response.contains("\"recordsTotal\":3")
             && list_response.contains("\"recordsCapacity\":")
             && list_response.contains("\"recordsDroppedTotal\":")
             && list_response.contains("\"affectedRowsTotal\":")
@@ -15491,6 +15492,24 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"op\":\"queryOne\"")
             && list_response.contains("\"affected_rows\":"),
         "db records response should include deterministic persisted record list:\n{list_response}"
+    );
+
+    let limited_list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?limit=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        limited_list_response.contains("HTTP/1.1 200 OK"),
+        "db records limited response should contain deterministic 200 status:\n{limited_list_response}"
+    );
+    assert!(
+        limited_list_response.contains("\"count\":2")
+            && limited_list_response.contains("\"recordsTotal\":3")
+            && limited_list_response.contains("\"records\":")
+            && limited_list_response.contains("\"op\":\"execTx\"")
+            && limited_list_response.contains("\"op\":\"queryOne\""),
+        "db records limited response should return trailing record window deterministically:\n{limited_list_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

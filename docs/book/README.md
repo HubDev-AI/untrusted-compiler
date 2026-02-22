@@ -1378,5 +1378,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1406-m39-lasm-db-cache-telemetry-in-list-records.md`
 - `1407-m39-postgres-e2e-local-infra-example-and-smoke.md`
 - `1408-m39-lasm-db-record-history-capacity-guard.md`
+- `1409-m39-lasm-db-records-limit-window.md`
 
 As milestones progress, chapters will be added and linked from this index.
