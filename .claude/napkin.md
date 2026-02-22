@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I used `awk` `match(..., ..., parts)` capture-array syntax while adding latency-unit parsing in the capacity probe; this environment awk does not support third-arg capture arrays, so parsed `p99` became empty. | Keep benchmark scripts on portable awk constructs (suffix stripping via `sub` + numeric regex checks) and avoid non-portable `match(..., ..., array)` usage. |
 | 2026-02-22 | self | I committed the local-cursor relay-pump slice directly on `dev` (`dcc09950`) before creating a `codex/*` branch. | Keep a hard pre-commit gate (`git branch --show-current`) and if it is `dev`, branch first; if missed, recover immediately by branching from the commit and resetting local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I treated a single `run_command_lasm_cluster_status_json_skips_unchanged_snapshots` failure (`exit status: 2`) as possible regression before confirming it was transient on rerun. | For this cluster status-json command test, rerun once and do a quick manual `sec4 run --backend lasm --cluster-status-json ...` reproduction before reverting code. |
 | 2026-02-22 | self | I passed `&SocketAddr` into the new fallback-attempt helper that expects `SocketAddr`, causing a quick compile break. | When extracting helper signatures from inlined code, re-check call sites for by-value vs by-reference argument ownership before the first compile run. |
