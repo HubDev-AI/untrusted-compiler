@@ -1613,6 +1613,10 @@ Post-alpha track acceptance anchors:
       - relay worker selection-state derivation (`has_healthy`, identity, cycle-span, single-healthy index) now comes from one shared recompute helper,
       - connect-failure fallback traversal now reuses freshly recomputed healthy lookup state instead of scanning all worker slots for healthy candidates.
       - documented in `docs/book/1364-m39-lasm-cluster-relay-shared-selection-recompute-and-fallback-lookup-traversal.md`.
+   - [x] Unified backend connect-failure unhealthy/warning bookkeeping in one helper:
+      - primary and fallback connect-failure branches now share one helper for unhealthy cooldown marking, prune scheduling, warning throttling, and selection-dirty signaling,
+      - removes duplicated failure bookkeeping branches in relay worker loop while preserving deterministic warning and cooldown behavior.
+      - documented in `docs/book/1365-m39-lasm-cluster-relay-connect-failure-shared-unhealthy-warning-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
