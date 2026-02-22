@@ -1589,6 +1589,10 @@ Post-alpha track acceptance anchors:
       - fallback connect candidate is now chosen by cyclic scan starting from the failed backend’s next index, instead of always picking the first healthy backend,
       - reduces fallback hot-spot bias under repeated connect failures and preserves deterministic degraded routing order.
       - documented in `docs/book/1358-m39-lasm-cluster-relay-connect-fallback-next-healthy-cyclic-scan.md`.
+   - [x] Saturation counters now increment only on final connect failure outcome:
+      - relay worker connect failure path now records saturation only when request ends with worker-unavailable response after fallback handling,
+      - recovered requests (primary connect failure + successful fallback connect) no longer inflate saturation telemetry/autoscale signals.
+      - documented in `docs/book/1359-m39-lasm-cluster-relay-saturation-count-final-failure-only.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
