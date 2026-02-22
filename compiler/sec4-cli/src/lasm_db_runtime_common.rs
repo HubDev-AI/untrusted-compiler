@@ -2,7 +2,7 @@ use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
 };
 use crate::LasmDynamicResponseState;
-use postgres::Client as PostgresClient;
+use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
@@ -131,6 +131,28 @@ pub(crate) fn lasm_dynamic_postgres_client_mut(
     })
 }
 
+pub(crate) fn lasm_dynamic_postgres_prepared_statement(
+    state: &mut LasmDynamicResponseState,
+    query_template: &str,
+) -> Result<PostgresStatement, String> {
+    if let Some(statement) = state
+        .db_records_postgres_statement_cache
+        .get(query_template)
+    {
+        return Ok(statement.clone());
+    }
+    let statement = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        client
+            .prepare(query_template)
+            .map_err(|err| format!("postgres prepare failed: {err}"))?
+    };
+    state
+        .db_records_postgres_statement_cache
+        .insert(query_template.to_string(), statement.clone());
+    Ok(statement)
+}
+
 pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
@@ -145,6 +167,7 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     )?;
     ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
     state.db_records_postgres_client = Some(client);
+    state.db_records_postgres_statement_cache.clear();
     Ok(())
 }
 

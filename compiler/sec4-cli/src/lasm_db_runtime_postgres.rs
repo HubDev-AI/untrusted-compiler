@@ -1,9 +1,10 @@
 use crate::lasm_db_runtime_common::{
-    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
+    lasm_dynamic_postgres_client_mut, lasm_dynamic_postgres_prepared_statement,
+    reconnect_lasm_dynamic_postgres_client,
 };
 use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
-use postgres::Client as PostgresClient;
+use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 
 pub(crate) enum LasmPostgresParam {
     Text(String),
@@ -264,10 +265,21 @@ pub(crate) fn run_lasm_postgres_exec(
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
+    let prepared_statement = if use_prepared {
+        Some(lasm_dynamic_postgres_prepared_statement(
+            state,
+            query_template,
+        )?)
+    } else {
+        None
+    };
     let initial = if use_prepared {
         let param_refs = lasm_postgres_query_param_refs(params);
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client.execute(query_template, param_refs.as_slice())
+        let statement = prepared_statement
+            .as_ref()
+            .expect("prepared statement should be available for prepared execution");
+        client.execute(statement, param_refs.as_slice())
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
         client.batch_execute(query_template).map(|_| 0u64)
@@ -277,10 +289,12 @@ pub(crate) fn run_lasm_postgres_exec(
         Err(err) if err.is_closed() => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             if use_prepared {
+                let retry_statement =
+                    lasm_dynamic_postgres_prepared_statement(state, query_template)?;
                 let param_refs = lasm_postgres_query_param_refs(params);
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 client
-                    .execute(query_template, param_refs.as_slice())
+                    .execute(&retry_statement, param_refs.as_slice())
                     .map_err(|retry_err| {
                         format!("postgres execution failed after reconnect: {retry_err}")
                     })?
@@ -309,6 +323,24 @@ pub(crate) fn run_lasm_postgres_exec(
     Ok(affected_rows)
 }
 
+fn run_lasm_postgres_exec_tx_once(
+    client: &mut PostgresClient,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+    prepared_statement: Option<&PostgresStatement>,
+) -> Result<u64, postgres::Error> {
+    let mut tx = client.transaction()?;
+    let affected_rows = if let Some(statement) = prepared_statement {
+        let param_refs = lasm_postgres_query_param_refs(params);
+        tx.execute(statement, param_refs.as_slice())?
+    } else {
+        tx.batch_execute(query_template)?;
+        0
+    };
+    tx.commit()?;
+    Ok(affected_rows)
+}
+
 pub(crate) fn run_lasm_postgres_exec_tx(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -325,30 +357,35 @@ pub(crate) fn run_lasm_postgres_exec_tx(
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
-    let run_once = |client: &mut PostgresClient| -> Result<u64, postgres::Error> {
-        let mut tx = client.transaction()?;
-        let affected_rows = if use_prepared {
-            let param_refs = lasm_postgres_query_param_refs(params);
-            tx.execute(query_template, param_refs.as_slice())?
-        } else {
-            tx.batch_execute(query_template)?;
-            0
-        };
-        tx.commit()?;
-        Ok(affected_rows)
+    let prepared_statement = if use_prepared {
+        Some(lasm_dynamic_postgres_prepared_statement(
+            state,
+            query_template,
+        )?)
+    } else {
+        None
     };
     let initial = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        run_once(client)
+        run_lasm_postgres_exec_tx_once(client, query_template, params, prepared_statement.as_ref())
     };
     let affected_rows = match initial {
         Ok(count) => count,
         Err(err) if err.is_closed() => {
             reconnect_lasm_dynamic_postgres_client(state)?;
+            let retry_statement = if use_prepared {
+                Some(lasm_dynamic_postgres_prepared_statement(
+                    state,
+                    query_template,
+                )?)
+            } else {
+                None
+            };
             let client = lasm_dynamic_postgres_client_mut(state)?;
-            run_once(client).map_err(|retry_err| {
-                format!("postgres transaction execution failed after reconnect: {retry_err}")
-            })?
+            run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
+                .map_err(|retry_err| {
+                    format!("postgres transaction execution failed after reconnect: {retry_err}")
+                })?
         }
         Err(err)
             if use_prepared
@@ -392,22 +429,27 @@ pub(crate) fn run_lasm_postgres_query_one(
          FROM ({}) AS _sec4_row LIMIT 1",
         normalized_query
     );
-    let execute_query =
-        |client: &mut PostgresClient| -> Result<Option<postgres::Row>, postgres::Error> {
-            let param_refs = lasm_postgres_query_param_refs(params);
-            client.query_opt(wrapped_query.as_str(), param_refs.as_slice())
-        };
+    let prepared_statement =
+        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+    let execute_query = |client: &mut PostgresClient,
+                         statement: &PostgresStatement|
+     -> Result<Option<postgres::Row>, postgres::Error> {
+        let param_refs = lasm_postgres_query_param_refs(params);
+        client.query_opt(statement, param_refs.as_slice())
+    };
     let row = {
         let initial = {
             let client = lasm_dynamic_postgres_client_mut(state)?;
-            execute_query(client)
+            execute_query(client, &prepared_statement)
         };
         match initial {
             Ok(row) => row,
             Err(err) if err.is_closed() => {
                 reconnect_lasm_dynamic_postgres_client(state)?;
+                let retry_statement =
+                    lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
-                execute_query(client).map_err(|retry_err| {
+                execute_query(client, &retry_statement).map_err(|retry_err| {
                     format!("postgres queryOne execution failed after reconnect: {retry_err}")
                 })?
             }

@@ -10,7 +10,7 @@ use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
-use postgres::Client as PostgresClient;
+use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
@@ -47,6 +47,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_sqlite_connection: Option<rusqlite::Connection>,
     pub(crate) db_records_postgres_dsn: Option<String>,
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
+    pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
     pub(crate) db_tx_handles: HashMap<i64, i64>,
     pub(crate) db_tx_max_handles: usize,
     pub(crate) db_postgres_statement_timeout_ms: u64,
@@ -146,6 +147,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         .saturating_add(1);
     let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles(explicit_db_tx_max_handles)?;
     let db_tx_handles = HashMap::new();
+    let db_records_postgres_statement_cache = HashMap::new();
     let next_db_tx_handle = 1;
     Ok(LasmDynamicResponseState {
         users_by_id,
@@ -157,6 +159,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_sqlite_connection,
         db_records_postgres_dsn,
         db_records_postgres_client,
+        db_records_postgres_statement_cache,
         db_tx_handles,
         db_tx_max_handles,
         db_postgres_statement_timeout_ms,
