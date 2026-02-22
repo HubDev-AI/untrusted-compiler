@@ -811,11 +811,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         );
                         return true;
                     }
-                    let found_record = state.db_records.iter().rev().any(|record| {
-                        record.db == db
-                            && record.template == template.as_str()
-                            && record.params == params.as_str()
-                    });
+                    let signature =
+                        crate::lasm_db_record_signature_key(db, template.as_str(), params.as_str());
+                    let found_record = state.db_record_signatures.contains(signature.as_str());
                     if !found_record {
                         None
                     } else {
