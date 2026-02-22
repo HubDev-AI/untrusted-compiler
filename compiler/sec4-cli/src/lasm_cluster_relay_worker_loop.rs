@@ -207,6 +207,31 @@ fn try_lasm_cluster_relay_fallback_connect(
     }
 }
 
+fn resolve_lasm_cluster_fallback_lookup_start_cursor(
+    selection_lookup: &[usize],
+    selection_lookup_cycle_span: usize,
+    selected_backend_index: usize,
+    selected_worker_port_count: usize,
+) -> usize {
+    debug_assert!(selection_lookup_cycle_span > 0);
+    debug_assert_eq!(selection_lookup.len(), selection_lookup_cycle_span);
+    let failed_backend_next_index = selected_backend_index + 1;
+    let search_index = if failed_backend_next_index == selected_worker_port_count {
+        0
+    } else {
+        failed_backend_next_index
+    };
+    match selection_lookup.binary_search(&search_index) {
+        Ok(index) | Err(index) => {
+            if index == selection_lookup_cycle_span {
+                0
+            } else {
+                index
+            }
+        }
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_receiver: Receiver<TcpStream>,
     relay_active: Arc<AtomicUsize>,
@@ -562,26 +587,13 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         remaining_fallback_scan -= 1;
                                     }
                                 } else {
-                                    let failed_backend_next_index = selected_backend_index + 1;
-                                    let search_index = if failed_backend_next_index
-                                        == selected_worker_port_count
-                                    {
-                                        0
-                                    } else {
-                                        failed_backend_next_index
-                                    };
-                                    let mut fallback_lookup_cursor = match selection_lookup
-                                        .as_slice()
-                                        .binary_search(&search_index)
-                                    {
-                                        Ok(index) | Err(index) => {
-                                            if index == selection_lookup_cycle_span {
-                                                0
-                                            } else {
-                                                index
-                                            }
-                                        }
-                                    };
+                                    let mut fallback_lookup_cursor =
+                                        resolve_lasm_cluster_fallback_lookup_start_cursor(
+                                            selection_lookup.as_slice(),
+                                            selection_lookup_cycle_span,
+                                            selected_backend_index,
+                                            selected_worker_port_count,
+                                        );
                                     let mut remaining_fallback_scan = selection_lookup_cycle_span;
                                     while remaining_fallback_scan > 0 {
                                         let fallback_backend_index =
