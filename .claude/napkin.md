@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I committed the DB-overflow compaction follow-up on local `dev` again before creating the next `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if branch is `dev`, branch first. If missed, branch from the commit immediately and repoint local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I kicked off two cargo test commands in one parallel call while validating the DB-record capacity slice, causing avoidable package/build lock contention noise. | Keep cargo build/test commands strictly sequential; parallelize only read/search/shell syntax checks. |
 | 2026-02-22 | self | After merging PR #629, I continued implementing the Postgres statement-cache slice on local `dev` before creating the next `codex/*` branch. | Immediately after each merge, run `git branch --show-current`; if it is `dev`, create the next `codex/*` branch before any edits. |
 | 2026-02-22 | self | I started this continuation with a parallel napkin+status read again, and later kicked off branch checkout in parallel with a read command. | Keep continuation/session setup strictly sequential: first run standalone napkin read, then do branch/checkout operations, and only after branch state is stable run parallel read/search commands. |
