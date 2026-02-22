@@ -1408,5 +1408,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`
 - `1437-m39-lasm-postgres-named-object-params.md`
 - `1438-m39-lasm-autoscale-reusable-port-telemetry-store-elision.md`
+- `1439-m39-lasm-db-dispatch-adapter-aware-parse-paths.md`
 
 As milestones progress, chapters will be added and linked from this index.

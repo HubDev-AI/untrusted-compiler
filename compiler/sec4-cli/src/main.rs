@@ -8456,6 +8456,13 @@ fn cmd_run_lasm_backend(
             2
         })?,
     ));
+    let db_records_adapter = match dynamic_state.lock() {
+        Ok(state) => state.db_records_adapter,
+        Err(_) => {
+            eprintln!("run failed: dynamic response state unavailable");
+            return Err(2);
+        }
+    };
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
@@ -8478,6 +8485,7 @@ fn cmd_run_lasm_backend(
             let trace_counter_for_worker = Arc::clone(&trace_counter);
             let header_defaults_for_worker = Arc::clone(&header_defaults);
             let dynamic_state_for_worker = Arc::clone(&dynamic_state);
+            let db_records_adapter_for_worker = db_records_adapter;
             worker_handles.push(std::thread::spawn(move || {
                 let mut runtime = match build_lasm_http_runtime(
                     &routes_for_worker,
@@ -8506,6 +8514,7 @@ fn cmd_run_lasm_backend(
                         trace_counter_for_worker.as_ref(),
                         header_defaults_for_worker.as_ref(),
                         dynamic_state_for_worker.as_ref(),
+                        db_records_adapter_for_worker,
                     ) {
                         eprintln!("warning: LASM backend worker failed: {message}");
                     }
@@ -8556,6 +8565,7 @@ fn cmd_run_lasm_backend(
                 trace_counter.as_ref(),
                 header_defaults.as_ref(),
                 dynamic_state.as_ref(),
+                db_records_adapter,
             ) {
                 eprintln!("warning: LASM backend worker failed: {message}");
             };
@@ -8893,6 +8903,7 @@ fn process_lasm_connection_with_runtime(
     trace_counter: &AtomicU64,
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
 ) -> Result<(), String> {
     let mut responses_written = 0usize;
     let mut request_reader = BufReader::new(
@@ -9046,6 +9057,7 @@ fn process_lasm_connection_with_runtime(
                 &exchange.path_params,
                 header_defaults,
                 dynamic_state,
+                db_records_adapter,
                 trace_id.as_str(),
             );
             materialize_lasm_internal_runtime_error_envelope(&mut response, trace_id.as_str());
@@ -9364,6 +9376,7 @@ fn apply_lasm_dynamic_response_materialization(
     path_params: &BTreeMap<String, String>,
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
     trace_id: &str,
 ) {
     if apply_lasm_auth_requirement_enforcement(
@@ -9388,6 +9401,7 @@ fn apply_lasm_dynamic_response_materialization(
         request,
         path_params,
         dynamic_state,
+        db_records_adapter,
         trace_id,
     ) {
         clear_lasm_internal_response_markers(response);
