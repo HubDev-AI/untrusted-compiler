@@ -43,7 +43,7 @@ if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*an
   exit 1
 fi
 
-tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-cluster-accept-workers 4 --saturation-cluster-relay-accept-batch-max 333 --saturation-cluster-relay-pump-batch-max 444 --saturation-skip-verify)"
+tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-build-profile debug --saturation-samples 3 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-cluster-accept-workers 4 --saturation-cluster-relay-accept-batch-max 333 --saturation-cluster-relay-pump-batch-max 444 --saturation-skip-verify)"
 if ! grep -q 'projectPath=examples/hello' <<<"$tuned_sat"; then
   echo "missing delegated saturation project-path override" >&2
   exit 1
@@ -62,6 +62,14 @@ if ! grep -q 'connections=99' <<<"$tuned_sat"; then
 fi
 if ! grep -q 'targetRequests=12345' <<<"$tuned_sat"; then
   echo "missing delegated saturation target-requests override" >&2
+  exit 1
+fi
+if ! grep -q 'buildProfile=debug' <<<"$tuned_sat"; then
+  echo "missing delegated saturation build-profile override" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$tuned_sat"; then
+  echo "missing delegated saturation samples override" >&2
   exit 1
 fi
 if ! grep -q 'clusterRelayWorkers=11' <<<"$tuned_sat"; then
@@ -103,7 +111,7 @@ if ! grep -q 'autoscaleMaxInstances=4' <<<"$fixed_sat"; then
   exit 1
 fi
 
-out_mode="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-mode-compare --saturation-duration 12s --saturation-threads 3 --saturation-connections 44 --saturation-target-requests 555 --saturation-cluster-relay-pump-batch-max 77)"
+out_mode="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-mode-compare --saturation-duration 12s --saturation-threads 3 --saturation-connections 44 --saturation-target-requests 555 --saturation-build-profile release --saturation-samples 2 --saturation-cluster-relay-pump-batch-max 77)"
 if ! grep -q '^phase: lasm mode compare$' <<<"$out_mode"; then
   echo "missing lasm mode-compare phase" >&2
   exit 1
@@ -126,6 +134,14 @@ if ! grep -q 'connections=44' <<<"$out_mode"; then
 fi
 if ! grep -q 'targetRequests=555' <<<"$out_mode"; then
   echo "missing delegated mode-compare target-requests override" >&2
+  exit 1
+fi
+if ! grep -q 'buildProfile=release' <<<"$out_mode"; then
+  echo "missing delegated mode-compare build-profile override" >&2
+  exit 1
+fi
+if ! grep -q 'samples=2' <<<"$out_mode"; then
+  echo "missing delegated mode-compare samples override" >&2
   exit 1
 fi
 if ! grep -q 'proxyClusterRelayPumpBatchMax=77' <<<"$out_mode"; then

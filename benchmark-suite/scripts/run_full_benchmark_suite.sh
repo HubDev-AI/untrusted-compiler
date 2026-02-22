@@ -6,6 +6,7 @@ usage() {
 usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
           [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
+          [--saturation-build-profile debug|release] [--saturation-samples n]
           [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
           [--saturation-connections n] [--saturation-target-requests n]
           [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
@@ -25,6 +26,8 @@ include_lasm_mode_compare="${LASM_INCLUDE_MODE_COMPARE:-false}"
 include_lasm_saturation="false"
 saturation_skip_verify="false"
 saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
+saturation_build_profile=""
+saturation_samples=""
 saturation_project_path=""
 saturation_duration=""
 saturation_threads=""
@@ -101,6 +104,30 @@ while [ "$#" -gt 0 ]; do
       ;;
     --saturation-boost-steps=*)
       saturation_boost_steps_csv="${1#--saturation-boost-steps=}"
+      shift
+      ;;
+    --saturation-build-profile)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_build_profile="$2"
+      shift 2
+      ;;
+    --saturation-build-profile=*)
+      saturation_build_profile="${1#--saturation-build-profile=}"
+      shift
+      ;;
+    --saturation-samples)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_samples="$2"
+      shift 2
+      ;;
+    --saturation-samples=*)
+      saturation_samples="${1#--saturation-samples=}"
       shift
       ;;
     --saturation-project-path)
@@ -322,6 +349,12 @@ if [ "${include_lasm_saturation}" = "true" ]; then
   if [ -n "${saturation_target_requests}" ]; then
     saturation_args+=(--target-requests "${saturation_target_requests}")
   fi
+  if [ -n "${saturation_build_profile}" ]; then
+    saturation_args+=(--build-profile "${saturation_build_profile}")
+  fi
+  if [ -n "${saturation_samples}" ]; then
+    saturation_args+=(--samples "${saturation_samples}")
+  fi
   if [ -n "${saturation_cluster_relay_workers}" ]; then
     saturation_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
   fi
@@ -365,6 +398,12 @@ if [ "${include_lasm_mode_compare}" = "true" ]; then
   fi
   if [ -n "${saturation_target_requests}" ]; then
     mode_compare_args+=(--target-requests "${saturation_target_requests}")
+  fi
+  if [ -n "${saturation_build_profile}" ]; then
+    mode_compare_args+=(--build-profile "${saturation_build_profile}")
+  fi
+  if [ -n "${saturation_samples}" ]; then
+    mode_compare_args+=(--samples "${saturation_samples}")
   fi
   if [ -n "${saturation_cluster_relay_workers}" ]; then
     mode_compare_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
