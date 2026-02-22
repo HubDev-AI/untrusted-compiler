@@ -1400,5 +1400,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1428-m39-lasm-db-positional-object-sql-params.md`
 - `1429-m39-lasm-bulk-reuse-port-reservation.md`
 - `1430-m39-lasm-db-dispatch-preparse-postgres-params.md`
+- `1431-m39-lasm-db-dispatch-preparse-sqlite-params.md`
 
 As milestones progress, chapters will be added and linked from this index.

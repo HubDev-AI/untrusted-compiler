@@ -48,7 +48,7 @@ fn parse_lasm_sqlite_positional_object_params(
     Some(params)
 }
 
-fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
+pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
         return Vec::new();
@@ -157,9 +157,8 @@ fn validate_lasm_sqlite_parameter_arity(
 pub(crate) fn run_lasm_sqlite_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
-    params: &str,
+    sqlite_params: &[SqliteValue],
 ) -> Result<u64, String> {
-    let sqlite_params = parse_lasm_sqlite_query_params(params);
     run_lasm_sqlite_with_connection_retry(state, "sqlite execution", |connection| {
         let tx = connection
             .transaction()
@@ -214,15 +213,15 @@ pub(crate) fn run_lasm_sqlite_exec(
 pub(crate) fn run_lasm_sqlite_exec_tx(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
-    params: &str,
+    sqlite_params: &[SqliteValue],
 ) -> Result<u64, String> {
-    run_lasm_sqlite_exec(state, query_template, params)
+    run_lasm_sqlite_exec(state, query_template, sqlite_params)
 }
 
 pub(crate) fn run_lasm_sqlite_query_one(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
-    params: &str,
+    sqlite_params: &[SqliteValue],
 ) -> Result<Option<serde_json::Value>, String> {
     let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
     if normalized_query.trim().is_empty() {
@@ -231,7 +230,6 @@ pub(crate) fn run_lasm_sqlite_query_one(
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
         return Err("sqlite queryOne requires SELECT-style SQL statement".to_string());
     }
-    let sqlite_params = parse_lasm_sqlite_query_params(params);
     run_lasm_sqlite_with_connection_retry(state, "sqlite queryOne", |connection| {
         let mut statement = connection
             .prepare_cached(normalized_query.as_str())
