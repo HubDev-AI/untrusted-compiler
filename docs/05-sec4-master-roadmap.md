@@ -1801,6 +1801,11 @@ Post-alpha track acceptance anchors:
       - telemetry is emitted for all adapters (records.log/sqlite/postgres) from shared dynamic runtime state,
       - this gives operators direct visibility into runtime cache utilization during DB-path tuning/debug runs.
       - documented in `docs/book/1406-m39-lasm-db-cache-telemetry-in-list-records.md`.
+   - [x] Added Postgres cache-eviction telemetry counters:
+      - `dbCache` now includes cumulative `postgresStatementEvictedTotal` and `postgresPlaceholderEvictedTotal`,
+      - counters increment on capacity-triggered cache clears for prepared-statement and placeholder-index caches,
+      - this exposes cache churn signal (not only count/capacity snapshots) for live DB tuning.
+      - documented in `docs/book/1411-m39-postgres-cache-eviction-telemetry.md`.
    - [x] Added bounded LASM DB record-history capacity guard:
       - new runtime env control `SEC4_RT_LASM_DB_RECORDS_MAX` (default `10000`) bounds in-memory `db_records` history and drops oldest entries on overflow,
       - startup record load now applies the same bound to prevent unbounded process-memory growth from large persisted DB stores,

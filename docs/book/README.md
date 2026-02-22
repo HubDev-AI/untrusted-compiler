@@ -1380,5 +1380,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1408-m39-lasm-db-record-history-capacity-guard.md`
 - `1409-m39-lasm-db-records-limit-window.md`
 - `1410-m39-run-db-records-max-flag.md`
+- `1411-m39-postgres-cache-eviction-telemetry.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -148,6 +148,10 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
             .map_err(|err| format!("postgres prepare failed: {err}"))?
     };
     if state.db_records_postgres_statement_cache.len() >= state.db_postgres_statement_cache_max {
+        let evicted = state.db_records_postgres_statement_cache.len() as u64;
+        state.db_postgres_statement_cache_evictions_total = state
+            .db_postgres_statement_cache_evictions_total
+            .saturating_add(evicted);
         state.db_records_postgres_statement_cache.clear();
     }
     state
