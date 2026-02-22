@@ -1805,6 +1805,10 @@ Post-alpha track acceptance anchors:
       - cluster state now tracks reclaimed worker ports and reuses them for future scale-up/min-worker recovery reservations before consuming new `next_port` values,
       - dead-worker pruning and autoscale scale-down paths now feed reclaimed ports into the reuse pool.
       - documented in `docs/book/1424-m39-lasm-cluster-worker-port-reuse-pool.md`.
+   - [x] Returned unspawned reserved ports to reusable pool on autoscale spawn failures:
+      - autoscale spawn/apply path now tracks partial spawn progress and reclaims remaining reserved worker ports into `reusable_ports` when spawn fails mid-batch,
+      - this avoids dropping reserved ports on failure paths while preserving existing autoscale warning and partial-apply behavior.
+      - documented in `docs/book/1425-m39-lasm-autoscale-unspawned-port-reclaim.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

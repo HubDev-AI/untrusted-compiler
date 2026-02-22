@@ -241,11 +241,14 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 workers_changed_after_initial_refresh = true;
             }
             spawned_workers.reserve(workers_to_spawn_ports.len());
-            for worker_port in workers_to_spawn_ports.drain(..) {
+            let mut spawn_index = 0usize;
+            while spawn_index < workers_to_spawn_ports.len() {
+                let worker_port = workers_to_spawn_ports[spawn_index];
                 match spawn_and_wait_lasm_cluster_worker(&shared_config, worker_port) {
                     Ok(worker) => {
                         spawned_workers.push(worker);
                         workers_changed_after_initial_refresh = true;
+                        spawn_index += 1;
                     }
                     Err(message) => {
                         eprintln!("warning: LASM cluster autoscale-up failed: {message}");
@@ -253,7 +256,8 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     }
                 }
             }
-            if workers_changed_after_initial_refresh {
+            let has_unspawned_ports = spawn_index < workers_to_spawn_ports.len();
+            if workers_changed_after_initial_refresh || has_unspawned_ports {
                 let mut state = match state.write() {
                     Ok(state) => state,
                     Err(_) => break,
@@ -261,12 +265,20 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 if !spawned_workers.is_empty() {
                     state.workers.extend(spawned_workers.drain(..));
                 }
-                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-                    &state,
-                    &worker_ports_snapshot,
-                    &mut last_published_worker_ports,
-                );
+                if has_unspawned_ports {
+                    state
+                        .reusable_ports
+                        .extend_from_slice(&workers_to_spawn_ports[spawn_index..]);
+                }
+                if workers_changed_after_initial_refresh {
+                    refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                        &state,
+                        &worker_ports_snapshot,
+                        &mut last_published_worker_ports,
+                    );
+                }
             }
+            workers_to_spawn_ports.clear();
             if cooldown_anchor_changed {
                 autoscale_scale_up_cooldown_remaining_ms.store(
                     lasm_cluster_remaining_cooldown_ms(
