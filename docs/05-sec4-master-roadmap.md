@@ -1641,6 +1641,10 @@ Post-alpha track acceptance anchors:
       - repeated `Unavailable(client_stream)` dispatch-error handling branches in accept-loop degraded paths now route through one helper (`handle_lasm_cluster_accept_unavailable_stream`),
       - preserves deterministic accept-loop error counters/envelopes while reducing repeated inline unavailable handling blocks.
       - documented in `docs/book/1371-m39-lasm-cluster-accept-loop-unavailable-stream-helper.md`.
+   - [x] Unified accept-loop dispatch-counter flush blocks in one helper:
+      - duplicated accept-error flush blocks now call one shared helper (`flush_lasm_cluster_accept_dispatch_counters`) for saturation/fallback/short-circuit local counter flushes,
+      - accept-loop final-tail dispatch-counter flush now reuses the same helper path.
+      - documented in `docs/book/1372-m39-lasm-cluster-accept-loop-dispatch-counter-flush-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
