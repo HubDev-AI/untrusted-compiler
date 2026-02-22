@@ -32,6 +32,18 @@ pub(crate) struct LasmClusterAutoscaleLoopConfig {
     pub(crate) saturation_priority_interval_ms: u64,
 }
 
+#[inline(always)]
+fn store_lasm_cluster_reusable_ports_count_if_changed(
+    reusable_ports_count: &AtomicUsize,
+    last_reusable_ports_count: &mut usize,
+    next_reusable_ports_count: usize,
+) {
+    if next_reusable_ports_count != *last_reusable_ports_count {
+        reusable_ports_count.store(next_reusable_ports_count, Ordering::Relaxed);
+        *last_reusable_ports_count = next_reusable_ports_count;
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_autoscale_loop(
     config: LasmClusterAutoscaleLoopConfig,
 ) -> std::thread::JoinHandle<()> {
@@ -62,6 +74,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
         let mut last_scale_up_at: Option<Instant> = None;
         let mut last_scale_down_at: Option<Instant> = None;
         let mut last_published_worker_ports = worker_ports_snapshot.load().as_ref().clone();
+        let mut last_reusable_ports_count = reusable_ports_count.load(Ordering::Relaxed);
         let mut last_scale_eval_at = Instant::now()
             .checked_sub(autoscale_check_interval)
             .unwrap_or_else(Instant::now);
@@ -97,7 +110,11 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     shared_config.min_instances,
                     &mut workers_to_spawn_ports,
                 );
-                reusable_ports_count.store(state.reusable_ports.len(), Ordering::Relaxed);
+                store_lasm_cluster_reusable_ports_count_if_changed(
+                    &reusable_ports_count,
+                    &mut last_reusable_ports_count,
+                    state.reusable_ports.len(),
+                );
                 if !autoscale_enabled {
                     autoscale_last_desired_instances.store(state.workers.len(), Ordering::Relaxed);
                     autoscale_last_saturation_events.store(0, Ordering::Relaxed);
@@ -276,7 +293,11 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                         .reusable_ports
                         .extend_from_slice(&workers_to_spawn_ports[spawn_index..]);
                 }
-                reusable_ports_count.store(state.reusable_ports.len(), Ordering::Relaxed);
+                store_lasm_cluster_reusable_ports_count_if_changed(
+                    &reusable_ports_count,
+                    &mut last_reusable_ports_count,
+                    state.reusable_ports.len(),
+                );
                 if workers_changed_after_initial_refresh {
                     refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                         &state,

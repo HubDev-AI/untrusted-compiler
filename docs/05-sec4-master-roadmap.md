@@ -1834,6 +1834,10 @@ Post-alpha track acceptance anchors:
       - autoscale pre-action snapshot publish now runs only when prune/scale-down mutates worker membership,
       - spawn/stop apply path keeps post-action refresh behavior for topology-changing worker lifecycle events.
       - documented in `docs/book/1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`.
+   - [x] Suppressed no-op reusable-port telemetry atomic stores in autoscale loop:
+      - autoscale loop now tracks last published `reusablePortsCount` and writes the shared atomic only when reusable-port pool size changes,
+      - both maintenance pre-action path and spawn/apply path now reuse this change-detection helper to avoid redundant per-tick atomic store churn.
+      - documented in `docs/book/1438-m39-lasm-autoscale-reusable-port-telemetry-store-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
