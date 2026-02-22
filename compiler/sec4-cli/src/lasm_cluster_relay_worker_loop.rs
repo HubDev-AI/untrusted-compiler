@@ -526,6 +526,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             let mut accepted = false;
             let mut accepted_in_batch = 0_usize;
             let mut worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
+            let mut worker_ports_snapshot_loaded = false;
             if unhealthy_port_count > 0 {
                 let now = Instant::now();
                 let should_prune = match unhealthy_prune_next_at {
@@ -578,7 +579,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     } else {
                         Some(now + unhealthy_prune_interval)
                     };
-                    worker_ports_snapshot = Some(Arc::clone(&selected_worker_ports_snapshot));
+                    worker_ports_snapshot_loaded = true;
                 }
             }
             loop {
@@ -599,51 +600,50 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 accepted = true;
                 accepted_in_batch += 1;
 
-                if worker_ports_snapshot.is_none() || selection_lookup_dirty {
-                    if worker_ports_snapshot.is_none() {
+                if !worker_ports_snapshot_loaded || selection_lookup_dirty {
+                    if !worker_ports_snapshot_loaded {
                         if let Some(snapshot) = load_lasm_cluster_worker_ports_snapshot_if_changed(
                             &relay_worker_ports,
                             &selected_worker_ports_snapshot,
                         ) {
                             worker_ports_snapshot = Some(snapshot);
-                        } else {
-                            worker_ports_snapshot =
-                                Some(Arc::clone(&selected_worker_ports_snapshot));
                         }
+                        worker_ports_snapshot_loaded = true;
                     }
-                    let worker_ports_snapshot_ref = worker_ports_snapshot
-                        .as_ref()
-                        .expect("worker port snapshot loaded before backend selection");
-                    if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref) {
-                        let now = Instant::now();
-                        let previous_ports_snapshot = std::mem::replace(
-                            &mut selected_worker_ports_snapshot,
-                            Arc::clone(worker_ports_snapshot_ref),
-                        );
-                        let previous_unhealthy_ports_until_by_index =
-                            std::mem::take(&mut unhealthy_ports_until_by_index);
-                        let previous_connect_warning_next_allowed_by_index =
-                            std::mem::take(&mut connect_warning_next_allowed_by_index);
-                        selected_worker_port_count = selected_worker_ports_snapshot.len();
-                        rebuild_lasm_cluster_worker_backend_addrs(
-                            selected_worker_ports_snapshot.as_ref(),
-                            &mut selected_worker_backend_addrs,
-                        );
-                        unhealthy_port_count = remap_lasm_cluster_relay_port_state_by_index(
-                            previous_ports_snapshot.as_ref(),
-                            selected_worker_ports_snapshot.as_ref(),
-                            previous_unhealthy_ports_until_by_index.as_slice(),
-                            previous_connect_warning_next_allowed_by_index.as_slice(),
-                            now,
-                            &mut unhealthy_ports_until_by_index,
-                            &mut connect_warning_next_allowed_by_index,
-                        );
-                        unhealthy_prune_next_at = if unhealthy_port_count == 0 {
-                            None
-                        } else {
-                            Some(now + unhealthy_prune_interval)
-                        };
-                        selection_lookup_dirty = true;
+                    if let Some(worker_ports_snapshot_ref) = worker_ports_snapshot.as_ref() {
+                        if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref)
+                        {
+                            let now = Instant::now();
+                            let next_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
+                            let previous_ports_snapshot = std::mem::replace(
+                                &mut selected_worker_ports_snapshot,
+                                next_ports_snapshot,
+                            );
+                            let previous_unhealthy_ports_until_by_index =
+                                std::mem::take(&mut unhealthy_ports_until_by_index);
+                            let previous_connect_warning_next_allowed_by_index =
+                                std::mem::take(&mut connect_warning_next_allowed_by_index);
+                            selected_worker_port_count = selected_worker_ports_snapshot.len();
+                            rebuild_lasm_cluster_worker_backend_addrs(
+                                selected_worker_ports_snapshot.as_ref(),
+                                &mut selected_worker_backend_addrs,
+                            );
+                            unhealthy_port_count = remap_lasm_cluster_relay_port_state_by_index(
+                                previous_ports_snapshot.as_ref(),
+                                selected_worker_ports_snapshot.as_ref(),
+                                previous_unhealthy_ports_until_by_index.as_slice(),
+                                previous_connect_warning_next_allowed_by_index.as_slice(),
+                                now,
+                                &mut unhealthy_ports_until_by_index,
+                                &mut connect_warning_next_allowed_by_index,
+                            );
+                            unhealthy_prune_next_at = if unhealthy_port_count == 0 {
+                                None
+                            } else {
+                                Some(now + unhealthy_prune_interval)
+                            };
+                            selection_lookup_dirty = true;
+                        }
                     }
                     let worker_port_count = selected_worker_port_count;
                     if worker_port_count <= 1 {

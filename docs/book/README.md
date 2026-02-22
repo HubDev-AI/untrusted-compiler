@@ -1395,5 +1395,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1423-m39-lasm-autoscale-recovery-port-buffer-reuse.md`
 - `1424-m39-lasm-cluster-worker-port-reuse-pool.md`
 - `1425-m39-lasm-autoscale-unspawned-port-reclaim.md`
+- `1426-m39-lasm-relay-batch-snapshot-clone-elision.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1809,6 +1809,10 @@ Post-alpha track acceptance anchors:
       - autoscale spawn/apply path now tracks partial spawn progress and reclaims remaining reserved worker ports into `reusable_ports` when spawn fails mid-batch,
       - this avoids dropping reserved ports on failure paths while preserving existing autoscale warning and partial-apply behavior.
       - documented in `docs/book/1425-m39-lasm-autoscale-unspawned-port-reclaim.md`.
+   - [x] Removed unchanged-topology snapshot clone from relay worker batch path:
+      - relay worker loop now tracks whether a worker-port snapshot was already loaded for the current batch and reuses the selected snapshot directly when topology is unchanged,
+      - this avoids per-batch `Arc` clone churn on steady-state topology while preserving existing selection/remap logic when topology actually changes.
+      - documented in `docs/book/1426-m39-lasm-relay-batch-snapshot-clone-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
