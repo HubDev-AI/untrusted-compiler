@@ -1572,6 +1572,10 @@ Post-alpha track acceptance anchors:
       - backend selection lookup rebuild now materializes ordered healthy backend indices and maps selection slots cyclically across healthy backends when some workers are unhealthy,
       - removes gap-weighted degraded routing bias tied to dead-worker index spans and keeps degraded load spread deterministic across remaining healthy backends.
       - documented in `docs/book/1354-m39-lasm-cluster-cyclic-healthy-lookup-selection.md`.
+   - [x] Routed degraded reservation cadence through healthy-cycle span:
+      - backend lookup rebuild now returns explicit degraded healthy cycle span, and relay selection reservation now uses that span for modulo/cursor progression when not in identity mode,
+      - removes remaining dead-slot influence from degraded reservation cadence and keeps reservation churn scoped to healthy backend count.
+      - documented in `docs/book/1355-m39-lasm-cluster-healthy-cycle-span-reservation-selection.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
