@@ -525,7 +525,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             {
                                 next_live_index
                             } else {
-                                next_dispatch_wrapped
+                                stream_dispatch_start
                             }
                         } else {
                             next_dispatch_wrapped
