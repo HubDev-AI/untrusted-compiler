@@ -789,18 +789,17 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     if pump_outcome.removed {
                         relay_count -= 1;
                     } else {
-                        index += 1
+                        index += 1;
                     }
                 }
                 relay_pump_cursor = 0;
             } else {
-                let _ = normalize_lasm_cluster_relay_pump_cursor(
-                    &mut relay_pump_cursor,
-                    relay_connections.len(),
-                );
-                let mut pump_budget = relay_pump_batch_max.min(relay_connections.len());
+                let mut relay_count = relay_connections.len();
+                let _ =
+                    normalize_lasm_cluster_relay_pump_cursor(&mut relay_pump_cursor, relay_count);
+                let mut pump_budget = relay_pump_batch_max.min(relay_count);
                 while pump_budget > 0 {
-                    let relay_len_before_step = relay_connections.len();
+                    let relay_len_before_step = relay_count;
                     let pump_outcome = pump_lasm_cluster_relay_connection_once(
                         &mut relay_connections,
                         relay_pump_cursor,
@@ -815,9 +814,10 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     }
                     pump_budget -= 1;
                     if pump_outcome.removed {
+                        relay_count -= 1;
                         if normalize_lasm_cluster_relay_pump_cursor(
                             &mut relay_pump_cursor,
-                            relay_connections.len(),
+                            relay_count,
                         ) {
                             break;
                         }
