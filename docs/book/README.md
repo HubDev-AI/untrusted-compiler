@@ -1314,5 +1314,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1342-m39-lasm-cluster-resolver-invariant-and-saturation-inline-flush.md`
 - `1343-m39-lasm-cluster-accept-loop-fallback-branch-tree-match.md`
 - `1344-m39-lasm-cluster-next-live-scan-direct-wrap-progression.md`
+- `1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`
 
 As milestones progress, chapters will be added and linked from this index.

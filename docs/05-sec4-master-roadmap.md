@@ -1539,6 +1539,10 @@ Post-alpha track acceptance anchors:
       - `lasm_cluster_next_live_sender_index` now advances scan cursor with direct increment + wrap reset instead of calling wrapped-index helper each iteration,
       - preserves scan semantics while reducing helper-call overhead in a shared degraded-routing utility used across accept/fallback paths.
       - documented in `docs/book/1344-m39-lasm-cluster-next-live-scan-direct-wrap-progression.md`.
+   - [x] Inlined fallback scan-advance wrapped-step arithmetic:
+      - `advance_lasm_cluster_fallback_scan_index` now computes next-scan wrapped index and forward-distance slots directly in-function,
+      - removed helper indirection for wrapped-forward-distance calculation while preserving fallback scan step semantics and slot advancement behavior.
+      - documented in `docs/book/1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

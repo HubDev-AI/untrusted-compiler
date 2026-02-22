@@ -57,18 +57,6 @@ fn lasm_cluster_fallback_terminal_dispatch_error(
 }
 
 #[inline(always)]
-fn lasm_cluster_forward_distance_wrapped(start: usize, end: usize, count: usize) -> usize {
-    debug_assert!(count > 0);
-    debug_assert!(start < count);
-    debug_assert!(end < count);
-    if end >= start {
-        end - start
-    } else {
-        count - start + end
-    }
-}
-
-#[inline(always)]
 fn advance_lasm_cluster_fallback_scan_index(
     relay_sender_live: &[u8],
     relay_next_live_sender_lookup: &[usize],
@@ -79,7 +67,11 @@ fn advance_lasm_cluster_fallback_scan_index(
     debug_assert!(sender_count > 0);
     debug_assert!(current_index < sender_count);
 
-    let next_scan_start = lasm_cluster_next_index_wrapped(current_index, sender_count);
+    let next_scan_start = if current_index + 1 == sender_count {
+        0
+    } else {
+        current_index + 1
+    };
     let next_scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         next_scan_start
     } else if relay_has_next_live_sender_lookup {
@@ -100,8 +92,12 @@ fn advance_lasm_cluster_fallback_scan_index(
     } else {
         next_scan_start
     };
-    let advanced_slots =
-        lasm_cluster_forward_distance_wrapped(current_index, next_scan_index, sender_count).max(1);
+    let advanced_slots = if next_scan_index >= current_index {
+        next_scan_index - current_index
+    } else {
+        sender_count - current_index + next_scan_index
+    }
+    .max(1);
     (next_scan_index, advanced_slots)
 }
 
