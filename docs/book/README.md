@@ -1388,5 +1388,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1416-m39-lasm-cluster-relay-worker-snapshot-clone-elision.md`
 - `1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`
 - `1418-m39-lasm-relay-fallback-start-cursor-precompute.md`
+- `1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`
 
 As milestones progress, chapters will be added and linked from this index.
