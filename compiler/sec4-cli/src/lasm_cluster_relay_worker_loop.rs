@@ -367,17 +367,20 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                         let mut fallback_connected = false;
                         let mut fallback_client = Some(client);
                         if unhealthy_port_count < selected_worker_port_count {
-                            for candidate_step in 1..selected_worker_port_count {
-                                let fallback_backend_index = {
-                                    let candidate_index = selected_backend_index + candidate_step;
-                                    if candidate_index >= selected_worker_port_count {
-                                        candidate_index - selected_worker_port_count
-                                    } else {
-                                        candidate_index
-                                    }
-                                };
+                            let mut fallback_backend_index = selected_backend_index + 1;
+                            if fallback_backend_index == selected_worker_port_count {
+                                fallback_backend_index = 0;
+                            }
+                            let mut remaining_fallback_scan =
+                                selected_worker_port_count.saturating_sub(1);
+                            while remaining_fallback_scan > 0 {
                                 if unhealthy_ports_until_by_index[fallback_backend_index].is_some()
                                 {
+                                    fallback_backend_index += 1;
+                                    if fallback_backend_index == selected_worker_port_count {
+                                        fallback_backend_index = 0;
+                                    }
+                                    remaining_fallback_scan -= 1;
                                     continue;
                                 }
                                 let fallback_backend_addr =
@@ -479,8 +482,16 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                 fallback_now + relay_warning_throttle_duration,
                                             );
                                         }
+                                        if unhealthy_port_count >= selected_worker_port_count {
+                                            break;
+                                        }
                                     }
                                 }
+                                fallback_backend_index += 1;
+                                if fallback_backend_index == selected_worker_port_count {
+                                    fallback_backend_index = 0;
+                                }
+                                remaining_fallback_scan -= 1;
                             }
                         }
                         if fallback_connected {
