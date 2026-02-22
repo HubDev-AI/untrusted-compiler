@@ -4,6 +4,7 @@ use std::net::TcpStream;
 use crate::lasm_cluster_relay_send::attempt_lasm_cluster_relay_send;
 use crate::lasm_cluster_relay_topology::{
     lasm_cluster_next_live_sender_index, lookup_lasm_cluster_next_live_sender_index,
+    refresh_lasm_cluster_next_live_sender_lookup,
     resolve_lasm_cluster_next_live_sender_index_with_lookup_state,
 };
 use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
@@ -29,7 +30,7 @@ fn lasm_cluster_fallback_terminal_dispatch_error(
 #[inline(always)]
 fn advance_lasm_cluster_fallback_scan_index(
     relay_sender_live: &[u8],
-    relay_next_live_sender_lookup: &[usize],
+    relay_next_live_sender_lookup: &mut [usize],
     relay_has_next_live_sender_lookup: bool,
     current_index: usize,
 ) -> (usize, usize) {
@@ -53,7 +54,16 @@ fn advance_lasm_cluster_fallback_scan_index(
         ) {
             next_live_index
         } else {
-            next_scan_start
+            refresh_lasm_cluster_next_live_sender_lookup(
+                relay_sender_live,
+                relay_next_live_sender_lookup,
+            );
+            lookup_lasm_cluster_next_live_sender_index(
+                relay_sender_live,
+                relay_next_live_sender_lookup,
+                next_scan_start,
+            )
+            .unwrap_or(next_scan_start)
         }
     } else if let Some(next_live_index) =
         lasm_cluster_next_live_sender_index(relay_sender_live, next_scan_start)
@@ -69,6 +79,36 @@ fn advance_lasm_cluster_fallback_scan_index(
     }
     .max(1);
     (next_scan_index, advanced_slots)
+}
+
+#[inline(always)]
+fn resolve_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: &mut [usize],
+    relay_has_next_live_sender_lookup: bool,
+    start_index_wrapped: usize,
+) -> Option<usize> {
+    if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+        relay_sender_live,
+        relay_next_live_sender_lookup,
+        relay_has_next_live_sender_lookup,
+        start_index_wrapped,
+    ) {
+        return Some(next_live_index);
+    }
+    if relay_has_next_live_sender_lookup {
+        refresh_lasm_cluster_next_live_sender_lookup(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+        );
+        return resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            relay_has_next_live_sender_lookup,
+            start_index_wrapped,
+        );
+    }
+    None
 }
 
 #[inline(always)]
@@ -152,7 +192,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
     relay_sender_live: &mut [u8],
-    relay_next_live_sender_lookup: &[usize],
+    relay_next_live_sender_lookup: &mut [usize],
     relay_has_next_live_sender_lookup: bool,
     relay_live_sender_count: &mut usize,
     relay_all_senders_live: &mut bool,
@@ -210,7 +250,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     }
     let scan_live_target = *relay_live_sender_count - 1;
     if scan_live_target <= 1 {
-        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
             relay_sender_live,
             relay_next_live_sender_lookup,
             relay_has_next_live_sender_lookup,
@@ -234,7 +274,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     }
     if scan_live_target == 2 {
         if let Some(first_live_index) =
-            resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+            resolve_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
                 relay_has_next_live_sender_lookup,
@@ -270,7 +310,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 if relay_sender_live[second_start_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
                     Some(second_start_index)
                 } else {
-                    resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+                    resolve_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
                         relay_sender_live,
                         relay_next_live_sender_lookup,
                         relay_has_next_live_sender_lookup,
