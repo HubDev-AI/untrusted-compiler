@@ -1535,6 +1535,10 @@ Post-alpha track acceptance anchors:
       - accept-loop fallback dispatch now branches `relay_all_senders_live` first, then uses `match relay_live_sender_count` for degraded paths (`2`, `1`, default) instead of repeated `!relay_all_senders_live && count==...` checks,
       - preserves fallback behavior while reducing repeated boolean conjunction checks in failed-primary-dispatch handling.
       - documented in `docs/book/1343-m39-lasm-cluster-accept-loop-fallback-branch-tree-match.md`.
+   - [x] Tightened shared next-live sender scan helper loop progression:
+      - `lasm_cluster_next_live_sender_index` now advances scan cursor with direct increment + wrap reset instead of calling wrapped-index helper each iteration,
+      - preserves scan semantics while reducing helper-call overhead in a shared degraded-routing utility used across accept/fallback paths.
+      - documented in `docs/book/1344-m39-lasm-cluster-next-live-scan-direct-wrap-progression.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

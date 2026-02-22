@@ -23,7 +23,10 @@ pub(crate) fn lasm_cluster_next_live_sender_index(
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
             return Some(scan_index);
         }
-        scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+        scan_index += 1;
+        if scan_index == sender_count {
+            scan_index = 0;
+        }
     }
     None
 }
