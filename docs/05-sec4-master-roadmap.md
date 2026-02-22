@@ -1797,6 +1797,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now reuses spawn/stop/spawned worker vectors via `clear()` + `drain(..)` instead of allocating fresh vectors on each cycle,
       - this reduces per-tick allocation churn in scale planning/apply paths while preserving existing autoscale behavior.
       - documented in `docs/book/1422-m39-lasm-autoscale-loop-buffer-reuse.md`.
+   - [x] Removed recovery-port temporary vector allocation in autoscale loop:
+      - min-worker recovery port reservation now fills the existing autoscale spawn-port buffer directly instead of returning a temporary vector each tick,
+      - this keeps recovery reservation on the same reusable autoscale buffer path while preserving deterministic port-reservation behavior.
+      - documented in `docs/book/1423-m39-lasm-autoscale-recovery-port-buffer-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
