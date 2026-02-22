@@ -1551,6 +1551,10 @@ Post-alpha track acceptance anchors:
       - saturation batch count now uses direct quotient+remainder rounding (under non-zero flush-batch invariant), and scale-up/down bounds now use direct remaining-capacity / bounded-subtraction math instead of saturating add/sub helper chains,
       - preserves autoscale semantics while trimming saturating arithmetic overhead in the periodic LASM cluster autoscale loop.
       - documented in `docs/book/1347-m39-lasm-cluster-autoscale-direct-bounded-arithmetic.md`.
+   - [x] Tightened relay worker selection/pump cursor progression to direct wrap increments:
+      - relay selection reservation next-index progression now uses direct increment+wrap instead of wrapped-index helper calls,
+      - relay pump cursor advancement in the batched pump loop now uses direct increment+wrap for `Progressed`/`Idle` steps.
+      - documented in `docs/book/1348-m39-lasm-cluster-relay-worker-direct-wrap-cursor-progression.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

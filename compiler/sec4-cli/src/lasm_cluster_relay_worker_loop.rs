@@ -14,7 +14,6 @@ use crate::lasm_cluster_backend_selection::{
     remap_lasm_cluster_relay_port_state_by_index, LASM_CLUSTER_SELECTION_LOOKUP_NONE,
 };
 use crate::lasm_cluster_relay_pump::{LasmClusterRelayPump, LasmClusterRelayPumpStep};
-use crate::lasm_cluster_relay_topology::lasm_cluster_next_index_wrapped;
 use crate::{
     LASM_CLUSTER_IDLE_SLEEP_MICROS, LASM_CLUSTER_IDLE_SPIN_THRESHOLD,
     LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
@@ -260,8 +259,10 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                         }
                         let start_index = relay_selection_reservation_next_index;
                         relay_selection_reservation_offset += 1;
-                        relay_selection_reservation_next_index =
-                            lasm_cluster_next_index_wrapped(start_index, worker_port_count);
+                        relay_selection_reservation_next_index += 1;
+                        if relay_selection_reservation_next_index == worker_port_count {
+                            relay_selection_reservation_next_index = 0;
+                        }
                         if selection_lookup_is_identity {
                             start_index
                         } else {
@@ -403,17 +404,17 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     match relay_connections[relay_pump_cursor].pump_once() {
                         Ok(LasmClusterRelayPumpStep::Progressed) => {
                             progressed = true;
-                            relay_pump_cursor = lasm_cluster_next_index_wrapped(
-                                relay_pump_cursor,
-                                relay_len_before_step,
-                            );
+                            relay_pump_cursor += 1;
+                            if relay_pump_cursor == relay_len_before_step {
+                                relay_pump_cursor = 0;
+                            }
                             pump_budget -= 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Idle) => {
-                            relay_pump_cursor = lasm_cluster_next_index_wrapped(
-                                relay_pump_cursor,
-                                relay_len_before_step,
-                            );
+                            relay_pump_cursor += 1;
+                            if relay_pump_cursor == relay_len_before_step {
+                                relay_pump_cursor = 0;
+                            }
                             pump_budget -= 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {

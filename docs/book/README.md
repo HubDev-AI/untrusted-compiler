@@ -1317,5 +1317,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`
 - `1346-m39-lasm-cluster-fallback-multi-direct-lookup-state-signature.md`
 - `1347-m39-lasm-cluster-autoscale-direct-bounded-arithmetic.md`
+- `1348-m39-lasm-cluster-relay-worker-direct-wrap-cursor-progression.md`
 
 As milestones progress, chapters will be added and linked from this index.
