@@ -108,10 +108,19 @@ pub(crate) fn allocate_lasm_db_tx_handle(
     if state.db_tx_handles.len() >= state.db_tx_max_handles {
         return None;
     }
-    let tx = state.next_db_tx_handle.max(1);
-    state.next_db_tx_handle = tx.saturating_add(1).max(1);
-    state.db_tx_handles.insert(tx, db);
-    Some(tx)
+    let mut tx = state.next_db_tx_handle.max(1);
+    let start_tx = tx;
+    loop {
+        if let std::collections::hash_map::Entry::Vacant(entry) = state.db_tx_handles.entry(tx) {
+            entry.insert(db);
+            state.next_db_tx_handle = if tx == i64::MAX { 1 } else { tx + 1 };
+            return Some(tx);
+        }
+        tx = if tx == i64::MAX { 1 } else { tx + 1 };
+        if tx == start_tx {
+            return None;
+        }
+    }
 }
 
 pub(crate) fn lasm_dynamic_postgres_client_mut(
