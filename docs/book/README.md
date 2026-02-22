@@ -1410,5 +1410,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1438-m39-lasm-autoscale-reusable-port-telemetry-store-elision.md`
 - `1439-m39-lasm-db-dispatch-adapter-aware-parse-paths.md`
 - `1440-m39-lasm-queryone-recordscan-recordslog-only.md`
+- `1441-m39-lasm-autoscale-telemetry-store-elision.md`
 
 As milestones progress, chapters will be added and linked from this index.
