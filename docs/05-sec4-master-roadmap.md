@@ -1817,6 +1817,10 @@ Post-alpha track acceptance anchors:
       - autoscale scale-up path now reserves worker ports via shared lifecycle helper that consumes `reusable_ports` before advancing `next_port`,
       - min-worker recovery and autoscale scale-up now share one reservation path, preserving deterministic reservation behavior while preventing avoidable new-port churn after scale-down/dead-worker reclaim events.
       - documented in `docs/book/1427-m39-lasm-autoscale-scaleup-reuse-port-pool.md`.
+   - [x] Switched reusable worker-port reservation to bulk slice/truncate path:
+      - lifecycle reservation now appends reclaimed ports via one `extend_from_slice` + `truncate` operation instead of per-port `pop` loops,
+      - remaining fresh-port allocations still advance `next_port` deterministically for the uncovered tail.
+      - documented in `docs/book/1429-m39-lasm-bulk-reuse-port-reservation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
