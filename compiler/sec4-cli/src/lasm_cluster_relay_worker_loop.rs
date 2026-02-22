@@ -427,6 +427,18 @@ fn resolve_lasm_cluster_fallback_lookup_start_cursor(
     }
 }
 
+fn load_lasm_cluster_worker_ports_snapshot_if_changed(
+    relay_worker_ports: &Arc<ArcSwap<Vec<u16>>>,
+    selected_worker_ports_snapshot: &Arc<Vec<u16>>,
+) -> Option<Arc<Vec<u16>>> {
+    let snapshot = relay_worker_ports.load();
+    if Arc::ptr_eq(selected_worker_ports_snapshot, &snapshot) {
+        None
+    } else {
+        Some(Arc::clone(&snapshot))
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_receiver: Receiver<TcpStream>,
     relay_active: Arc<AtomicUsize>,
@@ -470,7 +482,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             Duration::from_millis(LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS);
         let unhealthy_prune_interval =
             Duration::from_millis(LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS);
-        let mut selected_worker_ports_snapshot = relay_worker_ports.load_full();
+        let mut selected_worker_ports_snapshot = Arc::clone(&relay_worker_ports.load());
         let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
         let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> =
             Vec::with_capacity(selected_worker_port_count);
@@ -498,8 +510,10 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     None => true,
                 };
                 if should_prune {
-                    let snapshot = relay_worker_ports.load_full();
-                    if !Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
+                    if let Some(snapshot) = load_lasm_cluster_worker_ports_snapshot_if_changed(
+                        &relay_worker_ports,
+                        &selected_worker_ports_snapshot,
+                    ) {
                         let previous_ports_snapshot =
                             std::mem::replace(&mut selected_worker_ports_snapshot, snapshot);
                         let previous_unhealthy_ports_until_by_index =
@@ -564,7 +578,15 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
 
                 if worker_ports_snapshot.is_none() || selection_lookup_dirty {
                     if worker_ports_snapshot.is_none() {
-                        worker_ports_snapshot = Some(relay_worker_ports.load_full());
+                        if let Some(snapshot) = load_lasm_cluster_worker_ports_snapshot_if_changed(
+                            &relay_worker_ports,
+                            &selected_worker_ports_snapshot,
+                        ) {
+                            worker_ports_snapshot = Some(snapshot);
+                        } else {
+                            worker_ports_snapshot =
+                                Some(Arc::clone(&selected_worker_ports_snapshot));
+                        }
                     }
                     let worker_ports_snapshot_ref = worker_ports_snapshot
                         .as_ref()
