@@ -655,16 +655,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
-                    let record_match = state
-                        .db_records
-                        .iter()
-                        .rev()
-                        .find(|record| {
-                            record.db == db
-                                && record.template == template.as_str()
-                                && record.params == params.as_str()
-                        })
-                        .cloned();
                     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
                         let (postgres_template, postgres_params) = match postgres_preparsed
                             .as_ref()
@@ -821,7 +811,12 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         );
                         return true;
                     }
-                    if record_match.is_none() {
+                    let found_record = state.db_records.iter().rev().any(|record| {
+                        record.db == db
+                            && record.template == template.as_str()
+                            && record.params == params.as_str()
+                    });
+                    if !found_record {
                         None
                     } else {
                         let record = LasmDbRecord {

@@ -1932,6 +1932,10 @@ Post-alpha track acceptance anchors:
       - DB dispatch now pre-parses only the active adapter params (Postgres or SQLite) instead of parsing both on every DB intrinsic call,
       - lock-time adapter checks are now debug-asserted against bootstrap adapter to keep adapter-bound parse paths deterministic.
       - documented in `docs/book/1439-m39-lasm-db-dispatch-adapter-aware-parse-paths.md`.
+   - [x] Reduced `db.queryOne` lock-held scan work for non-records adapters:
+      - `db.queryOne` runtime dispatch now skips `db_records` history scan on Postgres/SQLite adapter paths where row materialization is served directly by adapter runtime,
+      - records-log fallback path keeps deterministic reverse-scan behavior for template/params matching, preserving existing not-found/result semantics.
+      - documented in `docs/book/1440-m39-lasm-queryone-recordscan-recordslog-only.md`.
    - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
       - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
       - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.
