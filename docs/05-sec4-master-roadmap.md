@@ -1483,6 +1483,10 @@ Post-alpha track acceptance anchors:
       - `dispatch_lasm_cluster_relay_stream_fallback_single_live` and `_dual_live` now use direct indexed live-state checks with explicit debug shape assertions instead of `get().copied().unwrap_or(...)` chains,
       - keeps fallback terminal semantics unchanged while trimming option-chain overhead from hot fallback fast paths.
       - documented in `docs/book/1330-m39-lasm-cluster-fallback-direct-live-index-checks.md`.
+   - [x] Removed repeated fallback lookup-presence checks from scan-advance hot path:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now resolves lookup availability once (`relay_has_next_live_sender_lookup`) and threads that into scan-advance helper calls,
+      - `advance_lasm_cluster_fallback_scan_index` no longer checks `relay_next_live_sender_lookup.is_empty()` on every scan step, preserving scan semantics while reducing per-step branch work.
+      - documented in `docs/book/1331-m39-lasm-cluster-fallback-scan-lookup-presence-hoist.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
