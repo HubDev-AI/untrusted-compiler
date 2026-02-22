@@ -5,7 +5,9 @@ use crate::lasm_db_runtime_common::{
 use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
+use std::collections::HashMap;
 
+#[derive(Clone)]
 pub(crate) enum LasmPostgresParam {
     Text(String),
     Int(i64),
@@ -68,6 +70,267 @@ fn parse_lasm_postgres_positional_param_index(key: &str) -> Option<usize> {
     Some(index)
 }
 
+fn is_lasm_postgres_named_param_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return false;
+    }
+    chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn normalize_lasm_postgres_named_param_key(key: &str) -> Option<&str> {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let normalized = trimmed
+        .strip_prefix(':')
+        .or_else(|| trimmed.strip_prefix('@'))
+        .or_else(|| {
+            let candidate = trimmed.strip_prefix('$')?;
+            if candidate.chars().all(|ch| ch.is_ascii_digit()) {
+                return None;
+            }
+            Some(candidate)
+        })
+        .unwrap_or(trimmed)
+        .trim();
+    if is_lasm_postgres_named_param_identifier(normalized) {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn parse_lasm_postgres_named_object_params(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Option<HashMap<String, LasmPostgresParam>> {
+    let mut named = HashMap::with_capacity(entries.len());
+    for (key, value) in entries {
+        let normalized = normalize_lasm_postgres_named_param_key(key.as_str())?;
+        named.insert(
+            normalized.to_string(),
+            parse_lasm_postgres_query_param_value(value.clone()),
+        );
+    }
+    Some(named)
+}
+
+fn rewrite_lasm_postgres_named_query_template(
+    query_template: &str,
+    named_params: &HashMap<String, LasmPostgresParam>,
+) -> Result<Option<(String, Vec<LasmPostgresParam>)>, String> {
+    let bytes = query_template.as_bytes();
+    let mut index = 0usize;
+    let mut rewritten = Vec::with_capacity(bytes.len() + 16);
+    let mut in_single_quote = false;
+    let mut in_line_comment = false;
+    let mut block_comment_depth = 0usize;
+    let mut active_dollar_quote: Option<String> = None;
+    let mut named_placeholder_indices: HashMap<String, usize> = HashMap::new();
+    let mut ordered_params = Vec::new();
+    let mut saw_named_placeholder = false;
+
+    while index < bytes.len() {
+        if in_line_comment {
+            rewritten.push(bytes[index]);
+            if bytes[index] == b'\n' {
+                in_line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth > 0 {
+            if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+                block_comment_depth += 1;
+                rewritten.extend_from_slice(&bytes[index..index + 2]);
+                index += 2;
+                continue;
+            }
+            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
+                block_comment_depth = block_comment_depth.saturating_sub(1);
+                rewritten.extend_from_slice(&bytes[index..index + 2]);
+                index += 2;
+                continue;
+            }
+            rewritten.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if let Some(delimiter) = active_dollar_quote.as_ref() {
+            if query_template[index..].starts_with(delimiter.as_str()) {
+                rewritten.extend_from_slice(delimiter.as_bytes());
+                index += delimiter.len();
+                active_dollar_quote = None;
+                continue;
+            }
+            rewritten.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if bytes[index] == b'\'' {
+            if in_single_quote {
+                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                    rewritten.extend_from_slice(&bytes[index..index + 2]);
+                    index += 2;
+                    continue;
+                }
+                in_single_quote = false;
+                rewritten.push(bytes[index]);
+                index += 1;
+                continue;
+            }
+            in_single_quote = true;
+            rewritten.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if in_single_quote {
+            rewritten.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'-' && bytes[index + 1] == b'-' {
+            in_line_comment = true;
+            rewritten.extend_from_slice(&bytes[index..index + 2]);
+            index += 2;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+            block_comment_depth = 1;
+            rewritten.extend_from_slice(&bytes[index..index + 2]);
+            index += 2;
+            continue;
+        }
+        if bytes[index] == b'$' {
+            if let Some(delimiter) =
+                parse_lasm_postgres_dollar_quote_delimiter(query_template, index)
+            {
+                active_dollar_quote = Some(delimiter.to_string());
+                rewritten.extend_from_slice(delimiter.as_bytes());
+                index += delimiter.len();
+                continue;
+            }
+        }
+
+        let marker = bytes[index];
+        if marker != b':' && marker != b'@' && marker != b'$' {
+            rewritten.push(marker);
+            index += 1;
+            continue;
+        }
+        if marker == b':' {
+            if (index > 0 && bytes[index - 1] == b':')
+                || (index + 1 < bytes.len() && bytes[index + 1] == b':')
+            {
+                rewritten.push(marker);
+                index += 1;
+                continue;
+            }
+        }
+        if marker == b'$' && index + 1 < bytes.len() && bytes[index + 1].is_ascii_digit() {
+            rewritten.push(marker);
+            index += 1;
+            continue;
+        }
+        if index + 1 >= bytes.len() {
+            rewritten.push(marker);
+            index += 1;
+            continue;
+        }
+        let next = bytes[index + 1];
+        if !(next == b'_' || next.is_ascii_alphabetic()) {
+            rewritten.push(marker);
+            index += 1;
+            continue;
+        }
+        let mut cursor = index + 2;
+        while cursor < bytes.len() {
+            let byte = bytes[cursor];
+            if !(byte == b'_' || byte.is_ascii_alphanumeric()) {
+                break;
+            }
+            cursor += 1;
+        }
+        let name = &query_template[index + 1..cursor];
+        let Some(param_value) = named_params.get(name) else {
+            return Err(format!(
+                "postgres named parameter '{name}' is missing from params object"
+            ));
+        };
+        saw_named_placeholder = true;
+        let placeholder_index = if let Some(existing) = named_placeholder_indices.get(name) {
+            *existing
+        } else {
+            ordered_params.push(param_value.clone());
+            let next_index = ordered_params.len();
+            named_placeholder_indices.insert(name.to_string(), next_index);
+            next_index
+        };
+        rewritten.extend_from_slice(format!("${placeholder_index}").as_bytes());
+        index = cursor;
+    }
+
+    if !saw_named_placeholder {
+        return Ok(None);
+    }
+    let rewritten_query = String::from_utf8(rewritten)
+        .map_err(|_| "postgres named parameter rewrite produced invalid UTF-8".to_string())?;
+    Ok(Some((rewritten_query, ordered_params)))
+}
+
+pub(crate) fn parse_lasm_postgres_query_template_and_params(
+    query_template: &str,
+    value: &str,
+) -> Result<(String, Vec<LasmPostgresParam>), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        return Ok((query_template.to_string(), Vec::new()));
+    }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return match parsed {
+            serde_json::Value::Array(entries) => Ok((
+                query_template.to_string(),
+                entries
+                    .into_iter()
+                    .map(parse_lasm_postgres_query_param_value)
+                    .collect(),
+            )),
+            serde_json::Value::Object(entries) => {
+                if let Some(params) = parse_lasm_postgres_positional_object_params(&entries) {
+                    return Ok((query_template.to_string(), params));
+                }
+                if let Some(named) = parse_lasm_postgres_named_object_params(&entries) {
+                    if let Some((rewritten_template, params)) =
+                        rewrite_lasm_postgres_named_query_template(query_template, &named)?
+                    {
+                        return Ok((rewritten_template, params));
+                    }
+                }
+                Ok((
+                    query_template.to_string(),
+                    vec![parse_lasm_postgres_query_param_value(
+                        serde_json::Value::Object(entries),
+                    )],
+                ))
+            }
+            serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
+            other => Ok((
+                query_template.to_string(),
+                vec![parse_lasm_postgres_query_param_value(other)],
+            )),
+        };
+    }
+    Ok((
+        query_template.to_string(),
+        vec![LasmPostgresParam::Text(trimmed.to_string())],
+    ))
+}
+
+#[cfg(test)]
 pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Vec<LasmPostgresParam> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
@@ -548,7 +811,7 @@ pub(crate) fn run_lasm_postgres_query_one(
 mod tests {
     use super::{
         max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
-        LasmPostgresParam,
+        parse_lasm_postgres_query_template_and_params, LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -608,6 +871,50 @@ mod tests {
         match &params[1] {
             LasmPostgresParam::Text(value) => assert_eq!(value, "alice"),
             _ => panic!("expected text param at position 2"),
+        }
+    }
+
+    #[test]
+    fn named_object_params_rewrite_colon_placeholders() {
+        let (template, params) = parse_lasm_postgres_query_template_and_params(
+            "SELECT * FROM users WHERE email = :email AND active = :active",
+            "{\"email\":\"alice@example.com\",\"active\":true}",
+        )
+        .expect("expected named postgres params to rewrite");
+        assert_eq!(
+            template,
+            "SELECT * FROM users WHERE email = $1 AND active = $2"
+        );
+        assert_eq!(params.len(), 2);
+        match &params[0] {
+            LasmPostgresParam::Text(value) => assert_eq!(value, "alice@example.com"),
+            _ => panic!("expected text param at position 1"),
+        }
+        match &params[1] {
+            LasmPostgresParam::Bool(value) => assert!(*value),
+            _ => panic!("expected bool param at position 2"),
+        }
+    }
+
+    #[test]
+    fn named_object_params_skip_cast_literals_comments_and_reuse_indices() {
+        let (template, params) = parse_lasm_postgres_query_template_and_params(
+            "SELECT :name::text AS n, ':name' AS literal /* :name */ WHERE id = @id OR backup = :name",
+            "{\"name\":\"alice\",\"id\":42}",
+        )
+        .expect("expected named postgres params to rewrite");
+        assert_eq!(
+            template,
+            "SELECT $1::text AS n, ':name' AS literal /* :name */ WHERE id = $2 OR backup = $1"
+        );
+        assert_eq!(params.len(), 2);
+        match &params[0] {
+            LasmPostgresParam::Text(value) => assert_eq!(value, "alice"),
+            _ => panic!("expected text param at position 1"),
+        }
+        match &params[1] {
+            LasmPostgresParam::Int(value) => assert_eq!(*value, 42),
+            _ => panic!("expected int param at position 2"),
         }
     }
 }

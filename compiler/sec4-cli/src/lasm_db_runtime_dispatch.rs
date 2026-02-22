@@ -6,8 +6,8 @@ use crate::lasm_db_runtime_common::{
     normalize_lasm_db_params, parse_lasm_positive_i64,
 };
 use crate::lasm_db_runtime_postgres::{
-    parse_lasm_postgres_query_params, run_lasm_postgres_exec, run_lasm_postgres_exec_tx,
-    run_lasm_postgres_query_one,
+    parse_lasm_postgres_query_template_and_params, run_lasm_postgres_exec,
+    run_lasm_postgres_exec_tx, run_lasm_postgres_query_one,
 };
 use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx,
@@ -121,16 +121,36 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             }
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let postgres_preparsed =
+                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
             let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                            Ok((rewritten_template, parsed_params)) => {
+                                (rewritten_template.as_str(), parsed_params.as_slice())
+                            }
+                            Err(message) => {
+                                set_lasm_json_response(
+                                    response,
+                                    400,
+                                    &lasm_error_envelope(
+                                        "DB.EXEC_INVALID",
+                                        "validation",
+                                        message.as_str(),
+                                        400,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         let postgres_affected_rows = match run_lasm_postgres_exec(
                             &mut state,
-                            template.as_str(),
-                            postgres_params.as_slice(),
+                            postgres_template,
+                            postgres_params,
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -152,9 +172,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_affected_rows =
-                            match run_lasm_sqlite_exec(&mut state, template.as_str(), &sqlite_params)
-                            {
+                        let sqlite_affected_rows = match run_lasm_sqlite_exec(
+                            &mut state,
+                            template.as_str(),
+                            &sqlite_params,
+                        ) {
                             Ok(value) => value,
                             Err(message) => {
                                 let (status, code, kind) =
@@ -254,10 +276,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let tx_handle_raw =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
-            );
+                );
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let postgres_preparsed =
+                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
             let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             enum ExecTxSource {
                 AllocateFromDb(i64),
@@ -368,10 +391,32 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     };
                     let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                            Ok((rewritten_template, parsed_params)) => {
+                                (rewritten_template.as_str(), parsed_params.as_slice())
+                            }
+                            Err(message) => {
+                                if let Some(tx_handle) = allocated_tx_handle {
+                                    state.db_tx_handles.remove(&tx_handle);
+                                }
+                                set_lasm_json_response(
+                                    response,
+                                    400,
+                                    &lasm_error_envelope(
+                                        "DB.EXEC_TX_INVALID",
+                                        "validation",
+                                        message.as_str(),
+                                        400,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         let postgres_affected_rows = match run_lasm_postgres_exec_tx(
                             &mut state,
-                            template.as_str(),
-                            postgres_params.as_slice(),
+                            postgres_template,
+                            postgres_params,
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -561,7 +606,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let postgres_preparsed =
+                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
             let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
@@ -576,10 +622,29 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         })
                         .cloned();
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                            Ok((rewritten_template, parsed_params)) => {
+                                (rewritten_template.as_str(), parsed_params.as_slice())
+                            }
+                            Err(message) => {
+                                set_lasm_json_response(
+                                    response,
+                                    400,
+                                    &lasm_error_envelope(
+                                        "DB.QUERY_ONE_INVALID",
+                                        "validation",
+                                        message.as_str(),
+                                        400,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         let row_object = match run_lasm_postgres_query_one(
                             &mut state,
-                            template.as_str(),
-                            postgres_params.as_slice(),
+                            postgres_template,
+                            postgres_params,
                         ) {
                             Ok(Some(value)) => value,
                             Ok(None) => {

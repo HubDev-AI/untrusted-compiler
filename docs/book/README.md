@@ -1406,5 +1406,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`
 - `1435-m39-lasm-sqlite-named-object-params.md`
 - `1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`
+- `1437-m39-lasm-postgres-named-object-params.md`
 
 As milestones progress, chapters will be added and linked from this index.
