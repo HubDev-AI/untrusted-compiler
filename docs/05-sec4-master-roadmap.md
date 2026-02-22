@@ -1495,6 +1495,10 @@ Post-alpha track acceptance anchors:
       - `attempt_lasm_cluster_relay_send` now marks sender dead/count-down only when sender state transitions from live to dead, replacing unconditional saturating decrement on every disconnected attempt,
       - preserves disconnected fallback behavior while avoiding duplicate counter decrements under repeated disconnected sends and removing saturating arithmetic from this path.
       - documented in `docs/book/1333-m39-lasm-cluster-relay-send-dead-transition-guard.md`.
+   - [x] Tightened accept-dispatch overload response hot path:
+      - `handle_lasm_cluster_accept_dispatch_error` now writes relay-saturated/relay-unavailable static response buffers directly in the dispatch-error handler instead of routing through reason enum + helper dispatch,
+      - preserves overload response payloads and terminal semantics while removing per-error reason dispatch overhead in the accept hot path.
+      - documented in `docs/book/1334-m39-lasm-cluster-accept-dispatch-direct-overload-buffer-writes.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

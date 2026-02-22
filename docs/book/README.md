@@ -1303,5 +1303,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1331-m39-lasm-cluster-fallback-scan-lookup-presence-hoist.md`
 - `1332-m39-lasm-cluster-relay-topology-direct-start-index-check.md`
 - `1333-m39-lasm-cluster-relay-send-dead-transition-guard.md`
+- `1334-m39-lasm-cluster-accept-dispatch-direct-overload-buffer-writes.md`
 
 As milestones progress, chapters will be added and linked from this index.
