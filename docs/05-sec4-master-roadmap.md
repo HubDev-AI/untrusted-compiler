@@ -1779,6 +1779,11 @@ Post-alpha track acceptance anchors:
       - sqlite `db.queryOne` now uses `connection.prepare_cached(...)` for repeated select-like templates,
       - this preserves intrinsic behavior while reducing repeated SQLite parse/prepare overhead on hot request paths.
       - documented in `docs/book/1402-m39-lasm-sqlite-prepare-cached-runtime.md`.
+   - [x] Added Postgres placeholder-index cache for LASM DB runtime:
+      - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
+      - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
+      - this keeps parameter validation semantics unchanged while reducing repeated SQL scan overhead in hot Postgres paths.
+      - documented in `docs/book/1403-m39-lasm-postgres-placeholder-index-cache.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
    - [x] Records-log `db.queryOne` fallback now returns structured `rowObject` metadata (including `affected_rows`) instead of null, aligning response shape with sqlite/postgres query-one materialization while preserving deterministic fallback semantics (`docs/book/1097-m39-lasm-records-log-query-one-row-object-parity.md`).
    - [x] LASM DB runtime now rejects invalid DB capability handles (`db != 1`) for `db.exec`, `db.queryOne`, and inline `db.tx(...)` sources used by `db.execTx`, preventing manual-handle SQL execution on sqlite/postgres adapters and preserving deterministic `DB.*_INVALID` validation envelopes (`docs/book/1098-m39-lasm-db-capability-handle-validation-guard.md`).

@@ -177,6 +177,20 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     max_placeholder
 }
 
+fn max_lasm_postgres_placeholder_index_cached(
+    state: &mut LasmDynamicResponseState,
+    query_template: &str,
+) -> usize {
+    if let Some(value) = state.db_postgres_placeholder_max_cache.get(query_template) {
+        return *value;
+    }
+    let value = max_lasm_postgres_placeholder_index(query_template);
+    state
+        .db_postgres_placeholder_max_cache
+        .insert(query_template.to_string(), value);
+    value
+}
+
 fn first_lasm_postgres_keyword(query_template: &str) -> Option<String> {
     let bytes = query_template.as_bytes();
     let mut index = 0usize;
@@ -254,7 +268,7 @@ pub(crate) fn run_lasm_postgres_exec(
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<u64, String> {
-    let required_params = max_lasm_postgres_placeholder_index(query_template);
+    let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
     if required_params > params.len() {
         return Err(format!(
             "postgres query requires at least {required_params} sql parameters but received {}",
@@ -346,7 +360,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<u64, String> {
-    let required_params = max_lasm_postgres_placeholder_index(query_template);
+    let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
     if required_params > params.len() {
         return Err(format!(
             "postgres query requires at least {required_params} sql parameters but received {}",
@@ -417,7 +431,8 @@ pub(crate) fn run_lasm_postgres_query_one(
     if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
-    let required_params = max_lasm_postgres_placeholder_index(normalized_query.as_str());
+    let required_params =
+        max_lasm_postgres_placeholder_index_cached(state, normalized_query.as_str());
     if required_params > params.len() {
         return Err(format!(
             "postgres query requires at least {required_params} sql parameters but received {}",

@@ -1372,5 +1372,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1400-m39-lasm-cluster-accept-saturation-carryover-fast-reject.md`
 - `1401-m39-lasm-postgres-prepared-statement-cache.md`
 - `1402-m39-lasm-sqlite-prepare-cached-runtime.md`
+- `1403-m39-lasm-postgres-placeholder-index-cache.md`
 
 As milestones progress, chapters will be added and linked from this index.
