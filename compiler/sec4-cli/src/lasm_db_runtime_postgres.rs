@@ -4,7 +4,7 @@ use crate::lasm_db_runtime_common::{
 };
 use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
-use postgres::{Client as PostgresClient, Statement as PostgresStatement};
+use postgres::{Client as PostgresClient, GenericClient, Statement as PostgresStatement};
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -578,6 +578,29 @@ pub(crate) fn normalize_lasm_postgres_query_for_subquery(query_template: &str) -
     normalized
 }
 
+fn is_lasm_postgres_execute_rows_error(err: &postgres::Error) -> bool {
+    let message = err.to_string().to_ascii_lowercase();
+    message.contains("query returned rows") || message.contains("execute returned rows")
+}
+
+fn run_lasm_postgres_unprepared_exec_with_count(
+    client: &mut impl GenericClient,
+    query_template: &str,
+) -> Result<u64, postgres::Error> {
+    if has_lasm_sql_non_trailing_statement_separator(query_template) {
+        client.batch_execute(query_template)?;
+        return Ok(0);
+    }
+    match client.execute(query_template, &[]) {
+        Ok(count) => Ok(count),
+        Err(err) if is_lasm_postgres_execute_rows_error(&err) => {
+            let rows = client.query(query_template, &[])?;
+            Ok(rows.len() as u64)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 pub(crate) fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -611,7 +634,7 @@ pub(crate) fn run_lasm_postgres_exec(
         client.execute(statement, param_refs.as_slice())
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client.batch_execute(query_template).map(|_| 0u64)
+        run_lasm_postgres_unprepared_exec_with_count(client, query_template)
     };
     let affected_rows = match initial {
         Ok(count) => count,
@@ -629,12 +652,9 @@ pub(crate) fn run_lasm_postgres_exec(
                     })?
             } else {
                 let client = lasm_dynamic_postgres_client_mut(state)?;
-                client
-                    .batch_execute(query_template)
-                    .map(|_| 0u64)
-                    .map_err(|retry_err| {
-                        format!("postgres execution failed after reconnect: {retry_err}")
-                    })?
+                run_lasm_postgres_unprepared_exec_with_count(client, query_template).map_err(
+                    |retry_err| format!("postgres execution failed after reconnect: {retry_err}"),
+                )?
             }
         }
         Err(err)
@@ -663,8 +683,7 @@ fn run_lasm_postgres_exec_tx_once(
         let param_refs = lasm_postgres_query_param_refs(params);
         tx.execute(statement, param_refs.as_slice())?
     } else {
-        tx.batch_execute(query_template)?;
-        0
+        run_lasm_postgres_unprepared_exec_with_count(&mut tx, query_template)?
     };
     tx.commit()?;
     Ok(affected_rows)
