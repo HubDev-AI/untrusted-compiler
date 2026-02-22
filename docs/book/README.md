@@ -1315,5 +1315,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1343-m39-lasm-cluster-accept-loop-fallback-branch-tree-match.md`
 - `1344-m39-lasm-cluster-next-live-scan-direct-wrap-progression.md`
 - `1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`
+- `1346-m39-lasm-cluster-fallback-multi-direct-lookup-state-signature.md`
 
 As milestones progress, chapters will be added and linked from this index.

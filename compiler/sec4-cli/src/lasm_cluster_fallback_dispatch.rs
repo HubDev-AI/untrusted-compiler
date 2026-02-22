@@ -15,35 +15,6 @@ pub(crate) enum LasmClusterRelayDispatchError {
 }
 
 #[inline(always)]
-pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
-    client_stream: TcpStream,
-    relay_senders: &[Sender<TcpStream>],
-    relay_sender_live: &mut [u8],
-    relay_next_live_sender_lookup: &[usize],
-    relay_use_next_live_lookup: bool,
-    relay_live_sender_count: &mut usize,
-    relay_all_senders_live: &mut bool,
-    start_index_wrapped: usize,
-    saw_live_sender: bool,
-) -> Result<(), LasmClusterRelayDispatchError> {
-    let fallback_next_live_lookup = if relay_use_next_live_lookup {
-        relay_next_live_sender_lookup
-    } else {
-        &[]
-    };
-    dispatch_lasm_cluster_relay_stream_fallback_multi(
-        client_stream,
-        relay_senders,
-        relay_sender_live,
-        fallback_next_live_lookup,
-        relay_live_sender_count,
-        relay_all_senders_live,
-        start_index_wrapped,
-        saw_live_sender,
-    )
-}
-
-#[inline(always)]
 fn lasm_cluster_fallback_terminal_dispatch_error(
     client_stream: TcpStream,
     saw_live_sender: bool,
@@ -183,6 +154,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     relay_senders: &[Sender<TcpStream>],
     relay_sender_live: &mut [u8],
     relay_next_live_sender_lookup: &[usize],
+    relay_has_next_live_sender_lookup: bool,
     relay_live_sender_count: &mut usize,
     relay_all_senders_live: &mut bool,
     start_index_wrapped: usize,
@@ -192,7 +164,6 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     debug_assert!(sender_count > 1);
     debug_assert_eq!(relay_sender_live.len(), sender_count);
     debug_assert!(start_index_wrapped < sender_count);
-    let relay_has_next_live_sender_lookup = !relay_next_live_sender_lookup.is_empty();
     debug_assert!(
         !relay_has_next_live_sender_lookup || relay_next_live_sender_lookup.len() == sender_count
     );

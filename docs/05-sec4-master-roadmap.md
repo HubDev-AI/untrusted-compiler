@@ -1543,6 +1543,10 @@ Post-alpha track acceptance anchors:
       - `advance_lasm_cluster_fallback_scan_index` now computes next-scan wrapped index and forward-distance slots directly in-function,
       - removed helper indirection for wrapped-forward-distance calculation while preserving fallback scan step semantics and slot advancement behavior.
       - documented in `docs/book/1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`.
+   - [x] Removed fallback-multi wrapper and threaded lookup-state directly into core fallback function:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now receives precomputed `relay_has_next_live_sender_lookup` directly and no longer derives lookup availability with internal `is_empty` checks,
+      - accept-loop now calls core fallback-multi function directly (wrapper removed), reducing one call layer and one per-call lookup-availability branch in fallback dispatch plumbing.
+      - documented in `docs/book/1346-m39-lasm-cluster-fallback-multi-direct-lookup-state-signature.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
