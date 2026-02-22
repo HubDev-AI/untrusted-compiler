@@ -136,7 +136,7 @@ pub(crate) fn run_lasm_sqlite_exec(
             .transaction()
             .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
         let mut statement = tx
-            .prepare(query_template)
+            .prepare_cached(query_template)
             .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
         let parameter_count = statement.parameter_count();
         validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
@@ -205,7 +205,7 @@ pub(crate) fn run_lasm_sqlite_query_one(
     let sqlite_params = parse_lasm_sqlite_query_params(params);
     run_lasm_sqlite_with_connection_retry(state, "sqlite queryOne", |connection| {
         let mut statement = connection
-            .prepare(normalized_query.as_str())
+            .prepare_cached(normalized_query.as_str())
             .map_err(|err| format!("sqlite queryOne prepare failed: {err}"))?;
         let parameter_count = statement.parameter_count();
         validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
