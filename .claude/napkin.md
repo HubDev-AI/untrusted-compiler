@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I committed the shared-selection-recompute slice on local `dev` again before creating the PR branch. | Run `git branch --show-current` immediately before staging/commit; if on `dev`, branch first. If missed, branch from commit and force local `dev` back to `origin/dev` before pushing. |
 | 2026-02-22 | self | I committed the fallback-multi lookup-state slice directly on local `dev` again before opening a `codex/*` branch. | Keep a hard pre-commit check (`git branch --show-current`) and if on `dev`, branch immediately before commit; if missed, recover by branching from the commit and re-point local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I started this continuation by reading `.claude/napkin.md` in parallel with branch/status/log commands instead of running napkin read as the standalone first command. | Enforce strict session gate: run `cat .claude/napkin.md` alone first, then run any git/status/search commands afterward. |
 | 2026-02-22 | self | I moved `client` into relay creation inside a multi-candidate fallback loop and hit `E0382` because later unavailable-response path still borrowed `client`. | In retry loops that may or may not consume a stream, park ownership in `Option<TcpStream>` and `take()` only on successful consume paths, then unwrap for final fallback response only when still present. |
