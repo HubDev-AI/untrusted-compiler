@@ -1,3 +1,4 @@
+use crate::lasm_db_runtime_common::normalize_lasm_db_params;
 use crate::LasmDbRecord;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -128,7 +129,7 @@ fn lasm_db_record_from_json(value: &serde_json::Value) -> Option<LasmDbRecord> {
         op: value.get("op")?.as_str()?.to_string(),
         db: value.get("db")?.as_i64()?,
         template: value.get("template")?.as_str()?.to_string(),
-        params: value.get("params")?.as_str()?.to_string(),
+        params: normalize_lasm_db_params(value.get("params")?.as_str()?),
         tx: value.get("tx")?.as_i64()?,
         affected_rows: value
             .get("affected_rows")
@@ -149,4 +150,39 @@ pub(crate) fn lasm_db_record_to_json(record: &LasmDbRecord) -> serde_json::Value
         "affected_rows": record.affected_rows,
         "created_at_ms": record.created_at_ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_lasm_dynamic_db_records_from_disk;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn load_records_log_normalizes_json_params_for_signature_stability() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be monotonic for tests")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("sec4-records-log-normalize-{suffix}"));
+        fs::create_dir_all(&base).expect("temp records-log directory should be created");
+        let path = base.join("records.log");
+        let line = serde_json::json!({
+            "id": 1,
+            "op": "exec",
+            "db": 1,
+            "template": "SELECT $1::int",
+            "params": "{\"b\":2,\"a\":1}",
+            "tx": 0,
+            "affected_rows": 0,
+            "created_at_ms": 1
+        });
+        fs::write(&path, format!("{line}\n")).expect("records.log fixture should be written");
+
+        let records = load_lasm_dynamic_db_records_from_disk(path.as_path());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].params, "{\"a\":1,\"b\":2}");
+
+        fs::remove_dir_all(&base).expect("temp records-log directory should be removed");
+    }
 }

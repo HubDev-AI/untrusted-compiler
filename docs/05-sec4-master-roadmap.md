@@ -1963,6 +1963,10 @@ Post-alpha track acceptance anchors:
       - `normalize_lasm_db_params` now canonicalizes JSON object key ordering recursively (while preserving non-JSON passthrough behavior),
       - semantically equivalent JSON param payloads now map to deterministic normalized strings and stable records-log signature keys.
       - documented in `docs/book/1447-m39-lasm-db-param-canonical-json-normalization.md`.
+   - [x] Added records-log load-time parameter normalization backfill:
+      - `records.log` loader now normalizes persisted `params` strings through runtime canonical normalization,
+      - pre-canonical history artifacts now align with current signature matching behavior after restart.
+      - documented in `docs/book/1448-m39-lasm-records-log-load-param-normalization-backfill.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

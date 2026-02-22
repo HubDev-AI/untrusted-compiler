@@ -1417,5 +1417,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1445-m39-lasm-db-record-signature-latest-row-materialization.md`
 - `1446-m39-lasm-db-recordslog-queryone-adapter-module-extraction.md`
 - `1447-m39-lasm-db-param-canonical-json-normalization.md`
+- `1448-m39-lasm-records-log-load-param-normalization-backfill.md`
 
 As milestones progress, chapters will be added and linked from this index.
