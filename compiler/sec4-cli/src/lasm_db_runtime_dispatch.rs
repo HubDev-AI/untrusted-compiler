@@ -9,6 +9,9 @@ use crate::lasm_db_runtime_postgres::{
     parse_lasm_postgres_query_template_and_params, run_lasm_postgres_exec,
     run_lasm_postgres_exec_tx, run_lasm_postgres_query_one,
 };
+use crate::lasm_db_runtime_records_log::{
+    build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
+};
 use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx,
     run_lasm_sqlite_query_one,
@@ -811,46 +814,28 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         );
                         return true;
                     }
-                    let signature =
-                        crate::lasm_db_record_signature_key(db, template.as_str(), params.as_str());
-                    if !state.db_record_signatures.contains_key(signature.as_str()) {
-                        None
+                    let matched_source_record = find_lasm_records_log_latest_match(
+                        &state,
+                        db,
+                        template.as_str(),
+                        params.as_str(),
+                    );
+                    if let Some(matched_source_record) = matched_source_record {
+                        let record = LasmDbRecord {
+                            id: state.next_db_record_id,
+                            op: "queryOne".to_string(),
+                            db,
+                            template: template.clone(),
+                            params: params.clone(),
+                            tx: 0,
+                            affected_rows: 1,
+                            created_at_ms: lasm_now_ms(),
+                        };
+                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                        Some((record, matched_source_record))
                     } else {
-                        let matched_source_record = state
-                            .db_latest_record_by_signature
-                            .get(signature.as_str())
-                            .cloned()
-                            .or_else(|| {
-                                state
-                                    .db_records
-                                    .iter()
-                                    .rev()
-                                    .find(|candidate| {
-                                        crate::lasm_db_record_signature_key(
-                                            candidate.db,
-                                            &candidate.template,
-                                            &candidate.params,
-                                        ) == signature
-                                    })
-                                    .cloned()
-                            });
-                        if let Some(matched_source_record) = matched_source_record {
-                            let record = LasmDbRecord {
-                                id: state.next_db_record_id,
-                                op: "queryOne".to_string(),
-                                db,
-                                template: template.clone(),
-                                params: params.clone(),
-                                tx: 0,
-                                affected_rows: 1,
-                                created_at_ms: lasm_now_ms(),
-                            };
-                            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                            persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                            Some((record, matched_source_record))
-                        } else {
-                            None
-                        }
+                        None
                     }
                 }
                 Err(_) => {
@@ -882,15 +867,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             };
-            let row_object = serde_json::json!({
-                "op": matched_source_record.op,
-                "db": matched_source_record.db,
-                "template": matched_source_record.template,
-                "params": matched_source_record.params,
-                "tx": matched_source_record.tx,
-                "affected_rows": matched_source_record.affected_rows,
-                "rowSchema": row_schema,
-            });
+            let row_object =
+                build_lasm_records_log_query_one_row_object(&matched_source_record, row_schema);
             let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
             set_lasm_json_response(
                 response,

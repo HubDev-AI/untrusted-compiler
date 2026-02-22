@@ -45,6 +45,7 @@ mod lasm_db_records_log;
 mod lasm_db_runtime_common;
 mod lasm_db_runtime_dispatch;
 mod lasm_db_runtime_postgres;
+mod lasm_db_runtime_records_log;
 mod lasm_db_runtime_sqlite;
 mod lasm_dynamic_state;
 mod lasm_request_template;
