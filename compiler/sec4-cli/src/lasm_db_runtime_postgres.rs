@@ -32,6 +32,29 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
     }
 }
 
+fn parse_lasm_postgres_positional_object_params(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Option<Vec<LasmPostgresParam>> {
+    let mut indexed = Vec::with_capacity(entries.len());
+    let mut max_index = 0usize;
+    for (key, value) in entries {
+        let index = key.parse::<usize>().ok()?;
+        if index == 0 {
+            return None;
+        }
+        max_index = max_index.max(index);
+        indexed.push((index, parse_lasm_postgres_query_param_value(value.clone())));
+    }
+    let mut params = Vec::with_capacity(max_index);
+    for _ in 0..max_index {
+        params.push(LasmPostgresParam::Null(None));
+    }
+    for (index, value) in indexed {
+        params[index - 1] = value;
+    }
+    Some(params)
+}
+
 pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Vec<LasmPostgresParam> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
@@ -43,6 +66,15 @@ pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Vec<LasmPostgresP
                 .into_iter()
                 .map(parse_lasm_postgres_query_param_value)
                 .collect(),
+            serde_json::Value::Object(entries) => {
+                if let Some(params) = parse_lasm_postgres_positional_object_params(&entries) {
+                    params
+                } else {
+                    vec![parse_lasm_postgres_query_param_value(
+                        serde_json::Value::Object(entries),
+                    )]
+                }
+            }
             serde_json::Value::Null => Vec::new(),
             other => vec![parse_lasm_postgres_query_param_value(other)],
         };
@@ -501,7 +533,10 @@ pub(crate) fn run_lasm_postgres_query_one(
 
 #[cfg(test)]
 mod tests {
-    use super::max_lasm_postgres_placeholder_index_cached;
+    use super::{
+        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
+        LasmPostgresParam,
+    };
     use crate::LasmDynamicResponseState;
 
     #[test]
@@ -519,5 +554,33 @@ mod tests {
         assert_eq!(second, 2);
         assert_eq!(state.db_postgres_placeholder_cache_evictions_total, 1);
         assert_eq!(state.db_postgres_placeholder_max_cache.len(), 1);
+    }
+
+    #[test]
+    fn positional_object_params_expand_with_null_fill() {
+        let params = parse_lasm_postgres_query_params("{\"1\":\"alice\",\"3\":true}");
+        assert_eq!(params.len(), 3);
+        match &params[0] {
+            LasmPostgresParam::Text(value) => assert_eq!(value, "alice"),
+            _ => panic!("expected text param at position 1"),
+        }
+        match &params[1] {
+            LasmPostgresParam::Null(_) => {}
+            _ => panic!("expected null fill at position 2"),
+        }
+        match &params[2] {
+            LasmPostgresParam::Bool(value) => assert!(*value),
+            _ => panic!("expected bool param at position 3"),
+        }
+    }
+
+    #[test]
+    fn non_numeric_object_params_fall_back_to_single_text_param() {
+        let params = parse_lasm_postgres_query_params("{\"user\":\"alice\"}");
+        assert_eq!(params.len(), 1);
+        match &params[0] {
+            LasmPostgresParam::Text(value) => assert_eq!(value, "{\"user\":\"alice\"}"),
+            _ => panic!("expected fallback text param"),
+        }
     }
 }
