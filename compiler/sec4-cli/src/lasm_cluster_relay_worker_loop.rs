@@ -169,6 +169,59 @@ fn pump_lasm_cluster_relay_connection_once(
     }
 }
 
+fn pump_lasm_cluster_relay_connections(
+    relay_connections: &mut Vec<LasmClusterRelayPump>,
+    relay_pump_batch_max: usize,
+    relay_pump_cursor: &mut usize,
+    relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
+    relay_buffer_pool_max: usize,
+    pump_warning_next_allowed: &mut Option<Instant>,
+    relay_warning_throttle_duration: Duration,
+    active_connection_decrements_local: &mut usize,
+) -> bool {
+    let mut progressed = false;
+    let mut relay_count = relay_connections.len();
+    let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
+    if full_scan_pump_mode {
+        *relay_pump_cursor = 0;
+    } else {
+        let _ = normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count);
+    }
+    let mut pump_budget = if full_scan_pump_mode {
+        relay_count
+    } else {
+        relay_pump_batch_max.min(relay_count)
+    };
+    while pump_budget > 0 {
+        let relay_len_before_step = relay_count;
+        let pump_outcome = pump_lasm_cluster_relay_connection_once(
+            relay_connections,
+            *relay_pump_cursor,
+            relay_buffer_pool,
+            relay_buffer_pool_max,
+            pump_warning_next_allowed,
+            relay_warning_throttle_duration,
+            active_connection_decrements_local,
+        );
+        if pump_outcome.progressed {
+            progressed = true;
+        }
+        pump_budget -= 1;
+        if pump_outcome.removed {
+            relay_count -= 1;
+            if normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count) {
+                break;
+            }
+            continue;
+        }
+        advance_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_len_before_step);
+    }
+    if full_scan_pump_mode {
+        *relay_pump_cursor = 0;
+    }
+    progressed
+}
+
 fn recompute_lasm_cluster_relay_selection_state(
     worker_port_count: usize,
     unhealthy_ports_until_by_index: &[Option<Instant>],
@@ -769,51 +822,16 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 }
             }
 
-            let mut progressed = false;
-            let mut relay_count = relay_connections.len();
-            let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
-            if full_scan_pump_mode {
-                relay_pump_cursor = 0;
-            } else {
-                let _ =
-                    normalize_lasm_cluster_relay_pump_cursor(&mut relay_pump_cursor, relay_count);
-            }
-            let mut pump_budget = if full_scan_pump_mode {
-                relay_count
-            } else {
-                relay_pump_batch_max.min(relay_count)
-            };
-            while pump_budget > 0 {
-                let relay_len_before_step = relay_count;
-                let pump_outcome = pump_lasm_cluster_relay_connection_once(
-                    &mut relay_connections,
-                    relay_pump_cursor,
-                    &mut relay_buffer_pool,
-                    relay_buffer_pool_max,
-                    &mut pump_warning_next_allowed,
-                    relay_warning_throttle_duration,
-                    &mut active_connection_decrements_local,
-                );
-                if pump_outcome.progressed {
-                    progressed = true;
-                }
-                pump_budget -= 1;
-                if pump_outcome.removed {
-                    relay_count -= 1;
-                    if normalize_lasm_cluster_relay_pump_cursor(&mut relay_pump_cursor, relay_count)
-                    {
-                        break;
-                    }
-                    continue;
-                }
-                advance_lasm_cluster_relay_pump_cursor(
-                    &mut relay_pump_cursor,
-                    relay_len_before_step,
-                );
-            }
-            if full_scan_pump_mode {
-                relay_pump_cursor = 0;
-            }
+            let progressed = pump_lasm_cluster_relay_connections(
+                &mut relay_connections,
+                relay_pump_batch_max,
+                &mut relay_pump_cursor,
+                &mut relay_buffer_pool,
+                relay_buffer_pool_max,
+                &mut pump_warning_next_allowed,
+                relay_warning_throttle_duration,
+                &mut active_connection_decrements_local,
+            );
 
             if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
                 flush_lasm_cluster_saturation_counters(
