@@ -1681,6 +1681,10 @@ Post-alpha track acceptance anchors:
       - relay pump scheduler now computes full-scan flag, cursor normalization/reset, and pump budget through `resolve_lasm_cluster_relay_pump_mode(...)`,
       - removes duplicated mode-setup arithmetic from relay pump scheduler and keeps mode configuration single-sourced.
       - documented in `docs/book/1381-m39-lasm-cluster-relay-pump-mode-resolution-helper.md`.
+   - [x] Switched relay pump scheduler to local cursor progression with single write-back:
+      - relay pump scheduler now advances/normalizes a local cursor variable per cycle and writes back `relay_pump_cursor` only once after loop completion (or resets to zero in full-scan mode),
+      - reduces per-step mutable shared-cursor writes while preserving deterministic full-scan/budget cursor semantics.
+      - documented in `docs/book/1382-m39-lasm-cluster-relay-pump-local-cursor-writeback.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
