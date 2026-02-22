@@ -25,6 +25,7 @@ pub(crate) struct LasmClusterAutoscaleLoopConfig {
     pub(crate) autoscale_last_desired_instances: Arc<AtomicUsize>,
     pub(crate) autoscale_last_saturation_events: Arc<AtomicUsize>,
     pub(crate) autoscale_last_dynamic_boost_step: Arc<AtomicUsize>,
+    pub(crate) reusable_ports_count: Arc<AtomicUsize>,
     pub(crate) autoscale_scale_up_cooldown_remaining_ms: Arc<AtomicU64>,
     pub(crate) autoscale_scale_down_cooldown_remaining_ms: Arc<AtomicU64>,
     pub(crate) autoscale_enabled: bool,
@@ -45,6 +46,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
         autoscale_last_desired_instances,
         autoscale_last_saturation_events,
         autoscale_last_dynamic_boost_step,
+        reusable_ports_count,
         autoscale_scale_up_cooldown_remaining_ms,
         autoscale_scale_down_cooldown_remaining_ms,
         autoscale_enabled,
@@ -100,6 +102,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     &worker_ports_snapshot,
                     &mut last_published_worker_ports,
                 );
+                reusable_ports_count.store(state.reusable_ports.len(), Ordering::Relaxed);
                 if !autoscale_enabled {
                     autoscale_last_desired_instances.store(state.workers.len(), Ordering::Relaxed);
                     autoscale_last_saturation_events.store(0, Ordering::Relaxed);
@@ -270,6 +273,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                         .reusable_ports
                         .extend_from_slice(&workers_to_spawn_ports[spawn_index..]);
                 }
+                reusable_ports_count.store(state.reusable_ports.len(), Ordering::Relaxed);
                 if workers_changed_after_initial_refresh {
                     refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                         &state,

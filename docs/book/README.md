@@ -1403,5 +1403,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1431-m39-lasm-db-dispatch-preparse-sqlite-params.md`
 - `1432-m39-lasm-db-positional-object-placeholder-keys.md`
 - `1433-m39-lasm-status-writer-snapshot-clone-elision.md`
+- `1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1825,6 +1825,10 @@ Post-alpha track acceptance anchors:
       - status writer now keeps a selected worker-port snapshot and only clones a new `Arc` when `ArcSwap` pointer changes,
       - steady-state status ticks reuse existing snapshot/count instead of unconditional `load_full()` clone churn.
       - documented in `docs/book/1433-m39-lasm-status-writer-snapshot-clone-elision.md`.
+   - [x] Added reusable worker-port pool telemetry to cluster status JSON:
+      - autoscale loop now publishes live reusable-port pool size into shared telemetry state,
+      - status writer now emits `reusablePortsCount` in cluster status payload for live scale/reclaim visibility.
+      - documented in `docs/book/1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
