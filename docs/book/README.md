@@ -1300,5 +1300,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1328-m39-lasm-cluster-status-writer-warning-throttle.md`
 - `1329-m39-lasm-cluster-fallback-scan-remaining-slot-accounting.md`
 - `1330-m39-lasm-cluster-fallback-direct-live-index-checks.md`
+- `1331-m39-lasm-cluster-fallback-scan-lookup-presence-hoist.md`
 
 As milestones progress, chapters will be added and linked from this index.

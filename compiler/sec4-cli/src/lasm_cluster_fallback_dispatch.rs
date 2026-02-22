@@ -42,6 +42,7 @@ fn lasm_cluster_forward_distance_wrapped(start: usize, end: usize, count: usize)
 fn advance_lasm_cluster_fallback_scan_index(
     relay_sender_live: &[u8],
     relay_next_live_sender_lookup: &[usize],
+    relay_has_next_live_sender_lookup: bool,
     current_index: usize,
 ) -> (usize, usize) {
     let sender_count = relay_sender_live.len();
@@ -51,7 +52,7 @@ fn advance_lasm_cluster_fallback_scan_index(
     let next_scan_start = lasm_cluster_next_index_wrapped(current_index, sender_count);
     let next_scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         next_scan_start
-    } else if !relay_next_live_sender_lookup.is_empty() {
+    } else if relay_has_next_live_sender_lookup {
         debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
         if let Some(next_live_index) = lookup_lasm_cluster_next_live_sender_index(
             relay_sender_live,
@@ -165,6 +166,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     debug_assert!(sender_count > 1);
     debug_assert_eq!(relay_sender_live.len(), sender_count);
     debug_assert!(start_index_wrapped < sender_count);
+    let relay_has_next_live_sender_lookup = !relay_next_live_sender_lookup.is_empty();
+    debug_assert!(
+        !relay_has_next_live_sender_lookup || relay_next_live_sender_lookup.len() == sender_count
+    );
     if *relay_live_sender_count == 0 {
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
@@ -294,6 +299,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
+                relay_has_next_live_sender_lookup,
                 scan_index,
             );
             scan_index = next_scan_index;
@@ -333,6 +339,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
             relay_sender_live,
             relay_next_live_sender_lookup,
+            relay_has_next_live_sender_lookup,
             scan_index,
         );
         scan_index = next_scan_index;
