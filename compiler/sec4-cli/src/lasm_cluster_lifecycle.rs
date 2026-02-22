@@ -243,8 +243,16 @@ pub(crate) fn reserve_lasm_cluster_min_worker_ports(
     worker_ports_out: &mut Vec<u16>,
 ) {
     let missing = min_instances.saturating_sub(state.workers.len());
-    worker_ports_out.reserve(missing);
-    for _ in 0..missing {
+    reserve_lasm_cluster_worker_ports(state, missing, worker_ports_out);
+}
+
+pub(crate) fn reserve_lasm_cluster_worker_ports(
+    state: &mut LasmClusterState,
+    reserve_count: usize,
+    worker_ports_out: &mut Vec<u16>,
+) {
+    worker_ports_out.reserve(reserve_count);
+    for _ in 0..reserve_count {
         let worker_port = match state.reusable_ports.pop() {
             Some(port) => port,
             None => {
