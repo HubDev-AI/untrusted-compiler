@@ -85,12 +85,8 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
     saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     debug_assert!(alternate_live_index < relay_senders.len());
-    if relay_sender_live
-        .get(alternate_live_index)
-        .copied()
-        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
-        != LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
+    debug_assert_eq!(relay_sender_live.len(), relay_senders.len());
+    if relay_sender_live[alternate_live_index] != LASM_CLUSTER_RELAY_SENDER_LIVE {
         return lasm_cluster_fallback_terminal_dispatch_error(
             client_stream,
             saw_live_sender,
@@ -127,12 +123,8 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_single_live(
     saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     debug_assert!(single_live_index < relay_senders.len());
-    if relay_sender_live
-        .get(single_live_index)
-        .copied()
-        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
-        != LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
+    debug_assert_eq!(relay_sender_live.len(), relay_senders.len());
+    if relay_sender_live[single_live_index] != LASM_CLUSTER_RELAY_SENDER_LIVE {
         return lasm_cluster_fallback_terminal_dispatch_error(
             client_stream,
             saw_live_sender,

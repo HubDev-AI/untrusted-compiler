@@ -1479,6 +1479,10 @@ Post-alpha track acceptance anchors:
       - `dispatch_lasm_cluster_relay_stream_fallback_multi` now uses a remaining-slot budget instead of per-iteration saturating slot counters for dead/live sender advancement,
       - removes saturating arithmetic from fallback scan hot-path iteration while preserving fallback dispatch terminal semantics (`saturated` vs `unavailable`) and existing live-target bounds.
       - documented in `docs/book/1329-m39-lasm-cluster-fallback-scan-remaining-slot-accounting.md`.
+   - [x] Tightened single/dual-live fallback membership checks to direct index reads:
+      - `dispatch_lasm_cluster_relay_stream_fallback_single_live` and `_dual_live` now use direct indexed live-state checks with explicit debug shape assertions instead of `get().copied().unwrap_or(...)` chains,
+      - keeps fallback terminal semantics unchanged while trimming option-chain overhead from hot fallback fast paths.
+      - documented in `docs/book/1330-m39-lasm-cluster-fallback-direct-live-index-checks.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
