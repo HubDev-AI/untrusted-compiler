@@ -10,6 +10,7 @@ pub(crate) struct LasmClusterShutdownSummary {
     pub(crate) relay_worker_panics: usize,
     pub(crate) autoscale_panicked: bool,
     pub(crate) status_writer_panicked: bool,
+    pub(crate) state_lock_poisoned: bool,
 }
 
 impl LasmClusterShutdownSummary {
@@ -17,10 +18,17 @@ impl LasmClusterShutdownSummary {
         self.relay_worker_panics > 0 || self.autoscale_panicked || self.status_writer_panicked
     }
 
-    pub(crate) fn panic_message(&self) -> String {
+    pub(crate) fn has_failures(&self) -> bool {
+        self.has_thread_panics() || self.state_lock_poisoned
+    }
+
+    pub(crate) fn failure_message(&self) -> String {
         format!(
-            "LASM cluster shutdown observed thread panic(s): relay_workers={}, autoscale_panicked={}, status_writer_panicked={}",
-            self.relay_worker_panics, self.autoscale_panicked, self.status_writer_panicked
+            "LASM cluster shutdown observed failure(s): relay_worker_panics={}, autoscale_panicked={}, status_writer_panicked={}, state_lock_poisoned={}",
+            self.relay_worker_panics,
+            self.autoscale_panicked,
+            self.status_writer_panicked,
+            self.state_lock_poisoned
         )
     }
 }
@@ -45,12 +53,17 @@ pub(crate) fn finalize_lasm_cluster_runtime(
     let status_writer_panicked = status_writer_handle
         .map(|handle| handle.join().is_err())
         .unwrap_or(false);
-    if let Ok(mut state) = shared_state.write() {
-        stop_lasm_cluster_workers(&mut state);
-    }
+    let state_lock_poisoned = match shared_state.write() {
+        Ok(mut state) => {
+            stop_lasm_cluster_workers(&mut state);
+            false
+        }
+        Err(_) => true,
+    };
     LasmClusterShutdownSummary {
         relay_worker_panics,
         autoscale_panicked,
         status_writer_panicked,
+        state_lock_poisoned,
     }
 }

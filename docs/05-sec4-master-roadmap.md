@@ -1467,6 +1467,10 @@ Post-alpha track acceptance anchors:
       - accept-worker orchestration now records and returns deterministic first accept-loop failure message instead of printing and returning success,
       - `cmd_run_lasm_cluster(...)` now fails non-zero when any accept-loop worker/main accept path reports an error, preserving stop-flag shutdown behavior and deterministic error surface.
       - documented in `docs/book/1326-m39-lasm-cluster-accept-error-propagation.md`.
+   - [x] Hardened LASM cluster shutdown lock-poison handling:
+      - shutdown finalizer summary now tracks `state_lock_poisoned` when cluster state write lock is poisoned during finalization,
+      - cluster run path now treats shutdown lock-poison as deterministic runtime failure alongside background-thread panic conditions.
+      - documented in `docs/book/1327-m39-lasm-cluster-shutdown-lock-poison-handling.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
