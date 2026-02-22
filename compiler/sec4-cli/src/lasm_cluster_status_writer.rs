@@ -82,6 +82,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         let mut last_status_write_error: Option<String> = None;
         let mut status_write_warning_next_allowed_at: Option<Instant> = None;
         let status_write_warning_throttle_duration = Duration::from_millis(1000);
+        let mut selected_worker_ports_snapshot = Arc::clone(&worker_ports_snapshot.load());
+        let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
         loop {
             let sample_now = Instant::now();
             let saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
@@ -101,8 +103,18 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
             let dispatch_fallback_per_sec = (dispatch_fallback_delta as f64) / elapsed_secs;
             let dispatch_saturation_short_circuit_per_sec =
                 (dispatch_saturation_short_circuit_delta as f64) / elapsed_secs;
-            let worker_ports = worker_ports_snapshot.load_full();
-            let worker_count = worker_ports.len();
+            if let Some(next_snapshot) = {
+                let snapshot = worker_ports_snapshot.load();
+                if Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
+                    None
+                } else {
+                    Some(Arc::clone(&snapshot))
+                }
+            } {
+                selected_worker_port_count = next_snapshot.len();
+                selected_worker_ports_snapshot = next_snapshot;
+            }
+            let worker_count = selected_worker_port_count;
             let active_connections = active_connections.load(Ordering::Relaxed);
             let active_connections_per_worker = if worker_count == 0 {
                 0.0
@@ -117,7 +129,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_worker_count,
                 relay_queue_capacity,
                 relay_queue_shard_capacity,
-                worker_ports,
+                worker_ports: Arc::clone(&selected_worker_ports_snapshot),
                 active_connections,
                 active_connections_per_worker,
                 relay_saturation_events_pending: relay_saturation_events.load(Ordering::Relaxed),
