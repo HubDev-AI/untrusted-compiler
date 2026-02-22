@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::{
-    LasmClusterConfig, LasmClusterState, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
+    LasmClusterConfig, LasmClusterState, LASM_CLUSTER_IDLE_SLEEP_MICROS,
+    LASM_CLUSTER_IDLE_SPIN_THRESHOLD, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
     LASM_CLUSTER_RELAY_PUMP_BATCH_MIN, LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER,
     LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK,
 };
@@ -18,6 +19,40 @@ pub(crate) fn lasm_cluster_backend_connect_timeout(config: &LasmClusterConfig) -
 
 pub(crate) fn lasm_cluster_backend_connect_cooldown(config: &LasmClusterConfig) -> Duration {
     Duration::from_millis(config.cluster_backend_connect_cooldown_ms.max(25))
+}
+
+fn resolve_lasm_cluster_env_u64(name: &str, default_value: u64, min: u64, max: u64) -> u64 {
+    let Ok(raw) = std::env::var(name) else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .map(|parsed| parsed.clamp(min, max))
+        .unwrap_or(default_value)
+}
+
+pub(crate) fn resolve_lasm_cluster_idle_spin_threshold() -> u32 {
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD",
+        u64::from(LASM_CLUSTER_IDLE_SPIN_THRESHOLD),
+        1,
+        4096,
+    );
+    u32::try_from(value).unwrap_or(LASM_CLUSTER_IDLE_SPIN_THRESHOLD)
+}
+
+pub(crate) fn resolve_lasm_cluster_idle_sleep_micros() -> u64 {
+    resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS",
+        LASM_CLUSTER_IDLE_SLEEP_MICROS,
+        1,
+        50_000,
+    )
 }
 
 pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
