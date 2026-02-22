@@ -4,7 +4,8 @@ use std::net::TcpStream;
 use crate::lasm_cluster_relay_send::attempt_lasm_cluster_relay_send;
 use crate::lasm_cluster_relay_topology::{
     lasm_cluster_next_index_wrapped, lasm_cluster_next_live_sender_index,
-    lookup_lasm_cluster_next_live_sender_index, resolve_lasm_cluster_next_live_sender_index,
+    lookup_lasm_cluster_next_live_sender_index,
+    resolve_lasm_cluster_next_live_sender_index_with_lookup_state,
 };
 use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
 
@@ -211,9 +212,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     }
     let scan_live_target = relay_live_sender_count.saturating_sub(1);
     if scan_live_target <= 1 {
-        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index(
+        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
             relay_sender_live,
             relay_next_live_sender_lookup,
+            relay_has_next_live_sender_lookup,
             start_index_wrapped,
         ) {
             return dispatch_lasm_cluster_relay_stream_fallback_single_live(
@@ -233,11 +235,14 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         );
     }
     if scan_live_target == 2 {
-        if let Some(first_live_index) = resolve_lasm_cluster_next_live_sender_index(
-            relay_sender_live,
-            relay_next_live_sender_lookup,
-            start_index_wrapped,
-        ) {
+        if let Some(first_live_index) =
+            resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
+                relay_sender_live,
+                relay_next_live_sender_lookup,
+                relay_has_next_live_sender_lookup,
+                start_index_wrapped,
+            )
+        {
             if let Err(next_stream) = attempt_lasm_cluster_relay_send(
                 client_stream,
                 relay_senders,
@@ -264,9 +269,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 if relay_sender_live[second_start_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
                     Some(second_start_index)
                 } else {
-                    resolve_lasm_cluster_next_live_sender_index(
+                    resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
                         relay_sender_live,
                         relay_next_live_sender_lookup,
+                        relay_has_next_live_sender_lookup,
                         second_start_index,
                     )
                 };

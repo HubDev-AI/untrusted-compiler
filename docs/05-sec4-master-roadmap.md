@@ -1507,6 +1507,10 @@ Post-alpha track acceptance anchors:
       - `lookup_lasm_cluster_next_live_sender_index` now relies on established topology invariants (`non-empty`, `cached index in bounds`) via debug assertions and direct indexed reads,
       - removed redundant runtime empty/bounds checks on the hot lookup path while preserving fallback live-scan behavior when cached entry is no longer live.
       - documented in `docs/book/1336-m39-lasm-cluster-relay-lookup-invariant-fast-path.md`.
+   - [x] Added lookup-state-aware next-live resolver for degraded fallback dispatch:
+      - relay topology now exposes `resolve_lasm_cluster_next_live_sender_index_with_lookup_state(...)` so hot callers can pass precomputed lookup availability,
+      - fallback multi-dispatch now threads one `relay_has_next_live_sender_lookup` flag through next-live resolution calls, removing repeated lookup-availability branching from degraded dispatch resolution.
+      - documented in `docs/book/1337-m39-lasm-cluster-resolve-next-live-with-lookup-state.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

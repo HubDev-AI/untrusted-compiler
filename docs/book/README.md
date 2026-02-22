@@ -1306,5 +1306,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1334-m39-lasm-cluster-accept-dispatch-direct-overload-buffer-writes.md`
 - `1335-m39-lasm-cluster-unavailable-response-helper-split.md`
 - `1336-m39-lasm-cluster-relay-lookup-invariant-fast-path.md`
+- `1337-m39-lasm-cluster-resolve-next-live-with-lookup-state.md`
 
 As milestones progress, chapters will be added and linked from this index.
