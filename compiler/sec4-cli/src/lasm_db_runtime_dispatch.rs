@@ -408,6 +408,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = sqlite_affected_rows;
                     }
+                    if let Some(tx_handle) = allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx_handle);
+                    }
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
                         op: "execTx".to_string(),
