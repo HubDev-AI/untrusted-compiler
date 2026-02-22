@@ -1325,5 +1325,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1353-m39-lasm-cluster-autoscale-cooldown-tail-store-elision.md`
 - `1354-m39-lasm-cluster-cyclic-healthy-lookup-selection.md`
 - `1355-m39-lasm-cluster-healthy-cycle-span-reservation-selection.md`
+- `1356-m39-lasm-cluster-accept-fallback-direct-wrap-step-elision.md`
 
 As milestones progress, chapters will be added and linked from this index.

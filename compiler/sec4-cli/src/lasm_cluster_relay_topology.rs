@@ -1,16 +1,6 @@
 use crate::LASM_CLUSTER_RELAY_SENDER_LIVE;
 
 #[inline(always)]
-pub(crate) fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
-    debug_assert!(count > 0);
-    if index + 1 == count {
-        0
-    } else {
-        index + 1
-    }
-}
-
-#[inline(always)]
 pub(crate) fn lasm_cluster_next_live_sender_index(
     relay_sender_live: &[u8],
     start_index_wrapped: usize,

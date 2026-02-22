@@ -3,8 +3,7 @@ use std::net::TcpStream;
 
 use crate::lasm_cluster_relay_send::attempt_lasm_cluster_relay_send;
 use crate::lasm_cluster_relay_topology::{
-    lasm_cluster_next_index_wrapped, lasm_cluster_next_live_sender_index,
-    lookup_lasm_cluster_next_live_sender_index,
+    lasm_cluster_next_live_sender_index, lookup_lasm_cluster_next_live_sender_index,
     resolve_lasm_cluster_next_live_sender_index_with_lookup_state,
 };
 use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
@@ -262,8 +261,11 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     *relay_live_sender_count,
                 );
             }
-            let second_start_index =
-                lasm_cluster_next_index_wrapped(first_live_index, sender_count);
+            let second_start_index = if first_live_index + 1 == sender_count {
+                0
+            } else {
+                first_live_index + 1
+            };
             let second_live_index =
                 if relay_sender_live[second_start_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
                     Some(second_start_index)
