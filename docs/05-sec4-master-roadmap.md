@@ -1443,6 +1443,10 @@ Post-alpha track acceptance anchors:
       - moved status-writer thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_writer.rs` (`spawn_lasm_cluster_status_writer`, `LasmClusterStatusWriterConfig`),
       - cluster orchestration now wires status-writer dependencies through a typed module config while preserving unchanged-snapshot skip behavior and deterministic status payload emission cadence.
       - documented in `docs/book/1320-m39-lasm-cluster-status-writer-module-extraction.md`.
+   - [x] Extracted LASM cluster autoscale thread loop into dedicated module:
+      - moved autoscale thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs` (`spawn_lasm_cluster_autoscale_loop`, `LasmClusterAutoscaleLoopConfig`),
+      - cluster orchestration now wires autoscale dependencies through module config while preserving dynamic boost behavior, cooldown tracking, and worker lifecycle update semantics.
+      - documented in `docs/book/1321-m39-lasm-cluster-autoscale-loop-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
