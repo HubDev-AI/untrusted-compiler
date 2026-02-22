@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::lasm_cluster_accept_loop::run_lasm_cluster_accept_loop;
 
@@ -49,6 +49,7 @@ pub(crate) fn run_lasm_cluster_accept_workers(
     } = config;
 
     let accept_error_reported = Arc::new(AtomicBool::new(false));
+    let accept_first_error = Arc::new(Mutex::new(None::<String>));
     let mut accept_handles: Vec<std::thread::JoinHandle<()>> =
         Vec::with_capacity(relay_accept_worker_count.saturating_sub(1));
     for accept_worker_index in 1..relay_accept_worker_count {
@@ -75,6 +76,7 @@ pub(crate) fn run_lasm_cluster_accept_workers(
         let accept_relay_live_sender_count = Arc::clone(relay_live_sender_count);
         let accept_stop_flag = Arc::clone(stop_flag);
         let accept_error_reported = Arc::clone(&accept_error_reported);
+        let accept_first_error = Arc::clone(&accept_first_error);
         accept_handles.push(std::thread::spawn(move || {
             if let Err(message) = run_lasm_cluster_accept_loop(
                 &accept_listener,
@@ -90,7 +92,9 @@ pub(crate) fn run_lasm_cluster_accept_workers(
                 relay_accept_batch_max,
             ) {
                 if !accept_error_reported.swap(true, Ordering::Relaxed) {
-                    eprintln!("run failed: {message}");
+                    if let Ok(mut first_error) = accept_first_error.lock() {
+                        *first_error = Some(message.clone());
+                    }
                 }
                 accept_stop_flag.store(true, Ordering::Relaxed);
             }
@@ -111,12 +115,29 @@ pub(crate) fn run_lasm_cluster_accept_workers(
         relay_accept_batch_max,
     ) {
         if !accept_error_reported.swap(true, Ordering::Relaxed) {
-            eprintln!("run failed: {message}");
+            if let Ok(mut first_error) = accept_first_error.lock() {
+                *first_error = Some(message.clone());
+            }
         }
     }
 
     stop_flag.store(true, Ordering::Relaxed);
     let panic_count = join_lasm_cluster_accept_worker_handles(accept_handles);
+    let accept_error_message = accept_first_error
+        .lock()
+        .ok()
+        .and_then(|first_error| first_error.clone());
+    let has_accept_error = accept_error_reported.load(Ordering::Relaxed);
+    if has_accept_error {
+        if panic_count > 0 {
+            return Err(format!(
+                "{panic_count} LASM cluster accept worker thread(s) panicked after accept loop failure"
+            ));
+        }
+        return Err(
+            accept_error_message.unwrap_or_else(|| "LASM cluster accept loop failed".to_string())
+        );
+    }
     if panic_count > 0 {
         return Err(format!(
             "{panic_count} LASM cluster accept worker thread(s) panicked"
