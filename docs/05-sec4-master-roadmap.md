@@ -1725,6 +1725,10 @@ Post-alpha track acceptance anchors:
       - `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` now supports `--build-profile debug|release` and `--samples <n>`, executes multiple wrk samples, and reports the best sample plus all sample metrics in summary JSON,
       - this reduces tuning noise when local loadgen variance is high and keeps profile selection explicit for performance investigations.
       - documented in `docs/book/1392-m39-lasm-capacity-probe-build-profile-and-samples.md`.
+   - [x] Wired LASM mode-compare orchestration to stable probe controls:
+      - `benchmark-suite/scripts/run_lasm_cluster_mode_compare.sh` now accepts/forwards `--build-profile` and `--samples` to both proxy and fixed probe runs,
+      - compare dry-run/test coverage now validates build-profile/sample controls and invalid-input diagnostics so repeated mode comparisons stay deterministic.
+      - documented in `docs/book/1393-m39-lasm-mode-compare-build-profile-and-samples.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

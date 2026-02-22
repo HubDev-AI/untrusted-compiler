@@ -35,6 +35,8 @@ Options:
   --cluster-accept-workers <n>                     Optional relay accept-worker override for proxy-relay probe
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override for proxy-relay probe
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override for proxy-relay probe
+  --build-profile <debug|release>                  sec4 build profile forwarded to both probe runs (default: release)
+  --samples <n>                                    Number of wrk samples per probe run (default: 1)
   --proxy-out <path>                               Proxy probe output path (default: results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-proxy.json)
   --fixed-out <path>                               Fixed probe output path (default: results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-fixed.json)
   --out <path>                                     Comparison output path (default: results/summaries/sec4-lasm-cluster-mode-compare.json)
@@ -84,6 +86,8 @@ cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
+build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
+samples="${LASM_CAPACITY_SAMPLES:-1}"
 proxy_out_rel="${LASM_CAPACITY_MODE_COMPARE_PROXY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-proxy.json}"
 fixed_out_rel="${LASM_CAPACITY_MODE_COMPARE_FIXED_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-fixed.json}"
 out_rel="${LASM_CAPACITY_MODE_COMPARE_OUT:-results/summaries/sec4-lasm-cluster-mode-compare.json}"
@@ -180,6 +184,14 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
+    --build-profile)
+      build_profile="${2:-}"
+      shift 2
+      ;;
+    --samples)
+      samples="${2:-}"
+      shift 2
+      ;;
     --proxy-out)
       proxy_out_rel="${2:-}"
       shift 2
@@ -243,6 +255,21 @@ if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   echo "request-header must include ':' (example: Authorization: Bearer token123)" >&2
   exit 2
 fi
+case "$build_profile" in
+  debug|release) ;;
+  *)
+    echo "build-profile must be one of: debug, release (got: $build_profile)" >&2
+    exit 2
+    ;;
+esac
+if ! [[ "$samples" =~ ^[0-9]+$ ]]; then
+  echo "samples must be an integer >= 1, got: $samples" >&2
+  exit 2
+fi
+if [ "$samples" -lt 1 ]; then
+  echo "samples must be >= 1, got: $samples" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -279,6 +306,8 @@ sec4 LASM cluster mode compare plan:
   proxyClusterAcceptWorkers=${cluster_accept_workers:-auto}
   proxyClusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   proxyClusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
+  buildProfile=${build_profile}
+  samples=${samples}
   proxyOut=${proxy_out_path}
   fixedOut=${fixed_out_path}
   out=${out_path}
@@ -303,6 +332,8 @@ common_args=(
   --autoscale-scale-up-step "${autoscale_scale_up_step}"
   --autoscale-scale-down-step "${autoscale_scale_down_step}"
   --autoscale-saturation-boost-step "${autoscale_saturation_boost_step}"
+  --build-profile "${build_profile}"
+  --samples "${samples}"
 )
 
 proxy_cmd=(

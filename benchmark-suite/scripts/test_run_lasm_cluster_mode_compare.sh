@@ -27,6 +27,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
   --cluster-accept-workers 4 \
   --cluster-relay-accept-batch-max 321 \
   --cluster-relay-pump-batch-max 654 \
+  --build-profile debug \
+  --samples 3 \
   --proxy-out results/summaries/custom-lasm-mode-compare-proxy.json \
   --fixed-out results/summaries/custom-lasm-mode-compare-fixed.json \
   --out results/summaries/custom-lasm-mode-compare.json \
@@ -52,6 +54,14 @@ if ! grep -q 'clusterRelayWorkers=9' <<<"$out"; then
   echo "mode compare dry-run missing proxy relay workers passthrough" >&2
   exit 1
 fi
+if ! grep -q 'buildProfile=debug' <<<"$out"; then
+  echo "mode compare dry-run missing build profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$out"; then
+  echo "mode compare dry-run missing samples marker" >&2
+  exit 1
+fi
 if ! grep -q 'fixedReusePortMode=true' <<<"$out"; then
   echo "mode compare dry-run missing delegated fixed reuse-port mode marker" >&2
   exit 1
@@ -72,6 +82,22 @@ if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --cluster-re
 fi
 if ! grep -q "cluster-relay-pump-batch-max must be numeric" /tmp/lasm-mode-compare-invalid-pump.log; then
   echo "mode compare missing invalid relay pump batch diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --samples 0 >/tmp/lasm-mode-compare-invalid-samples.log 2>&1; then
+  echo "mode compare accepted invalid samples value" >&2
+  exit 1
+fi
+if ! grep -q "samples must be >= 1" /tmp/lasm-mode-compare-invalid-samples.log; then
+  echo "mode compare missing invalid samples diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --build-profile fast >/tmp/lasm-mode-compare-invalid-profile.log 2>&1; then
+  echo "mode compare accepted invalid build profile value" >&2
+  exit 1
+fi
+if ! grep -q "build-profile must be one of: debug, release" /tmp/lasm-mode-compare-invalid-profile.log; then
+  echo "mode compare missing invalid build profile diagnostic" >&2
   exit 1
 fi
 
