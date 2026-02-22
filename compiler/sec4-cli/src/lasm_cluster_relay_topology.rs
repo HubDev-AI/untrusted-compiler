@@ -53,15 +53,14 @@ pub(crate) fn resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
     relay_has_next_live_sender_lookup: bool,
     start_index_wrapped: usize,
 ) -> Option<usize> {
-    if relay_sender_live.is_empty() {
-        return None;
-    }
-    debug_assert!(start_index_wrapped < relay_sender_live.len());
+    let sender_count = relay_sender_live.len();
+    debug_assert!(sender_count > 0);
+    debug_assert!(start_index_wrapped < sender_count);
     if relay_sender_live[start_index_wrapped] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         return Some(start_index_wrapped);
     }
     if relay_has_next_live_sender_lookup {
-        debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
+        debug_assert_eq!(relay_next_live_sender_lookup.len(), sender_count);
         return lookup_lasm_cluster_next_live_sender_index(
             relay_sender_live,
             relay_next_live_sender_lookup,
