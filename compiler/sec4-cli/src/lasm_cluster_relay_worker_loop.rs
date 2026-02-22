@@ -333,8 +333,6 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                         }
                     }
                     Err(err) => {
-                        saturation_events_pending_local += 1;
-                        saturation_events_total_local += 1;
                         let now = Instant::now();
                         let unhealthy_until = now + relay_backend_connect_cooldown;
                         let unhealthy_entry =
@@ -464,6 +462,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 }
                             }
                         }
+                        saturation_events_pending_local += 1;
+                        saturation_events_total_local += 1;
                         let _ = write_lasm_cluster_worker_unavailable_response(&mut client);
                         active_connection_decrements_local += 1;
                     }
