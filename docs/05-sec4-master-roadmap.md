@@ -1547,6 +1547,10 @@ Post-alpha track acceptance anchors:
       - `dispatch_lasm_cluster_relay_stream_fallback_multi` now receives precomputed `relay_has_next_live_sender_lookup` directly and no longer derives lookup availability with internal `is_empty` checks,
       - accept-loop now calls core fallback-multi function directly (wrapper removed), reducing one call layer and one per-call lookup-availability branch in fallback dispatch plumbing.
       - documented in `docs/book/1346-m39-lasm-cluster-fallback-multi-direct-lookup-state-signature.md`.
+   - [x] Tightened autoscale arithmetic to direct bounded math paths:
+      - saturation batch count now uses direct quotient+remainder rounding (under non-zero flush-batch invariant), and scale-up/down bounds now use direct remaining-capacity / bounded-subtraction math instead of saturating add/sub helper chains,
+      - preserves autoscale semantics while trimming saturating arithmetic overhead in the periodic LASM cluster autoscale loop.
+      - documented in `docs/book/1347-m39-lasm-cluster-autoscale-direct-bounded-arithmetic.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
