@@ -1311,5 +1311,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1339-m39-lasm-cluster-fallback-all-live-direct-wrap-increment.md`
 - `1340-m39-lasm-cluster-fallback-live-target-direct-guards.md`
 - `1341-m39-lasm-cluster-accept-loop-redundant-live-guard-removal.md`
+- `1342-m39-lasm-cluster-resolver-invariant-and-saturation-inline-flush.md`
 
 As milestones progress, chapters will be added and linked from this index.

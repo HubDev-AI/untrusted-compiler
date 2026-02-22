@@ -120,12 +120,12 @@ pub(crate) fn handle_lasm_cluster_accept_dispatch_error(
             *listener_saturation_total_local += 1;
             let _ = stream.write_all(LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE);
             if *listener_saturation_pending_local >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH {
-                flush_lasm_cluster_saturation_counters(
-                    relay_saturation_events,
-                    relay_saturation_events_total,
-                    listener_saturation_pending_local,
-                    listener_saturation_total_local,
-                );
+                relay_saturation_events
+                    .fetch_add(*listener_saturation_pending_local, Ordering::Relaxed);
+                relay_saturation_events_total
+                    .fetch_add(*listener_saturation_total_local, Ordering::Relaxed);
+                *listener_saturation_pending_local = 0;
+                *listener_saturation_total_local = 0;
             }
             Ok(())
         }
