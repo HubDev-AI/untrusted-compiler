@@ -1897,6 +1897,10 @@ Post-alpha track acceptance anchors:
       - runtime SQL param parsing now accepts object form with numeric keys (for example `{\"1\": \"alice\", \"3\": true}`) and expands it into positional vectors with deterministic null-fill for missing indices,
       - non-numeric object keys retain existing fallback behavior (single text parameter), preserving backward compatibility for non-positional object payloads.
       - documented in `docs/book/1428-m39-lasm-db-positional-object-sql-params.md`.
+   - [x] Extended positional-object SQL parameter parsing to placeholder-style object keys:
+      - Postgres/SQLite positional-object parsing now accepts key prefixes used in SQL placeholder notation (`$1`, `?1`) in addition to plain numeric keys,
+      - this improves compatibility with AI-generated/object-transformed param payloads while preserving fallback behavior for non-positional keys.
+      - documented in `docs/book/1432-m39-lasm-db-positional-object-placeholder-keys.md`.
    - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
       - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
       - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.
