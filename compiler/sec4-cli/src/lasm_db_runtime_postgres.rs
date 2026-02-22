@@ -1,6 +1,6 @@
 use crate::lasm_db_runtime_common::{
-    lasm_dynamic_postgres_client_mut, lasm_dynamic_postgres_prepared_statement,
-    reconnect_lasm_dynamic_postgres_client,
+    insert_lasm_bounded_cache_entry, lasm_dynamic_postgres_client_mut,
+    lasm_dynamic_postgres_prepared_statement, reconnect_lasm_dynamic_postgres_client,
 };
 use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
@@ -185,16 +185,16 @@ fn max_lasm_postgres_placeholder_index_cached(
         return *value;
     }
     let value = max_lasm_postgres_placeholder_index(query_template);
-    if state.db_postgres_placeholder_max_cache.len() >= state.db_postgres_placeholder_cache_max {
-        let evicted = state.db_postgres_placeholder_max_cache.len() as u64;
-        state.db_postgres_placeholder_cache_evictions_total = state
-            .db_postgres_placeholder_cache_evictions_total
-            .saturating_add(evicted);
-        state.db_postgres_placeholder_max_cache.clear();
-    }
-    state
-        .db_postgres_placeholder_max_cache
-        .insert(query_template.to_string(), value);
+    let evicted = insert_lasm_bounded_cache_entry(
+        &mut state.db_postgres_placeholder_max_cache,
+        &mut state.db_postgres_placeholder_max_cache_order,
+        state.db_postgres_placeholder_cache_max,
+        query_template.to_string(),
+        value,
+    );
+    state.db_postgres_placeholder_cache_evictions_total = state
+        .db_postgres_placeholder_cache_evictions_total
+        .saturating_add(evicted);
     value
 }
 

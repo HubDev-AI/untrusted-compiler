@@ -1386,5 +1386,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1414-m39-lasm-postgres-native-tls-auto-fallback.md`
 - `1415-m39-run-db-postgres-tls-mode-flag.md`
 - `1416-m39-lasm-cluster-relay-worker-snapshot-clone-elision.md`
+- `1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`
 
 As milestones progress, chapters will be added and linked from this index.
