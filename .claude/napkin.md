@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I passed `&SocketAddr` into the new fallback-attempt helper that expects `SocketAddr`, causing a quick compile break. | When extracting helper signatures from inlined code, re-check call sites for by-value vs by-reference argument ownership before the first compile run. |
 | 2026-02-22 | self | I committed the shared-selection-recompute slice on local `dev` again before creating the PR branch. | Run `git branch --show-current` immediately before staging/commit; if on `dev`, branch first. If missed, branch from commit and force local `dev` back to `origin/dev` before pushing. |
 | 2026-02-22 | self | I committed the fallback-multi lookup-state slice directly on local `dev` again before opening a `codex/*` branch. | Keep a hard pre-commit check (`git branch --show-current`) and if on `dev`, branch immediately before commit; if missed, recover by branching from the commit and re-point local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I started this continuation by reading `.claude/napkin.md` in parallel with branch/status/log commands instead of running napkin read as the standalone first command. | Enforce strict session gate: run `cat .claude/napkin.md` alone first, then run any git/status/search commands afterward. |
