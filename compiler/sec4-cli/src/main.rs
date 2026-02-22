@@ -34,6 +34,7 @@ mod lasm_cluster_relay_send;
 mod lasm_cluster_relay_topology;
 mod lasm_cluster_relay_worker_loop;
 mod lasm_cluster_runtime_config;
+mod lasm_cluster_shutdown;
 mod lasm_cluster_status_json;
 mod lasm_cluster_status_writer;
 mod lasm_db_adapter_state;
@@ -70,6 +71,7 @@ use lasm_cluster_runtime_config::{
     resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
+use lasm_cluster_shutdown::finalize_lasm_cluster_runtime;
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
@@ -7874,18 +7876,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
     if let Err(err) = listener.set_nonblocking(true) {
         eprintln!("run failed: could not set LASM cluster proxy listener nonblocking: {err}");
-        stop_flag.store(true, Ordering::Relaxed);
-        drop(relay_senders);
-        for handle in relay_handles {
-            let _ = handle.join();
-        }
-        let _ = autoscale_handle.join();
-        if let Some(handle) = status_writer_handle {
-            let _ = handle.join();
-        }
-        if let Ok(mut state) = shared_state.write() {
-            stop_lasm_cluster_workers(&mut state);
-        }
+        finalize_lasm_cluster_runtime(
+            &stop_flag,
+            relay_senders,
+            relay_handles,
+            autoscale_handle,
+            status_writer_handle,
+            &shared_state,
+        );
         return Err(2);
     }
 
@@ -7904,30 +7902,24 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_accept_batch_max,
     }) {
         eprintln!("run failed: {message}");
-        drop(relay_senders);
-        for handle in relay_handles {
-            let _ = handle.join();
-        }
-        let _ = autoscale_handle.join();
-        if let Some(handle) = status_writer_handle {
-            let _ = handle.join();
-        }
-        if let Ok(mut state) = shared_state.write() {
-            stop_lasm_cluster_workers(&mut state);
-        }
+        finalize_lasm_cluster_runtime(
+            &stop_flag,
+            relay_senders,
+            relay_handles,
+            autoscale_handle,
+            status_writer_handle,
+            &shared_state,
+        );
         return Err(2);
     }
-    drop(relay_senders);
-    for handle in relay_handles {
-        let _ = handle.join();
-    }
-    let _ = autoscale_handle.join();
-    if let Some(handle) = status_writer_handle {
-        let _ = handle.join();
-    }
-    if let Ok(mut state) = shared_state.write() {
-        stop_lasm_cluster_workers(&mut state);
-    }
+    finalize_lasm_cluster_runtime(
+        &stop_flag,
+        relay_senders,
+        relay_handles,
+        autoscale_handle,
+        status_writer_handle,
+        &shared_state,
+    );
     Ok(())
 }
 
