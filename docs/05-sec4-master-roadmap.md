@@ -1625,6 +1625,10 @@ Post-alpha track acceptance anchors:
       - fallback dispatch strategy selection (all-live, dual-live, single-live, multi fallback) now routes through one helper that consumes live hints and refreshes hint caches only when missing,
       - removes large inline strategy-branch duplication from the accept loop while preserving existing fallback dispatch behavior and hint-refresh semantics.
       - documented in `docs/book/1367-m39-lasm-cluster-accept-loop-fallback-dispatch-resolution-helper.md`.
+   - [x] Added non-zero gates for accept-loop counter-flush helper calls:
+      - accept-loop batch tail now calls active-increment/fallback/short-circuit flush helpers only when local counters are non-zero,
+      - accept-loop final tail now gates saturation/fallback/short-circuit flush helpers on pending local deltas.
+      - documented in `docs/book/1368-m39-lasm-cluster-accept-loop-flush-helper-nonzero-gates.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
