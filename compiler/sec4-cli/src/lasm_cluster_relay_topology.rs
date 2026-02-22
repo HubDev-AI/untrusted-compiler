@@ -47,9 +47,10 @@ pub(crate) fn lookup_lasm_cluster_next_live_sender_index(
 }
 
 #[inline(always)]
-pub(crate) fn resolve_lasm_cluster_next_live_sender_index(
+pub(crate) fn resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
     relay_sender_live: &[u8],
     relay_next_live_sender_lookup: &[usize],
+    relay_has_next_live_sender_lookup: bool,
     start_index_wrapped: usize,
 ) -> Option<usize> {
     if relay_sender_live.is_empty() {
@@ -59,7 +60,7 @@ pub(crate) fn resolve_lasm_cluster_next_live_sender_index(
     if relay_sender_live[start_index_wrapped] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         return Some(start_index_wrapped);
     }
-    if !relay_next_live_sender_lookup.is_empty() {
+    if relay_has_next_live_sender_lookup {
         debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
         return lookup_lasm_cluster_next_live_sender_index(
             relay_sender_live,
