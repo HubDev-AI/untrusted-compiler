@@ -215,7 +215,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         );
     }
     let mut scan_index = start_index_wrapped;
-    let scan_slot_limit = sender_count.saturating_sub(1);
+    let scan_slot_limit = sender_count - 1;
     if *relay_all_senders_live {
         for _ in 0..scan_slot_limit {
             if let Err(next_stream) = attempt_lasm_cluster_relay_send(
@@ -242,7 +242,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             *relay_live_sender_count,
         );
     }
-    let scan_live_target = relay_live_sender_count.saturating_sub(1);
+    let scan_live_target = *relay_live_sender_count - 1;
     if scan_live_target <= 1 {
         if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index_with_lookup_state(
             relay_sender_live,
@@ -359,7 +359,11 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             &mut saw_live_sender,
         ) {
             if *relay_live_sender_count != live_sender_count_before_attempt {
-                scan_live_target_dynamic = relay_live_sender_count.saturating_sub(1);
+                scan_live_target_dynamic = if *relay_live_sender_count > 0 {
+                    *relay_live_sender_count - 1
+                } else {
+                    0
+                };
             }
             client_stream = next_stream;
         } else {
