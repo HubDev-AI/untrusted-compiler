@@ -58,6 +58,20 @@ fn initialize_lasm_cluster_relay_connection(
     }
 }
 
+fn release_lasm_cluster_relay_connection(
+    relay_connections: &mut Vec<LasmClusterRelayPump>,
+    relay_index: usize,
+    relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
+    relay_buffer_pool_max: usize,
+    active_connection_decrements_local: &mut usize,
+) {
+    let relay = relay_connections.swap_remove(relay_index);
+    if relay_buffer_pool.len() < relay_buffer_pool_max {
+        relay_buffer_pool.push(relay.into_buffers());
+    }
+    *active_connection_decrements_local += 1;
+}
+
 fn recompute_lasm_cluster_relay_selection_state(
     worker_port_count: usize,
     unhealthy_ports_until_by_index: &[Option<Instant>],
@@ -671,11 +685,13 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             index += 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {
-                            let relay = relay_connections.swap_remove(index);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
-                            }
-                            active_connection_decrements_local += 1;
+                            release_lasm_cluster_relay_connection(
+                                &mut relay_connections,
+                                index,
+                                &mut relay_buffer_pool,
+                                relay_buffer_pool_max,
+                                &mut active_connection_decrements_local,
+                            );
                             progressed = true;
                         }
                         Err(err) => {
@@ -689,11 +705,13 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 pump_warning_next_allowed =
                                     Some(now + relay_warning_throttle_duration);
                             }
-                            let relay = relay_connections.swap_remove(index);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
-                            }
-                            active_connection_decrements_local += 1;
+                            release_lasm_cluster_relay_connection(
+                                &mut relay_connections,
+                                index,
+                                &mut relay_buffer_pool,
+                                relay_buffer_pool_max,
+                                &mut active_connection_decrements_local,
+                            );
                             progressed = true;
                         }
                     }
@@ -723,11 +741,13 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             pump_budget -= 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {
-                            let relay = relay_connections.swap_remove(relay_pump_cursor);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
-                            }
-                            active_connection_decrements_local += 1;
+                            release_lasm_cluster_relay_connection(
+                                &mut relay_connections,
+                                relay_pump_cursor,
+                                &mut relay_buffer_pool,
+                                relay_buffer_pool_max,
+                                &mut active_connection_decrements_local,
+                            );
                             progressed = true;
                             pump_budget -= 1;
                             if relay_connections.is_empty() {
@@ -749,11 +769,13 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 pump_warning_next_allowed =
                                     Some(now + relay_warning_throttle_duration);
                             }
-                            let relay = relay_connections.swap_remove(relay_pump_cursor);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
-                            }
-                            active_connection_decrements_local += 1;
+                            release_lasm_cluster_relay_connection(
+                                &mut relay_connections,
+                                relay_pump_cursor,
+                                &mut relay_buffer_pool,
+                                relay_buffer_pool_max,
+                                &mut active_connection_decrements_local,
+                            );
                             progressed = true;
                             pump_budget -= 1;
                             if relay_connections.is_empty() {
