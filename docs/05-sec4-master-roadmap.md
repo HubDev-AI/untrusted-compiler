@@ -1804,6 +1804,7 @@ Post-alpha track acceptance anchors:
    - [x] Added bounded LASM DB record-history capacity guard:
       - new runtime env control `SEC4_RT_LASM_DB_RECORDS_MAX` (default `10000`) bounds in-memory `db_records` history and drops oldest entries on overflow,
       - startup record load now applies the same bound to prevent unbounded process-memory growth from large persisted DB stores,
+      - overflow append path now triggers adapter full-sync compaction so persisted record history remains bounded to the same window,
       - `DbListRecordsResponse` now includes `recordsCapacity` so operators can confirm configured history bounds in runtime telemetry.
       - documented in `docs/book/1408-m39-lasm-db-record-history-capacity-guard.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).

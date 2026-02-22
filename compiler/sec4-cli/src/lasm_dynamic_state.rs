@@ -78,9 +78,11 @@ fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacit
 pub(crate) fn append_lasm_dynamic_db_record(
     state: &mut LasmDynamicResponseState,
     record: LasmDbRecord,
-) {
+) -> bool {
+    let before = state.db_records.len();
     state.db_records.push(record);
     truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
+    state.db_records.len() < before.saturating_add(1)
 }
 
 pub(crate) fn build_lasm_dynamic_response_state(
@@ -317,9 +319,12 @@ mod tests {
             db_records_adapter: LasmDbRecordsAdapter::RecordsLog,
             ..Default::default()
         };
-        append_lasm_dynamic_db_record(&mut state, sample_record(1));
-        append_lasm_dynamic_db_record(&mut state, sample_record(2));
-        append_lasm_dynamic_db_record(&mut state, sample_record(3));
+        let first_append_overflowed = append_lasm_dynamic_db_record(&mut state, sample_record(1));
+        let second_append_overflowed = append_lasm_dynamic_db_record(&mut state, sample_record(2));
+        let third_append_overflowed = append_lasm_dynamic_db_record(&mut state, sample_record(3));
+        assert!(!first_append_overflowed);
+        assert!(!second_append_overflowed);
+        assert!(third_append_overflowed);
         assert_eq!(state.db_records.len(), 2);
         assert_eq!(state.db_records[0].id, 2);
         assert_eq!(state.db_records[1].id, 3);
