@@ -12,7 +12,7 @@ use crate::lasm_db_config::{
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_by_id: HashMap<String, serde_json::Value>,
     pub(crate) users_store_path: Option<PathBuf>,
     pub(crate) db_records: Vec<LasmDbRecord>,
-    pub(crate) db_record_signatures: HashSet<String>,
+    pub(crate) db_record_signatures: HashMap<String, usize>,
     pub(crate) db_records_max: usize,
     pub(crate) db_records_dropped_total: u64,
     pub(crate) db_records_adapter: LasmDbRecordsAdapter,
@@ -79,21 +79,39 @@ pub(crate) fn lasm_db_record_signature_key(db: i64, template: &str, params: &str
     format!("{db}\u{1f}{template}\u{1f}{params}")
 }
 
-fn rebuild_lasm_db_record_signatures(records: &[LasmDbRecord]) -> HashSet<String> {
-    records
-        .iter()
-        .map(|record| lasm_db_record_signature_key(record.db, &record.template, &record.params))
-        .collect()
+fn build_lasm_db_record_signature_counts(records: &[LasmDbRecord]) -> HashMap<String, usize> {
+    let mut signatures = HashMap::new();
+    for record in records {
+        let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
+        *signatures.entry(signature).or_insert(0) += 1;
+    }
+    signatures
 }
 
-fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacity: usize) -> usize {
+fn decrement_lasm_db_record_signature(
+    signatures: &mut HashMap<String, usize>,
+    record: &LasmDbRecord,
+) {
+    let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
+    if let Some(count) = signatures.get_mut(signature.as_str()) {
+        if *count <= 1 {
+            signatures.remove(signature.as_str());
+        } else {
+            *count -= 1;
+        }
+    }
+}
+
+fn truncate_lasm_db_records_to_capacity(
+    records: &mut Vec<LasmDbRecord>,
+    capacity: usize,
+) -> Vec<LasmDbRecord> {
     let bounded_capacity = capacity.max(1);
     if records.len() > bounded_capacity {
         let overflow = records.len() - bounded_capacity;
-        records.drain(0..overflow);
-        return overflow;
+        return records.drain(0..overflow).collect();
     }
-    0
+    Vec::new()
 }
 
 pub(crate) fn append_lasm_dynamic_db_record(
@@ -102,14 +120,16 @@ pub(crate) fn append_lasm_dynamic_db_record(
 ) -> bool {
     let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
     state.db_records.push(record);
-    state.db_record_signatures.insert(signature);
-    let overflow =
+    *state.db_record_signatures.entry(signature).or_insert(0) += 1;
+    let dropped_records =
         truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
-    if overflow > 0 {
+    if !dropped_records.is_empty() {
         state.db_records_dropped_total = state
             .db_records_dropped_total
-            .saturating_add(overflow as u64);
-        state.db_record_signatures = rebuild_lasm_db_record_signatures(&state.db_records);
+            .saturating_add(dropped_records.len() as u64);
+        for dropped_record in dropped_records.iter() {
+            decrement_lasm_db_record_signature(&mut state.db_record_signatures, dropped_record);
+        }
         return true;
     }
     false
@@ -245,7 +265,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         }
     };
     let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
-    let db_record_signatures = rebuild_lasm_db_record_signatures(&db_records);
+    let db_record_signatures = build_lasm_db_record_signature_counts(&db_records);
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -265,7 +285,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records,
         db_record_signatures,
         db_records_max,
-        db_records_dropped_total: startup_dropped as u64,
+        db_records_dropped_total: startup_dropped.len() as u64,
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
@@ -429,7 +449,40 @@ mod tests {
         assert_eq!(state.db_records_dropped_total, 1);
         assert!(!state
             .db_record_signatures
-            .contains(&lasm_db_record_signature_key(1, "SELECT 1", "1")));
+            .contains_key(lasm_db_record_signature_key(1, "SELECT 1", "1").as_str()));
         assert_eq!(state.db_record_signatures.len(), 2);
+    }
+
+    #[test]
+    fn append_db_record_keeps_signature_when_duplicate_survives_overflow() {
+        let mut state = LasmDynamicResponseState {
+            db_records_max: 2,
+            db_records_adapter: LasmDbRecordsAdapter::RecordsLog,
+            ..Default::default()
+        };
+        let mut first = sample_record(1);
+        first.template = "SELECT 1".to_string();
+        first.params = "same".to_string();
+        let mut second = sample_record(2);
+        second.template = "SELECT 1".to_string();
+        second.params = "same".to_string();
+        let mut third = sample_record(3);
+        third.template = "SELECT 2".to_string();
+        third.params = "other".to_string();
+        append_lasm_dynamic_db_record(&mut state, first);
+        append_lasm_dynamic_db_record(&mut state, second);
+        let overflowed = append_lasm_dynamic_db_record(&mut state, third);
+        assert!(overflowed);
+        let duplicated_signature = lasm_db_record_signature_key(1, "SELECT 1", "same");
+        assert!(state
+            .db_record_signatures
+            .contains_key(duplicated_signature.as_str()));
+        assert_eq!(
+            state
+                .db_record_signatures
+                .get(duplicated_signature.as_str())
+                .copied(),
+            Some(1)
+        );
     }
 }

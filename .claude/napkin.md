@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I tried running two unit-test name filters in one `cargo test` command while validating the signature-refcount slice; Cargo accepts only one filter and failed fast. | Keep Cargo test filters one-per-command and run multiple filters as explicit sequential commands. |
+| 2026-02-22 | self | While removing relay batch snapshot clones, I borrowed `selected_worker_ports_snapshot` immutably via `unwrap_or(&selected...)` and then tried mutating it in the same block, triggering `E0502`. | When a ref may alias the mutable owner, split changed-snapshot handling into `if let Some(snapshot)` branch and clone to a local `next_*` value before `std::mem::replace`. |
 | 2026-02-22 | self | I launched two focused Cargo tests in one parallel call again during the worker-port reuse slice and hit package/build lock waits. | Keep Cargo commands strictly sequential; use parallel calls only for read/search/syntax operations. |
 | 2026-02-22 | self | After merge, I started this slice on local `dev` and only noticed at pre-commit branch gate. | Keep a hard post-merge branch gate: immediately create the next `codex/*` branch before any edits. |
 | 2026-02-22 | self | I started the autoscale recovery reserve/spawn slice on local `dev` again and only created the branch after code edits. | Run a hard pre-edit branch gate (`git branch --show-current`) after every merge and create the next `codex/*` branch before opening or patching files. |

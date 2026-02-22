@@ -1945,6 +1945,11 @@ Post-alpha track acceptance anchors:
       - records-log `db.queryOne` fallback now checks signature membership directly instead of reverse-scanning record history on each call,
       - overflow compaction rebuilds the signature index to keep match behavior deterministic.
       - documented in `docs/book/1443-m39-lasm-db-record-signature-index-for-queryone.md`.
+   - [x] Switched records-log query signature index overflow handling to incremental ref-count updates:
+      - dynamic state now stores signature membership as a ref-count map (signature -> retained record count) instead of a set-only index,
+      - overflow eviction decrements/removes only dropped-record signatures in O(overflow) time instead of rebuilding signature index over full retained history,
+      - records-log `db.queryOne` fallback keeps the same deterministic signature-membership contract via key presence checks.
+      - documented in `docs/book/1444-m39-lasm-db-record-signature-refcount-overflow-updates.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
