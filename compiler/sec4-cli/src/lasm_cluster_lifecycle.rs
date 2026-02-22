@@ -79,6 +79,16 @@ fn spawn_lasm_cluster_worker(
     push_optional_u64_run_arg(&mut cmd, "--db-records-max", config.db_records_max);
     push_optional_u64_run_arg(
         &mut cmd,
+        "--db-postgres-statement-cache-max",
+        config.db_postgres_statement_cache_max,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-placeholder-cache-max",
+        config.db_postgres_placeholder_cache_max,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
         "--db-postgres-statement-timeout-ms",
         config.db_postgres_statement_timeout_ms,
     );

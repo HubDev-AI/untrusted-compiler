@@ -159,6 +159,10 @@ enum Commands {
         #[arg(long)]
         db_records_max: Option<u64>,
         #[arg(long)]
+        db_postgres_statement_cache_max: Option<u64>,
+        #[arg(long)]
+        db_postgres_placeholder_cache_max: Option<u64>,
+        #[arg(long)]
         db_postgres_statement_timeout_ms: Option<u64>,
         #[arg(long)]
         db_postgres_lock_timeout_ms: Option<u64>,
@@ -558,6 +562,8 @@ fn main() {
             db_postgres_dsn_file,
             db_max_tx_handles,
             db_records_max,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -600,6 +606,8 @@ fn main() {
             db_postgres_dsn_file.as_deref(),
             db_max_tx_handles,
             db_records_max,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -6861,6 +6869,8 @@ fn cmd_run(
     db_postgres_dsn_file: Option<&Path>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -7022,6 +7032,18 @@ fn cmd_run(
         eprintln!("run failed: --db-records-max is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_statement_cache_max.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-statement-cache-max is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_postgres_placeholder_cache_max.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-placeholder-cache-max is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && db_postgres_statement_timeout_ms.is_some() {
         eprintln!(
             "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
@@ -7052,6 +7074,14 @@ fn cmd_run(
         eprintln!("run failed: --db-records-max must be >= 1");
         return Err(2);
     }
+    if db_postgres_statement_cache_max == Some(0) {
+        eprintln!("run failed: --db-postgres-statement-cache-max must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_placeholder_cache_max == Some(0) {
+        eprintln!("run failed: --db-postgres-placeholder-cache-max must be >= 1");
+        return Err(2);
+    }
     if db_postgres_statement_timeout_ms == Some(0) {
         eprintln!("run failed: --db-postgres-statement-timeout-ms must be >= 1");
         return Err(2);
@@ -7074,13 +7104,15 @@ fn cmd_run(
     }
     let postgres_runtime_overrides = db_postgres_dsn.is_some()
         || db_postgres_dsn_file.is_some()
+        || db_postgres_statement_cache_max.is_some()
+        || db_postgres_placeholder_cache_max.is_some()
         || db_postgres_statement_timeout_ms.is_some()
         || db_postgres_lock_timeout_ms.is_some()
         || db_postgres_connect_timeout_ms.is_some();
     let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some();
     if backend == RunBackend::Lasm && postgres_runtime_overrides && sqlite_runtime_overrides {
         eprintln!(
-            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
+            "run failed: postgres and sqlite runtime overrides cannot be combined in the same run"
         );
         return Err(2);
     }
@@ -7303,6 +7335,8 @@ fn cmd_run(
             explicit_db_postgres_dsn.as_deref(),
             db_max_tx_handles,
             db_records_max,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -7657,6 +7691,8 @@ struct LasmClusterConfig {
     db_postgres_dsn: Option<String>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -7960,6 +7996,8 @@ fn cmd_run_lasm_backend(
     db_postgres_dsn: Option<&str>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
@@ -8286,6 +8324,8 @@ fn cmd_run_lasm_backend(
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
             db_records_max,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -8335,6 +8375,8 @@ fn cmd_run_lasm_backend(
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
             db_records_max,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -8400,6 +8442,24 @@ fn cmd_run_lasm_backend(
                 .transpose()
                 .map_err(|_| {
                     eprintln!("run failed: --db-records-max exceeds platform limits");
+                    2
+                })?,
+            db_postgres_statement_cache_max
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!(
+                        "run failed: --db-postgres-statement-cache-max exceeds platform limits"
+                    );
+                    2
+                })?,
+            db_postgres_placeholder_cache_max
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!(
+                        "run failed: --db-postgres-placeholder-cache-max exceeds platform limits"
+                    );
                     2
                 })?,
         )

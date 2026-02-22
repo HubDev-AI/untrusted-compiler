@@ -102,6 +102,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_postgres_dsn: Option<&str>,
     explicit_db_tx_max_handles: Option<usize>,
     explicit_db_records_max: Option<usize>,
+    explicit_db_postgres_statement_cache_max: Option<usize>,
+    explicit_db_postgres_placeholder_cache_max: Option<usize>,
 ) -> Result<LasmDynamicResponseState, String> {
     let db_postgres_statement_timeout_ms = resolve_lasm_env_positive_u64(
         "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
@@ -119,14 +121,22 @@ pub(crate) fn build_lasm_dynamic_response_state(
         "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
         LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
     );
-    let db_postgres_statement_cache_max = resolve_lasm_env_positive_usize(
-        "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
-        LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT,
-    );
-    let db_postgres_placeholder_cache_max = resolve_lasm_env_positive_usize(
-        "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
-        LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT,
-    );
+    let db_postgres_statement_cache_max = explicit_db_postgres_statement_cache_max
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| {
+            resolve_lasm_env_positive_usize(
+                "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
+                LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT,
+            )
+        });
+    let db_postgres_placeholder_cache_max = explicit_db_postgres_placeholder_cache_max
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| {
+            resolve_lasm_env_positive_usize(
+                "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
+                LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT,
+            )
+        });
     let db_records_max = explicit_db_records_max
         .filter(|value| *value > 0)
         .unwrap_or_else(|| {
