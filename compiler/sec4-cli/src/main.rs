@@ -82,8 +82,9 @@ pub(crate) use lasm_db_headers::{
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 pub(crate) use lasm_dynamic_state::{
-    build_lasm_dynamic_response_state, persist_lasm_dynamic_users_to_disk, LasmDbRecord,
-    LasmDbRecordsAdapter, LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
+    append_lasm_dynamic_db_record, build_lasm_dynamic_response_state,
+    persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
+    LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
 pub(crate) use lasm_request_template::{
     contains_lasm_request_placeholder_tokens, escape_lasm_html,
@@ -9824,6 +9825,7 @@ fn apply_lasm_dynamic_response_materialization(
         "DbListRecordsResponse" => {
             let (
                 records,
+                records_capacity,
                 adapter,
                 tx_handle_count,
                 tx_handle_capacity,
@@ -9838,6 +9840,7 @@ fn apply_lasm_dynamic_response_materialization(
             ) = match dynamic_state.lock() {
                 Ok(state) => (
                     state.db_records.clone(),
+                    state.db_records_max,
                     lasm_db_records_adapter_label(state.db_records_adapter),
                     state.db_tx_handles.len(),
                     state.db_tx_max_handles,
@@ -9874,6 +9877,7 @@ fn apply_lasm_dynamic_response_materialization(
                 &serde_json::json!({
                     "ok": true,
                     "count": records.len(),
+                    "recordsCapacity": records_capacity,
                     "affectedRowsTotal": affected_rows_total,
                     "adapter": adapter,
                     "txHandleCount": tx_handle_count,
