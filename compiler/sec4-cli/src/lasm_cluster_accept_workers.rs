@@ -5,6 +5,18 @@ use std::sync::Arc;
 
 use crate::lasm_cluster_accept_loop::run_lasm_cluster_accept_loop;
 
+fn join_lasm_cluster_accept_worker_handles(
+    accept_handles: Vec<std::thread::JoinHandle<()>>,
+) -> usize {
+    let mut panic_count = 0_usize;
+    for handle in accept_handles {
+        if handle.join().is_err() {
+            panic_count += 1;
+        }
+    }
+    panic_count
+}
+
 pub(crate) struct LasmClusterAcceptWorkersConfig<'a> {
     pub(crate) listener: &'a TcpListener,
     pub(crate) relay_accept_worker_count: usize,
@@ -44,8 +56,11 @@ pub(crate) fn run_lasm_cluster_accept_workers(
             Ok(listener) => listener,
             Err(err) => {
                 stop_flag.store(true, Ordering::Relaxed);
-                for handle in accept_handles {
-                    let _ = handle.join();
+                let panic_count = join_lasm_cluster_accept_worker_handles(accept_handles);
+                if panic_count > 0 {
+                    return Err(format!(
+                        "could not clone LASM cluster listener: {err} ({panic_count} accept worker thread(s) panicked while stopping)"
+                    ));
                 }
                 return Err(format!("could not clone LASM cluster listener: {err}"));
             }
@@ -101,8 +116,11 @@ pub(crate) fn run_lasm_cluster_accept_workers(
     }
 
     stop_flag.store(true, Ordering::Relaxed);
-    for handle in accept_handles {
-        let _ = handle.join();
+    let panic_count = join_lasm_cluster_accept_worker_handles(accept_handles);
+    if panic_count > 0 {
+        return Err(format!(
+            "{panic_count} LASM cluster accept worker thread(s) panicked"
+        ));
     }
     Ok(())
 }
