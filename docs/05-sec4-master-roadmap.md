@@ -1515,6 +1515,10 @@ Post-alpha track acceptance anchors:
       - added `dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(...)` so accept-loop code passes one precomputed lookup-state flag instead of rebuilding lookup slices at each fallback branch,
       - accept-loop fallback path now computes `relay_use_next_live_lookup_for_fallback` once per failed primary dispatch and reuses it across single/dual/default fallback paths.
       - documented in `docs/book/1338-m39-lasm-cluster-accept-loop-fallback-lookup-state-plumbing.md`.
+   - [x] Tightened all-live fallback scan wrapped-index progression:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now advances scan index with direct increment + wrap reset (`scan_index += 1; if == sender_count {0}`) in the all-live branch,
+      - preserves sender traversal order and fallback semantics while removing per-iteration wrapped-index helper call overhead from the all-live fallback scan loop.
+      - documented in `docs/book/1339-m39-lasm-cluster-fallback-all-live-direct-wrap-increment.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

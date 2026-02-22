@@ -231,7 +231,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             } else {
                 return Ok(());
             }
-            scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+            scan_index += 1;
+            if scan_index == sender_count {
+                scan_index = 0;
+            }
         }
         return lasm_cluster_fallback_terminal_dispatch_error(
             client_stream,
