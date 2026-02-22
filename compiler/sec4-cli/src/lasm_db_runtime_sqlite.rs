@@ -34,7 +34,7 @@ fn parse_lasm_sqlite_positional_object_params(
     let mut indexed = Vec::with_capacity(entries.len());
     let mut max_index = 0usize;
     for (key, value) in entries {
-        let index = key.parse::<usize>().ok()?;
+        let index = parse_lasm_sqlite_positional_param_index(key.as_str())?;
         if index == 0 {
             return None;
         }
@@ -46,6 +46,19 @@ fn parse_lasm_sqlite_positional_object_params(
         params[index - 1] = value;
     }
     Some(params)
+}
+
+fn parse_lasm_sqlite_positional_param_index(key: &str) -> Option<usize> {
+    let trimmed = key.trim();
+    let digits = trimmed
+        .strip_prefix('$')
+        .or_else(|| trimmed.strip_prefix('?'))
+        .unwrap_or(trimmed);
+    let index = digits.parse::<usize>().ok()?;
+    if index == 0 {
+        return None;
+    }
+    Some(index)
 }
 
 pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
@@ -289,5 +302,14 @@ mod tests {
         let params = parse_lasm_sqlite_query_params("{\"user\":\"alice\"}");
         assert_eq!(params.len(), 1);
         assert_eq!(params[0], SqliteValue::Text("{\"user\":\"alice\"}".to_string()));
+    }
+
+    #[test]
+    fn positional_object_params_accept_placeholder_prefixed_keys() {
+        let params = parse_lasm_sqlite_query_params("{\"?3\":7}");
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[0], SqliteValue::Null);
+        assert_eq!(params[1], SqliteValue::Null);
+        assert_eq!(params[2], SqliteValue::Integer(7));
     }
 }
