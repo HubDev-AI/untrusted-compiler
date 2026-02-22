@@ -367,11 +367,25 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 Some(now + relay_warning_throttle_duration);
                         }
                         if unhealthy_port_count < selected_worker_port_count {
-                            if let Some(fallback_backend_index) = unhealthy_ports_until_by_index
-                                .iter()
-                                .take(selected_worker_port_count)
-                                .position(|entry| entry.is_none())
+                            let mut fallback_backend_index = None;
+                            let mut candidate_index = if selected_backend_index + 1
+                                == selected_worker_port_count
                             {
+                                0
+                            } else {
+                                selected_backend_index + 1
+                            };
+                            for _ in 0..selected_worker_port_count.saturating_sub(1) {
+                                if unhealthy_ports_until_by_index[candidate_index].is_none() {
+                                    fallback_backend_index = Some(candidate_index);
+                                    break;
+                                }
+                                candidate_index += 1;
+                                if candidate_index == selected_worker_port_count {
+                                    candidate_index = 0;
+                                }
+                            }
+                            if let Some(fallback_backend_index) = fallback_backend_index {
                                 let fallback_backend_addr =
                                     selected_worker_backend_addrs[fallback_backend_index];
                                 match TcpStream::connect_timeout(

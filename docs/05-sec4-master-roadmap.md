@@ -1585,6 +1585,10 @@ Post-alpha track acceptance anchors:
       - when the primary selected backend connect fails, relay worker now marks it unhealthy and immediately tries one alternate currently-healthy backend before returning worker-unavailable response,
       - keeps deterministic unhealthy/warning tracking while reducing request failures under transient single-backend connect faults.
       - documented in `docs/book/1357-m39-lasm-cluster-relay-connect-failure-single-fallback-attempt.md`.
+   - [x] Switched fallback connect candidate selection to next-healthy cyclic scan:
+      - fallback connect candidate is now chosen by cyclic scan starting from the failed backend’s next index, instead of always picking the first healthy backend,
+      - reduces fallback hot-spot bias under repeated connect failures and preserves deterministic degraded routing order.
+      - documented in `docs/book/1358-m39-lasm-cluster-relay-connect-fallback-next-healthy-cyclic-scan.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -1327,5 +1327,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1355-m39-lasm-cluster-healthy-cycle-span-reservation-selection.md`
 - `1356-m39-lasm-cluster-accept-fallback-direct-wrap-step-elision.md`
 - `1357-m39-lasm-cluster-relay-connect-failure-single-fallback-attempt.md`
+- `1358-m39-lasm-cluster-relay-connect-fallback-next-healthy-cyclic-scan.md`
 
 As milestones progress, chapters will be added and linked from this index.
