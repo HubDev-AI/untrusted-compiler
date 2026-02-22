@@ -1597,6 +1597,10 @@ Post-alpha track acceptance anchors:
       - relay worker connect failure path now scans all remaining healthy backends in cyclic order (after the failed backend) and attempts fallback connect per candidate before final worker-unavailable response,
       - preserves deterministic unhealthy cooldown + warning tracking for each failed candidate while reducing final request failures when multiple healthy backends remain.
       - documented in `docs/book/1360-m39-lasm-cluster-relay-connect-fallback-multi-alternate-attempts.md`.
+   - [x] Tightened multi-alternate fallback scan to direct wrapped cursor progression:
+      - connect-failure fallback candidate traversal now uses direct wrapped index progression (`index += 1; wrap to 0`) plus explicit remaining-scan counter, removing per-iteration offset arithmetic,
+      - fallback scan now exits early when all backends become unhealthy during candidate failures.
+      - documented in `docs/book/1361-m39-lasm-cluster-relay-fallback-scan-direct-wrap-and-terminal-break.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
