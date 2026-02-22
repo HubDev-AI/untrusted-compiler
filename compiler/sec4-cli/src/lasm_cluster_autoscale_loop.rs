@@ -132,27 +132,34 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
             let mut scale_up_step_budget = shared_config.autoscale_scale_up_step;
             let current_workers = state.workers.len();
             if saturation_events > 0 {
-                let saturation_batch_size = LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH.max(1);
-                let saturation_batches = saturation_events
-                    .saturating_add(saturation_batch_size.saturating_sub(1))
-                    / saturation_batch_size;
+                let saturation_batch_size = LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
+                debug_assert!(saturation_batch_size > 0);
+                let saturation_batches = saturation_events / saturation_batch_size
+                    + usize::from(saturation_events % saturation_batch_size != 0);
                 let dynamic_boost_step = shared_config
                     .autoscale_saturation_boost_step
-                    .saturating_mul(saturation_batches.max(1))
-                    .max(shared_config.autoscale_saturation_boost_step)
-                    .max(1)
+                    .saturating_mul(saturation_batches)
                     .min(shared_config.max_instances);
-                let boosted_target = current_workers
-                    .saturating_add(dynamic_boost_step)
-                    .min(shared_config.max_instances);
+                let boosted_target = if current_workers >= shared_config.max_instances {
+                    shared_config.max_instances
+                } else {
+                    let remaining_capacity = shared_config.max_instances - current_workers;
+                    current_workers + dynamic_boost_step.min(remaining_capacity)
+                };
                 desired = desired.max(boosted_target);
                 scale_up_step_budget = scale_up_step_budget.max(dynamic_boost_step);
             }
             autoscale_last_desired_instances.store(desired, Ordering::Relaxed);
             autoscale_last_saturation_events.store(saturation_events, Ordering::Relaxed);
             autoscale_last_dynamic_boost_step.store(scale_up_step_budget, Ordering::Relaxed);
+            let up_budget_target = if current_workers >= shared_config.max_instances {
+                shared_config.max_instances
+            } else {
+                let remaining_capacity = shared_config.max_instances - current_workers;
+                current_workers + scale_up_step_budget.min(remaining_capacity)
+            };
             let up_target = if desired > current_workers {
-                desired.min(current_workers.saturating_add(scale_up_step_budget))
+                desired.min(up_budget_target)
             } else {
                 current_workers
             };
@@ -175,8 +182,13 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 last_scale_up_at = Some(now);
             }
             let current_workers = state.workers.len();
+            let min_down_target = if shared_config.autoscale_scale_down_step >= current_workers {
+                0
+            } else {
+                current_workers - shared_config.autoscale_scale_down_step
+            };
             let down_target = if desired < current_workers {
-                desired.max(current_workers.saturating_sub(shared_config.autoscale_scale_down_step))
+                desired.max(min_down_target)
             } else {
                 current_workers
             };
