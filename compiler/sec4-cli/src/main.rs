@@ -72,7 +72,12 @@ use lasm_cluster_runtime_config::{
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
-use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
+use lasm_db_adapter_state::lasm_db_postgres_tls_mode_label;
+use lasm_db_cli::{
+    push_optional_db_adapter_run_arg, push_optional_db_postgres_tls_mode_run_arg,
+    run_db_adapter_to_lasm_db_records_adapter,
+    run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode,
+};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -153,6 +158,8 @@ enum Commands {
         db_postgres_dsn: Option<String>,
         #[arg(long)]
         db_postgres_dsn_file: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
         #[arg(long)]
         db_max_tx_handles: Option<u64>,
         #[arg(long)]
@@ -363,6 +370,13 @@ enum RunDbAdapter {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum RunDbPostgresTlsMode {
+    Auto,
+    Disable,
+    Require,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum EmitTarget {
     Ast,
     DiagnosticsJson,
@@ -559,6 +573,7 @@ fn main() {
             db_adapter,
             db_postgres_dsn,
             db_postgres_dsn_file,
+            db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
             db_postgres_statement_cache_max,
@@ -603,6 +618,7 @@ fn main() {
             db_adapter,
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
+            db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
             db_postgres_statement_cache_max,
@@ -6866,6 +6882,7 @@ fn cmd_run(
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
+    db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
@@ -7023,6 +7040,10 @@ fn cmd_run(
         eprintln!("run failed: --db-postgres-dsn-file is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_tls_mode.is_some() {
+        eprintln!("run failed: --db-postgres-tls-mode is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && db_max_tx_handles.is_some() {
         eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
         return Err(2);
@@ -7103,6 +7124,7 @@ fn cmd_run(
     }
     let postgres_runtime_overrides = db_postgres_dsn.is_some()
         || db_postgres_dsn_file.is_some()
+        || db_postgres_tls_mode.is_some()
         || db_postgres_statement_cache_max.is_some()
         || db_postgres_placeholder_cache_max.is_some()
         || db_postgres_statement_timeout_ms.is_some()
@@ -7332,6 +7354,7 @@ fn cmd_run(
             db_base,
             effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
+            db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
             db_postgres_statement_cache_max,
@@ -7688,6 +7711,7 @@ struct LasmClusterConfig {
     db_base: Option<PathBuf>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<String>,
+    db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
@@ -7970,6 +7994,7 @@ fn cmd_run_lasm_backend(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
+    db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
@@ -8273,6 +8298,7 @@ fn cmd_run_lasm_backend(
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
+            db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
             db_postgres_statement_cache_max,
@@ -8324,6 +8350,7 @@ fn cmd_run_lasm_backend(
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
+            db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
             db_postgres_statement_cache_max,
@@ -8381,6 +8408,7 @@ fn cmd_run_lasm_backend(
             db_base,
             db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
             explicit_db_postgres_dsn.as_deref(),
+            db_postgres_tls_mode.map(run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode),
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
@@ -9903,6 +9931,7 @@ fn apply_lasm_dynamic_response_materialization(
                 postgres_statement_timeout_ms,
                 postgres_lock_timeout_ms,
                 postgres_connect_timeout_ms,
+                postgres_tls_mode,
                 sqlite_busy_timeout_ms,
             ) = match dynamic_state.lock() {
                 Ok(state) => {
@@ -9938,6 +9967,7 @@ fn apply_lasm_dynamic_response_materialization(
                         state.db_postgres_statement_timeout_ms,
                         state.db_postgres_lock_timeout_ms,
                         state.db_postgres_connect_timeout_ms,
+                        lasm_db_postgres_tls_mode_label(state.db_postgres_tls_mode),
                         state.db_sqlite_busy_timeout_ms,
                     )
                 }
@@ -9981,6 +10011,7 @@ fn apply_lasm_dynamic_response_materialization(
                         "postgresStatement": postgres_statement_timeout_ms,
                         "postgresLock": postgres_lock_timeout_ms,
                         "postgresConnect": postgres_connect_timeout_ms,
+                        "postgresTlsMode": postgres_tls_mode,
                         "sqliteBusy": sqlite_busy_timeout_ms,
                     },
                     "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),

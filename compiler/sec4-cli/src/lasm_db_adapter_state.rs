@@ -21,6 +21,32 @@ pub(crate) const LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT: u64 = 2000;
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT: u64 = 5000;
 pub(crate) const LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT: u64 = 2000;
 pub(crate) const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
+pub(crate) const LASM_DB_POSTGRES_TLS_MODE_ENV: &str = "SEC4_RT_LASM_DB_POSTGRES_TLS_MODE";
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) enum LasmDbPostgresTlsMode {
+    #[default]
+    Auto,
+    Disable,
+    Require,
+}
+
+pub(crate) fn parse_lasm_db_postgres_tls_mode(value: &str) -> Option<LasmDbPostgresTlsMode> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" => Some(LasmDbPostgresTlsMode::Auto),
+        "disable" | "disabled" | "off" | "none" => Some(LasmDbPostgresTlsMode::Disable),
+        "require" | "required" | "on" => Some(LasmDbPostgresTlsMode::Require),
+        _ => None,
+    }
+}
+
+pub(crate) fn lasm_db_postgres_tls_mode_label(mode: LasmDbPostgresTlsMode) -> &'static str {
+    match mode {
+        LasmDbPostgresTlsMode::Auto => "auto",
+        LasmDbPostgresTlsMode::Disable => "disable",
+        LasmDbPostgresTlsMode::Require => "require",
+    }
+}
 
 fn lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms: u64) -> u64 {
     timeout_ms.saturating_add(999).saturating_div(1000).max(1)
@@ -52,30 +78,49 @@ fn is_lasm_postgres_tls_required_error(message: &str) -> bool {
         || normalized.contains("ssl off")
 }
 
+fn build_lasm_native_tls_connector() -> Result<MakeTlsConnector, String> {
+    let tls_connector = TlsConnector::builder()
+        .build()
+        .map_err(|tls_err| format!("native TLS connector bootstrap failed: {tls_err}"))?;
+    Ok(MakeTlsConnector::new(tls_connector))
+}
+
 fn connect_lasm_dynamic_db_records_postgres_client(
     connect_dsn: &str,
+    tls_mode: LasmDbPostgresTlsMode,
 ) -> Result<PostgresClient, String> {
-    match PostgresClient::connect(connect_dsn, NoTls) {
-        Ok(client) => Ok(client),
-        Err(no_tls_err) => {
-            let no_tls_message = no_tls_err.to_string();
-            if !is_lasm_postgres_tls_required_error(no_tls_message.as_str()) {
-                return Err(format!(
-                    "could not connect LASM dynamic postgres records store: {no_tls_message}"
-                ));
-            }
-            let tls_connector = TlsConnector::builder().build().map_err(|tls_err| {
-                format!(
-                    "could not connect LASM dynamic postgres records store: TLS required, but native TLS connector bootstrap failed: {tls_err}"
-                )
+    match tls_mode {
+        LasmDbPostgresTlsMode::Disable => PostgresClient::connect(connect_dsn, NoTls)
+            .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}")),
+        LasmDbPostgresTlsMode::Require => {
+            let tls_connector = build_lasm_native_tls_connector().map_err(|tls_err| {
+                format!("could not connect LASM dynamic postgres records store: {tls_err}")
             })?;
-            let tls_connector = MakeTlsConnector::new(tls_connector);
-            PostgresClient::connect(connect_dsn, tls_connector).map_err(|tls_err| {
-                format!(
-                    "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err}"
-                )
+            PostgresClient::connect(connect_dsn, tls_connector).map_err(|err| {
+                format!("could not connect LASM dynamic postgres records store: {err}")
             })
         }
+        LasmDbPostgresTlsMode::Auto => match PostgresClient::connect(connect_dsn, NoTls) {
+            Ok(client) => Ok(client),
+            Err(no_tls_err) => {
+                let no_tls_message = no_tls_err.to_string();
+                if !is_lasm_postgres_tls_required_error(no_tls_message.as_str()) {
+                    return Err(format!(
+                        "could not connect LASM dynamic postgres records store: {no_tls_message}"
+                    ));
+                }
+                let tls_connector = build_lasm_native_tls_connector().map_err(|tls_err| {
+                    format!(
+                        "could not connect LASM dynamic postgres records store: TLS required, but {tls_err}"
+                    )
+                })?;
+                PostgresClient::connect(connect_dsn, tls_connector).map_err(|tls_err| {
+                    format!(
+                        "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err}"
+                    )
+                })
+            }
+        },
     }
 }
 
@@ -244,6 +289,7 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
 
 pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     dsn: &str,
+    tls_mode: LasmDbPostgresTlsMode,
     statement_timeout_ms: u64,
     lock_timeout_ms: u64,
     connect_timeout_ms: u64,
@@ -251,7 +297,8 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     let connect_timeout_seconds =
         lasm_postgres_connect_timeout_seconds_from_ms(connect_timeout_ms.max(1));
     let connect_dsn = build_lasm_postgres_connect_dsn(dsn, connect_timeout_seconds);
-    let mut client = connect_lasm_dynamic_db_records_postgres_client(connect_dsn.as_str())?;
+    let mut client =
+        connect_lasm_dynamic_db_records_postgres_client(connect_dsn.as_str(), tls_mode)?;
     let statement_timeout_ms = statement_timeout_ms.max(1);
     let lock_timeout_ms = lock_timeout_ms.max(1);
     let timeout_settings = format!(
@@ -269,7 +316,8 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
 mod tests {
     use super::{
         build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
-        lasm_postgres_connect_timeout_seconds_from_ms,
+        lasm_db_postgres_tls_mode_label, lasm_postgres_connect_timeout_seconds_from_ms,
+        parse_lasm_db_postgres_tls_mode, LasmDbPostgresTlsMode,
     };
 
     #[test]
@@ -334,6 +382,39 @@ mod tests {
         assert!(!is_lasm_postgres_tls_required_error(
             "database does not exist"
         ));
+    }
+
+    #[test]
+    fn parse_postgres_tls_mode_supports_operator_aliases() {
+        assert_eq!(
+            parse_lasm_db_postgres_tls_mode("auto"),
+            Some(LasmDbPostgresTlsMode::Auto)
+        );
+        assert_eq!(
+            parse_lasm_db_postgres_tls_mode("none"),
+            Some(LasmDbPostgresTlsMode::Disable)
+        );
+        assert_eq!(
+            parse_lasm_db_postgres_tls_mode("required"),
+            Some(LasmDbPostgresTlsMode::Require)
+        );
+        assert_eq!(parse_lasm_db_postgres_tls_mode("invalid"), None);
+    }
+
+    #[test]
+    fn postgres_tls_mode_labels_are_stable() {
+        assert_eq!(
+            lasm_db_postgres_tls_mode_label(LasmDbPostgresTlsMode::Auto),
+            "auto"
+        );
+        assert_eq!(
+            lasm_db_postgres_tls_mode_label(LasmDbPostgresTlsMode::Disable),
+            "disable"
+        );
+        assert_eq!(
+            lasm_db_postgres_tls_mode_label(LasmDbPostgresTlsMode::Require),
+            "require"
+        );
     }
 }
 

@@ -27632,6 +27632,81 @@ fn run_command_rejects_db_postgres_dsn_file_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_tls_mode_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-tls-mode-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-tls-mode",
+        "require",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-tls-mode is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-tls-mode is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-postgres-tls-mode guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_tls_mode_with_non_postgres_adapter() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-tls-mode-non-postgres-adapter");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "sqlite",
+        "--db-postgres-tls-mode",
+        "require",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when postgres tls-mode is combined with non-postgres adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
+        ),
+        "stderr should include deterministic postgres-tls-mode/non-postgres-adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_dsn_with_non_postgres_adapter() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-non-postgres-adapter");
     let project_path = project_dir

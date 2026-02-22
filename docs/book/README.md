@@ -1384,5 +1384,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1412-m39-run-postgres-cache-capacity-flags.md`
 - `1413-m39-run-db-timeout-overrides-explicit-state.md`
 - `1414-m39-lasm-postgres-native-tls-auto-fallback.md`
+- `1415-m39-run-db-postgres-tls-mode-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.
