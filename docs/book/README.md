@@ -1413,5 +1413,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1441-m39-lasm-autoscale-telemetry-store-elision.md`
 - `1442-m39-lasm-exectx-parse-after-handle-validation.md`
 - `1443-m39-lasm-db-record-signature-index-for-queryone.md`
+- `1444-m39-lasm-db-record-signature-refcount-overflow-updates.md`
 
 As milestones progress, chapters will be added and linked from this index.
