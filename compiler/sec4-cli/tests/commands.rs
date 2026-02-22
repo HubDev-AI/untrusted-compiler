@@ -27662,7 +27662,7 @@ fn run_command_rejects_db_postgres_dsn_with_non_postgres_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+            "run failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
         ),
         "stderr should include deterministic postgres-dsn/non-postgres-adapter guidance:\n{stderr}"
     );
@@ -27707,7 +27707,7 @@ fn run_command_rejects_db_postgres_dsn_file_with_non_postgres_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+            "run failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
         ),
         "stderr should include deterministic postgres-dsn-file/non-postgres-adapter guidance:\n{stderr}"
     );

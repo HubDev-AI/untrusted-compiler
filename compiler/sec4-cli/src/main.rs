@@ -12,7 +12,6 @@ use sec4_core::{
     Diagnostic, Policy,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -7121,7 +7120,7 @@ fn cmd_run(
             Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
             Some(_) => {
                 eprintln!(
-                    "run failed: postgres DSN/timeout overrides require --db-adapter postgres when adapter is set explicitly"
+                    "run failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
                 );
                 return Err(2);
             }
@@ -7731,29 +7730,6 @@ struct LasmClusterState {
     next_port: u16,
 }
 
-struct ScopedEnvVarOverride {
-    name: &'static str,
-    previous: Option<OsString>,
-}
-
-impl ScopedEnvVarOverride {
-    fn set_u64(name: &'static str, value: u64) -> Self {
-        let previous = std::env::var_os(name);
-        std::env::set_var(name, value.to_string());
-        Self { name, previous }
-    }
-}
-
-impl Drop for ScopedEnvVarOverride {
-    fn drop(&mut self) {
-        if let Some(value) = self.previous.take() {
-            std::env::set_var(self.name, value);
-        } else {
-            std::env::remove_var(self.name);
-        }
-    }
-}
-
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
@@ -8228,31 +8204,6 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
-    let mut scoped_db_timeout_overrides = Vec::with_capacity(5);
-    if let Some(timeout_ms) = db_postgres_statement_timeout_ms {
-        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
-            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
-            timeout_ms,
-        ));
-    }
-    if let Some(timeout_ms) = db_postgres_lock_timeout_ms {
-        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
-            "SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS",
-            timeout_ms,
-        ));
-    }
-    if let Some(timeout_ms) = db_postgres_connect_timeout_ms {
-        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
-            "SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS",
-            timeout_ms,
-        ));
-    }
-    if let Some(timeout_ms) = db_sqlite_busy_timeout_ms {
-        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
-            "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
-            timeout_ms,
-        ));
-    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -8430,6 +8381,10 @@ fn cmd_run_lasm_backend(
             db_base,
             db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
             explicit_db_postgres_dsn.as_deref(),
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
+            db_postgres_connect_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             db_max_tx_handles
                 .map(|value| usize::try_from(value))
                 .transpose()

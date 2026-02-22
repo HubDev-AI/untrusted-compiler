@@ -1826,6 +1826,11 @@ Post-alpha track acceptance anchors:
       - deterministic CLI guards now reject non-LASM backend usage and reject zero values for both flags,
       - mixed sqlite/postgres override diagnostics now consistently use runtime-override wording since cache capacities are now part of the same override family.
       - documented in `docs/book/1412-m39-run-postgres-cache-capacity-flags.md`.
+   - [x] Routed DB timeout run flags through explicit LASM dynamic-state inputs:
+      - `sec4 run` Postgres timeout flags (`--db-postgres-statement-timeout-ms`, `--db-postgres-lock-timeout-ms`, `--db-postgres-connect-timeout-ms`) and SQLite timeout flag (`--db-sqlite-busy-timeout-ms`) now initialize runtime state directly instead of relying on scoped env mutation,
+      - env fallback behavior remains unchanged when flags are omitted,
+      - non-Postgres-adapter deterministic guidance now reflects the broadened override set (`postgres DSN/runtime overrides ...`).
+      - documented in `docs/book/1413-m39-run-db-timeout-overrides-explicit-state.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
    - [x] Records-log `db.queryOne` fallback now returns structured `rowObject` metadata (including `affected_rows`) instead of null, aligning response shape with sqlite/postgres query-one materialization while preserving deterministic fallback semantics (`docs/book/1097-m39-lasm-records-log-query-one-row-object-parity.md`).
    - [x] LASM DB runtime now rejects invalid DB capability handles (`db != 1`) for `db.exec`, `db.queryOne`, and inline `db.tx(...)` sources used by `db.execTx`, preventing manual-handle SQL execution on sqlite/postgres adapters and preserving deterministic `DB.*_INVALID` validation envelopes (`docs/book/1098-m39-lasm-db-capability-handle-validation-guard.md`).
