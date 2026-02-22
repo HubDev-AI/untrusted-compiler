@@ -1369,5 +1369,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1397-m39-lasm-benchmark-wrapper-wrk-process-passthrough.md`
 - `1398-m39-lasm-cluster-idle-backoff-env-tuning.md`
 - `1399-m39-lasm-cluster-status-json-idle-backoff-fields.md`
+- `1400-m39-lasm-cluster-accept-saturation-carryover-fast-reject.md`
 
 As milestones progress, chapters will be added and linked from this index.
