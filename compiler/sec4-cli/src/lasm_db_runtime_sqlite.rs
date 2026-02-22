@@ -28,6 +28,26 @@ fn parse_lasm_sqlite_query_param_value(value: serde_json::Value) -> SqliteValue 
     }
 }
 
+fn parse_lasm_sqlite_positional_object_params(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Option<Vec<SqliteValue>> {
+    let mut indexed = Vec::with_capacity(entries.len());
+    let mut max_index = 0usize;
+    for (key, value) in entries {
+        let index = key.parse::<usize>().ok()?;
+        if index == 0 {
+            return None;
+        }
+        max_index = max_index.max(index);
+        indexed.push((index, parse_lasm_sqlite_query_param_value(value.clone())));
+    }
+    let mut params = vec![SqliteValue::Null; max_index];
+    for (index, value) in indexed {
+        params[index - 1] = value;
+    }
+    Some(params)
+}
+
 fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
@@ -39,6 +59,15 @@ fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
                 .into_iter()
                 .map(parse_lasm_sqlite_query_param_value)
                 .collect(),
+            serde_json::Value::Object(entries) => {
+                if let Some(params) = parse_lasm_sqlite_positional_object_params(&entries) {
+                    params
+                } else {
+                    vec![parse_lasm_sqlite_query_param_value(serde_json::Value::Object(
+                        entries,
+                    ))]
+                }
+            }
             serde_json::Value::Null => Vec::new(),
             other => vec![parse_lasm_sqlite_query_param_value(other)],
         };
@@ -242,4 +271,25 @@ pub(crate) fn run_lasm_sqlite_query_one(
         }
         Ok(Some(serde_json::Value::Object(object)))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_lasm_sqlite_query_params;
+    use rusqlite::types::Value as SqliteValue;
+
+    #[test]
+    fn positional_object_params_expand_with_null_fill() {
+        let params = parse_lasm_sqlite_query_params("{\"2\":5}");
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0], SqliteValue::Null);
+        assert_eq!(params[1], SqliteValue::Integer(5));
+    }
+
+    #[test]
+    fn non_numeric_object_params_fall_back_to_single_text_param() {
+        let params = parse_lasm_sqlite_query_params("{\"user\":\"alice\"}");
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0], SqliteValue::Text("{\"user\":\"alice\"}".to_string()));
+    }
 }

@@ -1889,6 +1889,10 @@ Post-alpha track acceptance anchors:
       - mode also resolves from env fallback (`SEC4_RT_LASM_DB_POSTGRES_TLS_MODE`, default `auto`) when flag is absent,
       - `/db/records` telemetry now surfaces `dbTimeoutsMs.postgresTlsMode` so operators can confirm live runtime mode.
       - documented in `docs/book/1415-m39-run-db-postgres-tls-mode-flag.md`.
+   - [x] Added positional-object SQL parameter parsing for LASM Postgres/SQLite runtime adapters:
+      - runtime SQL param parsing now accepts object form with numeric keys (for example `{\"1\": \"alice\", \"3\": true}`) and expands it into positional vectors with deterministic null-fill for missing indices,
+      - non-numeric object keys retain existing fallback behavior (single text parameter), preserving backward compatibility for non-positional object payloads.
+      - documented in `docs/book/1428-m39-lasm-db-positional-object-sql-params.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
    - [x] Records-log `db.queryOne` fallback now returns structured `rowObject` metadata (including `affected_rows`) instead of null, aligning response shape with sqlite/postgres query-one materialization while preserving deterministic fallback semantics (`docs/book/1097-m39-lasm-records-log-query-one-row-object-parity.md`).
    - [x] LASM DB runtime now rejects invalid DB capability handles (`db != 1`) for `db.exec`, `db.queryOne`, and inline `db.tx(...)` sources used by `db.execTx`, preventing manual-handle SQL execution on sqlite/postgres adapters and preserving deterministic `DB.*_INVALID` validation envelopes (`docs/book/1098-m39-lasm-db-capability-handle-validation-guard.md`).
