@@ -3,7 +3,8 @@ use crate::lasm_db_records_log::{
     persist_lasm_dynamic_db_records_to_records_log,
 };
 use crate::lasm_db_runtime_common::{
-    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
+    lasm_dynamic_postgres_client_mut, normalize_lasm_db_params,
+    reconnect_lasm_dynamic_postgres_client,
 };
 use crate::{
     LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
@@ -207,12 +208,13 @@ pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmD
         if created_at_ms < 0 {
             return Err(rusqlite::Error::IntegralValueOutOfRange(7, created_at_ms));
         }
+        let params: String = row.get(4)?;
         Ok(LasmDbRecord {
             id: id as u64,
             op: row.get(1)?,
             db: row.get(2)?,
             template: row.get(3)?,
-            params: row.get(4)?,
+            params: normalize_lasm_db_record_loaded_params(params),
             tx: row.get(5)?,
             affected_rows: affected_rows as u64,
             created_at_ms: created_at_ms as u64,
@@ -317,7 +319,8 @@ mod tests {
     use super::{
         build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
         lasm_db_postgres_tls_mode_label, lasm_postgres_connect_timeout_seconds_from_ms,
-        parse_lasm_db_postgres_tls_mode, LasmDbPostgresTlsMode,
+        normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
+        LasmDbPostgresTlsMode,
     };
 
     #[test]
@@ -416,6 +419,18 @@ mod tests {
             "require"
         );
     }
+
+    #[test]
+    fn normalize_loaded_params_canonicalizes_json() {
+        let normalized = normalize_lasm_db_record_loaded_params("{\"b\":2,\"a\":1}".to_string());
+        assert_eq!(normalized, "{\"a\":1,\"b\":2}");
+    }
+
+    #[test]
+    fn normalize_loaded_params_preserves_non_json_text() {
+        let normalized = normalize_lasm_db_record_loaded_params("alpha".to_string());
+        assert_eq!(normalized, "alpha");
+    }
 }
 
 pub(crate) fn ensure_lasm_dynamic_db_records_postgres_schema(
@@ -475,18 +490,23 @@ pub(crate) fn load_lasm_dynamic_db_records_from_postgres(
                 index + 1
             ));
         }
+        let params: String = row.get(4);
         records.push(LasmDbRecord {
             id: id as u64,
             op: row.get(1),
             db: row.get(2),
             template: row.get(3),
-            params: row.get(4),
+            params: normalize_lasm_db_record_loaded_params(params),
             tx: row.get(5),
             affected_rows: affected_rows as u64,
             created_at_ms: created_at_ms as u64,
         });
     }
     Ok(records)
+}
+
+fn normalize_lasm_db_record_loaded_params(params: String) -> String {
+    normalize_lasm_db_params(params.as_str())
 }
 
 pub(crate) fn persist_lasm_dynamic_db_records_to_sqlite(
