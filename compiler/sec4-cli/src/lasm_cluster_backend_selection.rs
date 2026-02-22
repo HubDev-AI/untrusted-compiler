@@ -7,33 +7,32 @@ pub(crate) fn rebuild_lasm_cluster_backend_selection_lookup(
     unhealthy_ports_until_by_index: &[Option<Instant>],
     unhealthy_port_count: usize,
     lookup: &mut Vec<usize>,
-) -> (bool, bool) {
+) -> (bool, bool, usize) {
     debug_assert!(unhealthy_ports_until_by_index.len() >= worker_port_count);
     lookup.clear();
     if worker_port_count == 0 {
-        return (false, false);
+        return (false, false, 0);
     }
     if unhealthy_port_count >= worker_port_count {
-        return (false, false);
+        return (false, false, 0);
     }
     if unhealthy_port_count == 0 {
-        return (true, true);
+        return (true, true, worker_port_count);
     }
-    lookup.resize(worker_port_count, LASM_CLUSTER_SELECTION_LOOKUP_NONE);
-    let mut healthy_indices = Vec::with_capacity(worker_port_count - unhealthy_port_count);
-    for index in 0..worker_port_count {
-        if unhealthy_ports_until_by_index[index].is_none() {
-            healthy_indices.push(index);
+    for (index, unhealthy_until) in unhealthy_ports_until_by_index
+        .iter()
+        .take(worker_port_count)
+        .enumerate()
+    {
+        if unhealthy_until.is_none() {
+            lookup.push(index);
         }
     }
-    let healthy_count = healthy_indices.len();
+    let healthy_count = lookup.len();
     if healthy_count == 0 {
-        return (false, false);
+        return (false, false, 0);
     }
-    for index in 0..worker_port_count {
-        lookup[index] = healthy_indices[index % healthy_count];
-    }
-    (true, false)
+    (true, false, healthy_count)
 }
 
 pub(crate) fn rebuild_lasm_cluster_worker_backend_addrs(

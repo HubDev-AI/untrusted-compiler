@@ -51,7 +51,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let mut relay_selection_reservation_len = 0_usize;
         let mut relay_selection_reservation_offset = 0_usize;
         let mut relay_selection_reservation_next_index = 0_usize;
-        let mut relay_selection_reservation_worker_port_count = 0_usize;
+        let mut relay_selection_reservation_span = 0_usize;
         let relay_selection_reservation_chunk =
             relay_accept_batch_max.max(relay_selection_reservation_min_chunk);
         let mut relay_pump_cursor = 0_usize;
@@ -73,6 +73,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let mut selection_lookup: Vec<usize> = Vec::new();
         let mut selection_has_healthy_backends = false;
         let mut selection_lookup_is_identity = false;
+        let mut selection_lookup_cycle_span = 0_usize;
         let mut selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
         let mut selection_lookup_dirty = true;
 
@@ -192,22 +193,25 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     let worker_port_count = selected_worker_port_count;
                     if selection_lookup_dirty
                         || (!selection_lookup_is_identity
-                            && selection_lookup.len() != worker_port_count)
+                            && selection_lookup.len() != selection_lookup_cycle_span)
                     {
                         if worker_port_count == 0 {
                             selection_lookup.clear();
                             selection_has_healthy_backends = false;
                             selection_lookup_is_identity = false;
+                            selection_lookup_cycle_span = 0;
                             selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                         } else if unhealthy_port_count == 0 {
                             selection_lookup.clear();
                             selection_has_healthy_backends = true;
                             selection_lookup_is_identity = true;
+                            selection_lookup_cycle_span = worker_port_count;
                             selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                         } else if worker_port_count == 1 {
                             selection_lookup.clear();
                             selection_has_healthy_backends = false;
                             selection_lookup_is_identity = true;
+                            selection_lookup_cycle_span = 0;
                             selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                         } else if unhealthy_port_count + 1 == worker_port_count {
                             selection_lookup.clear();
@@ -218,15 +222,21 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             {
                                 selection_has_healthy_backends = true;
                                 selection_lookup_is_identity = false;
+                                selection_lookup_cycle_span = 1;
                                 selection_single_healthy_index = single_healthy_index;
                             } else {
                                 selection_has_healthy_backends = false;
                                 selection_lookup_is_identity = false;
+                                selection_lookup_cycle_span = 0;
                                 selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                             }
                         } else {
                             selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
-                            (selection_has_healthy_backends, selection_lookup_is_identity) =
+                            (
+                                selection_has_healthy_backends,
+                                selection_lookup_is_identity,
+                                selection_lookup_cycle_span,
+                            ) =
                                 rebuild_lasm_cluster_backend_selection_lookup(
                                     worker_port_count,
                                     unhealthy_ports_until_by_index.as_slice(),
@@ -246,28 +256,37 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     } else if selection_single_healthy_index != LASM_CLUSTER_SELECTION_LOOKUP_NONE {
                         selection_single_healthy_index
                     } else {
-                        if relay_selection_reservation_offset >= relay_selection_reservation_len
-                            || relay_selection_reservation_worker_port_count != worker_port_count
-                        {
-                            let relay_selection_reservation_base = relay_selection_counter
-                                .fetch_add(relay_selection_reservation_chunk, Ordering::Relaxed);
-                            relay_selection_reservation_len = relay_selection_reservation_chunk;
-                            relay_selection_reservation_offset = 0;
-                            relay_selection_reservation_worker_port_count = worker_port_count;
-                            relay_selection_reservation_next_index =
-                                relay_selection_reservation_base % worker_port_count;
-                        }
-                        let start_index = relay_selection_reservation_next_index;
-                        relay_selection_reservation_offset += 1;
-                        relay_selection_reservation_next_index += 1;
-                        if relay_selection_reservation_next_index == worker_port_count {
-                            relay_selection_reservation_next_index = 0;
-                        }
-                        if selection_lookup_is_identity {
-                            start_index
+                        let selection_span = if selection_lookup_is_identity {
+                            worker_port_count
                         } else {
-                            debug_assert_eq!(selection_lookup.len(), worker_port_count);
-                            selection_lookup[start_index]
+                            selection_lookup_cycle_span
+                        };
+                        if selection_span == 0 {
+                            LASM_CLUSTER_SELECTION_LOOKUP_NONE
+                        } else {
+                            if relay_selection_reservation_offset >= relay_selection_reservation_len
+                                || relay_selection_reservation_span != selection_span
+                            {
+                                let relay_selection_reservation_base = relay_selection_counter
+                                    .fetch_add(relay_selection_reservation_chunk, Ordering::Relaxed);
+                                relay_selection_reservation_len = relay_selection_reservation_chunk;
+                                relay_selection_reservation_offset = 0;
+                                relay_selection_reservation_span = selection_span;
+                                relay_selection_reservation_next_index =
+                                    relay_selection_reservation_base % selection_span;
+                            }
+                            let start_index = relay_selection_reservation_next_index;
+                            relay_selection_reservation_offset += 1;
+                            relay_selection_reservation_next_index += 1;
+                            if relay_selection_reservation_next_index == selection_span {
+                                relay_selection_reservation_next_index = 0;
+                            }
+                            if selection_lookup_is_identity {
+                                start_index
+                            } else {
+                                debug_assert_eq!(selection_lookup.len(), selection_span);
+                                selection_lookup[start_index]
+                            }
                         }
                     };
 
