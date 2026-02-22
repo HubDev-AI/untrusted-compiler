@@ -1475,6 +1475,10 @@ Post-alpha track acceptance anchors:
       - status-writer loop now throttles repeated JSON write warnings and suppresses duplicate error spam between intervals when failure text is unchanged,
       - successful status writes reset warning throttle state so new failures are surfaced immediately.
       - documented in `docs/book/1328-m39-lasm-cluster-status-writer-warning-throttle.md`.
+   - [x] Tightened relay fallback scan slot accounting in multi-relay dispatch:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now uses a remaining-slot budget instead of per-iteration saturating slot counters for dead/live sender advancement,
+      - removes saturating arithmetic from fallback scan hot-path iteration while preserving fallback dispatch terminal semantics (`saturated` vs `unavailable`) and existing live-target bounds.
+      - documented in `docs/book/1329-m39-lasm-cluster-fallback-scan-remaining-slot-accounting.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

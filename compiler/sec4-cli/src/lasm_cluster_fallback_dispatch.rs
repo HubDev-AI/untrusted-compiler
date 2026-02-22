@@ -292,11 +292,11 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         );
     }
     let mut scan_live_target_dynamic = scan_live_target;
-    let mut scanned_slots = 0usize;
+    let mut remaining_slots = scan_slot_limit;
     let mut scanned_live = 0usize;
-    while scanned_slots < scan_slot_limit && scanned_live < scan_live_target_dynamic {
+    while remaining_slots > 0 && scanned_live < scan_live_target_dynamic {
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
-            if scanned_slots.saturating_add(1) >= scan_slot_limit {
+            if remaining_slots <= 1 {
                 break;
             }
             let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
@@ -305,7 +305,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 scan_index,
             );
             scan_index = next_scan_index;
-            scanned_slots = scanned_slots.saturating_add(advanced_slots);
+            if advanced_slots >= remaining_slots {
+                break;
+            }
+            remaining_slots -= advanced_slots;
             continue;
         }
         scanned_live += 1;
@@ -332,7 +335,7 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         if scanned_live >= scan_live_target_dynamic {
             break;
         }
-        if scanned_slots.saturating_add(1) >= scan_slot_limit {
+        if remaining_slots <= 1 {
             break;
         }
         let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
@@ -341,7 +344,10 @@ pub(crate) fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             scan_index,
         );
         scan_index = next_scan_index;
-        scanned_slots = scanned_slots.saturating_add(advanced_slots);
+        if advanced_slots >= remaining_slots {
+            break;
+        }
+        remaining_slots -= advanced_slots;
     }
 
     lasm_cluster_fallback_terminal_dispatch_error(

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I started this continuation by reading `.claude/napkin.md` in parallel with branch/status/log commands instead of running napkin read as the standalone first command. | Enforce strict session gate: run `cat .claude/napkin.md` alone first, then run any git/status/search commands afterward. |
 | 2026-02-21 | self | While extracting relay-pump types, I removed the entire shared LASM cluster constants block from `main.rs`, which broke sibling modules importing root constants (`LASM_CLUSTER_RELAY_SENDER_*`, idle thresholds, pump bounds). | When moving a large block that starts near shared constants, split extraction into two steps: keep cross-module constants in `main.rs` first, then move only type/impl blocks and re-run compile immediately before further edits. |
 | 2026-02-21 | self | I accidentally triggered the web tool again during a local-only LASM module-extraction loop. | Keep implementation slices strictly on local tools (`functions.exec_command`, `functions.apply_patch`) unless external web research is explicitly required. |
 | 2026-02-21 | self | I started this continuation with git branch/status checks before the mandatory standalone `.claude/napkin.md` read again. | Treat continuation start as a strict hard gate: run `cat .claude/napkin.md` as the first command, then run any git/status/search commands. |
