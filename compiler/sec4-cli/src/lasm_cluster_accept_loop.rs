@@ -231,6 +231,33 @@ fn flush_lasm_cluster_accept_dispatch_counters(
     }
 }
 
+fn flush_lasm_cluster_accept_post_batch_counters(
+    active_connections: &AtomicUsize,
+    relay_dispatch_fallback_total: &AtomicU64,
+    relay_dispatch_short_circuit_total: &AtomicU64,
+    listener_enqueued_local: &mut usize,
+    listener_dispatch_counters: &mut LasmClusterAcceptDispatchCounters,
+) {
+    if *listener_enqueued_local > 0 {
+        flush_lasm_cluster_active_connection_increments(
+            active_connections,
+            listener_enqueued_local,
+        );
+    }
+    if listener_dispatch_counters.listener_dispatch_fallback_total_local > 0 {
+        flush_lasm_cluster_dispatch_fallback_total(
+            relay_dispatch_fallback_total,
+            &mut listener_dispatch_counters.listener_dispatch_fallback_total_local,
+        );
+    }
+    if listener_dispatch_counters.listener_dispatch_short_circuit_total_local > 0 {
+        flush_lasm_cluster_dispatch_short_circuit_total(
+            relay_dispatch_short_circuit_total,
+            &mut listener_dispatch_counters.listener_dispatch_short_circuit_total_local,
+        );
+    }
+}
+
 pub(crate) fn run_lasm_cluster_accept_loop(
     listener: &TcpListener,
     relay_senders: &[Sender<TcpStream>],
@@ -638,24 +665,13 @@ pub(crate) fn run_lasm_cluster_accept_loop(
         }
         listener_idle_spins = 0;
 
-        if listener_enqueued_local > 0 {
-            flush_lasm_cluster_active_connection_increments(
-                active_connections,
-                &mut listener_enqueued_local,
-            );
-        }
-        if listener_dispatch_counters.listener_dispatch_fallback_total_local > 0 {
-            flush_lasm_cluster_dispatch_fallback_total(
-                relay_dispatch_fallback_total,
-                &mut listener_dispatch_counters.listener_dispatch_fallback_total_local,
-            );
-        }
-        if listener_dispatch_counters.listener_dispatch_short_circuit_total_local > 0 {
-            flush_lasm_cluster_dispatch_short_circuit_total(
-                relay_dispatch_short_circuit_total,
-                &mut listener_dispatch_counters.listener_dispatch_short_circuit_total_local,
-            );
-        }
+        flush_lasm_cluster_accept_post_batch_counters(
+            active_connections,
+            relay_dispatch_fallback_total,
+            relay_dispatch_short_circuit_total,
+            &mut listener_enqueued_local,
+            &mut listener_dispatch_counters,
+        );
     }
 
     flush_lasm_cluster_accept_dispatch_counters(
