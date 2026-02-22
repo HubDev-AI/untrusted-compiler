@@ -1593,6 +1593,10 @@ Post-alpha track acceptance anchors:
       - relay worker connect failure path now records saturation only when request ends with worker-unavailable response after fallback handling,
       - recovered requests (primary connect failure + successful fallback connect) no longer inflate saturation telemetry/autoscale signals.
       - documented in `docs/book/1359-m39-lasm-cluster-relay-saturation-count-final-failure-only.md`.
+   - [x] Extended connect-failure fallback to bounded multi-alternate healthy attempts:
+      - relay worker connect failure path now scans all remaining healthy backends in cyclic order (after the failed backend) and attempts fallback connect per candidate before final worker-unavailable response,
+      - preserves deterministic unhealthy cooldown + warning tracking for each failed candidate while reducing final request failures when multiple healthy backends remain.
+      - documented in `docs/book/1360-m39-lasm-cluster-relay-connect-fallback-multi-alternate-attempts.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
