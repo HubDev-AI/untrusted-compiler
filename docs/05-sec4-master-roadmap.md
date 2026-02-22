@@ -1764,6 +1764,11 @@ Post-alpha track acceptance anchors:
       - successful primary/fallback dispatches clear the carryover flag so recovery immediately resumes normal dispatch behavior,
       - this reduces repeated fallback scan overhead in sustained overload windows without changing healthy-path routing semantics.
       - documented in `docs/book/1400-m39-lasm-cluster-accept-saturation-carryover-fast-reject.md`.
+   - [x] Added single-backend fast path for LASM relay-worker selection state:
+      - relay-worker loop now bypasses generic selection lookup/recompute bookkeeping when backend count is `0` or `1`,
+      - one-backend mode now resolves backend index directly from backend health (`unhealthy_port_count`) instead of full lookup pipeline,
+      - this trims selection-path branch/lookup overhead in small-cluster deployments while preserving existing fallback/unhealthy behavior.
+      - documented in `docs/book/1405-m39-lasm-relay-worker-single-backend-fastpath.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
