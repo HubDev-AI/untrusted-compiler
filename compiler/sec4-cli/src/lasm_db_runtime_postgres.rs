@@ -186,6 +186,10 @@ fn max_lasm_postgres_placeholder_index_cached(
     }
     let value = max_lasm_postgres_placeholder_index(query_template);
     if state.db_postgres_placeholder_max_cache.len() >= state.db_postgres_placeholder_cache_max {
+        let evicted = state.db_postgres_placeholder_max_cache.len() as u64;
+        state.db_postgres_placeholder_cache_evictions_total = state
+            .db_postgres_placeholder_cache_evictions_total
+            .saturating_add(evicted);
         state.db_postgres_placeholder_max_cache.clear();
     }
     state
@@ -493,4 +497,27 @@ pub(crate) fn run_lasm_postgres_query_one(
     let row_json = serde_json::from_str::<serde_json::Value>(row_payload.as_str())
         .map_err(|err| format!("postgres queryOne row json decode failed: {err}"))?;
     Ok(Some(row_json))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::max_lasm_postgres_placeholder_index_cached;
+    use crate::LasmDynamicResponseState;
+
+    #[test]
+    fn placeholder_cache_eviction_counter_increments_when_capacity_is_hit() {
+        let mut state = LasmDynamicResponseState {
+            db_postgres_placeholder_cache_max: 1,
+            ..Default::default()
+        };
+        let first = max_lasm_postgres_placeholder_index_cached(&mut state, "SELECT $1");
+        assert_eq!(first, 1);
+        assert_eq!(state.db_postgres_placeholder_cache_evictions_total, 0);
+        assert_eq!(state.db_postgres_placeholder_max_cache.len(), 1);
+
+        let second = max_lasm_postgres_placeholder_index_cached(&mut state, "SELECT $2");
+        assert_eq!(second, 2);
+        assert_eq!(state.db_postgres_placeholder_cache_evictions_total, 1);
+        assert_eq!(state.db_postgres_placeholder_max_cache.len(), 1);
+    }
 }
