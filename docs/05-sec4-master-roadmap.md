@@ -1840,6 +1840,7 @@ Post-alpha track acceptance anchors:
    - [x] Improved DB runtime timeout/lock error envelopes with deterministic timeout/conflict mapping codes (`DB.*_TIMEOUT`, `DB.*_LOCK_TIMEOUT`) for Postgres statement/lock timeouts and sqlite lock contention (`docs/book/1123-m39-lasm-db-timeout-lock-error-classification.md`).
 6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
    - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
+   - [x] Added dedicated real-Postgres E2E operator lane with shared local Docker infra (`infra/local-postgres`) plus canonical smoke-ready sample (`examples/postgres-e2e`), including deterministic `sec4 check` command coverage for the example path (`docs/book/1407-m39-postgres-e2e-local-infra-example-and-smoke.md`).
 7. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
 
 ### Post-DB execution lock (authoritative order)

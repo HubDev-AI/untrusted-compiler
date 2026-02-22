@@ -1,0 +1,70 @@
+// postgres-e2e:
+// Real LASM runtime example for external Postgres adapter validation.
+//
+// Routes use DB intrinsics directly and are intended for local operator smoke runs.
+
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn dbExec() effects { net, db.write } -> Int {
+  // Required query parameters:
+  // - template: SQL template text
+  // - params: serialized params payload ("0" or JSON array)
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.exec(db, query);
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn dbExecTx() effects { net, db.write, db.tx } -> Int {
+  // Required query parameters:
+  // - template: SQL template text
+  // - params: serialized params payload ("0" or JSON array)
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbQueryOne() effects { net, db.read } -> Int {
+  // Required query parameters:
+  // - template: SQL SELECT-like template text
+  // - params: serialized params payload ("0" or JSON array)
+  // - row_schema: numeric row schema handle id
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  // Returns deterministic DB runtime record and telemetry payload.
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/health", health);
+  http.post(router, "/db/exec", dbExec);
+  http.post(router, "/db/exec-tx", dbExecTx);
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.get(router, "/db/records", dbListRecords);
+
+  http.serve(8080, router);
+  0
+}

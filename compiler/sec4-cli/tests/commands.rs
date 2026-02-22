@@ -28146,3 +28146,40 @@ fn run_command_rejects_zero_overflow_probe_timeout_ms_override() {
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
+
+#[test]
+fn check_command_succeeds_for_postgres_e2e_example() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("repo root should resolve");
+    let example_dir = repo_root.join("examples/postgres-e2e");
+    let example_path = example_dir
+        .to_str()
+        .expect("example path should be valid utf-8")
+        .to_string();
+
+    assert!(
+        example_dir.join("sec4.toml").exists(),
+        "postgres e2e example manifest should exist at {}",
+        example_dir.display()
+    );
+
+    let output = run_cli(&["check", "--path", &example_path]);
+    assert!(
+        output.status.success(),
+        "check should pass for postgres-e2e example.\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("check succeeded"),
+        "check output should include success marker:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("package=postgres-e2e"),
+        "check output should include postgres-e2e package marker:\n{stdout}"
+    );
+}
