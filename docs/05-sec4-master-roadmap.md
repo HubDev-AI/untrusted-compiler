@@ -1629,6 +1629,10 @@ Post-alpha track acceptance anchors:
       - accept-loop batch tail now calls active-increment/fallback/short-circuit flush helpers only when local counters are non-zero,
       - accept-loop final tail now gates saturation/fallback/short-circuit flush helpers on pending local deltas.
       - documented in `docs/book/1368-m39-lasm-cluster-accept-loop-flush-helper-nonzero-gates.md`.
+   - [x] Fallback connect path now enforces alternate-only candidate attempts:
+      - fallback connect traversal no longer retries the same backend that just failed primary connect,
+      - identity traversal now scans `N-1` candidates from failed-backend-next index, and lookup traversal defensively skips selected primary backend when present.
+      - documented in `docs/book/1369-m39-lasm-cluster-relay-fallback-alternate-only-connect-attempts.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -497,33 +497,36 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             if selection_single_healthy_index != LASM_CLUSTER_SELECTION_LOOKUP_NONE
                             {
                                 let fallback_backend_index = selection_single_healthy_index;
-                                let fallback_backend_addr =
-                                    selected_worker_backend_addrs[fallback_backend_index];
-                                fallback_connected = try_lasm_cluster_relay_fallback_connect(
-                                    fallback_backend_addr,
-                                    fallback_backend_index,
-                                    relay_backend_connect_timeout,
-                                    &mut fallback_client,
-                                    &mut relay_buffer_pool,
-                                    &mut relay_connections,
-                                    &mut pump_warning_next_allowed,
-                                    relay_warning_throttle_duration,
-                                    &mut active_connection_decrements_local,
-                                    relay_backend_connect_cooldown,
-                                    unhealthy_ports_until_by_index.as_mut_slice(),
-                                    &mut unhealthy_port_count,
-                                    &mut selection_lookup_dirty,
-                                    &mut unhealthy_prune_next_at,
-                                    unhealthy_prune_interval,
-                                    connect_warning_next_allowed_by_index.as_mut_slice(),
-                                );
+                                if fallback_backend_index != selected_backend_index {
+                                    let fallback_backend_addr =
+                                        selected_worker_backend_addrs[fallback_backend_index];
+                                    fallback_connected = try_lasm_cluster_relay_fallback_connect(
+                                        fallback_backend_addr,
+                                        fallback_backend_index,
+                                        relay_backend_connect_timeout,
+                                        &mut fallback_client,
+                                        &mut relay_buffer_pool,
+                                        &mut relay_connections,
+                                        &mut pump_warning_next_allowed,
+                                        relay_warning_throttle_duration,
+                                        &mut active_connection_decrements_local,
+                                        relay_backend_connect_cooldown,
+                                        unhealthy_ports_until_by_index.as_mut_slice(),
+                                        &mut unhealthy_port_count,
+                                        &mut selection_lookup_dirty,
+                                        &mut unhealthy_prune_next_at,
+                                        unhealthy_prune_interval,
+                                        connect_warning_next_allowed_by_index.as_mut_slice(),
+                                    );
+                                }
                             } else if selection_has_healthy_backends {
                                 if selection_lookup_is_identity {
                                     let mut fallback_backend_index = selected_backend_index + 1;
                                     if fallback_backend_index == selected_worker_port_count {
                                         fallback_backend_index = 0;
                                     }
-                                    let mut remaining_fallback_scan = selected_worker_port_count;
+                                    let mut remaining_fallback_scan =
+                                        selected_worker_port_count.saturating_sub(1);
                                     while remaining_fallback_scan > 0 {
                                         let fallback_backend_addr =
                                             selected_worker_backend_addrs[fallback_backend_index];
@@ -583,6 +586,15 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                     while remaining_fallback_scan > 0 {
                                         let fallback_backend_index =
                                             selection_lookup[fallback_lookup_cursor];
+                                        if fallback_backend_index == selected_backend_index {
+                                            fallback_lookup_cursor += 1;
+                                            if fallback_lookup_cursor == selection_lookup_cycle_span
+                                            {
+                                                fallback_lookup_cursor = 0;
+                                            }
+                                            remaining_fallback_scan -= 1;
+                                            continue;
+                                        }
                                         let fallback_backend_addr =
                                             selected_worker_backend_addrs[fallback_backend_index];
                                         fallback_connected =
