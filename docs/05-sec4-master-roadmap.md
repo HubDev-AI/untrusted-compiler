@@ -1617,6 +1617,10 @@ Post-alpha track acceptance anchors:
       - primary and fallback connect-failure branches now share one helper for unhealthy cooldown marking, prune scheduling, warning throttling, and selection-dirty signaling,
       - removes duplicated failure bookkeeping branches in relay worker loop while preserving deterministic warning and cooldown behavior.
       - documented in `docs/book/1365-m39-lasm-cluster-relay-connect-failure-shared-unhealthy-warning-helper.md`.
+   - [x] Split fallback connect traversal into explicit mode loops:
+      - fallback connect attempts now run through explicit single-candidate, identity-order, and healthy-lookup traversal loops instead of one mixed per-iteration mode branch path,
+      - fallback connect attempt body moved into shared helper so all traversal modes reuse one deterministic connect/mark-failure flow.
+      - documented in `docs/book/1366-m39-lasm-cluster-relay-fallback-traversal-mode-split-with-shared-attempt-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
