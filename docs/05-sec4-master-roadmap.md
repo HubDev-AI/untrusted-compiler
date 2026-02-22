@@ -1487,6 +1487,10 @@ Post-alpha track acceptance anchors:
       - `dispatch_lasm_cluster_relay_stream_fallback_multi` now resolves lookup availability once (`relay_has_next_live_sender_lookup`) and threads that into scan-advance helper calls,
       - `advance_lasm_cluster_fallback_scan_index` no longer checks `relay_next_live_sender_lookup.is_empty()` on every scan step, preserving scan semantics while reducing per-step branch work.
       - documented in `docs/book/1331-m39-lasm-cluster-fallback-scan-lookup-presence-hoist.md`.
+   - [x] Tightened relay topology next-live resolution to direct index reads:
+      - `resolve_lasm_cluster_next_live_sender_index` now performs explicit empty-slice guard + direct `relay_sender_live[start_index_wrapped]` check instead of option-chain access (`get().copied().unwrap_or(...)`),
+      - preserves next-live resolution semantics while removing option-chain overhead from a shared relay topology helper used in degraded dispatch paths.
+      - documented in `docs/book/1332-m39-lasm-cluster-relay-topology-direct-start-index-check.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

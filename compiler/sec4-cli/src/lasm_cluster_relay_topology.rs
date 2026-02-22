@@ -1,4 +1,4 @@
-use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
+use crate::LASM_CLUSTER_RELAY_SENDER_LIVE;
 
 #[inline(always)]
 pub(crate) fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
@@ -54,12 +54,11 @@ pub(crate) fn resolve_lasm_cluster_next_live_sender_index(
     relay_next_live_sender_lookup: &[usize],
     start_index_wrapped: usize,
 ) -> Option<usize> {
-    if relay_sender_live
-        .get(start_index_wrapped)
-        .copied()
-        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
-        == LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
+    if relay_sender_live.is_empty() {
+        return None;
+    }
+    debug_assert!(start_index_wrapped < relay_sender_live.len());
+    if relay_sender_live[start_index_wrapped] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         return Some(start_index_wrapped);
     }
     if !relay_next_live_sender_lookup.is_empty() {
