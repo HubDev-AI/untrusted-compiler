@@ -120,11 +120,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             }
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
+            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
                         let postgres_affected_rows = match run_lasm_postgres_exec(
                             &mut state,
                             template.as_str(),
@@ -254,9 +254,10 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let tx_handle_raw =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
-                );
+            );
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
+            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -366,7 +367,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     };
                     let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
                         let postgres_affected_rows = match run_lasm_postgres_exec_tx(
                             &mut state,
                             template.as_str(),
@@ -560,6 +560,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
+            let postgres_params = parse_lasm_postgres_query_params(params.as_str());
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let record_match = state
@@ -573,7 +574,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         })
                         .cloned();
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
                         let row_object = match run_lasm_postgres_query_one(
                             &mut state,
                             template.as_str(),
