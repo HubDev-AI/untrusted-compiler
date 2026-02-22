@@ -209,7 +209,8 @@ pub(crate) fn spawn_and_wait_lasm_cluster_worker(
     })
 }
 
-pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
+pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) -> bool {
+    let mut workers_changed = false;
     let mut worker_index = 0usize;
     while worker_index < state.workers.len() {
         let worker_port = state.workers[worker_index].port;
@@ -221,6 +222,7 @@ pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
                 );
                 state.workers.swap_remove(worker_index);
                 state.reusable_ports.push(worker_port);
+                workers_changed = true;
             }
             Ok(None) => {
                 worker_index += 1;
@@ -232,9 +234,11 @@ pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
                 );
                 state.workers.swap_remove(worker_index);
                 state.reusable_ports.push(worker_port);
+                workers_changed = true;
             }
         }
     }
+    workers_changed
 }
 
 pub(crate) fn reserve_lasm_cluster_min_worker_ports(
@@ -329,7 +333,7 @@ pub(crate) fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Resul
 
     loop {
         std::thread::sleep(Duration::from_millis(config.autoscale_check_ms.max(200)));
-        prune_dead_lasm_cluster_workers(&mut state);
+        let _ = prune_dead_lasm_cluster_workers(&mut state);
         while state.workers.len() < config.min_instances {
             match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {
                 Ok(worker) => state.workers.push(worker),

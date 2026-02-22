@@ -1829,6 +1829,11 @@ Post-alpha track acceptance anchors:
       - autoscale loop now publishes live reusable-port pool size into shared telemetry state,
       - status writer now emits `reusablePortsCount` in cluster status payload for live scale/reclaim visibility.
       - documented in `docs/book/1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`.
+   - [x] Removed unconditional pre-action worker-port snapshot refreshes from autoscale loop:
+      - dead-worker pruning now reports whether worker membership changed during maintenance pass,
+      - autoscale pre-action snapshot publish now runs only when prune/scale-down mutates worker membership,
+      - spawn/stop apply path keeps post-action refresh behavior for topology-changing worker lifecycle events.
+      - documented in `docs/book/1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
