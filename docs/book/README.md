@@ -1338,5 +1338,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1366-m39-lasm-cluster-relay-fallback-traversal-mode-split-with-shared-attempt-helper.md`
 - `1367-m39-lasm-cluster-accept-loop-fallback-dispatch-resolution-helper.md`
 - `1368-m39-lasm-cluster-accept-loop-flush-helper-nonzero-gates.md`
+- `1369-m39-lasm-cluster-relay-fallback-alternate-only-connect-attempts.md`
 
 As milestones progress, chapters will be added and linked from this index.
