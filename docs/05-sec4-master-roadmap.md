@@ -1821,6 +1821,10 @@ Post-alpha track acceptance anchors:
       - lifecycle reservation now appends reclaimed ports via one `extend_from_slice` + `truncate` operation instead of per-port `pop` loops,
       - remaining fresh-port allocations still advance `next_port` deterministically for the uncovered tail.
       - documented in `docs/book/1429-m39-lasm-bulk-reuse-port-reservation.md`.
+   - [x] Removed unchanged-topology snapshot clone churn from cluster status-writer loop:
+      - status writer now keeps a selected worker-port snapshot and only clones a new `Arc` when `ArcSwap` pointer changes,
+      - steady-state status ticks reuse existing snapshot/count instead of unconditional `load_full()` clone churn.
+      - documented in `docs/book/1433-m39-lasm-status-writer-snapshot-clone-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
