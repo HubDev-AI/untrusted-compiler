@@ -10,7 +10,8 @@ use crate::lasm_db_runtime_postgres::{
     run_lasm_postgres_query_one,
 };
 use crate::lasm_db_runtime_sqlite::{
-    run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
+    parse_lasm_sqlite_query_params, run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx,
+    run_lasm_sqlite_query_one,
 };
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
@@ -121,6 +122,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
             let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let mut affected_rows = 0u64;
@@ -153,7 +155,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         let sqlite_affected_rows = match run_lasm_sqlite_exec(
                             &mut state,
                             template.as_str(),
-                            params.as_str(),
+                            sqlite_params.as_slice(),
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -258,6 +260,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
             let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -398,7 +401,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
                             &mut state,
                             template.as_str(),
-                            params.as_str(),
+                            sqlite_params.as_slice(),
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -561,6 +564,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
             let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let record_match = state
@@ -643,7 +647,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         let row_object = match run_lasm_sqlite_query_one(
                             &mut state,
                             template.as_str(),
-                            params.as_str(),
+                            sqlite_params.as_slice(),
                         ) {
                             Ok(Some(value)) => value,
                             Ok(None) => {
