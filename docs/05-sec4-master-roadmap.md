@@ -1967,6 +1967,10 @@ Post-alpha track acceptance anchors:
       - `records.log` loader now normalizes persisted `params` strings through runtime canonical normalization,
       - pre-canonical history artifacts now align with current signature matching behavior after restart.
       - documented in `docs/book/1448-m39-lasm-records-log-load-param-normalization-backfill.md`.
+   - [x] Added SQLite/Postgres adapter-load parameter normalization:
+      - sqlite/postgres persisted DB-record loaders now normalize loaded `params` strings through canonical DB-param normalization,
+      - retained record history now keeps deterministic `params` formatting aligned across adapter switches/restarts.
+      - documented in `docs/book/1449-m39-lasm-sqlite-postgres-load-param-normalization.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

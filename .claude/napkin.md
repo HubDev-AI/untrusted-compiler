@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | While adding adapter-load normalization tests, I appended a second `mod tests` block in `lasm_db_adapter_state.rs`, causing `E0428` duplicate module compile failure. | Before adding tests in files that already have `#[cfg(test)] mod tests`, extend the existing module instead of appending a new one. |
 | 2026-02-22 | self | I again launched branch checkout in parallel with file reads while starting the records-log normalization-backfill slice. | Keep branch creation/checkouts as standalone sequential commands, then run parallel read/search only after branch state is settled. |
 | 2026-02-22 | self | After merging PR #678, I started the DB param canonicalization edits on local `dev` before creating the next `codex/*` branch. | Keep a hard post-merge branch gate: create the next `codex/*` branch immediately before any read/edit commands. |
 | 2026-02-22 | self | I accidentally triggered web-tool calls while continuing a local-only LASM DB runtime slice. | Keep local implementation loops strictly on `functions.exec_command` + `functions.apply_patch`; invoke web tooling only for explicit external research tasks. |
