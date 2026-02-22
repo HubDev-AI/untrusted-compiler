@@ -1971,6 +1971,10 @@ Post-alpha track acceptance anchors:
       - sqlite/postgres persisted DB-record loaders now normalize loaded `params` strings through canonical DB-param normalization,
       - retained record history now keeps deterministic `params` formatting aligned across adapter switches/restarts.
       - documented in `docs/book/1449-m39-lasm-sqlite-postgres-load-param-normalization.md`.
+   - [x] Improved Postgres unprepared execution affected-row accounting:
+      - unprepared single-statement `db.exec` / `db.execTx` paths now attempt direct execution-row counts and fallback to query-row counting for row-returning statements,
+      - multi-statement unprepared SQL keeps batch-execute path and deterministic zero-count fallback behavior.
+      - documented in `docs/book/1450-m39-lasm-postgres-unprepared-affected-row-accounting.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
