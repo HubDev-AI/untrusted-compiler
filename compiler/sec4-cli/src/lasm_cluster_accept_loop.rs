@@ -163,8 +163,30 @@ fn handle_lasm_cluster_accept_unavailable_stream(
     listener_enqueued_local: &mut usize,
     listener_dispatch_counters: &mut LasmClusterAcceptDispatchCounters,
 ) -> Result<(), String> {
-    handle_lasm_cluster_accept_dispatch_error(
+    handle_lasm_cluster_accept_dispatch_error_with_counters(
         LasmClusterRelayDispatchError::Unavailable(client_stream),
+        active_connections,
+        relay_saturation_events,
+        relay_saturation_events_total,
+        relay_dispatch_fallback_total,
+        relay_dispatch_short_circuit_total,
+        listener_enqueued_local,
+        listener_dispatch_counters,
+    )
+}
+
+fn handle_lasm_cluster_accept_dispatch_error_with_counters(
+    dispatch_error: LasmClusterRelayDispatchError,
+    active_connections: &AtomicUsize,
+    relay_saturation_events: &AtomicUsize,
+    relay_saturation_events_total: &AtomicU64,
+    relay_dispatch_fallback_total: &AtomicU64,
+    relay_dispatch_short_circuit_total: &AtomicU64,
+    listener_enqueued_local: &mut usize,
+    listener_dispatch_counters: &mut LasmClusterAcceptDispatchCounters,
+) -> Result<(), String> {
+    handle_lasm_cluster_accept_dispatch_error(
+        dispatch_error,
         active_connections,
         relay_saturation_events,
         relay_saturation_events_total,
@@ -271,21 +293,18 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             client_stream,
                             relay_single_sender,
                         ) {
-                            if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                dispatch_error,
-                                active_connections,
-                                relay_saturation_events,
-                                relay_saturation_events_total,
-                                relay_dispatch_fallback_total,
-                                relay_dispatch_short_circuit_total,
-                                &mut listener_enqueued_local,
-                                &mut listener_dispatch_counters.listener_saturation_pending_local,
-                                &mut listener_dispatch_counters.listener_saturation_total_local,
-                                &mut listener_dispatch_counters
-                                    .listener_dispatch_fallback_total_local,
-                                &mut listener_dispatch_counters
-                                    .listener_dispatch_short_circuit_total_local,
-                            ) {
+                            if let Err(message) =
+                                handle_lasm_cluster_accept_dispatch_error_with_counters(
+                                    dispatch_error,
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    relay_dispatch_short_circuit_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_dispatch_counters,
+                                )
+                            {
                                 return Err(message);
                             }
                         } else {
@@ -478,22 +497,18 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             &mut saw_live_sender,
                         ) {
                             if listener_all_senders_saturated_in_batch && saw_live_sender {
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                    LasmClusterRelayDispatchError::Saturated(stream),
-                                    active_connections,
-                                    relay_saturation_events,
-                                    relay_saturation_events_total,
-                                    relay_dispatch_fallback_total,
-                                    relay_dispatch_short_circuit_total,
-                                    &mut listener_enqueued_local,
-                                    &mut listener_dispatch_counters
-                                        .listener_saturation_pending_local,
-                                    &mut listener_dispatch_counters.listener_saturation_total_local,
-                                    &mut listener_dispatch_counters
-                                        .listener_dispatch_fallback_total_local,
-                                    &mut listener_dispatch_counters
-                                        .listener_dispatch_short_circuit_total_local,
-                                ) {
+                                if let Err(message) =
+                                    handle_lasm_cluster_accept_dispatch_error_with_counters(
+                                        LasmClusterRelayDispatchError::Saturated(stream),
+                                        active_connections,
+                                        relay_saturation_events,
+                                        relay_saturation_events_total,
+                                        relay_dispatch_fallback_total,
+                                        relay_dispatch_short_circuit_total,
+                                        &mut listener_enqueued_local,
+                                        &mut listener_dispatch_counters,
+                                    )
+                                {
                                     return Err(message);
                                 }
                                 listener_dispatch_counters
@@ -575,23 +590,18 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                     ) {
                                         listener_all_senders_saturated_in_batch = true;
                                     }
-                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                        dispatch_error,
-                                        active_connections,
-                                        relay_saturation_events,
-                                        relay_saturation_events_total,
-                                        relay_dispatch_fallback_total,
-                                        relay_dispatch_short_circuit_total,
-                                        &mut listener_enqueued_local,
-                                        &mut listener_dispatch_counters
-                                            .listener_saturation_pending_local,
-                                        &mut listener_dispatch_counters
-                                            .listener_saturation_total_local,
-                                        &mut listener_dispatch_counters
-                                            .listener_dispatch_fallback_total_local,
-                                        &mut listener_dispatch_counters
-                                            .listener_dispatch_short_circuit_total_local,
-                                    ) {
+                                    if let Err(message) =
+                                        handle_lasm_cluster_accept_dispatch_error_with_counters(
+                                            dispatch_error,
+                                            active_connections,
+                                            relay_saturation_events,
+                                            relay_saturation_events_total,
+                                            relay_dispatch_fallback_total,
+                                            relay_dispatch_short_circuit_total,
+                                            &mut listener_enqueued_local,
+                                            &mut listener_dispatch_counters,
+                                        )
+                                    {
                                         return Err(message);
                                     }
                                 }

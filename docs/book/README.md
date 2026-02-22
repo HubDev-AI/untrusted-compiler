@@ -1354,5 +1354,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1382-m39-lasm-cluster-relay-pump-local-cursor-writeback.md`
 - `1383-m39-lasm-cluster-relay-pump-zero-fastpath-and-branchless-progress.md`
 - `1384-m39-lasm-cluster-accept-loop-dispatch-counter-struct.md`
+- `1385-m39-lasm-cluster-accept-loop-dispatch-error-wrapper.md`
 
 As milestones progress, chapters will be added and linked from this index.

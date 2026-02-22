@@ -1693,6 +1693,10 @@ Post-alpha track acceptance anchors:
       - accept loop now tracks saturation/fallback/short-circuit local counters through `LasmClusterAcceptDispatchCounters` and passes one mutable counter state into helper paths,
       - reduced repeated multi-counter argument threading across unavailable/error/flush call sites while preserving deterministic counter flush behavior.
       - documented in `docs/book/1384-m39-lasm-cluster-accept-loop-dispatch-counter-struct.md`.
+   - [x] Added shared accept-loop dispatch-error wrapper for counter-state wiring:
+      - accept loop now routes dispatch-error handling through `handle_lasm_cluster_accept_dispatch_error_with_counters(...)` so all call sites reuse one counter wiring path,
+      - keeps dispatch-error behavior unchanged while reducing repeated atomic/counter argument threading in single-sender and fallback dispatch branches.
+      - documented in `docs/book/1385-m39-lasm-cluster-accept-loop-dispatch-error-wrapper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
