@@ -27136,6 +27136,8 @@ fn main() effects { net } -> Int {
             "--serve-timeout-ms",
             "20000",
         ])
+        .env("SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD", "41")
+        .env("SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS", "333")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -27186,6 +27188,20 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64)
             .is_some(),
         "first status json should include relayLiveSenderCount"
+    );
+    assert_eq!(
+        first_status
+            .get("relayIdleSpinThreshold")
+            .and_then(serde_json::Value::as_u64),
+        Some(41),
+        "first status json should include relayIdleSpinThreshold env override"
+    );
+    assert_eq!(
+        first_status
+            .get("relayIdleSleepMicros")
+            .and_then(serde_json::Value::as_u64),
+        Some(333),
+        "first status json should include relayIdleSleepMicros env override"
     );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")

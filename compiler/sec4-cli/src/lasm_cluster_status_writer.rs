@@ -4,6 +4,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::lasm_cluster_runtime_config::{
+    resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
+};
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
 use crate::LasmClusterConfig;
 
@@ -66,6 +69,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
     ));
 
     Some(std::thread::spawn(move || {
+        let relay_idle_spin_threshold = resolve_lasm_cluster_idle_spin_threshold();
+        let relay_idle_sleep_micros = resolve_lasm_cluster_idle_sleep_micros();
         let mut last_saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
         let mut last_dispatch_fallback_total =
             relay_dispatch_fallback_total.load(Ordering::Relaxed);
@@ -122,6 +127,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_pump_batch_max: shared_config.cluster_relay_pump_batch_max,
                 relay_selection_reservation_min_chunk: shared_config
                     .cluster_selection_reservation_min_chunk,
+                relay_idle_spin_threshold,
+                relay_idle_sleep_micros,
                 relay_accept_workers: relay_accept_worker_count,
                 relay_backend_connect_timeout_ms: shared_config.cluster_backend_connect_timeout_ms,
                 relay_backend_connect_cooldown_ms: shared_config
