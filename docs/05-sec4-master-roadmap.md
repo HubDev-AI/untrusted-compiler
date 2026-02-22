@@ -1677,6 +1677,10 @@ Post-alpha track acceptance anchors:
       - relay worker now delegates per-cycle pump scheduling to `pump_lasm_cluster_relay_connections(...)` and keeps the outer worker loop focused on accept/fallback/counter flush flow,
       - preserves existing full-scan/budget mode behavior and warning/release/cursor semantics while reducing relay worker-loop branch footprint.
       - documented in `docs/book/1380-m39-lasm-cluster-relay-pump-loop-helper-extraction.md`.
+   - [x] Extracted relay pump mode/budget resolution into one helper:
+      - relay pump scheduler now computes full-scan flag, cursor normalization/reset, and pump budget through `resolve_lasm_cluster_relay_pump_mode(...)`,
+      - removes duplicated mode-setup arithmetic from relay pump scheduler and keeps mode configuration single-sourced.
+      - documented in `docs/book/1381-m39-lasm-cluster-relay-pump-mode-resolution-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

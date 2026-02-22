@@ -117,6 +117,33 @@ struct LasmClusterRelayPumpDispatchOutcome {
     removed: bool,
 }
 
+struct LasmClusterRelayPumpModeResolution {
+    full_scan_pump_mode: bool,
+    pump_budget: usize,
+}
+
+fn resolve_lasm_cluster_relay_pump_mode(
+    relay_count: usize,
+    relay_pump_batch_max: usize,
+    relay_pump_cursor: &mut usize,
+) -> LasmClusterRelayPumpModeResolution {
+    let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
+    if full_scan_pump_mode {
+        *relay_pump_cursor = 0;
+    } else {
+        let _ = normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count);
+    }
+    let pump_budget = if full_scan_pump_mode {
+        relay_count
+    } else {
+        relay_pump_batch_max.min(relay_count)
+    };
+    LasmClusterRelayPumpModeResolution {
+        full_scan_pump_mode,
+        pump_budget,
+    }
+}
+
 fn pump_lasm_cluster_relay_connection_once(
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     relay_index: usize,
@@ -181,17 +208,9 @@ fn pump_lasm_cluster_relay_connections(
 ) -> bool {
     let mut progressed = false;
     let mut relay_count = relay_connections.len();
-    let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
-    if full_scan_pump_mode {
-        *relay_pump_cursor = 0;
-    } else {
-        let _ = normalize_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_count);
-    }
-    let mut pump_budget = if full_scan_pump_mode {
-        relay_count
-    } else {
-        relay_pump_batch_max.min(relay_count)
-    };
+    let pump_mode =
+        resolve_lasm_cluster_relay_pump_mode(relay_count, relay_pump_batch_max, relay_pump_cursor);
+    let mut pump_budget = pump_mode.pump_budget;
     while pump_budget > 0 {
         let relay_len_before_step = relay_count;
         let pump_outcome = pump_lasm_cluster_relay_connection_once(
@@ -216,7 +235,7 @@ fn pump_lasm_cluster_relay_connections(
         }
         advance_lasm_cluster_relay_pump_cursor(relay_pump_cursor, relay_len_before_step);
     }
-    if full_scan_pump_mode {
+    if pump_mode.full_scan_pump_mode {
         *relay_pump_cursor = 0;
     }
     progressed
