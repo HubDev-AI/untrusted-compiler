@@ -1793,6 +1793,10 @@ Post-alpha track acceptance anchors:
       - cluster lifecycle now prunes exited/uninspectable workers with in-place `swap_remove` iteration instead of rebuilding a temporary worker vector each maintenance pass,
       - this reduces autoscale maintenance allocation churn while preserving deterministic dead-worker warning behavior.
       - documented in `docs/book/1421-m39-lasm-in-place-dead-worker-pruning.md`.
+   - [x] Reused autoscale planning/apply buffers across loop iterations:
+      - autoscale loop now reuses spawn/stop/spawned worker vectors via `clear()` + `drain(..)` instead of allocating fresh vectors on each cycle,
+      - this reduces per-tick allocation churn in scale planning/apply paths while preserving existing autoscale behavior.
+      - documented in `docs/book/1422-m39-lasm-autoscale-loop-buffer-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
