@@ -1637,6 +1637,10 @@ Post-alpha track acceptance anchors:
       - fallback lookup traversal now derives initial cursor through one helper (`resolve_lasm_cluster_fallback_lookup_start_cursor`) instead of inline binary-search/start-index branch logic,
       - keeps fallback cursor semantics deterministic while removing duplicated cursor bootstrap arithmetic from relay worker loop body.
       - documented in `docs/book/1370-m39-lasm-cluster-relay-fallback-lookup-start-cursor-helper.md`.
+   - [x] Added shared accept-loop unavailable-stream dispatch helper:
+      - repeated `Unavailable(client_stream)` dispatch-error handling branches in accept-loop degraded paths now route through one helper (`handle_lasm_cluster_accept_unavailable_stream`),
+      - preserves deterministic accept-loop error counters/envelopes while reducing repeated inline unavailable handling blocks.
+      - documented in `docs/book/1371-m39-lasm-cluster-accept-loop-unavailable-stream-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
