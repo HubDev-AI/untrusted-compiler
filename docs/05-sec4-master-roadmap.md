@@ -1669,6 +1669,10 @@ Post-alpha track acceptance anchors:
       - budgeted scheduler now tracks mutable `relay_count` for per-step pre-length state and removed-path cursor normalization instead of reading `relay_connections.len()` after each pump step,
       - preserves deterministic cursor wrap/remove semantics while reducing repeated length reads in budgeted relay hot path iterations.
       - documented in `docs/book/1378-m39-lasm-cluster-relay-pump-budget-local-count.md`.
+   - [x] Unified full-scan and budgeted relay pump scheduling into one loop:
+      - relay worker now computes one scheduler mode flag (`full_scan_pump_mode`) and routes both full-scan and budgeted behavior through a single shared pump loop with mode-specific pump budget and cursor reset semantics,
+      - removes duplicated scheduler branch bodies while preserving deterministic removal/cursor progression and full-scan cursor reset behavior.
+      - documented in `docs/book/1379-m39-lasm-cluster-relay-pump-shared-loop.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

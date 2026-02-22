@@ -1348,5 +1348,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1376-m39-lasm-cluster-relay-pump-step-shared-helper.md`
 - `1377-m39-lasm-cluster-relay-pump-fullscan-local-count.md`
 - `1378-m39-lasm-cluster-relay-pump-budget-local-count.md`
+- `1379-m39-lasm-cluster-relay-pump-shared-loop.md`
 
 As milestones progress, chapters will be added and linked from this index.
