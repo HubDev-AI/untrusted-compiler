@@ -1455,6 +1455,10 @@ Post-alpha track acceptance anchors:
       - moved repeated cluster shutdown/join sequence from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_shutdown.rs` (`finalize_lasm_cluster_runtime`),
       - nonblocking failure, accept-worker failure, and normal completion paths now share one deterministic finalizer for stop-flag set, relay/aux thread joins, and worker-stop lifecycle cleanup.
       - documented in `docs/book/1323-m39-lasm-cluster-shutdown-module-extraction.md`.
+   - [x] Moved LASM cluster listener nonblocking setup to preflight:
+      - `cmd_run_lasm_cluster(...)` now sets proxy listener nonblocking immediately after bind and exits before worker/thread startup on failure,
+      - removes late nonblocking failure path from post-bootstrap orchestration while preserving existing failure diagnostics.
+      - documented in `docs/book/1324-m39-lasm-cluster-listener-nonblocking-preflight.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

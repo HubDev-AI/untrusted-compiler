@@ -7724,6 +7724,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             return Err(2);
         }
     };
+    if let Err(err) = listener.set_nonblocking(true) {
+        eprintln!("run failed: could not set LASM cluster proxy listener nonblocking: {err}");
+        return Err(2);
+    }
 
     let base_port = match compute_lasm_cluster_base_port(config.listen_port, config.max_instances) {
         Ok(port) => port,
@@ -7873,19 +7877,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         maintenance_interval_ms,
         saturation_priority_interval_ms,
     });
-
-    if let Err(err) = listener.set_nonblocking(true) {
-        eprintln!("run failed: could not set LASM cluster proxy listener nonblocking: {err}");
-        finalize_lasm_cluster_runtime(
-            &stop_flag,
-            relay_senders,
-            relay_handles,
-            autoscale_handle,
-            status_writer_handle,
-            &shared_state,
-        );
-        return Err(2);
-    }
 
     if let Err(message) = run_lasm_cluster_accept_workers(LasmClusterAcceptWorkersConfig {
         listener: &listener,
