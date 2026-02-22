@@ -357,6 +357,8 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
+                        let mut stream_single_live_index: Option<usize> = None;
+                        let mut stream_dual_live_indices: Option<(usize, usize)> = None;
                         if !relay_all_senders_live {
                             if relay_live_sender_count == 0 {
                                 if let Err(message) = handle_lasm_cluster_accept_unavailable_stream(
@@ -403,6 +405,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         index
                                     };
                                 relay_dispatch_cursor = single_live_index;
+                                stream_single_live_index = Some(single_live_index);
                             } else if relay_live_sender_count == 2 {
                                 let (first_live, second_live) =
                                     if let Some(indices) = relay_dual_live_sender_indices {
@@ -437,6 +440,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 {
                                     relay_dispatch_cursor = first_live;
                                 }
+                                stream_dual_live_indices = Some((first_live, second_live));
                             } else if relay_sender_live[relay_dispatch_cursor]
                                 != LASM_CLUSTER_RELAY_SENDER_LIVE
                             {
@@ -478,19 +482,14 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 stream_dispatch_start + 1
                             };
                         let next_dispatch_index = if !relay_all_senders_live {
-                            if relay_live_sender_count == 1 {
+                            if stream_single_live_index.is_some() {
                                 stream_dispatch_start
-                            } else if relay_live_sender_count == 2 {
-                                if let Some((first_live, second_live)) =
-                                    relay_dual_live_sender_indices
-                                {
-                                    if stream_dispatch_start == first_live {
-                                        second_live
-                                    } else {
-                                        first_live
-                                    }
+                            } else if let Some((first_live, second_live)) = stream_dual_live_indices
+                            {
+                                if stream_dispatch_start == first_live {
+                                    second_live
                                 } else {
-                                    next_dispatch_wrapped
+                                    first_live
                                 }
                             } else if relay_sender_live[next_dispatch_wrapped]
                                 == LASM_CLUSTER_RELAY_SENDER_LIVE
