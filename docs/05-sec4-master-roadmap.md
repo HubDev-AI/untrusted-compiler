@@ -1471,6 +1471,10 @@ Post-alpha track acceptance anchors:
       - shutdown finalizer summary now tracks `state_lock_poisoned` when cluster state write lock is poisoned during finalization,
       - cluster run path now treats shutdown lock-poison as deterministic runtime failure alongside background-thread panic conditions.
       - documented in `docs/book/1327-m39-lasm-cluster-shutdown-lock-poison-handling.md`.
+   - [x] Hardened LASM status-writer failure logging with throttled dedupe:
+      - status-writer loop now throttles repeated JSON write warnings and suppresses duplicate error spam between intervals when failure text is unchanged,
+      - successful status writes reset warning throttle state so new failures are surfaced immediately.
+      - documented in `docs/book/1328-m39-lasm-cluster-status-writer-warning-throttle.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

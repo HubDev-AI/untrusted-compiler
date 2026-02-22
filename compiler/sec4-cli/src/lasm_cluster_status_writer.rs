@@ -74,6 +74,9 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         let mut last_saturation_sample_at = Instant::now();
         let mut last_status_snapshot: Option<LasmClusterStatusSnapshot> = None;
         let mut status_parent_ready = false;
+        let mut last_status_write_error: Option<String> = None;
+        let mut status_write_warning_next_allowed_at: Option<Instant> = None;
+        let status_write_warning_throttle_duration = Duration::from_millis(1000);
         loop {
             let sample_now = Instant::now();
             let saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
@@ -148,7 +151,25 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 &mut last_status_snapshot,
                 &mut status_parent_ready,
             ) {
-                eprintln!("warning: LASM cluster status json write failed: {err}");
+                let error_message = err;
+                let warning_allowed = match status_write_warning_next_allowed_at {
+                    Some(next_allowed_at) => sample_now >= next_allowed_at,
+                    None => true,
+                };
+                let should_log = warning_allowed
+                    || last_status_write_error
+                        .as_deref()
+                        .map(|last| last != error_message)
+                        .unwrap_or(true);
+                if should_log {
+                    eprintln!("warning: LASM cluster status json write failed: {error_message}");
+                    status_write_warning_next_allowed_at =
+                        Some(sample_now + status_write_warning_throttle_duration);
+                    last_status_write_error = Some(error_message.to_string());
+                }
+            } else {
+                last_status_write_error = None;
+                status_write_warning_next_allowed_at = None;
             }
             last_saturation_total = saturation_total;
             last_dispatch_fallback_total = dispatch_fallback_total;
