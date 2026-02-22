@@ -16483,10 +16483,10 @@ fn main() effects { net } -> Int {
         "POST /db/exec-tx?template=SELECT%202&params=beta HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
     );
     assert!(
-        second_exec_tx_response.contains("HTTP/1.1 500 Internal Server Error")
-            && second_exec_tx_response.contains("\"code\":\"DB.TX_INTERNAL\"")
-            && second_exec_tx_response.contains("db.tx runtime failure"),
-        "second execTx request should fail deterministically after tx-handle capacity is exhausted:\n{second_exec_tx_response}"
+        second_exec_tx_response.contains("HTTP/1.1 200 OK")
+            && second_exec_tx_response.contains("\"op\":\"execTx\"")
+            && second_exec_tx_response.contains("\"recordId\":2"),
+        "second execTx request should succeed because inline db.tx handles are released after execTx:\n{second_exec_tx_response}"
     );
 
     let list_response =
@@ -16496,14 +16496,14 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"count\":1")
-            && list_response.contains("\"txHandleCount\":1")
+        list_response.contains("\"count\":2")
+            && list_response.contains("\"txHandleCount\":0")
             && list_response.contains("\"txHandleCapacity\":1")
             && list_response.contains("\"dbTimeoutsMs\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("alpha")
-            && !list_response.contains("beta"),
-        "tx-capacity overflow should not append second execTx record:\n{list_response}"
+            && list_response.contains("beta"),
+        "inline db.tx handle cleanup should keep tx handle count bounded while allowing subsequent execTx records:\n{list_response}"
     );
 
     let _ = child.kill();
