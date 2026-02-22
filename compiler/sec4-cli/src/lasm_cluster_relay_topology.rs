@@ -34,15 +34,13 @@ pub(crate) fn lookup_lasm_cluster_next_live_sender_index(
     relay_next_live_sender_lookup: &[usize],
     start_index_wrapped: usize,
 ) -> Option<usize> {
+    let sender_count = relay_sender_live.len();
+    debug_assert!(sender_count > 0);
     debug_assert_eq!(relay_sender_live.len(), relay_next_live_sender_lookup.len());
-    if relay_sender_live.is_empty() {
-        return None;
-    }
-    debug_assert!(start_index_wrapped < relay_sender_live.len());
+    debug_assert!(start_index_wrapped < sender_count);
     let cached_index = relay_next_live_sender_lookup[start_index_wrapped];
-    if cached_index < relay_sender_live.len()
-        && relay_sender_live[cached_index] == LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
+    debug_assert!(cached_index < sender_count);
+    if relay_sender_live[cached_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         return Some(cached_index);
     }
     lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
