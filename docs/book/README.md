@@ -1360,5 +1360,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1388-m39-lasm-cluster-accept-loop-next-live-lookup-refresh-on-miss.md`
 - `1389-m39-lasm-cluster-accept-loop-live-start-fallback-on-next-dispatch-lookup-miss.md`
 - `1390-m39-lasm-cluster-fallback-dispatch-lookup-refresh-on-miss.md`
+- `1391-m39-lasm-cluster-reuse-port-fast-path-override.md`
 
 As milestones progress, chapters will be added and linked from this index.
