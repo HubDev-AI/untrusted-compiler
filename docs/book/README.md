@@ -1365,5 +1365,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1393-m39-lasm-mode-compare-build-profile-and-samples.md`
 - `1394-m39-lasm-saturation-matrix-bundle-build-profile-and-samples.md`
 - `1395-m39-full-benchmark-suite-saturation-profile-samples-wiring.md`
+- `1396-m39-lasm-capacity-probe-wrk-process-fanout.md`
 
 As milestones progress, chapters will be added and linked from this index.

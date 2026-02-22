@@ -34,6 +34,7 @@ Options:
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
   --build-profile <debug|release>                  sec4 build profile used for probe run (default: release)
   --samples <n>                                    Number of wrk samples (best sample is reported, default: 1)
+  --wrk-processes <n>                              Number of parallel wrk processes per sample (default: 1)
   --keep-cluster-status-json                       Keep raw cluster status json artifact after probe
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
   --skip-build                                     Skip sec4 binary rebuild
@@ -45,6 +46,57 @@ USAGE
 is_number() {
   local value="$1"
   awk -v x="$value" 'BEGIN { exit !(x ~ /^-?[0-9]+([.][0-9]+)?$/) }'
+}
+
+sum_numbers() {
+  local left="$1"
+  local right="$2"
+  awk -v a="$left" -v b="$right" 'BEGIN { printf "%.6f", (a + 0) + (b + 0) }'
+}
+
+latency_to_ms() {
+  local value="$1"
+  awk -v raw="$value" '
+    BEGIN {
+      unit = "";
+      amount = raw;
+      if (raw ~ /us$/) {
+        unit = "us";
+        sub(/us$/, "", amount);
+      } else if (raw ~ /ms$/) {
+        unit = "ms";
+        sub(/ms$/, "", amount);
+      } else if (raw ~ /s$/) {
+        unit = "s";
+        sub(/s$/, "", amount);
+      } else if (raw ~ /m$/) {
+        unit = "m";
+        sub(/m$/, "", amount);
+      } else {
+        exit 1;
+      }
+      if (amount !~ /^-?[0-9]+([.][0-9]+)?$/) {
+        exit 1;
+      }
+      amount += 0;
+      if (unit == "us") {
+        printf "%.6f", amount / 1000.0;
+      } else if (unit == "ms") {
+        printf "%.6f", amount;
+      } else if (unit == "s") {
+        printf "%.6f", amount * 1000.0;
+      } else if (unit == "m") {
+        printf "%.6f", amount * 60000.0;
+      } else {
+        exit 1;
+      }
+    }
+  '
+}
+
+format_latency_ms() {
+  local value_ms="$1"
+  awk -v x="$value_ms" 'BEGIN { printf "%.3fms", x + 0 }'
 }
 
 project_path="${LASM_CAPACITY_PROJECT_PATH:-examples/lasm-alpha-full}"
@@ -71,6 +123,7 @@ cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
+wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
 fixed_reuse_port_mode="${LASM_CAPACITY_FIXED_REUSE_PORT_MODE:-false}"
 skip_build="false"
@@ -179,6 +232,10 @@ while [ "$#" -gt 0 ]; do
       samples="${2:-}"
       shift 2
       ;;
+    --wrk-processes)
+      wrk_processes="${2:-}"
+      shift 2
+      ;;
     --out)
       out_rel="${2:-}"
       shift 2
@@ -251,6 +308,14 @@ if ! [[ "$samples" =~ ^[0-9]+$ ]]; then
 fi
 if [ "$samples" -lt 1 ]; then
   echo "samples must be >= 1, got: $samples" >&2
+  exit 2
+fi
+if ! [[ "$wrk_processes" =~ ^[0-9]+$ ]]; then
+  echo "wrk-processes must be an integer >= 1, got: $wrk_processes" >&2
+  exit 2
+fi
+if [ "$wrk_processes" -lt 1 ]; then
+  echo "wrk-processes must be >= 1, got: $wrk_processes" >&2
   exit 2
 fi
 if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
@@ -348,6 +413,7 @@ sec4 LASM cluster capacity probe plan:
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   buildProfile=$build_profile
   samples=$samples
+  wrkProcesses=$wrk_processes
   clusterStatusJson=$(if [ "$fixed_reuse_port_mode" = "true" ]; then printf "%s" "n/a (fixed-reuse-port-mode)"; else printf "%s" "$status_json_file"; fi)
   keepClusterStatusJson=${keep_cluster_status_json}
   skipBuild=$skip_build
@@ -471,37 +537,119 @@ sample_entries_jsonl="${root_dir}/results/raw/sec4-lasm-cluster-${probe_label}-s
 : >"$sample_entries_jsonl"
 for sample_index in $(seq 1 "$samples"); do
   sample_raw_file="$raw_file"
-  if [ "$samples" -gt 1 ]; then
+  if [ "$samples" -gt 1 ] || [ "$wrk_processes" -gt 1 ]; then
     sample_raw_file="${raw_file%.txt}-sample-${sample_index}.txt"
   fi
 
   sample_exit_code=0
-  if ! wrk -t"$threads" -c"$connections" -d"$duration" --latency -H "$request_header" "${base_url}${request_path}" >"$sample_raw_file" 2>&1; then
-    sample_exit_code=$?
-    if [ "$bench_rc" -eq 0 ]; then
-      bench_rc=$sample_exit_code
-    fi
-    sample_failure_count=$((sample_failure_count + 1))
-  else
-    sample_success_count=$((sample_success_count + 1))
-  fi
-
   sample_requests=0
   sample_requests_per_sec=0
+  sample_p99_ms=""
+  sample_process_entries_jsonl="${root_dir}/results/raw/sec4-lasm-cluster-${probe_label}-sample-${sample_index}-wrk-processes.jsonl"
+  : >"$sample_process_entries_jsonl"
+  sample_process_pids=()
+  sample_process_raw_files=()
+
+  for process_index in $(seq 1 "$wrk_processes"); do
+    sample_process_raw_file="$sample_raw_file"
+    if [ "$wrk_processes" -gt 1 ]; then
+      sample_process_raw_file="${sample_raw_file%.txt}-wrk-${process_index}.txt"
+    fi
+    sample_process_raw_files+=("$sample_process_raw_file")
+    wrk -t"$threads" -c"$connections" -d"$duration" --latency -H "$request_header" "${base_url}${request_path}" >"$sample_process_raw_file" 2>&1 &
+    sample_process_pids+=("$!")
+  done
+
+  for process_offset in "${!sample_process_pids[@]}"; do
+    process_pid="${sample_process_pids[$process_offset]}"
+    process_index=$((process_offset + 1))
+    sample_process_raw_file="${sample_process_raw_files[$process_offset]}"
+
+    process_exit_code=0
+    if ! wait "$process_pid"; then
+      process_exit_code=$?
+      if [ "$sample_exit_code" -eq 0 ]; then
+        sample_exit_code=$process_exit_code
+      fi
+      if [ "$bench_rc" -eq 0 ]; then
+        bench_rc=$process_exit_code
+      fi
+    fi
+
+    process_requests=0
+    process_requests_per_sec=0
+    process_p99=""
+    process_p99_ms=""
+    if [ -f "$sample_process_raw_file" ]; then
+      process_requests_raw="$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$sample_process_raw_file")"
+      if is_number "$process_requests_raw"; then
+        process_requests="$process_requests_raw"
+      fi
+      process_requests_per_sec_raw="$(awk '/^Requests\/sec:/ {print $2; exit}' "$sample_process_raw_file")"
+      if is_number "$process_requests_per_sec_raw"; then
+        process_requests_per_sec="$process_requests_per_sec_raw"
+      fi
+      process_p99_raw="$(awk '$1 == "99%" {print $2; exit}' "$sample_process_raw_file")"
+      if [ -n "$process_p99_raw" ]; then
+        process_p99_ms="$(latency_to_ms "$process_p99_raw" 2>/dev/null || true)"
+        if [ -n "$process_p99_ms" ]; then
+          process_p99="$(format_latency_ms "$process_p99_ms")"
+        fi
+      fi
+    fi
+
+    sample_requests=$((sample_requests + process_requests))
+    sample_requests_per_sec="$(sum_numbers "$sample_requests_per_sec" "$process_requests_per_sec")"
+    if [ -n "$process_p99_ms" ]; then
+      if [ -z "$sample_p99_ms" ] || awk -v current="$process_p99_ms" -v best="$sample_p99_ms" 'BEGIN { exit !(current + 0 > best + 0) }'; then
+        sample_p99_ms="$process_p99_ms"
+      fi
+    fi
+
+    jq -n \
+      --argjson process "$process_index" \
+      --arg raw "$sample_process_raw_file" \
+      --argjson requests "$process_requests" \
+      --argjson requestsPerSec "$process_requests_per_sec" \
+      --arg p99 "$process_p99" \
+      --argjson runExitCode "$process_exit_code" \
+      '{
+        process: $process,
+        raw: $raw,
+        requests: $requests,
+        requestsPerSec: $requestsPerSec,
+        p99: $p99,
+        runExitCode: $runExitCode
+      }' >>"$sample_process_entries_jsonl"
+  done
+
+  if [ "$wrk_processes" -gt 1 ]; then
+    {
+      printf "# sec4 LASM cluster capacity sample %s (%s wrk processes)\n" "$sample_index" "$wrk_processes"
+      for process_offset in "${!sample_process_raw_files[@]}"; do
+        process_index=$((process_offset + 1))
+        sample_process_raw_file="${sample_process_raw_files[$process_offset]}"
+        printf "\n## wrk process %s (%s)\n\n" "$process_index" "$sample_process_raw_file"
+        if [ -f "$sample_process_raw_file" ]; then
+          cat "$sample_process_raw_file"
+        else
+          echo "(missing wrk output)"
+        fi
+      done
+    } >"$sample_raw_file"
+  fi
+
   sample_p99=""
-  if [ -f "$sample_raw_file" ]; then
-    sample_requests_raw="$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$sample_raw_file")"
-    if is_number "$sample_requests_raw"; then
-      sample_requests="$sample_requests_raw"
-    fi
-    sample_requests_per_sec_raw="$(awk '/^Requests\/sec:/ {print $2; exit}' "$sample_raw_file")"
-    if is_number "$sample_requests_per_sec_raw"; then
-      sample_requests_per_sec="$sample_requests_per_sec_raw"
-    fi
-    sample_p99_raw="$(awk '$1 == "99%" {print $2; exit}' "$sample_raw_file")"
-    if [ -n "$sample_p99_raw" ]; then
-      sample_p99="$sample_p99_raw"
-    fi
+  if [ -n "$sample_p99_ms" ]; then
+    sample_p99="$(format_latency_ms "$sample_p99_ms")"
+  fi
+  sample_process_entries_json="$(jq -s '.' "$sample_process_entries_jsonl")"
+  rm -f "$sample_process_entries_jsonl"
+
+  if [ "$sample_exit_code" -eq 0 ]; then
+    sample_success_count=$((sample_success_count + 1))
+  else
+    sample_failure_count=$((sample_failure_count + 1))
   fi
 
   jq -n \
@@ -510,6 +658,8 @@ for sample_index in $(seq 1 "$samples"); do
     --argjson requests "$sample_requests" \
     --argjson requestsPerSec "$sample_requests_per_sec" \
     --arg p99 "$sample_p99" \
+    --argjson wrkProcesses "$wrk_processes" \
+    --argjson wrkProcessRuns "$sample_process_entries_json" \
     --argjson runExitCode "$sample_exit_code" \
     '{
       index: $index,
@@ -517,6 +667,8 @@ for sample_index in $(seq 1 "$samples"); do
       requests: $requests,
       requestsPerSec: $requestsPerSec,
       p99: $p99,
+      wrkProcesses: $wrkProcesses,
+      wrkProcessRuns: $wrkProcessRuns,
       runExitCode: $runExitCode
     }' >>"$sample_entries_jsonl"
 
@@ -601,6 +753,7 @@ if [ -f "$status_json_file" ]; then
 fi
 
 sample_entries_json="$(jq -s '.' "$sample_entries_jsonl")"
+wrk_total_connections="$(awk -v c="$connections" -v p="$wrk_processes" 'BEGIN { printf "%.0f", (c + 0) * (p + 0) }')"
 
 target_met="false"
 if awk -v observed="$observed_requests" -v target="$target_requests" 'BEGIN { exit !(observed + 0 >= target + 0) }'; then
@@ -625,6 +778,8 @@ jq -n \
   --arg statusJsonFile "$status_json_file" \
   --argjson threads "$threads" \
   --argjson connections "$connections" \
+  --argjson wrkProcesses "$wrk_processes" \
+  --argjson wrkTotalConnections "$wrk_total_connections" \
   --argjson sampleCount "$samples" \
   --argjson sampleSuccessCount "$sample_success_count" \
   --argjson sampleFailureCount "$sample_failure_count" \
@@ -675,6 +830,8 @@ jq -n \
       buildProfile: $buildProfile,
       threads: $threads,
       connections: $connections,
+      wrkProcesses: $wrkProcesses,
+      wrkTotalConnections: $wrkTotalConnections,
       samples: $sampleCount,
       targetRequests: $targetRequests,
       instances: $instances,

@@ -29,6 +29,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --cluster-relay-pump-batch-max 654 \
   --build-profile debug \
   --samples 3 \
+  --wrk-processes 4 \
   --out results/summaries/custom-lasm-capacity.json \
   2>&1)"
 
@@ -90,6 +91,10 @@ if ! grep -q 'buildProfile=debug' <<<"$out"; then
 fi
 if ! grep -q 'samples=3' <<<"$out"; then
   echo "lasm capacity probe dry-run missing samples output" >&2
+  exit 1
+fi
+if ! grep -q 'wrkProcesses=4' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing wrkProcesses output" >&2
   exit 1
 fi
 if ! grep -q "out=${root_dir}/results/summaries/custom-lasm-capacity.json" <<<"$out"; then
@@ -178,6 +183,22 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --samples 
 fi
 if ! grep -q "samples must be >= 1" /tmp/lasm-capacity-probe-invalid-samples.log; then
   echo "lasm capacity probe invalid samples error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --wrk-processes 0 >/tmp/lasm-capacity-probe-invalid-wrk-processes.log 2>&1; then
+  echo "lasm capacity probe accepted invalid wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q "wrk-processes must be >= 1" /tmp/lasm-capacity-probe-invalid-wrk-processes.log; then
+  echo "lasm capacity probe invalid wrk-processes error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --wrk-processes nope >/tmp/lasm-capacity-probe-invalid-wrk-processes-type.log 2>&1; then
+  echo "lasm capacity probe accepted non-integer wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q "wrk-processes must be an integer >= 1" /tmp/lasm-capacity-probe-invalid-wrk-processes-type.log; then
+  echo "lasm capacity probe invalid wrk-processes type error missing" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --build-profile fast >/tmp/lasm-capacity-probe-invalid-profile.log 2>&1; then
