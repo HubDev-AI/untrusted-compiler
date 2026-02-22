@@ -108,6 +108,50 @@ fn recompute_lasm_cluster_relay_selection_state(
     )
 }
 
+fn mark_lasm_cluster_relay_backend_connect_failure(
+    backend_addr: std::net::SocketAddr,
+    backend_index: usize,
+    connect_error: &std::io::Error,
+    now: Instant,
+    relay_backend_connect_cooldown: Duration,
+    unhealthy_ports_until_by_index: &mut [Option<Instant>],
+    unhealthy_port_count: &mut usize,
+    selection_lookup_dirty: &mut bool,
+    unhealthy_prune_next_at: &mut Option<Instant>,
+    unhealthy_prune_interval: Duration,
+    connect_warning_next_allowed_by_index: &mut [Option<Instant>],
+    relay_warning_throttle_duration: Duration,
+) {
+    let unhealthy_until = now + relay_backend_connect_cooldown;
+    let unhealthy_entry = &mut unhealthy_ports_until_by_index[backend_index];
+    let should_mark_unhealthy = match *unhealthy_entry {
+        Some(existing_until) => existing_until <= now,
+        None => true,
+    };
+    if should_mark_unhealthy {
+        *unhealthy_port_count += 1;
+        *selection_lookup_dirty = true;
+    }
+    *unhealthy_entry = Some(unhealthy_until);
+    if unhealthy_prune_next_at.is_none() && *unhealthy_port_count > 0 {
+        *unhealthy_prune_next_at = Some(now + unhealthy_prune_interval);
+    }
+
+    let warning_next_allowed_entry = &mut connect_warning_next_allowed_by_index[backend_index];
+    let warning_allowed = match *warning_next_allowed_entry {
+        Some(next_allowed_at) => now >= next_allowed_at,
+        None => true,
+    };
+    if warning_allowed {
+        eprintln!(
+            "warning: LASM cluster worker {} connect failed: {}",
+            backend_addr.port(),
+            connect_error
+        );
+        *warning_next_allowed_entry = Some(now + relay_warning_throttle_duration);
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_receiver: Receiver<TcpStream>,
     relay_active: Arc<AtomicUsize>,
@@ -365,36 +409,20 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     }
                     Err(err) => {
                         let now = Instant::now();
-                        let unhealthy_until = now + relay_backend_connect_cooldown;
-                        let unhealthy_entry =
-                            &mut unhealthy_ports_until_by_index[selected_backend_index];
-                        let should_mark_unhealthy = match *unhealthy_entry {
-                            Some(existing_until) => existing_until <= now,
-                            None => true,
-                        };
-                        if should_mark_unhealthy {
-                            unhealthy_port_count += 1;
-                            selection_lookup_dirty = true;
-                        }
-                        *unhealthy_entry = Some(unhealthy_until);
-                        if unhealthy_prune_next_at.is_none() && unhealthy_port_count > 0 {
-                            unhealthy_prune_next_at = Some(now + unhealthy_prune_interval);
-                        }
-                        let warning_next_allowed_entry =
-                            &mut connect_warning_next_allowed_by_index[selected_backend_index];
-                        let warning_allowed = match *warning_next_allowed_entry {
-                            Some(next_allowed_at) => now >= next_allowed_at,
-                            None => true,
-                        };
-                        if warning_allowed {
-                            eprintln!(
-                                "warning: LASM cluster worker {} connect failed: {}",
-                                backend_addr.port(),
-                                err
-                            );
-                            *warning_next_allowed_entry =
-                                Some(now + relay_warning_throttle_duration);
-                        }
+                        mark_lasm_cluster_relay_backend_connect_failure(
+                            backend_addr,
+                            selected_backend_index,
+                            &err,
+                            now,
+                            relay_backend_connect_cooldown,
+                            unhealthy_ports_until_by_index.as_mut_slice(),
+                            &mut unhealthy_port_count,
+                            &mut selection_lookup_dirty,
+                            &mut unhealthy_prune_next_at,
+                            unhealthy_prune_interval,
+                            connect_warning_next_allowed_by_index.as_mut_slice(),
+                            relay_warning_throttle_duration,
+                        );
                         let mut fallback_connected = false;
                         let mut fallback_client = Some(client);
                         if unhealthy_port_count < selected_worker_port_count {
@@ -487,49 +515,20 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                     }
                                     Err(fallback_err) => {
                                         let fallback_now = Instant::now();
-                                        let fallback_unhealthy_until =
-                                            fallback_now + relay_backend_connect_cooldown;
-                                        let fallback_unhealthy_entry =
-                                            &mut unhealthy_ports_until_by_index
-                                                [fallback_backend_index];
-                                        let should_mark_fallback_unhealthy =
-                                            match *fallback_unhealthy_entry {
-                                                Some(existing_until) => {
-                                                    existing_until <= fallback_now
-                                                }
-                                                None => true,
-                                            };
-                                        if should_mark_fallback_unhealthy {
-                                            unhealthy_port_count += 1;
-                                            selection_lookup_dirty = true;
-                                        }
-                                        *fallback_unhealthy_entry = Some(fallback_unhealthy_until);
-                                        if unhealthy_prune_next_at.is_none()
-                                            && unhealthy_port_count > 0
-                                        {
-                                            unhealthy_prune_next_at =
-                                                Some(fallback_now + unhealthy_prune_interval);
-                                        }
-                                        let fallback_warning_next_allowed_entry =
-                                            &mut connect_warning_next_allowed_by_index
-                                                [fallback_backend_index];
-                                        let fallback_warning_allowed =
-                                            match *fallback_warning_next_allowed_entry {
-                                                Some(next_allowed_at) => {
-                                                    fallback_now >= next_allowed_at
-                                                }
-                                                None => true,
-                                            };
-                                        if fallback_warning_allowed {
-                                            eprintln!(
-                                                "warning: LASM cluster worker {} connect failed: {}",
-                                                fallback_backend_addr.port(),
-                                                fallback_err
-                                            );
-                                            *fallback_warning_next_allowed_entry = Some(
-                                                fallback_now + relay_warning_throttle_duration,
-                                            );
-                                        }
+                                        mark_lasm_cluster_relay_backend_connect_failure(
+                                            fallback_backend_addr,
+                                            fallback_backend_index,
+                                            &fallback_err,
+                                            fallback_now,
+                                            relay_backend_connect_cooldown,
+                                            unhealthy_ports_until_by_index.as_mut_slice(),
+                                            &mut unhealthy_port_count,
+                                            &mut selection_lookup_dirty,
+                                            &mut unhealthy_prune_next_at,
+                                            unhealthy_prune_interval,
+                                            connect_warning_next_allowed_by_index.as_mut_slice(),
+                                            relay_warning_throttle_duration,
+                                        );
                                         if unhealthy_port_count >= selected_worker_port_count {
                                             break;
                                         }
