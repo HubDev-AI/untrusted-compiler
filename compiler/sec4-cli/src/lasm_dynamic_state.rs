@@ -12,7 +12,7 @@ use crate::lasm_db_config::{
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,9 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_postgres_dsn: Option<String>,
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
+    pub(crate) db_records_postgres_statement_cache_order: VecDeque<String>,
     pub(crate) db_postgres_placeholder_max_cache: HashMap<String, usize>,
+    pub(crate) db_postgres_placeholder_max_cache_order: VecDeque<String>,
     pub(crate) db_postgres_statement_cache_max: usize,
     pub(crate) db_postgres_placeholder_cache_max: usize,
     pub(crate) db_postgres_statement_cache_evictions_total: u64,
@@ -237,7 +239,9 @@ pub(crate) fn build_lasm_dynamic_response_state(
     let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles(explicit_db_tx_max_handles)?;
     let db_tx_handles = HashMap::new();
     let db_records_postgres_statement_cache = HashMap::new();
+    let db_records_postgres_statement_cache_order = VecDeque::new();
     let db_postgres_placeholder_max_cache = HashMap::new();
+    let db_postgres_placeholder_max_cache_order = VecDeque::new();
     let next_db_tx_handle = 1;
     Ok(LasmDynamicResponseState {
         users_by_id,
@@ -252,7 +256,9 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_postgres_dsn,
         db_records_postgres_client,
         db_records_postgres_statement_cache,
+        db_records_postgres_statement_cache_order,
         db_postgres_placeholder_max_cache,
+        db_postgres_placeholder_max_cache_order,
         db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max,
         db_postgres_statement_cache_evictions_total: 0,

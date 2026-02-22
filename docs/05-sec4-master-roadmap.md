@@ -1773,6 +1773,10 @@ Post-alpha track acceptance anchors:
       - relay-worker now loads worker-port snapshots via pointer-checked `ArcSwap::load()` and clones only when topology changes,
       - removes unconditional `load_full()` clone churn from prune and selection-refresh branches while preserving existing remap/selection behavior.
       - documented in `docs/book/1416-m39-lasm-cluster-relay-worker-snapshot-clone-elision.md`.
+   - [x] Replaced Postgres cache clear-all behavior with bounded single-entry eviction:
+      - LASM Postgres statement cache and placeholder-max cache now evict one oldest entry at capacity instead of clearing the full cache map,
+      - this avoids full-cache churn cliffs under diverse query templates while preserving deterministic cache capacity enforcement and eviction telemetry counters.
+      - documented in `docs/book/1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

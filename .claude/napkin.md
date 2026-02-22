@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I ran two focused Cargo tests in one parallel call again and reintroduced package/build lock contention noise. | Keep Cargo checks/tests strictly sequential; parallel calls are only for read/search/syntax commands. |
+| 2026-02-22 | self | I launched `git checkout -b ...` in parallel with a branch-read command again, which returned stale branch state and violates branch-gate sequencing. | Keep branch creation/checkouts strictly sequential; only run parallel reads after branch state is settled. |
 | 2026-02-22 | self | I started this continuation with branch/status commands before the mandatory standalone `.claude/napkin.md` read. | Keep a strict first-command gate: run `cat .claude/napkin.md` alone before any git/status/search commands. |
 | 2026-02-22 | self | During this timeout-override slice I again launched three focused Cargo tests in one parallel call and hit build/package lock contention noise. | Keep Cargo commands strictly sequential; reserve parallel calls for read/search/syntax-only commands. |
 | 2026-02-22 | self | While adding Postgres cache-capacity run flags, I broadened the mixed-overrides diagnostic from "timeout overrides" to "runtime overrides" but initially forgot to align command-test assertions. | Whenever a deterministic CLI diagnostic string broadens/narrows scope, update assertion strings in the same slice and re-run only the impacted tests before commit. |

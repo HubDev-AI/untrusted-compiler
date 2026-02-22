@@ -3,6 +3,7 @@ use crate::lasm_db_adapter_state::{
 };
 use crate::LasmDynamicResponseState;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
+use std::collections::{HashMap, VecDeque};
 
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
@@ -147,17 +148,45 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
             .prepare(query_template)
             .map_err(|err| format!("postgres prepare failed: {err}"))?
     };
-    if state.db_records_postgres_statement_cache.len() >= state.db_postgres_statement_cache_max {
-        let evicted = state.db_records_postgres_statement_cache.len() as u64;
-        state.db_postgres_statement_cache_evictions_total = state
-            .db_postgres_statement_cache_evictions_total
-            .saturating_add(evicted);
-        state.db_records_postgres_statement_cache.clear();
-    }
-    state
-        .db_records_postgres_statement_cache
-        .insert(query_template.to_string(), statement.clone());
+    let evicted = insert_lasm_bounded_cache_entry(
+        &mut state.db_records_postgres_statement_cache,
+        &mut state.db_records_postgres_statement_cache_order,
+        state.db_postgres_statement_cache_max,
+        query_template.to_string(),
+        statement.clone(),
+    );
+    state.db_postgres_statement_cache_evictions_total = state
+        .db_postgres_statement_cache_evictions_total
+        .saturating_add(evicted);
     Ok(statement)
+}
+
+pub(crate) fn insert_lasm_bounded_cache_entry<V>(
+    cache: &mut HashMap<String, V>,
+    order: &mut VecDeque<String>,
+    capacity: usize,
+    key: String,
+    value: V,
+) -> u64 {
+    let bounded_capacity = capacity.max(1);
+    let key_exists = cache.contains_key(key.as_str());
+    let mut evicted = 0_u64;
+    if !key_exists {
+        while cache.len() >= bounded_capacity {
+            let Some(evicted_key) = order.pop_front() else {
+                cache.clear();
+                break;
+            };
+            if cache.remove(evicted_key.as_str()).is_some() {
+                evicted = evicted.saturating_add(1);
+            }
+        }
+    }
+    cache.insert(key.clone(), value);
+    if !key_exists {
+        order.push_back(key);
+    }
+    evicted
 }
 
 pub(crate) fn reconnect_lasm_dynamic_postgres_client(
@@ -176,12 +205,14 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
     state.db_records_postgres_client = Some(client);
     state.db_records_postgres_statement_cache.clear();
+    state.db_records_postgres_statement_cache_order.clear();
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::classify_lasm_db_runtime_error;
+    use super::{classify_lasm_db_runtime_error, insert_lasm_bounded_cache_entry};
+    use std::collections::{HashMap, VecDeque};
 
     #[test]
     fn classify_db_runtime_statement_timeout_error() {
@@ -198,5 +229,26 @@ mod tests {
         assert_eq!(status, 409);
         assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
         assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn bounded_cache_entry_evicts_oldest_single_entry_when_full() {
+        let mut cache = HashMap::new();
+        let mut order = VecDeque::new();
+
+        let first_evicted =
+            insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "a".to_string(), 1_i32);
+        let second_evicted =
+            insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "b".to_string(), 2_i32);
+        let third_evicted =
+            insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "c".to_string(), 3_i32);
+
+        assert_eq!(first_evicted, 0);
+        assert_eq!(second_evicted, 0);
+        assert_eq!(third_evicted, 1);
+        assert_eq!(cache.len(), 2);
+        assert!(!cache.contains_key("a"));
+        assert_eq!(cache.get("b"), Some(&2));
+        assert_eq!(cache.get("c"), Some(&3));
     }
 }
