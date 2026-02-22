@@ -770,64 +770,49 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             }
 
             let mut progressed = false;
-            if relay_connections.len() <= relay_pump_batch_max {
-                let mut index = 0_usize;
-                let mut relay_count = relay_connections.len();
-                while index < relay_count {
-                    let pump_outcome = pump_lasm_cluster_relay_connection_once(
-                        &mut relay_connections,
-                        index,
-                        &mut relay_buffer_pool,
-                        relay_buffer_pool_max,
-                        &mut pump_warning_next_allowed,
-                        relay_warning_throttle_duration,
-                        &mut active_connection_decrements_local,
-                    );
-                    if pump_outcome.progressed {
-                        progressed = true;
-                    }
-                    if pump_outcome.removed {
-                        relay_count -= 1;
-                    } else {
-                        index += 1;
-                    }
-                }
+            let mut relay_count = relay_connections.len();
+            let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
+            if full_scan_pump_mode {
                 relay_pump_cursor = 0;
             } else {
-                let mut relay_count = relay_connections.len();
                 let _ =
                     normalize_lasm_cluster_relay_pump_cursor(&mut relay_pump_cursor, relay_count);
-                let mut pump_budget = relay_pump_batch_max.min(relay_count);
-                while pump_budget > 0 {
-                    let relay_len_before_step = relay_count;
-                    let pump_outcome = pump_lasm_cluster_relay_connection_once(
-                        &mut relay_connections,
-                        relay_pump_cursor,
-                        &mut relay_buffer_pool,
-                        relay_buffer_pool_max,
-                        &mut pump_warning_next_allowed,
-                        relay_warning_throttle_duration,
-                        &mut active_connection_decrements_local,
-                    );
-                    if pump_outcome.progressed {
-                        progressed = true;
-                    }
-                    pump_budget -= 1;
-                    if pump_outcome.removed {
-                        relay_count -= 1;
-                        if normalize_lasm_cluster_relay_pump_cursor(
-                            &mut relay_pump_cursor,
-                            relay_count,
-                        ) {
-                            break;
-                        }
-                        continue;
-                    }
-                    advance_lasm_cluster_relay_pump_cursor(
-                        &mut relay_pump_cursor,
-                        relay_len_before_step,
-                    );
+            }
+            let mut pump_budget = if full_scan_pump_mode {
+                relay_count
+            } else {
+                relay_pump_batch_max.min(relay_count)
+            };
+            while pump_budget > 0 {
+                let relay_len_before_step = relay_count;
+                let pump_outcome = pump_lasm_cluster_relay_connection_once(
+                    &mut relay_connections,
+                    relay_pump_cursor,
+                    &mut relay_buffer_pool,
+                    relay_buffer_pool_max,
+                    &mut pump_warning_next_allowed,
+                    relay_warning_throttle_duration,
+                    &mut active_connection_decrements_local,
+                );
+                if pump_outcome.progressed {
+                    progressed = true;
                 }
+                pump_budget -= 1;
+                if pump_outcome.removed {
+                    relay_count -= 1;
+                    if normalize_lasm_cluster_relay_pump_cursor(&mut relay_pump_cursor, relay_count)
+                    {
+                        break;
+                    }
+                    continue;
+                }
+                advance_lasm_cluster_relay_pump_cursor(
+                    &mut relay_pump_cursor,
+                    relay_len_before_step,
+                );
+            }
+            if full_scan_pump_mode {
+                relay_pump_cursor = 0;
             }
 
             if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
