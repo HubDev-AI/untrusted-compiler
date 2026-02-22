@@ -8215,12 +8215,6 @@ fn cmd_run_lasm_backend(
             timeout_ms,
         ));
     }
-    if let Some(records_max) = db_records_max {
-        scoped_db_timeout_overrides.push(ScopedEnvVarOverride::set_u64(
-            "SEC4_RT_LASM_DB_RECORDS_MAX",
-            records_max,
-        ));
-    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -8399,6 +8393,13 @@ fn cmd_run_lasm_backend(
                 .transpose()
                 .map_err(|_| {
                     eprintln!("run failed: --db-max-tx-handles exceeds platform limits");
+                    2
+                })?,
+            db_records_max
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!("run failed: --db-records-max exceeds platform limits");
                     2
                 })?,
         )
