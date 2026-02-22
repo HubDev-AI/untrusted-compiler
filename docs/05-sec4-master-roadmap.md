@@ -1576,6 +1576,11 @@ Post-alpha track acceptance anchors:
       - backend lookup rebuild now returns explicit degraded healthy cycle span, and relay selection reservation now uses that span for modulo/cursor progression when not in identity mode,
       - removes remaining dead-slot influence from degraded reservation cadence and keeps reservation churn scoped to healthy backend count.
       - documented in `docs/book/1355-m39-lasm-cluster-healthy-cycle-span-reservation-selection.md`.
+   - [x] Inlined remaining dispatch wrapped-step helpers in accept/fallback hot paths:
+      - accept loop now advances `next_dispatch_wrapped` with direct increment+wrap arithmetic instead of relay-topology wrapped-index helper call,
+      - fallback dual-live branch now computes second-attempt start index with direct increment+wrap arithmetic,
+      - removed now-unused relay-topology wrapped-index helper symbol.
+      - documented in `docs/book/1356-m39-lasm-cluster-accept-fallback-direct-wrap-step-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

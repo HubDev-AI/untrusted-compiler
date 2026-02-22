@@ -17,8 +17,8 @@ use crate::lasm_cluster_relay_send::{
     attempt_lasm_cluster_relay_send, attempt_lasm_cluster_relay_send_single,
 };
 use crate::lasm_cluster_relay_topology::{
-    lasm_cluster_next_index_wrapped, lookup_lasm_cluster_next_live_sender_index,
-    realign_lasm_cluster_dispatch_cursor_to_live, refresh_lasm_cluster_dual_live_sender_indices,
+    lookup_lasm_cluster_next_live_sender_index, realign_lasm_cluster_dispatch_cursor_to_live,
+    refresh_lasm_cluster_dual_live_sender_indices,
     refresh_lasm_cluster_live_sender_hints, refresh_lasm_cluster_next_live_sender_lookup,
     refresh_lasm_cluster_single_live_sender_index,
 };
@@ -265,10 +265,13 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             }
                         }
                         let stream_dispatch_start = relay_dispatch_cursor;
-                        let next_dispatch_wrapped = lasm_cluster_next_index_wrapped(
-                            stream_dispatch_start,
-                            relay_sender_count,
-                        );
+                        let next_dispatch_wrapped = if stream_dispatch_start + 1
+                            == relay_sender_count
+                        {
+                            0
+                        } else {
+                            stream_dispatch_start + 1
+                        };
                         let next_dispatch_index = if !relay_all_senders_live {
                             if relay_live_sender_count == 1 {
                                 stream_dispatch_start
