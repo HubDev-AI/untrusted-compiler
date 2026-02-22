@@ -29,6 +29,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
   --cluster-relay-pump-batch-max 654 \
   --build-profile debug \
   --samples 3 \
+  --wrk-processes 4 \
   --proxy-out results/summaries/custom-lasm-mode-compare-proxy.json \
   --fixed-out results/summaries/custom-lasm-mode-compare-fixed.json \
   --out results/summaries/custom-lasm-mode-compare.json \
@@ -62,6 +63,10 @@ if ! grep -q 'samples=3' <<<"$out"; then
   echo "mode compare dry-run missing samples marker" >&2
   exit 1
 fi
+if ! grep -q 'wrkProcesses=4' <<<"$out"; then
+  echo "mode compare dry-run missing wrk-processes marker" >&2
+  exit 1
+fi
 if ! grep -q 'fixedReusePortMode=true' <<<"$out"; then
   echo "mode compare dry-run missing delegated fixed reuse-port mode marker" >&2
   exit 1
@@ -90,6 +95,22 @@ if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --samples 0 
 fi
 if ! grep -q "samples must be >= 1" /tmp/lasm-mode-compare-invalid-samples.log; then
   echo "mode compare missing invalid samples diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --wrk-processes 0 >/tmp/lasm-mode-compare-invalid-wrk-processes.log 2>&1; then
+  echo "mode compare accepted invalid wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q "wrk-processes must be >= 1" /tmp/lasm-mode-compare-invalid-wrk-processes.log; then
+  echo "mode compare missing invalid wrk-processes diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --wrk-processes nope >/tmp/lasm-mode-compare-invalid-wrk-processes-type.log 2>&1; then
+  echo "mode compare accepted non-integer wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q "wrk-processes must be an integer >= 1" /tmp/lasm-mode-compare-invalid-wrk-processes-type.log; then
+  echo "mode compare missing invalid wrk-processes type diagnostic" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --build-profile fast >/tmp/lasm-mode-compare-invalid-profile.log 2>&1; then

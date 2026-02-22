@@ -7,6 +7,7 @@ usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,
           [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
           [--saturation-build-profile debug|release] [--saturation-samples n]
+          [--saturation-wrk-processes n]
           [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
           [--saturation-connections n] [--saturation-target-requests n]
           [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
@@ -28,6 +29,7 @@ saturation_skip_verify="false"
 saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
 saturation_build_profile=""
 saturation_samples=""
+saturation_wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-}"
 saturation_project_path=""
 saturation_duration=""
 saturation_threads=""
@@ -128,6 +130,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --saturation-samples=*)
       saturation_samples="${1#--saturation-samples=}"
+      shift
+      ;;
+    --saturation-wrk-processes)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_wrk_processes="$2"
+      shift 2
+      ;;
+    --saturation-wrk-processes=*)
+      saturation_wrk_processes="${1#--saturation-wrk-processes=}"
       shift
       ;;
     --saturation-project-path)
@@ -355,6 +369,9 @@ if [ "${include_lasm_saturation}" = "true" ]; then
   if [ -n "${saturation_samples}" ]; then
     saturation_args+=(--samples "${saturation_samples}")
   fi
+  if [ -n "${saturation_wrk_processes}" ]; then
+    saturation_args+=(--wrk-processes "${saturation_wrk_processes}")
+  fi
   if [ -n "${saturation_cluster_relay_workers}" ]; then
     saturation_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
   fi
@@ -404,6 +421,9 @@ if [ "${include_lasm_mode_compare}" = "true" ]; then
   fi
   if [ -n "${saturation_samples}" ]; then
     mode_compare_args+=(--samples "${saturation_samples}")
+  fi
+  if [ -n "${saturation_wrk_processes}" ]; then
+    mode_compare_args+=(--wrk-processes "${saturation_wrk_processes}")
   fi
   if [ -n "${saturation_cluster_relay_workers}" ]; then
     mode_compare_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
