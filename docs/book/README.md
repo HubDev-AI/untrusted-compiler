@@ -1297,5 +1297,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1325-m39-lasm-cluster-thread-panic-handling.md`
 - `1326-m39-lasm-cluster-accept-error-propagation.md`
 - `1327-m39-lasm-cluster-shutdown-lock-poison-handling.md`
+- `1328-m39-lasm-cluster-status-writer-warning-throttle.md`
 
 As milestones progress, chapters will be added and linked from this index.
