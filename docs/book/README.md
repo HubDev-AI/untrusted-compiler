@@ -1293,5 +1293,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1321-m39-lasm-cluster-autoscale-loop-module-extraction.md`
 - `1322-m39-lasm-cluster-accept-workers-module-extraction.md`
 - `1323-m39-lasm-cluster-shutdown-module-extraction.md`
+- `1324-m39-lasm-cluster-listener-nonblocking-preflight.md`
 
 As milestones progress, chapters will be added and linked from this index.
