@@ -7713,9 +7713,9 @@ const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
 const LASM_CLUSTER_RELAY_SENDER_LIVE: u8 = 1;
 const LASM_CLUSTER_RELAY_SENDER_DEAD: u8 = 0;
 
-fn report_lasm_cluster_shutdown_panics(summary: &LasmClusterShutdownSummary) {
-    if summary.has_thread_panics() {
-        eprintln!("run failed: {}", summary.panic_message());
+fn report_lasm_cluster_shutdown_failures(summary: &LasmClusterShutdownSummary) {
+    if summary.has_failures() {
+        eprintln!("run failed: {}", summary.failure_message());
     }
 }
 
@@ -7907,7 +7907,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             status_writer_handle,
             &shared_state,
         );
-        report_lasm_cluster_shutdown_panics(&shutdown_summary);
+        report_lasm_cluster_shutdown_failures(&shutdown_summary);
         return Err(2);
     }
     let shutdown_summary = finalize_lasm_cluster_runtime(
@@ -7918,8 +7918,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         status_writer_handle,
         &shared_state,
     );
-    if shutdown_summary.has_thread_panics() {
-        report_lasm_cluster_shutdown_panics(&shutdown_summary);
+    if shutdown_summary.has_failures() {
+        report_lasm_cluster_shutdown_failures(&shutdown_summary);
         return Err(2);
     }
     Ok(())
