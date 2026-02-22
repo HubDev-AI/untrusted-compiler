@@ -1321,5 +1321,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1349-m39-lasm-cluster-autoscale-noop-second-refresh-elision.md`
 - `1350-m39-lasm-cluster-relay-selection-and-runtime-config-direct-arithmetic-batch.md`
 - `1351-m39-lasm-db-exectx-inline-tx-handle-cleanup.md`
+- `1352-m39-lasm-db-tx-handle-wrap-and-collision-safe-allocation.md`
 
 As milestones progress, chapters will be added and linked from this index.

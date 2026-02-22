@@ -1577,6 +1577,10 @@ Post-alpha track acceptance anchors:
    - [x] `DbListRecordsResponse` now exposes live tx-handle telemetry (`txHandleCount`, `txHandleCapacity`) alongside persisted-record metadata for all adapters, giving deterministic runtime-state visibility during DB execution tuning/debug flows (`docs/book/1101-m39-lasm-db-list-tx-handle-telemetry.md`).
    - [x] `sec4 run` now supports explicit LASM tx-handle capacity override via `--db-max-tx-handles`, with deterministic LASM-only/zero-value guard diagnostics, cluster worker forwarding, and CLI-over-env precedence (`--db-max-tx-handles` over `SEC4_RT_LASM_DB_MAX_TX_HANDLES`) for runtime state initialization (`docs/book/1102-m39-run-db-max-tx-handles-flag.md`).
    - [x] Inline `db.tx(dbCap)` handles used by `db.execTx(...)` are now cleaned up after successful execution, preventing capacity leakage from one-shot inline tx allocations while preserving deterministic tx-handle validation on failure/restart paths (`docs/book/1351-m39-lasm-db-exectx-inline-tx-handle-cleanup.md`).
+   - [x] Tx-handle allocator now performs wrap-safe/collision-safe allocation:
+      - allocation now probes for vacant positive tx handles starting from `next_db_tx_handle` and wraps from `i64::MAX` back to `1`,
+      - avoids handle overwrite risk under long-lived runtimes where handle counter approaches bounds or sparse handle sets are reused.
+      - documented in `docs/book/1352-m39-lasm-db-tx-handle-wrap-and-collision-safe-allocation.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
