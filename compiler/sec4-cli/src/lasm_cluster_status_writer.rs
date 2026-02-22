@@ -25,6 +25,7 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) relay_dispatch_fallback_total: Arc<AtomicU64>,
     pub(crate) relay_dispatch_saturation_short_circuit_total: Arc<AtomicU64>,
     pub(crate) relay_live_sender_count: Arc<AtomicUsize>,
+    pub(crate) reusable_ports_count: Arc<AtomicUsize>,
     pub(crate) autoscale_last_desired_instances: Arc<AtomicUsize>,
     pub(crate) autoscale_last_saturation_events: Arc<AtomicUsize>,
     pub(crate) autoscale_last_dynamic_boost_step: Arc<AtomicUsize>,
@@ -50,6 +51,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         relay_dispatch_fallback_total,
         relay_dispatch_saturation_short_circuit_total,
         relay_live_sender_count,
+        reusable_ports_count,
         autoscale_last_desired_instances,
         autoscale_last_saturation_events,
         autoscale_last_dynamic_boost_step,
@@ -152,6 +154,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_dispatch_saturation_short_circuit_per_sec:
                     dispatch_saturation_short_circuit_per_sec,
                 relay_live_sender_count: relay_live_sender_count.load(Ordering::Relaxed),
+                reusable_ports_count: reusable_ports_count.load(Ordering::Relaxed),
                 autoscale_desired_instances: autoscale_last_desired_instances
                     .load(Ordering::Relaxed),
                 autoscale_last_saturation_events: autoscale_last_saturation_events

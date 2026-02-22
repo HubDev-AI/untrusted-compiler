@@ -7883,6 +7883,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let autoscale_last_dynamic_boost_step = Arc::new(AtomicUsize::new(
         shared_config.autoscale_scale_up_step.max(1),
     ));
+    let reusable_ports_count = Arc::new(AtomicUsize::new(0));
     let autoscale_scale_up_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
     let autoscale_scale_down_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
 
@@ -7903,6 +7904,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             &relay_dispatch_saturation_short_circuit_total,
         ),
         relay_live_sender_count: Arc::clone(&relay_live_sender_count),
+        reusable_ports_count: Arc::clone(&reusable_ports_count),
         autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
         autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),
         autoscale_last_dynamic_boost_step: Arc::clone(&autoscale_last_dynamic_boost_step),
@@ -7927,6 +7929,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
         autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),
         autoscale_last_dynamic_boost_step: Arc::clone(&autoscale_last_dynamic_boost_step),
+        reusable_ports_count: Arc::clone(&reusable_ports_count),
         autoscale_scale_up_cooldown_remaining_ms: Arc::clone(
             &autoscale_scale_up_cooldown_remaining_ms,
         ),

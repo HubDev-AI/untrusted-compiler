@@ -27437,6 +27437,13 @@ fn main() effects { net } -> Int {
             .is_some(),
         "first status json should include relayLiveSenderCount"
     );
+    assert!(
+        first_status
+            .get("reusablePortsCount")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include reusablePortsCount"
+    );
     assert_eq!(
         first_status
             .get("relayIdleSpinThreshold")
