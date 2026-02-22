@@ -1649,6 +1649,10 @@ Post-alpha track acceptance anchors:
       - relay worker loop now routes `Complete` and pump-error release paths through one helper (`release_lasm_cluster_relay_connection`) for swap-remove, buffer-pool return, and active-decrement bookkeeping,
       - removes duplicated release branches in both full-scan and budgeted pump schedulers while preserving cursor progression and deterministic decrement semantics.
       - documented in `docs/book/1373-m39-lasm-cluster-relay-pump-release-helper.md`.
+   - [x] Unified relay pump warning-throttle emission in one helper:
+      - relay worker loop now routes pump-error warning checks through one helper (`emit_lasm_cluster_relay_pump_warning_if_allowed`) instead of duplicating throttle checks in both pump schedulers,
+      - keeps deterministic warning-throttle behavior unchanged while reducing repeated warning-branch bodies in the relay hot path.
+      - documented in `docs/book/1374-m39-lasm-cluster-relay-pump-warning-throttle-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
