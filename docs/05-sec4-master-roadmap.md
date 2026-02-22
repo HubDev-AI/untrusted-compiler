@@ -1605,6 +1605,10 @@ Post-alpha track acceptance anchors:
       - primary and fallback connect-success branches now share one relay-initialization helper (`set_nodelay`, pooled-buffer pump construction, throttled init-failure warning handling),
       - removes duplicated connect-success setup branches in relay worker loop and keeps warning/decrement behavior aligned.
       - documented in `docs/book/1362-m39-lasm-cluster-relay-connect-success-single-setup-helper.md`.
+   - [x] Added non-zero guard gates before relay counter-flush helper calls:
+      - relay worker loop now calls saturation/active-decrement flush helpers only when local pending counters are non-zero,
+      - removes per-cycle helper-call overhead on idle/steady-state cycles with no pending counter deltas.
+      - documented in `docs/book/1363-m39-lasm-cluster-relay-flush-helper-nonzero-gates.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
