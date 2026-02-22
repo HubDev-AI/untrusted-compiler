@@ -1633,6 +1633,10 @@ Post-alpha track acceptance anchors:
       - fallback connect traversal no longer retries the same backend that just failed primary connect,
       - identity traversal now scans `N-1` candidates from failed-backend-next index, and lookup traversal defensively skips selected primary backend when present.
       - documented in `docs/book/1369-m39-lasm-cluster-relay-fallback-alternate-only-connect-attempts.md`.
+   - [x] Added shared fallback lookup start-cursor resolver:
+      - fallback lookup traversal now derives initial cursor through one helper (`resolve_lasm_cluster_fallback_lookup_start_cursor`) instead of inline binary-search/start-index branch logic,
+      - keeps fallback cursor semantics deterministic while removing duplicated cursor bootstrap arithmetic from relay worker loop body.
+      - documented in `docs/book/1370-m39-lasm-cluster-relay-fallback-lookup-start-cursor-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
