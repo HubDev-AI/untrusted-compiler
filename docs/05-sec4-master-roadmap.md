@@ -1503,6 +1503,10 @@ Post-alpha track acceptance anchors:
       - `lasm_cluster_accept_dispatch` now exposes dedicated no-healthy-worker / worker-unavailable response writers instead of reason-enum routing,
       - relay worker loop now calls these dedicated helpers directly, preserving response payloads while removing reason-enum dispatch plumbing from unavailable response paths.
       - documented in `docs/book/1335-m39-lasm-cluster-unavailable-response-helper-split.md`.
+   - [x] Tightened relay lookup helper to invariant fast path:
+      - `lookup_lasm_cluster_next_live_sender_index` now relies on established topology invariants (`non-empty`, `cached index in bounds`) via debug assertions and direct indexed reads,
+      - removed redundant runtime empty/bounds checks on the hot lookup path while preserving fallback live-scan behavior when cached entry is no longer live.
+      - documented in `docs/book/1336-m39-lasm-cluster-relay-lookup-invariant-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
