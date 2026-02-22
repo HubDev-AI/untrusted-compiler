@@ -9,7 +9,9 @@ use crate::{
     LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
     LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
+use native_tls::TlsConnector;
 use postgres::{Client as PostgresClient, NoTls};
+use postgres_native_tls::MakeTlsConnector;
 use rusqlite::{params, Connection};
 use std::fs;
 use std::path::Path;
@@ -37,6 +39,43 @@ fn build_lasm_postgres_connect_dsn(dsn: &str, connect_timeout_seconds: u64) -> S
         }
     } else {
         format!("{trimmed} connect_timeout={connect_timeout_seconds}")
+    }
+}
+
+fn is_lasm_postgres_tls_required_error(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("ssl is required")
+        || normalized.contains("requires ssl")
+        || normalized.contains("sslmode=require")
+        || normalized.contains("sslmode=verify-ca")
+        || normalized.contains("sslmode=verify-full")
+        || normalized.contains("ssl off")
+}
+
+fn connect_lasm_dynamic_db_records_postgres_client(
+    connect_dsn: &str,
+) -> Result<PostgresClient, String> {
+    match PostgresClient::connect(connect_dsn, NoTls) {
+        Ok(client) => Ok(client),
+        Err(no_tls_err) => {
+            let no_tls_message = no_tls_err.to_string();
+            if !is_lasm_postgres_tls_required_error(no_tls_message.as_str()) {
+                return Err(format!(
+                    "could not connect LASM dynamic postgres records store: {no_tls_message}"
+                ));
+            }
+            let tls_connector = TlsConnector::builder().build().map_err(|tls_err| {
+                format!(
+                    "could not connect LASM dynamic postgres records store: TLS required, but native TLS connector bootstrap failed: {tls_err}"
+                )
+            })?;
+            let tls_connector = MakeTlsConnector::new(tls_connector);
+            PostgresClient::connect(connect_dsn, tls_connector).map_err(|tls_err| {
+                format!(
+                    "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err}"
+                )
+            })
+        }
     }
 }
 
@@ -212,8 +251,7 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     let connect_timeout_seconds =
         lasm_postgres_connect_timeout_seconds_from_ms(connect_timeout_ms.max(1));
     let connect_dsn = build_lasm_postgres_connect_dsn(dsn, connect_timeout_seconds);
-    let mut client = PostgresClient::connect(connect_dsn.as_str(), NoTls)
-        .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))?;
+    let mut client = connect_lasm_dynamic_db_records_postgres_client(connect_dsn.as_str())?;
     let statement_timeout_ms = statement_timeout_ms.max(1);
     let lock_timeout_ms = lock_timeout_ms.max(1);
     let timeout_settings = format!(
@@ -229,7 +267,10 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_lasm_postgres_connect_dsn, lasm_postgres_connect_timeout_seconds_from_ms};
+    use super::{
+        build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
+        lasm_postgres_connect_timeout_seconds_from_ms,
+    };
 
     #[test]
     fn postgres_connect_timeout_seconds_rounds_up_from_millis() {
@@ -270,6 +311,29 @@ mod tests {
             rewritten,
             "postgres://u:p@localhost/db?connect_timeout=9&sslmode=disable"
         );
+    }
+
+    #[test]
+    fn postgres_tls_error_detector_matches_required_ssl_patterns() {
+        assert!(is_lasm_postgres_tls_required_error(
+            "no pg_hba.conf entry for host \"127.0.0.1\", user \"u\", database \"db\", SSL off"
+        ));
+        assert!(is_lasm_postgres_tls_required_error(
+            "error: ssl is required by server"
+        ));
+        assert!(is_lasm_postgres_tls_required_error(
+            "invalid configuration: sslmode=require"
+        ));
+    }
+
+    #[test]
+    fn postgres_tls_error_detector_ignores_non_ssl_failures() {
+        assert!(!is_lasm_postgres_tls_required_error(
+            "password authentication failed for user"
+        ));
+        assert!(!is_lasm_postgres_tls_required_error(
+            "database does not exist"
+        ));
     }
 }
 
