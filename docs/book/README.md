@@ -1352,5 +1352,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1380-m39-lasm-cluster-relay-pump-loop-helper-extraction.md`
 - `1381-m39-lasm-cluster-relay-pump-mode-resolution-helper.md`
 - `1382-m39-lasm-cluster-relay-pump-local-cursor-writeback.md`
+- `1383-m39-lasm-cluster-relay-pump-zero-fastpath-and-branchless-progress.md`
 
 As milestones progress, chapters will be added and linked from this index.

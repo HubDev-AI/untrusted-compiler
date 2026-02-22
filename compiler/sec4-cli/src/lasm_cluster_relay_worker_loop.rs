@@ -128,6 +128,13 @@ fn resolve_lasm_cluster_relay_pump_mode(
     relay_pump_batch_max: usize,
     relay_pump_cursor: usize,
 ) -> LasmClusterRelayPumpModeResolution {
+    if relay_count == 0 {
+        return LasmClusterRelayPumpModeResolution {
+            full_scan_pump_mode: true,
+            initial_cursor: 0,
+            pump_budget: 0,
+        };
+    }
     let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
     let initial_cursor = if full_scan_pump_mode {
         0
@@ -136,9 +143,6 @@ fn resolve_lasm_cluster_relay_pump_mode(
         let _ = normalize_lasm_cluster_relay_pump_cursor(&mut cursor, relay_count);
         cursor
     };
-    if full_scan_pump_mode {
-        debug_assert_eq!(initial_cursor, 0);
-    }
     let pump_budget = if full_scan_pump_mode {
         relay_count
     } else {
@@ -230,9 +234,7 @@ fn pump_lasm_cluster_relay_connections(
             relay_warning_throttle_duration,
             active_connection_decrements_local,
         );
-        if pump_outcome.progressed {
-            progressed = true;
-        }
+        progressed |= pump_outcome.progressed;
         pump_budget -= 1;
         if pump_outcome.removed {
             relay_count -= 1;
