@@ -1332,5 +1332,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1360-m39-lasm-cluster-relay-connect-fallback-multi-alternate-attempts.md`
 - `1361-m39-lasm-cluster-relay-fallback-scan-direct-wrap-and-terminal-break.md`
 - `1362-m39-lasm-cluster-relay-connect-success-single-setup-helper.md`
+- `1363-m39-lasm-cluster-relay-flush-helper-nonzero-gates.md`
 
 As milestones progress, chapters will be added and linked from this index.
