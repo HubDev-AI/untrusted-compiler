@@ -601,7 +601,21 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                         selection_lookup_dirty = true;
                     }
                     let worker_port_count = selected_worker_port_count;
-                    if selection_lookup_dirty
+                    if worker_port_count <= 1 {
+                        selection_lookup.clear();
+                        if worker_port_count == 1 && unhealthy_port_count == 0 {
+                            selection_has_healthy_backends = true;
+                            selection_lookup_is_identity = true;
+                            selection_lookup_cycle_span = 1;
+                            selection_single_healthy_index = 0;
+                        } else {
+                            selection_has_healthy_backends = false;
+                            selection_lookup_is_identity = false;
+                            selection_lookup_cycle_span = 0;
+                            selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                        }
+                        selection_lookup_dirty = false;
+                    } else if selection_lookup_dirty
                         || (!selection_lookup_is_identity
                             && selection_lookup.len() != selection_lookup_cycle_span)
                     {
@@ -620,12 +634,16 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     }
                 }
                 let worker_port_count = selected_worker_port_count;
-                let selected_backend_index = if worker_port_count == 0
-                    || !selection_has_healthy_backends
-                {
+                let selected_backend_index = if worker_port_count == 0 {
                     LASM_CLUSTER_SELECTION_LOOKUP_NONE
                 } else if worker_port_count == 1 {
-                    0
+                    if unhealthy_port_count == 0 {
+                        0
+                    } else {
+                        LASM_CLUSTER_SELECTION_LOOKUP_NONE
+                    }
+                } else if !selection_has_healthy_backends {
+                    LASM_CLUSTER_SELECTION_LOOKUP_NONE
                 } else if selection_single_healthy_index != LASM_CLUSTER_SELECTION_LOOKUP_NONE {
                     selection_single_healthy_index
                 } else {
