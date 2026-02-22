@@ -88,6 +88,30 @@ fn emit_lasm_cluster_relay_pump_warning_if_allowed(
     }
 }
 
+fn advance_lasm_cluster_relay_pump_cursor(
+    relay_pump_cursor: &mut usize,
+    relay_len_before_step: usize,
+) {
+    *relay_pump_cursor += 1;
+    if *relay_pump_cursor == relay_len_before_step {
+        *relay_pump_cursor = 0;
+    }
+}
+
+fn normalize_lasm_cluster_relay_pump_cursor(
+    relay_pump_cursor: &mut usize,
+    relay_connections_len: usize,
+) -> bool {
+    if relay_connections_len == 0 {
+        *relay_pump_cursor = 0;
+        return true;
+    }
+    if *relay_pump_cursor >= relay_connections_len {
+        *relay_pump_cursor = 0;
+    }
+    false
+}
+
 fn recompute_lasm_cluster_relay_selection_state(
     worker_port_count: usize,
     unhealthy_ports_until_by_index: &[Option<Instant>],
@@ -729,26 +753,27 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 }
                 relay_pump_cursor = 0;
             } else {
-                if relay_pump_cursor >= relay_connections.len() {
-                    relay_pump_cursor = 0;
-                }
+                let _ = normalize_lasm_cluster_relay_pump_cursor(
+                    &mut relay_pump_cursor,
+                    relay_connections.len(),
+                );
                 let mut pump_budget = relay_pump_batch_max.min(relay_connections.len());
                 while pump_budget > 0 {
                     let relay_len_before_step = relay_connections.len();
                     match relay_connections[relay_pump_cursor].pump_once() {
                         Ok(LasmClusterRelayPumpStep::Progressed) => {
                             progressed = true;
-                            relay_pump_cursor += 1;
-                            if relay_pump_cursor == relay_len_before_step {
-                                relay_pump_cursor = 0;
-                            }
+                            advance_lasm_cluster_relay_pump_cursor(
+                                &mut relay_pump_cursor,
+                                relay_len_before_step,
+                            );
                             pump_budget -= 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Idle) => {
-                            relay_pump_cursor += 1;
-                            if relay_pump_cursor == relay_len_before_step {
-                                relay_pump_cursor = 0;
-                            }
+                            advance_lasm_cluster_relay_pump_cursor(
+                                &mut relay_pump_cursor,
+                                relay_len_before_step,
+                            );
                             pump_budget -= 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {
@@ -761,12 +786,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             );
                             progressed = true;
                             pump_budget -= 1;
-                            if relay_connections.is_empty() {
-                                relay_pump_cursor = 0;
+                            if normalize_lasm_cluster_relay_pump_cursor(
+                                &mut relay_pump_cursor,
+                                relay_connections.len(),
+                            ) {
                                 break;
-                            }
-                            if relay_pump_cursor >= relay_connections.len() {
-                                relay_pump_cursor = 0;
                             }
                         }
                         Err(err) => {
@@ -784,12 +808,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             );
                             progressed = true;
                             pump_budget -= 1;
-                            if relay_connections.is_empty() {
-                                relay_pump_cursor = 0;
+                            if normalize_lasm_cluster_relay_pump_cursor(
+                                &mut relay_pump_cursor,
+                                relay_connections.len(),
+                            ) {
                                 break;
-                            }
-                            if relay_pump_cursor >= relay_connections.len() {
-                                relay_pump_cursor = 0;
                             }
                         }
                     }

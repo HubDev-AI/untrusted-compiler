@@ -1653,6 +1653,10 @@ Post-alpha track acceptance anchors:
       - relay worker loop now routes pump-error warning checks through one helper (`emit_lasm_cluster_relay_pump_warning_if_allowed`) instead of duplicating throttle checks in both pump schedulers,
       - keeps deterministic warning-throttle behavior unchanged while reducing repeated warning-branch bodies in the relay hot path.
       - documented in `docs/book/1374-m39-lasm-cluster-relay-pump-warning-throttle-helper.md`.
+   - [x] Unified relay pump cursor progression/normalization helpers in budgeted scheduler:
+      - budgeted pump path now uses `advance_lasm_cluster_relay_pump_cursor(...)` for wrapped cursor step progression and `normalize_lasm_cluster_relay_pump_cursor(...)` for post-release cursor bounds/empty checks,
+      - removes duplicated cursor branch logic from `Progressed`, `Idle`, `Complete`, and pump-error branches while preserving deterministic cursor and break semantics.
+      - documented in `docs/book/1375-m39-lasm-cluster-relay-pump-cursor-helper-unification.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
