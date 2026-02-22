@@ -1389,5 +1389,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`
 - `1418-m39-lasm-relay-fallback-start-cursor-precompute.md`
 - `1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`
+- `1420-m39-lasm-autoscale-recovery-reserve-and-spawn-lock-light.md`
 
 As milestones progress, chapters will be added and linked from this index.
