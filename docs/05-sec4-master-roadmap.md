@@ -1559,6 +1559,11 @@ Post-alpha track acceptance anchors:
       - autoscale loop now tracks whether workers changed after the initial maintenance refresh and skips the second status-port snapshot refresh when no scale-up/down occurred,
       - preserves snapshot publication semantics while avoiding repeated worker-port comparison/publish work in steady-state no-op ticks.
       - documented in `docs/book/1349-m39-lasm-cluster-autoscale-noop-second-refresh-elision.md`.
+   - [x] Batched relay selection/runtime-config direct arithmetic simplifications:
+      - relay worker loop now hoists selection reservation chunk size (`max(accept_batch, reservation_min_chunk)`) out of the per-request selection path,
+      - backend selection lookup tail wrap-fill now uses direct slice fill for post-first-healthy indices,
+      - desired autoscale instance calculation now uses direct ceil-division math on active connections (`((active-1)/target)+1`) with explicit `target>=1` guard.
+      - documented in `docs/book/1350-m39-lasm-cluster-relay-selection-and-runtime-config-direct-arithmetic-batch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
