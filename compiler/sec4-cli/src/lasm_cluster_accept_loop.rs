@@ -173,6 +173,38 @@ fn handle_lasm_cluster_accept_unavailable_stream(
     )
 }
 
+fn flush_lasm_cluster_accept_dispatch_counters(
+    relay_saturation_events: &AtomicUsize,
+    relay_saturation_events_total: &AtomicU64,
+    relay_dispatch_fallback_total: &AtomicU64,
+    relay_dispatch_short_circuit_total: &AtomicU64,
+    listener_saturation_pending_local: &mut usize,
+    listener_saturation_total_local: &mut u64,
+    listener_dispatch_fallback_total_local: &mut u64,
+    listener_dispatch_short_circuit_total_local: &mut u64,
+) {
+    if *listener_saturation_pending_local > 0 || *listener_saturation_total_local > 0 {
+        flush_lasm_cluster_saturation_counters(
+            relay_saturation_events,
+            relay_saturation_events_total,
+            listener_saturation_pending_local,
+            listener_saturation_total_local,
+        );
+    }
+    if *listener_dispatch_fallback_total_local > 0 {
+        flush_lasm_cluster_dispatch_fallback_total(
+            relay_dispatch_fallback_total,
+            listener_dispatch_fallback_total_local,
+        );
+    }
+    if *listener_dispatch_short_circuit_total_local > 0 {
+        flush_lasm_cluster_dispatch_short_circuit_total(
+            relay_dispatch_short_circuit_total,
+            listener_dispatch_short_circuit_total_local,
+        );
+    }
+}
+
 pub(crate) fn run_lasm_cluster_accept_loop(
     listener: &TcpListener,
     relay_senders: &[Sender<TcpStream>],
@@ -260,18 +292,14 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(err) => {
-                        flush_lasm_cluster_saturation_counters(
+                        flush_lasm_cluster_accept_dispatch_counters(
                             relay_saturation_events,
                             relay_saturation_events_total,
+                            relay_dispatch_fallback_total,
+                            relay_dispatch_short_circuit_total,
                             &mut listener_saturation_pending_local,
                             &mut listener_saturation_total_local,
-                        );
-                        flush_lasm_cluster_dispatch_fallback_total(
-                            relay_dispatch_fallback_total,
                             &mut listener_dispatch_fallback_total_local,
-                        );
-                        flush_lasm_cluster_dispatch_short_circuit_total(
-                            relay_dispatch_short_circuit_total,
                             &mut listener_dispatch_short_circuit_total_local,
                         );
                         return Err(format!("LASM cluster proxy accept error: {err}"));
@@ -303,18 +331,17 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 continue;
                             }
                             if relay_live_sender_count == 1 {
-                                let single_live_index = if let Some(index) =
-                                    relay_single_live_sender_index
-                                {
-                                    index
-                                } else {
-                                    refresh_lasm_cluster_single_live_sender_index(
-                                        relay_sender_live.as_slice(),
-                                        relay_live_sender_count,
-                                        &mut relay_single_live_sender_index,
-                                    );
-                                    let Some(index) = relay_single_live_sender_index else {
-                                        if let Err(message) =
+                                let single_live_index =
+                                    if let Some(index) = relay_single_live_sender_index {
+                                        index
+                                    } else {
+                                        refresh_lasm_cluster_single_live_sender_index(
+                                            relay_sender_live.as_slice(),
+                                            relay_live_sender_count,
+                                            &mut relay_single_live_sender_index,
+                                        );
+                                        let Some(index) = relay_single_live_sender_index else {
+                                            if let Err(message) =
                                             handle_lasm_cluster_accept_unavailable_stream(
                                                 client_stream,
                                                 active_connections,
@@ -331,24 +358,23 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                        continue;
+                                            continue;
+                                        };
+                                        index
                                     };
-                                    index
-                                };
                                 relay_dispatch_cursor = single_live_index;
                             } else if relay_live_sender_count == 2 {
-                                let (first_live, second_live) = if let Some(indices) =
-                                    relay_dual_live_sender_indices
-                                {
-                                    indices
-                                } else {
-                                    refresh_lasm_cluster_dual_live_sender_indices(
-                                        relay_sender_live.as_slice(),
-                                        relay_live_sender_count,
-                                        &mut relay_dual_live_sender_indices,
-                                    );
-                                    let Some(indices) = relay_dual_live_sender_indices else {
-                                        if let Err(message) =
+                                let (first_live, second_live) =
+                                    if let Some(indices) = relay_dual_live_sender_indices {
+                                        indices
+                                    } else {
+                                        refresh_lasm_cluster_dual_live_sender_indices(
+                                            relay_sender_live.as_slice(),
+                                            relay_live_sender_count,
+                                            &mut relay_dual_live_sender_indices,
+                                        );
+                                        let Some(indices) = relay_dual_live_sender_indices else {
+                                            if let Err(message) =
                                             handle_lasm_cluster_accept_unavailable_stream(
                                                 client_stream,
                                                 active_connections,
@@ -365,10 +391,10 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                        continue;
+                                            continue;
+                                        };
+                                        indices
                                     };
-                                    indices
-                                };
                                 if relay_dispatch_cursor != first_live
                                     && relay_dispatch_cursor != second_live
                                 {
@@ -582,18 +608,14 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(err) => {
-                        flush_lasm_cluster_saturation_counters(
+                        flush_lasm_cluster_accept_dispatch_counters(
                             relay_saturation_events,
                             relay_saturation_events_total,
+                            relay_dispatch_fallback_total,
+                            relay_dispatch_short_circuit_total,
                             &mut listener_saturation_pending_local,
                             &mut listener_saturation_total_local,
-                        );
-                        flush_lasm_cluster_dispatch_fallback_total(
-                            relay_dispatch_fallback_total,
                             &mut listener_dispatch_fallback_total_local,
-                        );
-                        flush_lasm_cluster_dispatch_short_circuit_total(
-                            relay_dispatch_short_circuit_total,
                             &mut listener_dispatch_short_circuit_total_local,
                         );
                         return Err(format!("LASM cluster proxy accept error: {err}"));
@@ -633,25 +655,15 @@ pub(crate) fn run_lasm_cluster_accept_loop(
         }
     }
 
-    if listener_saturation_pending_local > 0 || listener_saturation_total_local > 0 {
-        flush_lasm_cluster_saturation_counters(
-            relay_saturation_events,
-            relay_saturation_events_total,
-            &mut listener_saturation_pending_local,
-            &mut listener_saturation_total_local,
-        );
-    }
-    if listener_dispatch_fallback_total_local > 0 {
-        flush_lasm_cluster_dispatch_fallback_total(
-            relay_dispatch_fallback_total,
-            &mut listener_dispatch_fallback_total_local,
-        );
-    }
-    if listener_dispatch_short_circuit_total_local > 0 {
-        flush_lasm_cluster_dispatch_short_circuit_total(
-            relay_dispatch_short_circuit_total,
-            &mut listener_dispatch_short_circuit_total_local,
-        );
-    }
+    flush_lasm_cluster_accept_dispatch_counters(
+        relay_saturation_events,
+        relay_saturation_events_total,
+        relay_dispatch_fallback_total,
+        relay_dispatch_short_circuit_total,
+        &mut listener_saturation_pending_local,
+        &mut listener_saturation_total_local,
+        &mut listener_dispatch_fallback_total_local,
+        &mut listener_dispatch_short_circuit_total_local,
+    );
     Ok(())
 }
