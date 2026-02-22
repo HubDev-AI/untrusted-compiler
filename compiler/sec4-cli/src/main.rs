@@ -9826,6 +9826,7 @@ fn apply_lasm_dynamic_response_materialization(
             let (
                 records,
                 records_capacity,
+                records_dropped_total,
                 adapter,
                 tx_handle_count,
                 tx_handle_capacity,
@@ -9841,6 +9842,7 @@ fn apply_lasm_dynamic_response_materialization(
                 Ok(state) => (
                     state.db_records.clone(),
                     state.db_records_max,
+                    state.db_records_dropped_total,
                     lasm_db_records_adapter_label(state.db_records_adapter),
                     state.db_tx_handles.len(),
                     state.db_tx_max_handles,
@@ -9878,6 +9880,7 @@ fn apply_lasm_dynamic_response_materialization(
                     "ok": true,
                     "count": records.len(),
                     "recordsCapacity": records_capacity,
+                    "recordsDroppedTotal": records_dropped_total,
                     "affectedRowsTotal": affected_rows_total,
                     "adapter": adapter,
                     "txHandleCount": tx_handle_count,

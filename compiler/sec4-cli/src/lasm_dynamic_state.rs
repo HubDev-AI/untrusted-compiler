@@ -42,6 +42,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_store_path: Option<PathBuf>,
     pub(crate) db_records: Vec<LasmDbRecord>,
     pub(crate) db_records_max: usize,
+    pub(crate) db_records_dropped_total: u64,
     pub(crate) db_records_adapter: LasmDbRecordsAdapter,
     pub(crate) db_records_store_path: Option<PathBuf>,
     pub(crate) db_records_sqlite_store_path: Option<PathBuf>,
@@ -67,22 +68,30 @@ pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
 pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
 pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
 
-fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacity: usize) {
+fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacity: usize) -> usize {
     let bounded_capacity = capacity.max(1);
     if records.len() > bounded_capacity {
         let overflow = records.len() - bounded_capacity;
         records.drain(0..overflow);
+        return overflow;
     }
+    0
 }
 
 pub(crate) fn append_lasm_dynamic_db_record(
     state: &mut LasmDynamicResponseState,
     record: LasmDbRecord,
 ) -> bool {
-    let before = state.db_records.len();
     state.db_records.push(record);
-    truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
-    state.db_records.len() < before.saturating_add(1)
+    let overflow =
+        truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
+    if overflow > 0 {
+        state.db_records_dropped_total = state
+            .db_records_dropped_total
+            .saturating_add(overflow as u64);
+        return true;
+    }
+    false
 }
 
 pub(crate) fn build_lasm_dynamic_response_state(
@@ -174,7 +183,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
             records
         }
     };
-    truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
+    let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -191,6 +200,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         users_store_path,
         db_records,
         db_records_max,
+        db_records_dropped_total: startup_dropped as u64,
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
@@ -328,5 +338,6 @@ mod tests {
         assert_eq!(state.db_records.len(), 2);
         assert_eq!(state.db_records[0].id, 2);
         assert_eq!(state.db_records[1].id, 3);
+        assert_eq!(state.db_records_dropped_total, 1);
     }
 }
