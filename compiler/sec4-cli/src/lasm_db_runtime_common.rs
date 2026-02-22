@@ -168,6 +168,7 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     })?;
     let mut client = connect_lasm_dynamic_db_records_postgres(
         dsn,
+        state.db_postgres_tls_mode,
         state.db_postgres_statement_timeout_ms.max(1),
         state.db_postgres_lock_timeout_ms.max(1),
         state.db_postgres_connect_timeout_ms.max(1),

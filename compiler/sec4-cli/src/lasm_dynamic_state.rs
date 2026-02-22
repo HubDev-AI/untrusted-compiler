@@ -1,9 +1,10 @@
 use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
     ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
-    load_lasm_dynamic_db_records_from_sqlite, LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
+    load_lasm_dynamic_db_records_from_sqlite, parse_lasm_db_postgres_tls_mode,
+    LasmDbPostgresTlsMode, LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
     LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT,
-    LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
+    LASM_DB_POSTGRES_TLS_MODE_ENV, LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
 };
 use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
@@ -60,6 +61,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_postgres_statement_timeout_ms: u64,
     pub(crate) db_postgres_lock_timeout_ms: u64,
     pub(crate) db_postgres_connect_timeout_ms: u64,
+    pub(crate) db_postgres_tls_mode: LasmDbPostgresTlsMode,
     pub(crate) db_sqlite_busy_timeout_ms: u64,
     pub(crate) next_db_tx_handle: i64,
     pub(crate) next_db_record_id: u64,
@@ -100,6 +102,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
     explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
     explicit_db_postgres_dsn: Option<&str>,
+    explicit_db_postgres_tls_mode: Option<LasmDbPostgresTlsMode>,
     explicit_db_postgres_statement_timeout_ms: Option<u64>,
     explicit_db_postgres_lock_timeout_ms: Option<u64>,
     explicit_db_postgres_connect_timeout_ms: Option<u64>,
@@ -141,6 +144,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
             )
         });
+    let db_postgres_tls_mode = resolve_lasm_db_postgres_tls_mode(explicit_db_postgres_tls_mode)?;
     let db_postgres_statement_cache_max = explicit_db_postgres_statement_cache_max
         .filter(|value| *value > 0)
         .unwrap_or_else(|| {
@@ -212,6 +216,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 .as_str();
             let mut client = connect_lasm_dynamic_db_records_postgres(
                 dsn,
+                db_postgres_tls_mode,
                 db_postgres_statement_timeout_ms,
                 db_postgres_lock_timeout_ms,
                 db_postgres_connect_timeout_ms,
@@ -257,6 +262,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
+        db_postgres_tls_mode,
         db_sqlite_busy_timeout_ms,
         next_db_tx_handle,
         next_db_record_id,
@@ -277,6 +283,23 @@ fn resolve_lasm_env_positive_usize(name: &str, default_value: usize) -> usize {
         .and_then(|raw| raw.trim().parse::<usize>().ok())
         .filter(|value| *value > 0)
         .unwrap_or(default_value)
+}
+
+fn resolve_lasm_db_postgres_tls_mode(
+    explicit_mode: Option<LasmDbPostgresTlsMode>,
+) -> Result<LasmDbPostgresTlsMode, String> {
+    if let Some(mode) = explicit_mode {
+        return Ok(mode);
+    }
+    let Some(raw) = env::var(LASM_DB_POSTGRES_TLS_MODE_ENV).ok() else {
+        return Ok(LasmDbPostgresTlsMode::Auto);
+    };
+    parse_lasm_db_postgres_tls_mode(raw.as_str()).ok_or_else(|| {
+        format!(
+            "invalid {LASM_DB_POSTGRES_TLS_MODE_ENV} value `{}`; expected one of: auto, disable, require",
+            raw.trim()
+        )
+    })
 }
 
 fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {
