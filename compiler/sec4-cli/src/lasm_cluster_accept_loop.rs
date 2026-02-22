@@ -145,6 +145,34 @@ fn dispatch_lasm_cluster_relay_stream_fallback_with_live_hints(
     }
 }
 
+fn handle_lasm_cluster_accept_unavailable_stream(
+    client_stream: TcpStream,
+    active_connections: &AtomicUsize,
+    relay_saturation_events: &AtomicUsize,
+    relay_saturation_events_total: &AtomicU64,
+    relay_dispatch_fallback_total: &AtomicU64,
+    relay_dispatch_short_circuit_total: &AtomicU64,
+    listener_enqueued_local: &mut usize,
+    listener_saturation_pending_local: &mut usize,
+    listener_saturation_total_local: &mut u64,
+    listener_dispatch_fallback_total_local: &mut u64,
+    listener_dispatch_short_circuit_total_local: &mut u64,
+) -> Result<(), String> {
+    handle_lasm_cluster_accept_dispatch_error(
+        LasmClusterRelayDispatchError::Unavailable(client_stream),
+        active_connections,
+        relay_saturation_events,
+        relay_saturation_events_total,
+        relay_dispatch_fallback_total,
+        relay_dispatch_short_circuit_total,
+        listener_enqueued_local,
+        listener_saturation_pending_local,
+        listener_saturation_total_local,
+        listener_dispatch_fallback_total_local,
+        listener_dispatch_short_circuit_total_local,
+    )
+}
+
 pub(crate) fn run_lasm_cluster_accept_loop(
     listener: &TcpListener,
     relay_senders: &[Sender<TcpStream>],
@@ -257,8 +285,8 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                         listener_accepted_in_batch += 1;
                         if !relay_all_senders_live {
                             if relay_live_sender_count == 0 {
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                    LasmClusterRelayDispatchError::Unavailable(client_stream),
+                                if let Err(message) = handle_lasm_cluster_accept_unavailable_stream(
+                                    client_stream,
                                     active_connections,
                                     relay_saturation_events,
                                     relay_saturation_events_total,
@@ -275,21 +303,20 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 continue;
                             }
                             if relay_live_sender_count == 1 {
-                                let single_live_index =
-                                    if let Some(index) = relay_single_live_sender_index {
-                                        index
-                                    } else {
-                                        refresh_lasm_cluster_single_live_sender_index(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
-                                            &mut relay_single_live_sender_index,
-                                        );
-                                        let Some(index) = relay_single_live_sender_index else {
-                                            if let Err(message) =
-                                            handle_lasm_cluster_accept_dispatch_error(
-                                                LasmClusterRelayDispatchError::Unavailable(
-                                                    client_stream,
-                                                ),
+                                let single_live_index = if let Some(index) =
+                                    relay_single_live_sender_index
+                                {
+                                    index
+                                } else {
+                                    refresh_lasm_cluster_single_live_sender_index(
+                                        relay_sender_live.as_slice(),
+                                        relay_live_sender_count,
+                                        &mut relay_single_live_sender_index,
+                                    );
+                                    let Some(index) = relay_single_live_sender_index else {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_unavailable_stream(
+                                                client_stream,
                                                 active_connections,
                                                 relay_saturation_events,
                                                 relay_saturation_events_total,
@@ -304,27 +331,26 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                            continue;
-                                        };
-                                        index
+                                        continue;
                                     };
+                                    index
+                                };
                                 relay_dispatch_cursor = single_live_index;
                             } else if relay_live_sender_count == 2 {
-                                let (first_live, second_live) =
-                                    if let Some(indices) = relay_dual_live_sender_indices {
-                                        indices
-                                    } else {
-                                        refresh_lasm_cluster_dual_live_sender_indices(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
-                                            &mut relay_dual_live_sender_indices,
-                                        );
-                                        let Some(indices) = relay_dual_live_sender_indices else {
-                                            if let Err(message) =
-                                            handle_lasm_cluster_accept_dispatch_error(
-                                                LasmClusterRelayDispatchError::Unavailable(
-                                                    client_stream,
-                                                ),
+                                let (first_live, second_live) = if let Some(indices) =
+                                    relay_dual_live_sender_indices
+                                {
+                                    indices
+                                } else {
+                                    refresh_lasm_cluster_dual_live_sender_indices(
+                                        relay_sender_live.as_slice(),
+                                        relay_live_sender_count,
+                                        &mut relay_dual_live_sender_indices,
+                                    );
+                                    let Some(indices) = relay_dual_live_sender_indices else {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_unavailable_stream(
+                                                client_stream,
                                                 active_connections,
                                                 relay_saturation_events,
                                                 relay_saturation_events_total,
@@ -339,10 +365,10 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                            continue;
-                                        };
-                                        indices
+                                        continue;
                                     };
+                                    indices
+                                };
                                 if relay_dispatch_cursor != first_live
                                     && relay_dispatch_cursor != second_live
                                 {
@@ -363,19 +389,21 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                     relay_sender_live.as_slice(),
                                     &mut relay_dispatch_cursor,
                                 ) {
-                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                        LasmClusterRelayDispatchError::Unavailable(client_stream),
-                                        active_connections,
-                                        relay_saturation_events,
-                                        relay_saturation_events_total,
-                                        relay_dispatch_fallback_total,
-                                        relay_dispatch_short_circuit_total,
-                                        &mut listener_enqueued_local,
-                                        &mut listener_saturation_pending_local,
-                                        &mut listener_saturation_total_local,
-                                        &mut listener_dispatch_fallback_total_local,
-                                        &mut listener_dispatch_short_circuit_total_local,
-                                    ) {
+                                    if let Err(message) =
+                                        handle_lasm_cluster_accept_unavailable_stream(
+                                            client_stream,
+                                            active_connections,
+                                            relay_saturation_events,
+                                            relay_saturation_events_total,
+                                            relay_dispatch_fallback_total,
+                                            relay_dispatch_short_circuit_total,
+                                            &mut listener_enqueued_local,
+                                            &mut listener_saturation_pending_local,
+                                            &mut listener_saturation_total_local,
+                                            &mut listener_dispatch_fallback_total_local,
+                                            &mut listener_dispatch_short_circuit_total_local,
+                                        )
+                                    {
                                         return Err(message);
                                     }
                                     continue;
