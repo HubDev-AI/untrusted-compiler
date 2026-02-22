@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | While adding Postgres cache-capacity run flags, I broadened the mixed-overrides diagnostic from "timeout overrides" to "runtime overrides" but initially forgot to align command-test assertions. | Whenever a deterministic CLI diagnostic string broadens/narrows scope, update assertion strings in the same slice and re-run only the impacted tests before commit. |
 | 2026-02-22 | self | After merging PR #640, I started implementing `--db-records-max` directly on local `dev` before creating the next `codex/*` branch. | After every merge, run a branch gate immediately (`git branch --show-current`) and branch off `codex/*` before the first read/edit command of the next slice. |
 | 2026-02-22 | self | After merging PR #638, I started the next DB telemetry slice on local `dev` before creating a new `codex/*` branch. | Right after each merge, run `git branch --show-current`; if it is `dev`, create the next `codex/*` branch before opening or editing any file. |
 | 2026-02-22 | self | I committed the DB-overflow compaction follow-up on local `dev` again before creating the next `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if branch is `dev`, branch first. If missed, branch from the commit immediately and repoint local `dev` to `origin/dev`. |

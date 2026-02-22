@@ -16684,6 +16684,154 @@ fn run_command_rejects_zero_db_records_max_override() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_statement_cache_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-statement-cache-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-statement-cache-max",
+        "64",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-statement-cache-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-statement-cache-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-statement-cache-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_statement_cache_max_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-statement-cache-max");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-statement-cache-max",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-statement-cache-max override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-statement-cache-max must be >= 1"),
+        "stderr should include deterministic db-postgres-statement-cache-max validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_placeholder_cache_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-placeholder-cache-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-placeholder-cache-max",
+        "64",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-placeholder-cache-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-placeholder-cache-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-placeholder-cache-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_placeholder_cache_max_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-placeholder-cache-max");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-placeholder-cache-max",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-placeholder-cache-max override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-placeholder-cache-max must be >= 1"),
+        "stderr should include deterministic db-postgres-placeholder-cache-max validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_statement_timeout_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-statement-timeout-c-backend");
     let project_path = project_dir
@@ -16975,7 +17123,7 @@ fn run_command_rejects_mixed_db_timeout_overrides_without_explicit_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
+            "run failed: postgres and sqlite runtime overrides cannot be combined in the same run"
         ),
         "stderr should include deterministic mixed-timeout override guidance:\n{stderr}"
     );
@@ -17017,7 +17165,7 @@ fn run_command_rejects_mixed_db_timeout_overrides_with_explicit_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
+            "run failed: postgres and sqlite runtime overrides cannot be combined in the same run"
         ),
         "stderr should include deterministic mixed-timeout override guidance:\n{stderr}"
     );
