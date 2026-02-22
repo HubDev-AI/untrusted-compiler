@@ -1373,5 +1373,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1401-m39-lasm-postgres-prepared-statement-cache.md`
 - `1402-m39-lasm-sqlite-prepare-cached-runtime.md`
 - `1403-m39-lasm-postgres-placeholder-index-cache.md`
+- `1404-m39-lasm-postgres-cache-capacity-guards.md`
 
 As milestones progress, chapters will be added and linked from this index.

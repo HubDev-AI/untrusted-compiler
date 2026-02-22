@@ -49,6 +49,8 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
     pub(crate) db_postgres_placeholder_max_cache: HashMap<String, usize>,
+    pub(crate) db_postgres_statement_cache_max: usize,
+    pub(crate) db_postgres_placeholder_cache_max: usize,
     pub(crate) db_tx_handles: HashMap<i64, i64>,
     pub(crate) db_tx_max_handles: usize,
     pub(crate) db_postgres_statement_timeout_ms: u64,
@@ -60,6 +62,8 @@ pub(crate) struct LasmDynamicResponseState {
 }
 
 pub(crate) const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
+pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
+pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
 
 pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
@@ -82,6 +86,14 @@ pub(crate) fn build_lasm_dynamic_response_state(
     let db_sqlite_busy_timeout_ms = resolve_lasm_env_positive_u64(
         "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
         LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
+    );
+    let db_postgres_statement_cache_max = resolve_lasm_env_positive_usize(
+        "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
+        LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT,
+    );
+    let db_postgres_placeholder_cache_max = resolve_lasm_env_positive_usize(
+        "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
+        LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT,
     );
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
@@ -163,6 +175,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_postgres_client,
         db_records_postgres_statement_cache,
         db_postgres_placeholder_max_cache,
+        db_postgres_statement_cache_max,
+        db_postgres_placeholder_cache_max,
         db_tx_handles,
         db_tx_max_handles,
         db_postgres_statement_timeout_ms,
@@ -178,6 +192,14 @@ fn resolve_lasm_env_positive_u64(name: &str, default_value: u64) -> u64 {
     env::var(name)
         .ok()
         .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_env_positive_usize(name: &str, default_value: usize) -> usize {
+    env::var(name)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
         .filter(|value| *value > 0)
         .unwrap_or(default_value)
 }

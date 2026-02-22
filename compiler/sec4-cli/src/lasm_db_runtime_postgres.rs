@@ -185,6 +185,9 @@ fn max_lasm_postgres_placeholder_index_cached(
         return *value;
     }
     let value = max_lasm_postgres_placeholder_index(query_template);
+    if state.db_postgres_placeholder_max_cache.len() >= state.db_postgres_placeholder_cache_max {
+        state.db_postgres_placeholder_max_cache.clear();
+    }
     state
         .db_postgres_placeholder_max_cache
         .insert(query_template.to_string(), value);
