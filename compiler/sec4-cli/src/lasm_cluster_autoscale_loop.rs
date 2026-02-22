@@ -164,6 +164,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 current_workers
             };
             let mut workers_changed_after_initial_refresh = false;
+            let mut cooldown_anchor_changed = false;
             let scale_up_cooldown_elapsed = match last_scale_up_at {
                 Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
                 None => true,
@@ -184,6 +185,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     }
                 }
                 last_scale_up_at = Some(now);
+                cooldown_anchor_changed = true;
             }
             let current_workers = state.workers.len();
             let min_down_target = if shared_config.autoscale_scale_down_step >= current_workers {
@@ -209,6 +211,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     }
                 }
                 last_scale_down_at = Some(now);
+                cooldown_anchor_changed = true;
             }
             if workers_changed_after_initial_refresh {
                 refresh_lasm_cluster_worker_ports_snapshot_if_changed(
@@ -217,22 +220,24 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     &mut last_published_worker_ports,
                 );
             }
-            autoscale_scale_up_cooldown_remaining_ms.store(
-                lasm_cluster_remaining_cooldown_ms(
-                    now,
-                    last_scale_up_at,
-                    shared_config.autoscale_scale_up_cooldown_ms,
-                ),
-                Ordering::Relaxed,
-            );
-            autoscale_scale_down_cooldown_remaining_ms.store(
-                lasm_cluster_remaining_cooldown_ms(
-                    now,
-                    last_scale_down_at,
-                    shared_config.autoscale_scale_down_cooldown_ms,
-                ),
-                Ordering::Relaxed,
-            );
+            if cooldown_anchor_changed {
+                autoscale_scale_up_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_up_at,
+                        shared_config.autoscale_scale_up_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
+                );
+                autoscale_scale_down_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_down_at,
+                        shared_config.autoscale_scale_down_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
+                );
+            }
         }
     })
 }
