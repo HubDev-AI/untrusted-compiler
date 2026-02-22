@@ -1838,6 +1838,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now tracks last published `reusablePortsCount` and writes the shared atomic only when reusable-port pool size changes,
       - both maintenance pre-action path and spawn/apply path now reuse this change-detection helper to avoid redundant per-tick atomic store churn.
       - documented in `docs/book/1438-m39-lasm-autoscale-reusable-port-telemetry-store-elision.md`.
+   - [x] Suppressed additional no-op autoscale telemetry atomic stores:
+      - autoscale loop now tracks last published values for desired instances, saturation counters, dynamic boost step, and cooldown remaining telemetry,
+      - corresponding shared atomics are now updated only when values change, avoiding redundant per-tick store churn while preserving deterministic telemetry semantics.
+      - documented in `docs/book/1441-m39-lasm-autoscale-telemetry-store-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
