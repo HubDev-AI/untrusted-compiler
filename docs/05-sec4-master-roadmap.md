@@ -1759,6 +1759,11 @@ Post-alpha track acceptance anchors:
       - status payload serialization and snapshot equality now include both fields, preserving deterministic unchanged-snapshot suppression behavior,
       - command integration coverage verifies env-overridden values are emitted in cluster status JSON while unchanged snapshots keep `updatedAtMs` stable.
       - documented in `docs/book/1399-m39-lasm-cluster-status-json-idle-backoff-fields.md`.
+   - [x] Added cross-batch relay saturation fast-reject carryover in LASM accept loop:
+      - accept loop now tracks recent relay-saturation state across batches and short-circuits fallback scans when relay queues remain saturated,
+      - successful primary/fallback dispatches clear the carryover flag so recovery immediately resumes normal dispatch behavior,
+      - this reduces repeated fallback scan overhead in sustained overload windows without changing healthy-path routing semantics.
+      - documented in `docs/book/1400-m39-lasm-cluster-accept-saturation-carryover-fast-reject.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
