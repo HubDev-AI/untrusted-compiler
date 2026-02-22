@@ -43,6 +43,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_store_path: Option<PathBuf>,
     pub(crate) db_records: Vec<LasmDbRecord>,
     pub(crate) db_record_signatures: HashMap<String, usize>,
+    pub(crate) db_latest_record_by_signature: HashMap<String, LasmDbRecord>,
     pub(crate) db_records_max: usize,
     pub(crate) db_records_dropped_total: u64,
     pub(crate) db_records_adapter: LasmDbRecordsAdapter,
@@ -88,6 +89,17 @@ fn build_lasm_db_record_signature_counts(records: &[LasmDbRecord]) -> HashMap<St
     signatures
 }
 
+fn build_lasm_db_latest_record_by_signature(
+    records: &[LasmDbRecord],
+) -> HashMap<String, LasmDbRecord> {
+    let mut latest = HashMap::new();
+    for record in records {
+        let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
+        latest.insert(signature, record.clone());
+    }
+    latest
+}
+
 fn decrement_lasm_db_record_signature(
     signatures: &mut HashMap<String, usize>,
     record: &LasmDbRecord,
@@ -120,15 +132,67 @@ pub(crate) fn append_lasm_dynamic_db_record(
 ) -> bool {
     let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
     state.db_records.push(record);
+    let appended_record = state
+        .db_records
+        .last()
+        .cloned()
+        .expect("append should retain pushed db record");
     *state.db_record_signatures.entry(signature).or_insert(0) += 1;
+    state.db_latest_record_by_signature.insert(
+        lasm_db_record_signature_key(
+            appended_record.db,
+            &appended_record.template,
+            &appended_record.params,
+        ),
+        appended_record,
+    );
     let dropped_records =
         truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
     if !dropped_records.is_empty() {
         state.db_records_dropped_total = state
             .db_records_dropped_total
             .saturating_add(dropped_records.len() as u64);
+        let mut signatures_needing_latest_refresh = Vec::new();
         for dropped_record in dropped_records.iter() {
             decrement_lasm_db_record_signature(&mut state.db_record_signatures, dropped_record);
+            let dropped_signature = lasm_db_record_signature_key(
+                dropped_record.db,
+                &dropped_record.template,
+                &dropped_record.params,
+            );
+            let latest_matches_dropped = state
+                .db_latest_record_by_signature
+                .get(dropped_signature.as_str())
+                .map(|record| record.id == dropped_record.id)
+                .unwrap_or(false);
+            if latest_matches_dropped {
+                signatures_needing_latest_refresh.push(dropped_signature);
+            }
+        }
+        signatures_needing_latest_refresh.sort();
+        signatures_needing_latest_refresh.dedup();
+        for signature in signatures_needing_latest_refresh.into_iter() {
+            let next_latest = state
+                .db_records
+                .iter()
+                .rev()
+                .find(|candidate| {
+                    lasm_db_record_signature_key(
+                        candidate.db,
+                        &candidate.template,
+                        &candidate.params,
+                    ) == signature
+                })
+                .cloned();
+            if let Some(record) = next_latest {
+                state
+                    .db_latest_record_by_signature
+                    .insert(signature, record);
+            } else {
+                state
+                    .db_latest_record_by_signature
+                    .remove(signature.as_str());
+            }
         }
         return true;
     }
@@ -266,6 +330,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
     };
     let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
     let db_record_signatures = build_lasm_db_record_signature_counts(&db_records);
+    let db_latest_record_by_signature = build_lasm_db_latest_record_by_signature(&db_records);
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -284,6 +349,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         users_store_path,
         db_records,
         db_record_signatures,
+        db_latest_record_by_signature,
         db_records_max,
         db_records_dropped_total: startup_dropped.len() as u64,
         db_records_adapter,
@@ -451,6 +517,7 @@ mod tests {
             .db_record_signatures
             .contains_key(lasm_db_record_signature_key(1, "SELECT 1", "1").as_str()));
         assert_eq!(state.db_record_signatures.len(), 2);
+        assert_eq!(state.db_latest_record_by_signature.len(), 2);
     }
 
     #[test]
@@ -484,5 +551,10 @@ mod tests {
                 .copied(),
             Some(1)
         );
+        let latest_signature_record = state
+            .db_latest_record_by_signature
+            .get(duplicated_signature.as_str())
+            .expect("latest signature map should retain surviving duplicate");
+        assert_eq!(latest_signature_record.id, 2);
     }
 }

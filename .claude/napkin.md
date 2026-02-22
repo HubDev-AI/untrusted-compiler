@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | While converting records-log queryOne fallback to return `(query_record, matched_source_record)`, I left an old tuple-pattern binding and triggered a type mismatch in `cargo check`. | During Option/tuple refactors, update both the initial binding and downstream `let Some(...)` unpack sites in one edit before compiling. |
 | 2026-02-22 | self | I tried running two unit-test name filters in one `cargo test` command while validating the signature-refcount slice; Cargo accepts only one filter and failed fast. | Keep Cargo test filters one-per-command and run multiple filters as explicit sequential commands. |
 | 2026-02-22 | self | While removing relay batch snapshot clones, I borrowed `selected_worker_ports_snapshot` immutably via `unwrap_or(&selected...)` and then tried mutating it in the same block, triggering `E0502`. | When a ref may alias the mutable owner, split changed-snapshot handling into `if let Some(snapshot)` branch and clone to a local `next_*` value before `std::mem::replace`. |
 | 2026-02-22 | self | I launched two focused Cargo tests in one parallel call again during the worker-port reuse slice and hit package/build lock waits. | Keep Cargo commands strictly sequential; use parallel calls only for read/search/syntax operations. |
