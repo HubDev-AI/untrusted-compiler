@@ -20,23 +20,18 @@ pub(crate) fn rebuild_lasm_cluster_backend_selection_lookup(
         return (true, true);
     }
     lookup.resize(worker_port_count, LASM_CLUSTER_SELECTION_LOOKUP_NONE);
-
-    let mut first_healthy_index: Option<usize> = None;
-    let mut next_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
-    for index in (0..worker_port_count).rev() {
+    let mut healthy_indices = Vec::with_capacity(worker_port_count - unhealthy_port_count);
+    for index in 0..worker_port_count {
         if unhealthy_ports_until_by_index[index].is_none() {
-            next_healthy_index = index;
-            first_healthy_index = Some(index);
+            healthy_indices.push(index);
         }
-        lookup[index] = next_healthy_index;
     }
-
-    let Some(first_healthy_index) = first_healthy_index else {
+    let healthy_count = healthy_indices.len();
+    if healthy_count == 0 {
         return (false, false);
-    };
-    let wrap_fill_start = first_healthy_index + 1;
-    if wrap_fill_start < worker_port_count {
-        lookup[wrap_fill_start..worker_port_count].fill(first_healthy_index);
+    }
+    for index in 0..worker_port_count {
+        lookup[index] = healthy_indices[index % healthy_count];
     }
     (true, false)
 }

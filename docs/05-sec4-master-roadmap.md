@@ -1568,6 +1568,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now tracks whether scale-up/down cooldown anchors changed in the current tick and only rewrites cooldown-remaining atomics at loop tail when anchors changed,
       - avoids duplicate cooldown atomic writes on steady-state no-op ticks while preserving immediate cooldown reset semantics after scale actions.
       - documented in `docs/book/1353-m39-lasm-cluster-autoscale-cooldown-tail-store-elision.md`.
+   - [x] Rebalanced degraded relay selection lookup to cyclic healthy distribution:
+      - backend selection lookup rebuild now materializes ordered healthy backend indices and maps selection slots cyclically across healthy backends when some workers are unhealthy,
+      - removes gap-weighted degraded routing bias tied to dead-worker index spans and keeps degraded load spread deterministic across remaining healthy backends.
+      - documented in `docs/book/1354-m39-lasm-cluster-cyclic-healthy-lookup-selection.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
