@@ -1909,6 +1909,10 @@ Post-alpha track acceptance anchors:
       - Postgres/SQLite positional-object parsing now accepts key prefixes used in SQL placeholder notation (`$1`, `?1`) in addition to plain numeric keys,
       - this improves compatibility with AI-generated/object-transformed param payloads while preserving fallback behavior for non-positional keys.
       - documented in `docs/book/1432-m39-lasm-db-positional-object-placeholder-keys.md`.
+   - [x] Added SQLite named-object SQL parameter binding support:
+      - SQLite runtime param parser now recognizes named object forms (plain and prefixed keys such as `name`, `:name`, `@name`, `$name`) and canonicalizes bindings for direct named-parameter execution,
+      - DB dispatch continues pre-parsing sqlite params outside lock and now passes either positional or named parameter sets into sqlite runtime calls.
+      - documented in `docs/book/1435-m39-lasm-sqlite-named-object-params.md`.
    - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
       - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
       - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.
