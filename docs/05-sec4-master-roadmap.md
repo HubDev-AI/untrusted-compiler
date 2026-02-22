@@ -1555,6 +1555,10 @@ Post-alpha track acceptance anchors:
       - relay selection reservation next-index progression now uses direct increment+wrap instead of wrapped-index helper calls,
       - relay pump cursor advancement in the batched pump loop now uses direct increment+wrap for `Progressed`/`Idle` steps.
       - documented in `docs/book/1348-m39-lasm-cluster-relay-worker-direct-wrap-cursor-progression.md`.
+   - [x] Reduced autoscale-loop worker-port snapshot churn on no-op ticks:
+      - autoscale loop now tracks whether workers changed after the initial maintenance refresh and skips the second status-port snapshot refresh when no scale-up/down occurred,
+      - preserves snapshot publication semantics while avoiding repeated worker-port comparison/publish work in steady-state no-op ticks.
+      - documented in `docs/book/1349-m39-lasm-cluster-autoscale-noop-second-refresh-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

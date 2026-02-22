@@ -163,6 +163,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
             } else {
                 current_workers
             };
+            let mut workers_changed_after_initial_refresh = false;
             let scale_up_cooldown_elapsed = match last_scale_up_at {
                 Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
                 None => true,
@@ -172,7 +173,10 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     let worker_port = state.next_port;
                     state.next_port = state.next_port.saturating_add(1);
                     match spawn_and_wait_lasm_cluster_worker(&shared_config, worker_port) {
-                        Ok(worker) => state.workers.push(worker),
+                        Ok(worker) => {
+                            state.workers.push(worker);
+                            workers_changed_after_initial_refresh = true;
+                        }
                         Err(message) => {
                             eprintln!("warning: LASM cluster autoscale-up failed: {message}");
                             break;
@@ -201,15 +205,18 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     if let Some(mut worker) = state.workers.pop() {
                         let _ = worker.child.kill();
                         let _ = worker.child.wait();
+                        workers_changed_after_initial_refresh = true;
                     }
                 }
                 last_scale_down_at = Some(now);
             }
-            refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-                &state,
-                &worker_ports_snapshot,
-                &mut last_published_worker_ports,
-            );
+            if workers_changed_after_initial_refresh {
+                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                    &state,
+                    &worker_ports_snapshot,
+                    &mut last_published_worker_ports,
+                );
+            }
             autoscale_scale_up_cooldown_remaining_ms.store(
                 lasm_cluster_remaining_cooldown_ms(
                     now,
