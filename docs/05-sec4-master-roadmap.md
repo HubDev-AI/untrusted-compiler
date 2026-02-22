@@ -1777,6 +1777,10 @@ Post-alpha track acceptance anchors:
       - LASM Postgres statement cache and placeholder-max cache now evict one oldest entry at capacity instead of clearing the full cache map,
       - this avoids full-cache churn cliffs under diverse query templates while preserving deterministic cache capacity enforcement and eviction telemetry counters.
       - documented in `docs/book/1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`.
+   - [x] Precomputed non-identity fallback start cursors on selection-state rebuild:
+      - relay-worker now builds per-backend fallback start cursors when lookup state is recomputed,
+      - this removes repeated `selection_lookup` binary-search work from per-failure fallback scans in degraded cluster paths while preserving fallback ordering semantics.
+      - documented in `docs/book/1418-m39-lasm-relay-fallback-start-cursor-precompute.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
