@@ -33,6 +33,8 @@ Options:
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
+  --build-profile <debug|release>                  sec4 build profile forwarded to matrix/verify probes (default: release)
+  --samples <n>                                    Number of wrk samples per probe run (default: 1)
   --skip-verify                                    Skip recommended-step follow-up probe
   --matrix-out <path>                              Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
@@ -66,6 +68,8 @@ cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
+build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
+samples="${LASM_CAPACITY_SAMPLES:-1}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 matrix_out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -169,6 +173,14 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
+    --build-profile)
+      build_profile="${2:-}"
+      shift 2
+      ;;
+    --samples)
+      samples="${2:-}"
+      shift 2
+      ;;
     --skip-verify)
       verify_recommended="false"
       shift
@@ -211,6 +223,21 @@ done
 
 if [ "${fixed_reuse_port_mode}" != "true" ] && [ "${fixed_reuse_port_mode}" != "false" ]; then
   echo "fixed-reuse-port-mode must be true or false, got: ${fixed_reuse_port_mode}" >&2
+  exit 2
+fi
+case "${build_profile}" in
+  debug|release) ;;
+  *)
+    echo "build-profile must be one of: debug, release (got: ${build_profile})" >&2
+    exit 2
+    ;;
+esac
+if ! [[ "${samples}" =~ ^[0-9]+$ ]]; then
+  echo "samples must be an integer >= 1, got: ${samples}" >&2
+  exit 2
+fi
+if [ "${samples}" -lt 1 ]; then
+  echo "samples must be >= 1, got: ${samples}" >&2
   exit 2
 fi
 
@@ -261,6 +288,8 @@ sec4 LASM saturation boost bundle plan:
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
+  buildProfile=${build_profile}
+  samples=${samples}
   verifyRecommended=${verify_recommended}
   matrixOut=${matrix_out_path}
   analysisOut=${analysis_out_path}
@@ -289,6 +318,8 @@ matrix_cmd=(
   --autoscale-scale-down-cooldown-ms "${autoscale_scale_down_cooldown_ms}"
   --autoscale-scale-up-step "${autoscale_scale_up_step}"
   --autoscale-scale-down-step "${autoscale_scale_down_step}"
+  --build-profile "${build_profile}"
+  --samples "${samples}"
   --out "${matrix_out_path}"
   --analysis-out "${analysis_out_path}"
 )

@@ -1363,5 +1363,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1391-m39-lasm-cluster-reuse-port-fast-path-override.md`
 - `1392-m39-lasm-capacity-probe-build-profile-and-samples.md`
 - `1393-m39-lasm-mode-compare-build-profile-and-samples.md`
+- `1394-m39-lasm-saturation-matrix-bundle-build-profile-and-samples.md`
 
 As milestones progress, chapters will be added and linked from this index.

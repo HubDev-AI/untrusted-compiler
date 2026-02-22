@@ -1729,6 +1729,10 @@ Post-alpha track acceptance anchors:
       - `benchmark-suite/scripts/run_lasm_cluster_mode_compare.sh` now accepts/forwards `--build-profile` and `--samples` to both proxy and fixed probe runs,
       - compare dry-run/test coverage now validates build-profile/sample controls and invalid-input diagnostics so repeated mode comparisons stay deterministic.
       - documented in `docs/book/1393-m39-lasm-mode-compare-build-profile-and-samples.md`.
+   - [x] Wired LASM saturation boost matrix/bundle orchestration to stable probe controls:
+      - `run_lasm_cluster_saturation_boost_matrix.sh` and `run_lasm_cluster_saturation_boost_bundle.sh` now accept/forward `--build-profile` and `--samples` to all probe runs (including recommended-step verify path),
+      - dry-run/test coverage now validates build-profile/sample passthrough plus deterministic invalid-input diagnostics across matrix and bundle wrappers.
+      - documented in `docs/book/1394-m39-lasm-saturation-matrix-bundle-build-profile-and-samples.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
