@@ -1375,5 +1375,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1403-m39-lasm-postgres-placeholder-index-cache.md`
 - `1404-m39-lasm-postgres-cache-capacity-guards.md`
 - `1405-m39-lasm-relay-worker-single-backend-fastpath.md`
+- `1406-m39-lasm-db-cache-telemetry-in-list-records.md`
 
 As milestones progress, chapters will be added and linked from this index.
