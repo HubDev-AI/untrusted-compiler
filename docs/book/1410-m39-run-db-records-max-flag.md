@@ -9,7 +9,7 @@ Milestone: M39 (DB runtime operator controls)
 - Wired the flag through:
   - direct `sec4 run --backend lasm` execution
   - LASM cluster worker spawn command forwarding
-- `--db-records-max` now exports runtime env override `SEC4_RT_LASM_DB_RECORDS_MAX` for the runtime state builder.
+- runtime state builder now receives `db_records_max` as an explicit run-configuration parameter (no env override dependency required for flag path).
 - Added deterministic CLI guards:
   - rejected on non-LASM backend
   - rejected when value is `0`

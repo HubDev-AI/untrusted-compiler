@@ -1818,7 +1818,7 @@ Post-alpha track acceptance anchors:
       - list response now includes `recordsTotal` so operators can distinguish returned window size from full retained history size.
       - documented in `docs/book/1409-m39-lasm-db-records-limit-window.md`.
    - [x] Added explicit LASM run flag for DB history capacity:
-      - new `sec4 run --db-records-max <n>` forwards capacity override into runtime (`SEC4_RT_LASM_DB_RECORDS_MAX`) for both single-instance and cluster worker flows,
+      - new `sec4 run --db-records-max <n>` forwards capacity override into runtime for both single-instance and cluster worker flows (explicit runtime config path, no env-only coupling),
       - deterministic CLI guards now reject flag usage on non-LASM backends and reject zero values.
       - documented in `docs/book/1410-m39-run-db-records-max-flag.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
