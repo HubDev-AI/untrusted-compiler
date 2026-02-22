@@ -8207,7 +8207,7 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: cluster mode does not support --oneshot");
         return Err(2);
     }
-    let fixed_cluster_reuse_port_mode = cluster_mode && max_instances == instances;
+    let fixed_cluster_reuse_port_mode = cluster_mode && (max_instances == instances || reuse_port);
     if fixed_cluster_reuse_port_mode && cluster_relay_workers.is_some() {
         eprintln!(
             "run failed: --cluster-relay-workers is not used in fixed reuse-port cluster mode"

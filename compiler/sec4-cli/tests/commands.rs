@@ -25954,6 +25954,53 @@ fn run_command_rejects_reuse_port_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_cluster_status_json_when_reuse_port_forces_fixed_cluster_mode() {
+    let project_dir = temp_dir("sec4-run-command-reuse-port-forced-fixed-cluster-status-json");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let status_json_path = project_dir.join("cluster-status.json");
+    let status_json_value = status_json_path
+        .to_str()
+        .expect("cluster status path should be valid utf-8")
+        .to_string();
+    write_minimal_project(&project_dir, "");
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--instances",
+        "2",
+        "--autoscale-max-instances",
+        "3",
+        "--reuse-port",
+        "--cluster-status-json",
+        &status_json_value,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --reuse-port forces fixed cluster mode and --cluster-status-json is set"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --cluster-status-json is not used in fixed reuse-port cluster mode"),
+        "stderr should include deterministic fixed reuse-port cluster status-json guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_cluster_relay_workers_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-cluster-relay-workers-c-backend");
     let project_path = project_dir

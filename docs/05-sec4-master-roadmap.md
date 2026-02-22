@@ -1717,6 +1717,10 @@ Post-alpha track acceptance anchors:
       - fallback-dispatch multi-sender traversal now accepts mutable next-live lookup state and performs one lookup-table refresh on lookup miss before falling back to slow scan defaults,
       - keeps fallback semantics unchanged while reducing repeated stale-lookup scan overhead in degraded relay topologies.
       - documented in `docs/book/1390-m39-lasm-cluster-fallback-dispatch-lookup-refresh-on-miss.md`.
+   - [x] Enabled explicit `--reuse-port` fast-path override for LASM cluster mode:
+      - when cluster mode is active, `--reuse-port` now forces fixed reuse-port cluster path even if `--autoscale-max-instances` is higher than `--instances`,
+      - this keeps proxy-relay path available by default while allowing explicit performance-mode opt-in without reworking autoscale flag sets.
+      - documented in `docs/book/1391-m39-lasm-cluster-reuse-port-fast-path-override.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
