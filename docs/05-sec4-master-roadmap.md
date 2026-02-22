@@ -1463,6 +1463,10 @@ Post-alpha track acceptance anchors:
       - accept-worker orchestration now detects accept worker thread panics during join and returns deterministic runtime failure instead of silently ignoring join failures,
       - shared cluster finalizer now returns panic summary across relay/autoscale/status threads and `cmd_run_lasm_cluster(...)` fails deterministically when shutdown observes worker-thread panic conditions.
       - documented in `docs/book/1325-m39-lasm-cluster-thread-panic-handling.md`.
+   - [x] Hardened LASM cluster accept-loop failure propagation:
+      - accept-worker orchestration now records and returns deterministic first accept-loop failure message instead of printing and returning success,
+      - `cmd_run_lasm_cluster(...)` now fails non-zero when any accept-loop worker/main accept path reports an error, preserving stop-flag shutdown behavior and deterministic error surface.
+      - documented in `docs/book/1326-m39-lasm-cluster-accept-error-propagation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
