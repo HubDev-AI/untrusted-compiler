@@ -10,6 +10,8 @@ Milestone: M39 (DB runtime hardening)
   - oldest records are dropped when capacity is exceeded
 - Applied the same capacity bound on startup load so previously persisted large stores do not expand process memory without limit.
 - Updated DB operation materialization paths (`exec`, `execTx`, `queryOne`) to append records through shared bounded helper.
+- Added overflow compaction sync for persisted adapters:
+  - when bounded in-memory append evicts old records, runtime triggers full adapter sync so on-disk history is compacted to the same bounded window.
 - Extended `DbListRecordsResponse` with `recordsCapacity` telemetry.
 
 ## Why
@@ -20,6 +22,7 @@ Milestone: M39 (DB runtime hardening)
 
 - Runtime memory growth for DB operation history is now deterministic and bounded.
 - Recent records are preserved; oldest entries are evicted first.
+- Persisted DB history now stays aligned with bounded in-memory history instead of growing without limit.
 - Operators can inspect configured bound through `/db/records` response.
 
 ## Validation

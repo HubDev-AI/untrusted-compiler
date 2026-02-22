@@ -710,3 +710,16 @@ pub(crate) fn persist_lasm_dynamic_db_record_append(
         }
     }
 }
+
+pub(crate) fn persist_lasm_dynamic_db_records_full_sync(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    match state.db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
+            state.db_records_store_path.as_deref(),
+            &state.db_records,
+        ),
+        LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
+        LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
+    }
+}
