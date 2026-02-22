@@ -20,10 +20,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod lasm_cluster_accept_dispatch;
 mod lasm_cluster_accept_loop;
+mod lasm_cluster_autoscale_loop;
 mod lasm_cluster_backend_selection;
 mod lasm_cluster_fallback_dispatch;
 mod lasm_cluster_lifecycle;
@@ -48,23 +49,22 @@ mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
 
-use lasm_cluster_accept_dispatch::LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
 use lasm_cluster_accept_loop::run_lasm_cluster_accept_loop;
+use lasm_cluster_autoscale_loop::{
+    spawn_lasm_cluster_autoscale_loop, LasmClusterAutoscaleLoopConfig,
+};
 use lasm_cluster_lifecycle::{
     bind_lasm_listener, cmd_run_lasm_reuseport_cluster, compute_lasm_cluster_base_port,
-    prune_dead_lasm_cluster_workers, recover_lasm_cluster_min_workers,
     spawn_and_wait_lasm_cluster_worker, stop_lasm_cluster_workers,
 };
 use lasm_cluster_relay_worker_loop::spawn_lasm_cluster_relay_worker_loop;
 use lasm_cluster_runtime_config::{
-    desired_lasm_cluster_instances, lasm_cluster_accept_worker_count,
-    lasm_cluster_backend_connect_cooldown, lasm_cluster_backend_connect_timeout,
-    lasm_cluster_maintenance_interval_ms, lasm_cluster_proxy_queue_capacity,
-    lasm_cluster_proxy_worker_count, lasm_cluster_relay_accept_batch_max,
-    lasm_cluster_relay_pump_batch_max, lasm_cluster_remaining_cooldown_ms,
-    lasm_cluster_selection_reservation_min_chunk,
-    refresh_lasm_cluster_worker_ports_snapshot_if_changed,
-    resolve_lasm_cluster_relay_accept_batch_max, resolve_lasm_cluster_relay_pump_batch_max,
+    lasm_cluster_accept_worker_count, lasm_cluster_backend_connect_cooldown,
+    lasm_cluster_backend_connect_timeout, lasm_cluster_maintenance_interval_ms,
+    lasm_cluster_proxy_queue_capacity, lasm_cluster_proxy_worker_count,
+    lasm_cluster_relay_accept_batch_max, lasm_cluster_relay_pump_batch_max,
+    lasm_cluster_selection_reservation_min_chunk, resolve_lasm_cluster_relay_accept_batch_max,
+    resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
@@ -7848,190 +7848,26 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let autoscale_enabled = shared_config.max_instances > shared_config.min_instances;
     let maintenance_interval_ms = lasm_cluster_maintenance_interval_ms(shared_config.as_ref());
     let saturation_priority_interval_ms = maintenance_interval_ms.min(100);
-    let autoscale_handle = {
-        let autoscale_state = Arc::clone(&shared_state);
-        let autoscale_config = Arc::clone(&shared_config);
-        let autoscale_active_connections = Arc::clone(&active_connections);
-        let autoscale_saturation_events = Arc::clone(&relay_saturation_events);
-        let autoscale_stop_flag = Arc::clone(&stop_flag);
-        let autoscale_worker_ports = Arc::clone(&worker_ports_snapshot);
-        let autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
-        let autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
-        let autoscale_last_dynamic_boost_step = Arc::clone(&autoscale_last_dynamic_boost_step);
-        let autoscale_scale_up_cooldown_remaining_ms =
-            Arc::clone(&autoscale_scale_up_cooldown_remaining_ms);
-        let autoscale_scale_down_cooldown_remaining_ms =
-            Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
-        std::thread::spawn(move || {
-            let autoscale_check_interval =
-                Duration::from_millis(autoscale_config.autoscale_check_ms);
-            let autoscale_scale_up_cooldown =
-                Duration::from_millis(autoscale_config.autoscale_scale_up_cooldown_ms);
-            let autoscale_scale_down_cooldown =
-                Duration::from_millis(autoscale_config.autoscale_scale_down_cooldown_ms);
-            let mut last_scale_up_at: Option<Instant> = None;
-            let mut last_scale_down_at: Option<Instant> = None;
-            let mut last_published_worker_ports = autoscale_worker_ports.load().as_ref().clone();
-            let mut last_scale_eval_at = Instant::now()
-                .checked_sub(autoscale_check_interval)
-                .unwrap_or_else(Instant::now);
-            while !autoscale_stop_flag.load(Ordering::Relaxed) {
-                let saturation_pending_before_sleep =
-                    autoscale_saturation_events.load(Ordering::Relaxed);
-                let sleep_ms = if autoscale_enabled && saturation_pending_before_sleep > 0 {
-                    saturation_priority_interval_ms
-                } else {
-                    maintenance_interval_ms
-                };
-                std::thread::sleep(Duration::from_millis(sleep_ms));
-                if autoscale_stop_flag.load(Ordering::Relaxed) {
-                    break;
-                }
-                let now = Instant::now();
-                let mut state = match autoscale_state.write() {
-                    Ok(state) => state,
-                    Err(_) => break,
-                };
-                prune_dead_lasm_cluster_workers(&mut state);
-                recover_lasm_cluster_min_workers(&mut state, &autoscale_config, "worker recovery");
-                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-                    &state,
-                    &autoscale_worker_ports,
-                    &mut last_published_worker_ports,
-                );
-                if !autoscale_enabled {
-                    autoscale_last_desired_instances.store(state.workers.len(), Ordering::Relaxed);
-                    autoscale_last_saturation_events.store(0, Ordering::Relaxed);
-                    autoscale_last_dynamic_boost_step.store(
-                        autoscale_config.autoscale_scale_up_step.max(1),
-                        Ordering::Relaxed,
-                    );
-                    autoscale_scale_up_cooldown_remaining_ms.store(0, Ordering::Relaxed);
-                    autoscale_scale_down_cooldown_remaining_ms.store(0, Ordering::Relaxed);
-                    continue;
-                }
-                autoscale_scale_up_cooldown_remaining_ms.store(
-                    lasm_cluster_remaining_cooldown_ms(
-                        now,
-                        last_scale_up_at,
-                        autoscale_config.autoscale_scale_up_cooldown_ms,
-                    ),
-                    Ordering::Relaxed,
-                );
-                autoscale_scale_down_cooldown_remaining_ms.store(
-                    lasm_cluster_remaining_cooldown_ms(
-                        now,
-                        last_scale_down_at,
-                        autoscale_config.autoscale_scale_down_cooldown_ms,
-                    ),
-                    Ordering::Relaxed,
-                );
-                let saturation_events_pending = autoscale_saturation_events.load(Ordering::Relaxed);
-                if now.duration_since(last_scale_eval_at) < autoscale_check_interval
-                    && saturation_events_pending == 0
-                {
-                    continue;
-                }
-                last_scale_eval_at = now;
-
-                let active = autoscale_active_connections.load(Ordering::Relaxed);
-                let mut desired = desired_lasm_cluster_instances(
-                    active,
-                    autoscale_config.min_instances,
-                    autoscale_config.max_instances,
-                    autoscale_config.target_connections_per_instance,
-                );
-                let saturation_events = autoscale_saturation_events.swap(0, Ordering::Relaxed);
-                let mut scale_up_step_budget = autoscale_config.autoscale_scale_up_step;
-                let current_workers = state.workers.len();
-                if saturation_events > 0 {
-                    let saturation_batch_size = LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH.max(1);
-                    let saturation_batches = saturation_events
-                        .saturating_add(saturation_batch_size.saturating_sub(1))
-                        / saturation_batch_size;
-                    let dynamic_boost_step = autoscale_config
-                        .autoscale_saturation_boost_step
-                        .saturating_mul(saturation_batches.max(1))
-                        .max(autoscale_config.autoscale_saturation_boost_step)
-                        .max(1)
-                        .min(autoscale_config.max_instances);
-                    let boosted_target = current_workers
-                        .saturating_add(dynamic_boost_step)
-                        .min(autoscale_config.max_instances);
-                    desired = desired.max(boosted_target);
-                    scale_up_step_budget = scale_up_step_budget.max(dynamic_boost_step);
-                }
-                autoscale_last_desired_instances.store(desired, Ordering::Relaxed);
-                autoscale_last_saturation_events.store(saturation_events, Ordering::Relaxed);
-                autoscale_last_dynamic_boost_step.store(scale_up_step_budget, Ordering::Relaxed);
-                let up_target = if desired > current_workers {
-                    desired.min(current_workers.saturating_add(scale_up_step_budget))
-                } else {
-                    current_workers
-                };
-                let scale_up_cooldown_elapsed = match last_scale_up_at {
-                    Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
-                    None => true,
-                };
-                if desired > state.workers.len() && scale_up_cooldown_elapsed {
-                    while state.workers.len() < up_target {
-                        let worker_port = state.next_port;
-                        state.next_port = state.next_port.saturating_add(1);
-                        match spawn_and_wait_lasm_cluster_worker(&autoscale_config, worker_port) {
-                            Ok(worker) => state.workers.push(worker),
-                            Err(message) => {
-                                eprintln!("warning: LASM cluster autoscale-up failed: {message}");
-                                break;
-                            }
-                        }
-                    }
-                    last_scale_up_at = Some(now);
-                }
-                let current_workers = state.workers.len();
-                let down_target = if desired < current_workers {
-                    desired.max(
-                        current_workers.saturating_sub(autoscale_config.autoscale_scale_down_step),
-                    )
-                } else {
-                    current_workers
-                };
-                let scale_down_cooldown_elapsed = match last_scale_down_at {
-                    Some(at) => now.duration_since(at) >= autoscale_scale_down_cooldown,
-                    None => true,
-                };
-                if desired < state.workers.len() && scale_down_cooldown_elapsed {
-                    while state.workers.len() > down_target {
-                        if let Some(mut worker) = state.workers.pop() {
-                            let _ = worker.child.kill();
-                            let _ = worker.child.wait();
-                        }
-                    }
-                    last_scale_down_at = Some(now);
-                }
-                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-                    &state,
-                    &autoscale_worker_ports,
-                    &mut last_published_worker_ports,
-                );
-                autoscale_scale_up_cooldown_remaining_ms.store(
-                    lasm_cluster_remaining_cooldown_ms(
-                        now,
-                        last_scale_up_at,
-                        autoscale_config.autoscale_scale_up_cooldown_ms,
-                    ),
-                    Ordering::Relaxed,
-                );
-                autoscale_scale_down_cooldown_remaining_ms.store(
-                    lasm_cluster_remaining_cooldown_ms(
-                        now,
-                        last_scale_down_at,
-                        autoscale_config.autoscale_scale_down_cooldown_ms,
-                    ),
-                    Ordering::Relaxed,
-                );
-            }
-        })
-    };
+    let autoscale_handle = spawn_lasm_cluster_autoscale_loop(LasmClusterAutoscaleLoopConfig {
+        state: Arc::clone(&shared_state),
+        shared_config: Arc::clone(&shared_config),
+        active_connections: Arc::clone(&active_connections),
+        saturation_events: Arc::clone(&relay_saturation_events),
+        stop_flag: Arc::clone(&stop_flag),
+        worker_ports_snapshot: Arc::clone(&worker_ports_snapshot),
+        autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
+        autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),
+        autoscale_last_dynamic_boost_step: Arc::clone(&autoscale_last_dynamic_boost_step),
+        autoscale_scale_up_cooldown_remaining_ms: Arc::clone(
+            &autoscale_scale_up_cooldown_remaining_ms,
+        ),
+        autoscale_scale_down_cooldown_remaining_ms: Arc::clone(
+            &autoscale_scale_down_cooldown_remaining_ms,
+        ),
+        autoscale_enabled,
+        maintenance_interval_ms,
+        saturation_priority_interval_ms,
+    });
 
     if let Err(err) = listener.set_nonblocking(true) {
         eprintln!("run failed: could not set LASM cluster proxy listener nonblocking: {err}");
