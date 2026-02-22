@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I started the autoscale recovery reserve/spawn slice on local `dev` again and only created the branch after code edits. | Run a hard pre-edit branch gate (`git branch --show-current`) after every merge and create the next `codex/*` branch before opening or patching files. |
 | 2026-02-22 | self | I committed the autoscale lock-scope slice on local `dev` before creating a `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, branch before staging/commit. If missed, branch from the commit immediately and repoint local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I accidentally triggered the web tool while continuing a local LASM autoscale implementation slice. | Keep local coding turns strictly on `functions.exec_command`/`functions.apply_patch`; only use web tools when external research is explicitly needed. |
 | 2026-02-22 | self | I ran two focused Cargo tests in one parallel call again and reintroduced package/build lock contention noise. | Keep Cargo checks/tests strictly sequential; parallel calls are only for read/search/syntax commands. |

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use crate::lasm_cluster_accept_dispatch::LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
 use crate::lasm_cluster_lifecycle::{
-    prune_dead_lasm_cluster_workers, recover_lasm_cluster_min_workers,
+    prune_dead_lasm_cluster_workers, reserve_lasm_cluster_min_worker_ports,
     spawn_and_wait_lasm_cluster_worker,
 };
 use crate::lasm_cluster_runtime_config::{
@@ -85,7 +85,9 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     Err(_) => break,
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
-                recover_lasm_cluster_min_workers(&mut state, &shared_config, "worker recovery");
+                let recovery_ports =
+                    reserve_lasm_cluster_min_worker_ports(&mut state, shared_config.min_instances);
+                workers_to_spawn_ports.extend(recovery_ports);
                 refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                     &state,
                     &worker_ports_snapshot,
@@ -100,7 +102,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     );
                     autoscale_scale_up_cooldown_remaining_ms.store(0, Ordering::Relaxed);
                     autoscale_scale_down_cooldown_remaining_ms.store(0, Ordering::Relaxed);
-                    skip_scale_actions = true;
+                    skip_scale_actions = workers_to_spawn_ports.is_empty();
                 } else {
                     autoscale_scale_up_cooldown_remaining_ms.store(
                         lasm_cluster_remaining_cooldown_ms(
@@ -122,7 +124,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     if now.duration_since(last_scale_eval_at) < autoscale_check_interval
                         && saturation_events_pending == 0
                     {
-                        skip_scale_actions = true;
+                        skip_scale_actions = workers_to_spawn_ports.is_empty();
                     } else {
                         last_scale_eval_at = now;
 
@@ -135,7 +137,10 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                         );
                         let saturation_events = saturation_events.swap(0, Ordering::Relaxed);
                         let mut scale_up_step_budget = shared_config.autoscale_scale_up_step;
-                        let current_workers = state.workers.len();
+                        let current_workers = state
+                            .workers
+                            .len()
+                            .saturating_add(workers_to_spawn_ports.len());
                         if saturation_events > 0 {
                             let saturation_batch_size = LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
                             debug_assert!(saturation_batch_size > 0);
@@ -175,8 +180,13 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                             Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
                             None => true,
                         };
-                        if desired > state.workers.len() && scale_up_cooldown_elapsed {
-                            let spawn_count = up_target.saturating_sub(state.workers.len());
+                        let current_workers_after_recovery = state
+                            .workers
+                            .len()
+                            .saturating_add(workers_to_spawn_ports.len());
+                        if desired > current_workers_after_recovery && scale_up_cooldown_elapsed {
+                            let spawn_count =
+                                up_target.saturating_sub(current_workers_after_recovery);
                             workers_to_spawn_ports.reserve(spawn_count);
                             for _ in 0..spawn_count {
                                 let worker_port = state.next_port;

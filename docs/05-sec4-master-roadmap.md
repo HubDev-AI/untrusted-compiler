@@ -1785,6 +1785,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now plans scale-up ports and scale-down worker removals under lock, then performs process spawn/kill/wait outside the lock and re-locks only to apply spawned workers + publish snapshots,
       - this reduces lock hold time on cluster state during expensive process lifecycle operations while preserving existing autoscale cooldown and scaling semantics.
       - documented in `docs/book/1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`.
+   - [x] Moved min-worker recovery spawn planning to lock-light path in autoscale loop:
+      - autoscale loop now reserves recovery worker ports under lock and executes recovery worker spawn outside the lock,
+      - this avoids holding cluster-state write lock during min-worker recovery process startup while preserving deterministic min-instance recovery behavior.
+      - documented in `docs/book/1420-m39-lasm-autoscale-recovery-reserve-and-spawn-lock-light.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
