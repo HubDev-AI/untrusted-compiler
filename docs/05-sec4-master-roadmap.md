@@ -1531,6 +1531,10 @@ Post-alpha track acceptance anchors:
       - lookup-state resolver now relies on non-empty sender-slice invariant (`sender_count > 0`) via debug assertion in fallback-callers-only hot path, removing runtime empty-slice branch,
       - accept-dispatch saturated branch now flushes local saturation counters directly (atomic adds + reset) when batch threshold is reached, avoiding helper-call indirection on saturated-error hot path.
       - documented in `docs/book/1342-m39-lasm-cluster-resolver-invariant-and-saturation-inline-flush.md`.
+   - [x] Tightened accept-loop fallback branch tree with live-state match:
+      - accept-loop fallback dispatch now branches `relay_all_senders_live` first, then uses `match relay_live_sender_count` for degraded paths (`2`, `1`, default) instead of repeated `!relay_all_senders_live && count==...` checks,
+      - preserves fallback behavior while reducing repeated boolean conjunction checks in failed-primary-dispatch handling.
+      - documented in `docs/book/1343-m39-lasm-cluster-accept-loop-fallback-branch-tree-match.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
