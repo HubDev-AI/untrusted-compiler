@@ -46,6 +46,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
     trace_id: &str,
 ) -> bool {
     let Some(raw_operation) = take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_HEADER)
@@ -121,14 +122,28 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             }
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_preparsed =
-                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
-            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
+            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                Some(parse_lasm_postgres_query_template_and_params(
+                    template.as_str(),
+                    params.as_str(),
+                ))
+            } else {
+                None
+            };
+            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                Some(parse_lasm_sqlite_query_params(params.as_str()))
+            } else {
+                None
+            };
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     let mut affected_rows = 0u64;
-                    if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match postgres_preparsed
+                            .as_ref()
+                            .expect("postgres preparse should exist for postgres adapter path")
+                        {
                             Ok((rewritten_template, parsed_params)) => {
                                 (rewritten_template.as_str(), parsed_params.as_slice())
                             }
@@ -171,11 +186,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             }
                         };
                         affected_rows = postgres_affected_rows;
-                    } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                    } else if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let sqlite_affected_rows = match run_lasm_sqlite_exec(
                             &mut state,
                             template.as_str(),
-                            &sqlite_params,
+                            sqlite_params
+                                .as_ref()
+                                .expect("sqlite params should exist for sqlite adapter path"),
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -279,9 +296,19 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_preparsed =
-                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
-            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
+            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                Some(parse_lasm_postgres_query_template_and_params(
+                    template.as_str(),
+                    params.as_str(),
+                ))
+            } else {
+                None
+            };
+            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                Some(parse_lasm_sqlite_query_params(params.as_str()))
+            } else {
+                None
+            };
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -352,6 +379,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     let (db, tx, allocated_tx_handle) = match tx_source {
                         ExecTxSource::AllocateFromDb(db_value) => {
                             let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, db_value)
@@ -390,8 +418,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         }
                     };
                     let mut affected_rows = 0u64;
-                    if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match postgres_preparsed
+                            .as_ref()
+                            .expect("postgres preparse should exist for postgres adapter path")
+                        {
                             Ok((rewritten_template, parsed_params)) => {
                                 (rewritten_template.as_str(), parsed_params.as_slice())
                             }
@@ -440,11 +471,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             }
                         };
                         affected_rows = postgres_affected_rows;
-                    } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                    } else if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
                             &mut state,
                             template.as_str(),
-                            &sqlite_params,
+                            sqlite_params
+                                .as_ref()
+                                .expect("sqlite params should exist for sqlite adapter path"),
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -606,11 +639,22 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_preparsed =
-                parse_lasm_postgres_query_template_and_params(template.as_str(), params.as_str());
-            let sqlite_params = parse_lasm_sqlite_query_params(params.as_str());
+            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                Some(parse_lasm_postgres_query_template_and_params(
+                    template.as_str(),
+                    params.as_str(),
+                ))
+            } else {
+                None
+            };
+            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                Some(parse_lasm_sqlite_query_params(params.as_str()))
+            } else {
+                None
+            };
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     let record_match = state
                         .db_records
                         .iter()
@@ -621,8 +665,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                                 && record.params == params.as_str()
                         })
                         .cloned();
-                    if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match &postgres_preparsed {
+                    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                        let (postgres_template, postgres_params) = match postgres_preparsed
+                            .as_ref()
+                            .expect("postgres preparse should exist for postgres adapter path")
+                        {
                             Ok((rewritten_template, parsed_params)) => {
                                 (rewritten_template.as_str(), parsed_params.as_slice())
                             }
@@ -706,11 +753,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         );
                         return true;
                     }
-                    if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                    if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let row_object = match run_lasm_sqlite_query_one(
                             &mut state,
                             template.as_str(),
-                            &sqlite_params,
+                            sqlite_params
+                                .as_ref()
+                                .expect("sqlite params should exist for sqlite adapter path"),
                         ) {
                             Ok(Some(value)) => value,
                             Ok(None) => {

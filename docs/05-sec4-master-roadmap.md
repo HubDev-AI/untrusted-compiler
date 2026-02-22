@@ -1927,6 +1927,11 @@ Post-alpha track acceptance anchors:
       - rewrite path skips literals/comments/dollar-quoted blocks and preserves cast syntax (`::type`) while reusing indices for repeated named placeholders,
       - DB dispatch now routes `db.exec`, `db.execTx`, and `db.queryOne` through template-aware Postgres param preparse with deterministic `DB.*_INVALID` validation errors on missing named parameters.
       - documented in `docs/book/1437-m39-lasm-postgres-named-object-params.md`.
+   - [x] Made LASM DB SQL parameter parsing adapter-aware on runtime dispatch path:
+      - runtime now resolves the active DB adapter once at LASM backend bootstrap and threads it through connection/materialization/dispatch path,
+      - DB dispatch now pre-parses only the active adapter params (Postgres or SQLite) instead of parsing both on every DB intrinsic call,
+      - lock-time adapter checks are now debug-asserted against bootstrap adapter to keep adapter-bound parse paths deterministic.
+      - documented in `docs/book/1439-m39-lasm-db-dispatch-adapter-aware-parse-paths.md`.
    - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
       - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
       - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.
