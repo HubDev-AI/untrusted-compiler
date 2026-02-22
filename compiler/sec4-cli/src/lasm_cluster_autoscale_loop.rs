@@ -6,8 +6,7 @@ use std::time::{Duration, Instant};
 use crate::lasm_cluster_accept_dispatch::LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
 use crate::lasm_cluster_lifecycle::{
     prune_dead_lasm_cluster_workers, reserve_lasm_cluster_min_worker_ports,
-    reserve_lasm_cluster_worker_ports,
-    spawn_and_wait_lasm_cluster_worker,
+    reserve_lasm_cluster_worker_ports, spawn_and_wait_lasm_cluster_worker,
 };
 use crate::lasm_cluster_runtime_config::{
     desired_lasm_cluster_instances, lasm_cluster_remaining_cooldown_ms,
@@ -91,16 +90,12 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     Ok(state) => state,
                     Err(_) => break,
                 };
-                prune_dead_lasm_cluster_workers(&mut state);
+                let mut workers_changed_before_scale_actions =
+                    prune_dead_lasm_cluster_workers(&mut state);
                 reserve_lasm_cluster_min_worker_ports(
                     &mut state,
                     shared_config.min_instances,
                     &mut workers_to_spawn_ports,
-                );
-                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-                    &state,
-                    &worker_ports_snapshot,
-                    &mut last_published_worker_ports,
                 );
                 reusable_ports_count.store(state.reusable_ports.len(), Ordering::Relaxed);
                 if !autoscale_enabled {
@@ -226,12 +221,20 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                                 if let Some(worker) = state.workers.pop() {
                                     state.reusable_ports.push(worker.port);
                                     workers_to_stop.push(worker);
+                                    workers_changed_before_scale_actions = true;
                                 }
                             }
                             last_scale_down_at = Some(now);
                             cooldown_anchor_changed = true;
                         }
                     }
+                }
+                if workers_changed_before_scale_actions {
+                    refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                        &state,
+                        &worker_ports_snapshot,
+                        &mut last_published_worker_ports,
+                    );
                 }
             }
             if skip_scale_actions {

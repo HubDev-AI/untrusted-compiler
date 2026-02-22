@@ -1405,5 +1405,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1433-m39-lasm-status-writer-snapshot-clone-elision.md`
 - `1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`
 - `1435-m39-lasm-sqlite-named-object-params.md`
+- `1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`
 
 As milestones progress, chapters will be added and linked from this index.
