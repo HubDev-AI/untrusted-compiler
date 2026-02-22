@@ -1511,6 +1511,10 @@ Post-alpha track acceptance anchors:
       - relay topology now exposes `resolve_lasm_cluster_next_live_sender_index_with_lookup_state(...)` so hot callers can pass precomputed lookup availability,
       - fallback multi-dispatch now threads one `relay_has_next_live_sender_lookup` flag through next-live resolution calls, removing repeated lookup-availability branching from degraded dispatch resolution.
       - documented in `docs/book/1337-m39-lasm-cluster-resolve-next-live-with-lookup-state.md`.
+   - [x] Simplified accept-loop fallback multi-dispatch lookup plumbing:
+      - added `dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(...)` so accept-loop code passes one precomputed lookup-state flag instead of rebuilding lookup slices at each fallback branch,
+      - accept-loop fallback path now computes `relay_use_next_live_lookup_for_fallback` once per failed primary dispatch and reuses it across single/dual/default fallback paths.
+      - documented in `docs/book/1338-m39-lasm-cluster-accept-loop-fallback-lookup-state-plumbing.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
