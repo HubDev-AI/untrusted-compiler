@@ -1391,5 +1391,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`
 - `1420-m39-lasm-autoscale-recovery-reserve-and-spawn-lock-light.md`
 - `1421-m39-lasm-in-place-dead-worker-pruning.md`
+- `1422-m39-lasm-autoscale-loop-buffer-reuse.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -63,6 +63,9 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
         let mut last_scale_eval_at = Instant::now()
             .checked_sub(autoscale_check_interval)
             .unwrap_or_else(Instant::now);
+        let mut workers_to_spawn_ports = Vec::new();
+        let mut workers_to_stop = Vec::new();
+        let mut spawned_workers = Vec::new();
         while !stop_flag.load(Ordering::Relaxed) {
             let saturation_pending_before_sleep = saturation_events.load(Ordering::Relaxed);
             let sleep_ms = if autoscale_enabled && saturation_pending_before_sleep > 0 {
@@ -75,8 +78,9 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 break;
             }
             let now = Instant::now();
-            let mut workers_to_spawn_ports = Vec::new();
-            let mut workers_to_stop = Vec::new();
+            workers_to_spawn_ports.clear();
+            workers_to_stop.clear();
+            spawned_workers.clear();
             let mut skip_scale_actions = false;
             let mut cooldown_anchor_changed = false;
             {
@@ -228,14 +232,13 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                 continue;
             }
             let mut workers_changed_after_initial_refresh = false;
-            for mut worker in workers_to_stop {
+            for mut worker in workers_to_stop.drain(..) {
                 let _ = worker.child.kill();
                 let _ = worker.child.wait();
                 workers_changed_after_initial_refresh = true;
             }
-            let mut spawned_workers = Vec::new();
             spawned_workers.reserve(workers_to_spawn_ports.len());
-            for worker_port in workers_to_spawn_ports {
+            for worker_port in workers_to_spawn_ports.drain(..) {
                 match spawn_and_wait_lasm_cluster_worker(&shared_config, worker_port) {
                     Ok(worker) => {
                         spawned_workers.push(worker);
@@ -253,7 +256,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     Err(_) => break,
                 };
                 if !spawned_workers.is_empty() {
-                    state.workers.extend(spawned_workers);
+                    state.workers.extend(spawned_workers.drain(..));
                 }
                 refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                     &state,
