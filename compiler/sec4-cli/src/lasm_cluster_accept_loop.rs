@@ -153,6 +153,27 @@ fn dispatch_lasm_cluster_relay_stream_fallback_with_live_hints(
     }
 }
 
+#[inline(always)]
+fn lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: &mut [usize],
+    start_index_wrapped: usize,
+) -> Option<usize> {
+    if let Some(next_live_index) = lookup_lasm_cluster_next_live_sender_index(
+        relay_sender_live,
+        relay_next_live_sender_lookup,
+        start_index_wrapped,
+    ) {
+        return Some(next_live_index);
+    }
+    refresh_lasm_cluster_next_live_sender_lookup(relay_sender_live, relay_next_live_sender_lookup);
+    lookup_lasm_cluster_next_live_sender_index(
+        relay_sender_live,
+        relay_next_live_sender_lookup,
+        start_index_wrapped,
+    )
+}
+
 fn handle_lasm_cluster_accept_unavailable_stream(
     client_stream: TcpStream,
     active_connections: &AtomicUsize,
@@ -445,9 +466,9 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 != LASM_CLUSTER_RELAY_SENDER_LIVE
                             {
                                 if let Some(next_live_index) =
-                                    lookup_lasm_cluster_next_live_sender_index(
+                                    lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
                                         relay_sender_live.as_slice(),
-                                        relay_next_live_sender_lookup.as_slice(),
+                                        relay_next_live_sender_lookup.as_mut_slice(),
                                         relay_dispatch_cursor,
                                     )
                                 {
@@ -496,9 +517,9 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             {
                                 next_dispatch_wrapped
                             } else if let Some(next_live_index) =
-                                lookup_lasm_cluster_next_live_sender_index(
+                                lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss(
                                     relay_sender_live.as_slice(),
-                                    relay_next_live_sender_lookup.as_slice(),
+                                    relay_next_live_sender_lookup.as_mut_slice(),
                                     next_dispatch_wrapped,
                                 )
                             {

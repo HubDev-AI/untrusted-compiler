@@ -1357,5 +1357,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1385-m39-lasm-cluster-accept-loop-dispatch-error-wrapper.md`
 - `1386-m39-lasm-cluster-accept-loop-post-batch-flush-helper.md`
 - `1387-m39-lasm-cluster-accept-loop-stream-local-live-hints-fastpath.md`
+- `1388-m39-lasm-cluster-accept-loop-next-live-lookup-refresh-on-miss.md`
 
 As milestones progress, chapters will be added and linked from this index.
