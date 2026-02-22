@@ -351,87 +351,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 );
                             }
                             let live_count_after_primary_dispatch = relay_live_sender_count;
-                            let dispatch_result = if !relay_all_senders_live
-                                && relay_live_sender_count == 2
-                            {
-                                let dual_live_indices =
-                                    if let Some(indices) = relay_dual_live_sender_indices {
-                                        Some(indices)
-                                    } else {
-                                        refresh_lasm_cluster_dual_live_sender_indices(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
-                                            &mut relay_dual_live_sender_indices,
-                                        );
-                                        relay_dual_live_sender_indices
-                                    };
-                                if let Some((first_live, second_live)) = dual_live_indices {
-                                    let alternate_live_index =
-                                        if stream_dispatch_start == first_live {
-                                            second_live
-                                        } else if stream_dispatch_start == second_live {
-                                            first_live
-                                        } else {
-                                            first_live
-                                        };
-                                    dispatch_lasm_cluster_relay_stream_fallback_dual_live(
-                                        stream,
-                                        relay_senders,
-                                        relay_sender_live.as_mut_slice(),
-                                        &mut relay_live_sender_count,
-                                        &mut relay_all_senders_live,
-                                        alternate_live_index,
-                                        saw_live_sender,
-                                    )
-                                } else {
-                                    dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
-                                            stream,
-                                            relay_senders,
-                                            relay_sender_live.as_mut_slice(),
-                                            relay_next_live_sender_lookup.as_slice(),
-                                            relay_use_next_live_lookup_for_fallback,
-                                            &mut relay_live_sender_count,
-                                            &mut relay_all_senders_live,
-                                            next_dispatch_index,
-                                            saw_live_sender,
-                                        )
-                                }
-                            } else if !relay_all_senders_live && relay_live_sender_count == 1 {
-                                let single_live_index =
-                                    if let Some(index) = relay_single_live_sender_index {
-                                        Some(index)
-                                    } else {
-                                        refresh_lasm_cluster_single_live_sender_index(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
-                                            &mut relay_single_live_sender_index,
-                                        );
-                                        relay_single_live_sender_index
-                                    };
-                                if let Some(single_live_index) = single_live_index {
-                                    dispatch_lasm_cluster_relay_stream_fallback_single_live(
-                                        stream,
-                                        relay_senders,
-                                        relay_sender_live.as_mut_slice(),
-                                        &mut relay_live_sender_count,
-                                        &mut relay_all_senders_live,
-                                        single_live_index,
-                                        saw_live_sender,
-                                    )
-                                } else {
-                                    dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
-                                            stream,
-                                            relay_senders,
-                                            relay_sender_live.as_mut_slice(),
-                                            relay_next_live_sender_lookup.as_slice(),
-                                            relay_use_next_live_lookup_for_fallback,
-                                            &mut relay_live_sender_count,
-                                            &mut relay_all_senders_live,
-                                            next_dispatch_index,
-                                            saw_live_sender,
-                                        )
-                                }
-                            } else {
+                            let dispatch_result = if relay_all_senders_live {
                                 dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
                                     stream,
                                     relay_senders,
@@ -443,6 +363,101 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                     next_dispatch_index,
                                     saw_live_sender,
                                 )
+                            } else {
+                                match relay_live_sender_count {
+                                    2 => {
+                                        let dual_live_indices =
+                                            if let Some(indices) = relay_dual_live_sender_indices {
+                                                Some(indices)
+                                            } else {
+                                                refresh_lasm_cluster_dual_live_sender_indices(
+                                                    relay_sender_live.as_slice(),
+                                                    relay_live_sender_count,
+                                                    &mut relay_dual_live_sender_indices,
+                                                );
+                                                relay_dual_live_sender_indices
+                                            };
+                                        if let Some((first_live, second_live)) = dual_live_indices
+                                        {
+                                            let alternate_live_index =
+                                                if stream_dispatch_start == first_live {
+                                                    second_live
+                                                } else if stream_dispatch_start == second_live {
+                                                    first_live
+                                                } else {
+                                                    first_live
+                                                };
+                                            dispatch_lasm_cluster_relay_stream_fallback_dual_live(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                alternate_live_index,
+                                                saw_live_sender,
+                                            )
+                                        } else {
+                                            dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                relay_next_live_sender_lookup.as_slice(),
+                                                relay_use_next_live_lookup_for_fallback,
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                next_dispatch_index,
+                                                saw_live_sender,
+                                            )
+                                        }
+                                    }
+                                    1 => {
+                                        let single_live_index =
+                                            if let Some(index) = relay_single_live_sender_index {
+                                                Some(index)
+                                            } else {
+                                                refresh_lasm_cluster_single_live_sender_index(
+                                                    relay_sender_live.as_slice(),
+                                                    relay_live_sender_count,
+                                                    &mut relay_single_live_sender_index,
+                                                );
+                                                relay_single_live_sender_index
+                                            };
+                                        if let Some(single_live_index) = single_live_index {
+                                            dispatch_lasm_cluster_relay_stream_fallback_single_live(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                single_live_index,
+                                                saw_live_sender,
+                                            )
+                                        } else {
+                                            dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                relay_next_live_sender_lookup.as_slice(),
+                                                relay_use_next_live_lookup_for_fallback,
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                next_dispatch_index,
+                                                saw_live_sender,
+                                            )
+                                        }
+                                    }
+                                    _ => dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                        stream,
+                                        relay_senders,
+                                        relay_sender_live.as_mut_slice(),
+                                        relay_next_live_sender_lookup.as_slice(),
+                                        relay_use_next_live_lookup_for_fallback,
+                                        &mut relay_live_sender_count,
+                                        &mut relay_all_senders_live,
+                                        next_dispatch_index,
+                                        saw_live_sender,
+                                    ),
+                                }
                             };
                             if !relay_all_senders_live
                                 && relay_live_sender_count > 1
