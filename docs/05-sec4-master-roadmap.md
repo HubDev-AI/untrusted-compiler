@@ -1955,6 +1955,10 @@ Post-alpha track acceptance anchors:
       - records-log fallback now returns row metadata from the latest matching retained DB record (instead of mirroring the synthetic queryOne record),
       - signature-count and latest-record maps are maintained together so fallback remains deterministic and O(1) on hot lookup path.
       - documented in `docs/book/1445-m39-lasm-db-record-signature-latest-row-materialization.md`.
+   - [x] Extracted records-log queryOne adapter logic into dedicated runtime module:
+      - records-log latest-match lookup and queryOne row-object materialization now live in `lasm_db_runtime_records_log.rs`,
+      - `lasm_db_runtime_dispatch.rs` now delegates records-log adapter-specific behavior through helper calls instead of embedding adapter logic inline.
+      - documented in `docs/book/1446-m39-lasm-db-recordslog-queryone-adapter-module-extraction.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

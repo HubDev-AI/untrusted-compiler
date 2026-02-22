@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I launched `git checkout -b ...` in parallel with read/search commands while starting the records-log adapter module slice, violating branch-gate sequencing. | Keep branch creation/checkouts strictly sequential before any parallel read/search tool calls. |
 | 2026-02-22 | self | I committed the records-log latest-row materialization slice directly on local `dev` before creating the `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, branch first. If missed, recover by branching from the commit and resetting local `dev` to `origin/dev`. |
 | 2026-02-22 | self | While converting records-log queryOne fallback to return `(query_record, matched_source_record)`, I left an old tuple-pattern binding and triggered a type mismatch in `cargo check`. | During Option/tuple refactors, update both the initial binding and downstream `let Some(...)` unpack sites in one edit before compiling. |
 | 2026-02-22 | self | I tried running two unit-test name filters in one `cargo test` command while validating the signature-refcount slice; Cargo accepts only one filter and failed fast. | Keep Cargo test filters one-per-command and run multiple filters as explicit sequential commands. |
