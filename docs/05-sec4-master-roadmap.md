@@ -1709,6 +1709,10 @@ Post-alpha track acceptance anchors:
       - accept loop now retries next-live lookup after one in-place lookup-table refresh when a degraded-mode lookup misses (`lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss`),
       - reduces repeated dead-index scan fallback in stale-lookup windows while preserving deterministic unavailable handling when no live sender exists.
       - documented in `docs/book/1388-m39-lasm-cluster-accept-loop-next-live-lookup-refresh-on-miss.md`.
+   - [x] Added live-start fallback for degraded next-dispatch cursor on lookup miss:
+      - when degraded next-live lookup still misses after refresh, next dispatch cursor now falls back to `stream_dispatch_start` (known live at selection time) instead of keeping a dead wrapped slot,
+      - reduces avoidable dead-slot primary dispatch attempts while preserving deterministic fallback/error behavior.
+      - documented in `docs/book/1389-m39-lasm-cluster-accept-loop-live-start-fallback-on-next-dispatch-lookup-miss.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
