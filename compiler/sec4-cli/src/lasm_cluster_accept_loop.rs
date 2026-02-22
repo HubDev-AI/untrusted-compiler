@@ -21,10 +21,10 @@ use crate::lasm_cluster_relay_topology::{
     refresh_lasm_cluster_dual_live_sender_indices, refresh_lasm_cluster_live_sender_hints,
     refresh_lasm_cluster_next_live_sender_lookup, refresh_lasm_cluster_single_live_sender_index,
 };
-use crate::{
-    LASM_CLUSTER_IDLE_SLEEP_MICROS, LASM_CLUSTER_IDLE_SPIN_THRESHOLD,
-    LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE,
+use crate::lasm_cluster_runtime_config::{
+    resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
 };
+use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
 
 #[derive(Default)]
 struct LasmClusterAcceptDispatchCounters {
@@ -294,7 +294,9 @@ pub(crate) fn run_lasm_cluster_accept_loop(
 ) -> Result<(), String> {
     let mut listener_dispatch_counters = LasmClusterAcceptDispatchCounters::default();
     let mut listener_idle_spins = 0_u32;
-    let listener_idle_sleep_duration = Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS);
+    let listener_idle_spin_threshold = resolve_lasm_cluster_idle_spin_threshold();
+    let listener_idle_sleep_duration =
+        Duration::from_micros(resolve_lasm_cluster_idle_sleep_micros());
     let relay_sender_count = relay_senders.len();
     if relay_sender_count == 0 {
         return Err("LASM cluster relay sender pool unavailable".to_string());
@@ -675,7 +677,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
         }
         if listener_accepted_in_batch == 0 {
             listener_idle_spins += 1;
-            if listener_idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
+            if listener_idle_spins < listener_idle_spin_threshold {
                 std::thread::yield_now();
             } else {
                 std::thread::sleep(listener_idle_sleep_duration);

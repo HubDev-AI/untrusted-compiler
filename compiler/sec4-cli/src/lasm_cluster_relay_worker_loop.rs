@@ -14,10 +14,10 @@ use crate::lasm_cluster_backend_selection::{
     remap_lasm_cluster_relay_port_state_by_index, LASM_CLUSTER_SELECTION_LOOKUP_NONE,
 };
 use crate::lasm_cluster_relay_pump::{LasmClusterRelayPump, LasmClusterRelayPumpStep};
-use crate::{
-    LASM_CLUSTER_IDLE_SLEEP_MICROS, LASM_CLUSTER_IDLE_SPIN_THRESHOLD,
-    LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
+use crate::lasm_cluster_runtime_config::{
+    resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
 };
+use crate::{LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS};
 
 fn initialize_lasm_cluster_relay_connection(
     client: TcpStream,
@@ -452,7 +452,9 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let mut pump_warning_next_allowed: Option<Instant> = None;
         let mut receiver_closed = false;
         let mut idle_spins = 0_u32;
-        let relay_idle_sleep_duration = Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS);
+        let relay_idle_spin_threshold = resolve_lasm_cluster_idle_spin_threshold();
+        let relay_idle_sleep_duration =
+            Duration::from_micros(resolve_lasm_cluster_idle_sleep_micros());
         let mut saturation_events_pending_local = 0_usize;
         let mut saturation_events_total_local = 0_u64;
         let mut active_connection_decrements_local = 0_usize;
@@ -889,7 +891,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             }
 
             idle_spins += 1;
-            if idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
+            if idle_spins < relay_idle_spin_threshold {
                 std::thread::yield_now();
             } else {
                 std::thread::sleep(relay_idle_sleep_duration);

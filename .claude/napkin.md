@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I accidentally triggered the web tool twice while doing a local LASM runtime coding slice. | Keep local implementation turns strictly on `functions.exec_command` + `functions.apply_patch`; do not invoke web tooling unless external research is explicitly required. |
 | 2026-02-22 | self | I committed the wrapper passthrough slice on local `dev` before branching. | Keep a hard pre-commit gate (`git branch --show-current`) and if branch is `dev`, create `codex/*` first; if missed, branch from the commit immediately and repoint local `dev` to `origin/dev`. |
 | 2026-02-22 | self | I attempted a large one-shot patch against `run_lasm_cluster_saturation_boost_matrix.sh` and hit context mismatch because argument names had drifted in adjacent hunks. | For active benchmark scripts, patch in small line-anchored hunks (`nl -ba` + focused apply_patch blocks) instead of broad multi-section patches. |
 | 2026-02-22 | self | I used `awk` `match(..., ..., parts)` capture-array syntax while adding latency-unit parsing in the capacity probe; this environment awk does not support third-arg capture arrays, so parsed `p99` became empty. | Keep benchmark scripts on portable awk constructs (suffix stripping via `sub` + numeric regex checks) and avoid non-portable `match(..., ..., array)` usage. |

@@ -1747,6 +1747,13 @@ Post-alpha track acceptance anchors:
       - `run_full_benchmark_suite.sh` now accepts `--saturation-wrk-processes <n>` and forwards it to both LASM saturation bundle and LASM mode-compare phases,
       - wrapper dry-run/test contracts now validate `wrkProcesses` passthrough and deterministic invalid-input diagnostics for integer/positive constraints.
       - documented in `docs/book/1397-m39-lasm-benchmark-wrapper-wrk-process-passthrough.md`.
+   - [x] Added env-tunable idle backoff controls for LASM cluster accept/relay loops:
+      - new runtime env controls:
+        - `SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD` (default `32`, clamp `1..4096`)
+        - `SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS` (default `250`, clamp `1..50000`)
+      - `run_lasm_cluster_accept_loop` and `spawn_lasm_cluster_relay_worker_loop` now resolve idle spin/sleep values via `lasm_cluster_runtime_config` instead of fixed compile-time constants,
+      - this keeps previous defaults intact while enabling hot-path idle backoff tuning during throughput investigations without code changes.
+      - documented in `docs/book/1398-m39-lasm-cluster-idle-backoff-env-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
