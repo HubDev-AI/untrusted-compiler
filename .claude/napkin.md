@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | After merging PR #678, I started the DB param canonicalization edits on local `dev` before creating the next `codex/*` branch. | Keep a hard post-merge branch gate: create the next `codex/*` branch immediately before any read/edit commands. |
+| 2026-02-22 | self | I accidentally triggered web-tool calls while continuing a local-only LASM DB runtime slice. | Keep local implementation loops strictly on `functions.exec_command` + `functions.apply_patch`; invoke web tooling only for explicit external research tasks. |
 | 2026-02-22 | self | I launched `git checkout -b ...` in parallel with read/search commands while starting the records-log adapter module slice, violating branch-gate sequencing. | Keep branch creation/checkouts strictly sequential before any parallel read/search tool calls. |
 | 2026-02-22 | self | I committed the records-log latest-row materialization slice directly on local `dev` before creating the `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, branch first. If missed, recover by branching from the commit and resetting local `dev` to `origin/dev`. |
 | 2026-02-22 | self | While converting records-log queryOne fallback to return `(query_record, matched_source_record)`, I left an old tuple-pattern binding and triggered a type mismatch in `cargo check`. | During Option/tuple refactors, update both the initial binding and downstream `let Some(...)` unpack sites in one edit before compiling. |

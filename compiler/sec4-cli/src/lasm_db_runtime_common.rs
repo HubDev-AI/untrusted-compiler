@@ -3,7 +3,7 @@ use crate::lasm_db_adapter_state::{
 };
 use crate::LasmDynamicResponseState;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
@@ -96,9 +96,36 @@ pub(crate) fn is_lasm_valid_db_cap_handle(db: i64) -> bool {
 pub(crate) fn normalize_lasm_db_params(value: &str) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        "0".to_string()
-    } else {
-        trimmed.to_string()
+        return "0".to_string();
+    }
+    let parsed = match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(parsed) => parsed,
+        Err(_) => return trimmed.to_string(),
+    };
+    let canonical = canonicalize_lasm_db_params_value(parsed);
+    serde_json::to_string(&canonical).unwrap_or_else(|_| trimmed.to_string())
+}
+
+fn canonicalize_lasm_db_params_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(values) => serde_json::Value::Array(
+            values
+                .into_iter()
+                .map(canonicalize_lasm_db_params_value)
+                .collect(),
+        ),
+        serde_json::Value::Object(entries) => {
+            let mut ordered = BTreeMap::new();
+            for (key, entry) in entries {
+                ordered.insert(key, canonicalize_lasm_db_params_value(entry));
+            }
+            let mut canonical = serde_json::Map::with_capacity(ordered.len());
+            for (key, entry) in ordered {
+                canonical.insert(key, entry);
+            }
+            serde_json::Value::Object(canonical)
+        }
+        other => other,
     }
 }
 
@@ -211,7 +238,9 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_lasm_db_runtime_error, insert_lasm_bounded_cache_entry};
+    use super::{
+        classify_lasm_db_runtime_error, insert_lasm_bounded_cache_entry, normalize_lasm_db_params,
+    };
     use std::collections::{HashMap, VecDeque};
 
     #[test]
@@ -250,5 +279,27 @@ mod tests {
         assert!(!cache.contains_key("a"));
         assert_eq!(cache.get("b"), Some(&2));
         assert_eq!(cache.get("c"), Some(&3));
+    }
+
+    #[test]
+    fn normalize_db_params_canonicalizes_object_key_order() {
+        let normalized = normalize_lasm_db_params("{\"b\":2,\"a\":1}");
+        assert_eq!(normalized, "{\"a\":1,\"b\":2}");
+    }
+
+    #[test]
+    fn normalize_db_params_canonicalizes_nested_json() {
+        let normalized =
+            normalize_lasm_db_params("{\"b\":[{\"z\":1,\"a\":2}],\"a\":{\"y\":3,\"x\":4}}");
+        assert_eq!(
+            normalized,
+            "{\"a\":{\"x\":4,\"y\":3},\"b\":[{\"a\":2,\"z\":1}]}"
+        );
+    }
+
+    #[test]
+    fn normalize_db_params_preserves_non_json_text() {
+        let normalized = normalize_lasm_db_params("alpha");
+        assert_eq!(normalized, "alpha");
     }
 }
