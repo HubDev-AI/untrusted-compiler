@@ -1345,5 +1345,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1373-m39-lasm-cluster-relay-pump-release-helper.md`
 - `1374-m39-lasm-cluster-relay-pump-warning-throttle-helper.md`
 - `1375-m39-lasm-cluster-relay-pump-cursor-helper-unification.md`
+- `1376-m39-lasm-cluster-relay-pump-step-shared-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.
