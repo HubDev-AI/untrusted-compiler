@@ -15475,6 +15475,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":3")
+            && list_response.contains("\"recordsCapacity\":")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"txHandleCount\":")

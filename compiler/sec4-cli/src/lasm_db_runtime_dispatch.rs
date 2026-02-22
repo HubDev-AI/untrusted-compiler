@@ -11,9 +11,10 @@ use crate::lasm_db_runtime_sqlite::{
     run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
 };
 use crate::{
-    lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
-    LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
+    set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
+    LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_HEADER,
+    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 use std::collections::BTreeMap;
@@ -165,7 +166,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         created_at_ms: lasm_now_ms(),
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                    state.db_records.push(record.clone());
+                    append_lasm_dynamic_db_record(&mut state, record.clone());
                     if let Err(message) = persist_lasm_dynamic_db_record_append(&mut state, &record)
                     {
                         eprintln!(
@@ -422,7 +423,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         created_at_ms: lasm_now_ms(),
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                    state.db_records.push(record.clone());
+                    append_lasm_dynamic_db_record(&mut state, record.clone());
                     if let Err(message) = persist_lasm_dynamic_db_record_append(&mut state, &record)
                     {
                         eprintln!(
@@ -615,7 +616,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        state.db_records.push(record.clone());
+                        append_lasm_dynamic_db_record(&mut state, record.clone());
                         if let Err(message) =
                             persist_lasm_dynamic_db_record_append(&mut state, &record)
                         {
@@ -688,7 +689,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        state.db_records.push(record.clone());
+                        append_lasm_dynamic_db_record(&mut state, record.clone());
                         if let Err(message) =
                             persist_lasm_dynamic_db_record_append(&mut state, &record)
                         {
@@ -724,7 +725,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        state.db_records.push(record.clone());
+                        append_lasm_dynamic_db_record(&mut state, record.clone());
                         if let Err(message) =
                             persist_lasm_dynamic_db_record_append(&mut state, &record)
                         {

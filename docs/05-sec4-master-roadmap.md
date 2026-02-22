@@ -1801,6 +1801,11 @@ Post-alpha track acceptance anchors:
       - telemetry is emitted for all adapters (records.log/sqlite/postgres) from shared dynamic runtime state,
       - this gives operators direct visibility into runtime cache utilization during DB-path tuning/debug runs.
       - documented in `docs/book/1406-m39-lasm-db-cache-telemetry-in-list-records.md`.
+   - [x] Added bounded LASM DB record-history capacity guard:
+      - new runtime env control `SEC4_RT_LASM_DB_RECORDS_MAX` (default `10000`) bounds in-memory `db_records` history and drops oldest entries on overflow,
+      - startup record load now applies the same bound to prevent unbounded process-memory growth from large persisted DB stores,
+      - `DbListRecordsResponse` now includes `recordsCapacity` so operators can confirm configured history bounds in runtime telemetry.
+      - documented in `docs/book/1408-m39-lasm-db-record-history-capacity-guard.md`.
    - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
    - [x] Records-log `db.queryOne` fallback now returns structured `rowObject` metadata (including `affected_rows`) instead of null, aligning response shape with sqlite/postgres query-one materialization while preserving deterministic fallback semantics (`docs/book/1097-m39-lasm-records-log-query-one-row-object-parity.md`).
    - [x] LASM DB runtime now rejects invalid DB capability handles (`db != 1`) for `db.exec`, `db.queryOne`, and inline `db.tx(...)` sources used by `db.execTx`, preventing manual-handle SQL execution on sqlite/postgres adapters and preserving deterministic `DB.*_INVALID` validation envelopes (`docs/book/1098-m39-lasm-db-capability-handle-validation-guard.md`).

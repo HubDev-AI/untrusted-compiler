@@ -41,6 +41,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_by_id: HashMap<String, serde_json::Value>,
     pub(crate) users_store_path: Option<PathBuf>,
     pub(crate) db_records: Vec<LasmDbRecord>,
+    pub(crate) db_records_max: usize,
     pub(crate) db_records_adapter: LasmDbRecordsAdapter,
     pub(crate) db_records_store_path: Option<PathBuf>,
     pub(crate) db_records_sqlite_store_path: Option<PathBuf>,
@@ -64,6 +65,23 @@ pub(crate) struct LasmDynamicResponseState {
 pub(crate) const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
 pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
+pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
+
+fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacity: usize) {
+    let bounded_capacity = capacity.max(1);
+    if records.len() > bounded_capacity {
+        let overflow = records.len() - bounded_capacity;
+        records.drain(0..overflow);
+    }
+}
+
+pub(crate) fn append_lasm_dynamic_db_record(
+    state: &mut LasmDynamicResponseState,
+    record: LasmDbRecord,
+) {
+    state.db_records.push(record);
+    truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
+}
 
 pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
@@ -95,6 +113,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
         "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
         LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT,
     );
+    let db_records_max =
+        resolve_lasm_env_positive_usize("SEC4_RT_LASM_DB_RECORDS_MAX", LASM_DB_RECORDS_MAX_DEFAULT);
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
@@ -108,7 +128,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
         .unwrap_or_default();
-    let db_records = match db_records_adapter {
+    let mut db_records = match db_records_adapter {
         LasmDbRecordsAdapter::RecordsLog => db_records_store_path
             .as_ref()
             .map(|path| load_lasm_dynamic_db_records_from_disk(path.as_path()))
@@ -152,6 +172,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
             records
         }
     };
+    truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -167,6 +188,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         users_by_id,
         users_store_path,
         db_records,
+        db_records_max,
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
@@ -267,4 +289,39 @@ pub(crate) fn persist_lasm_dynamic_users_to_disk(
         )
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        append_lasm_dynamic_db_record, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
+    };
+
+    fn sample_record(id: u64) -> LasmDbRecord {
+        LasmDbRecord {
+            id,
+            op: "exec".to_string(),
+            db: 1,
+            template: "SELECT 1".to_string(),
+            params: "0".to_string(),
+            tx: 0,
+            affected_rows: 0,
+            created_at_ms: 1,
+        }
+    }
+
+    #[test]
+    fn append_db_record_enforces_capacity_by_dropping_oldest() {
+        let mut state = LasmDynamicResponseState {
+            db_records_max: 2,
+            db_records_adapter: LasmDbRecordsAdapter::RecordsLog,
+            ..Default::default()
+        };
+        append_lasm_dynamic_db_record(&mut state, sample_record(1));
+        append_lasm_dynamic_db_record(&mut state, sample_record(2));
+        append_lasm_dynamic_db_record(&mut state, sample_record(3));
+        assert_eq!(state.db_records.len(), 2);
+        assert_eq!(state.db_records[0].id, 2);
+        assert_eq!(state.db_records[1].id, 3);
+    }
 }
