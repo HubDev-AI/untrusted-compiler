@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::lasm_cluster_accept_dispatch::{
     flush_lasm_cluster_active_connection_decrements, flush_lasm_cluster_saturation_counters,
-    write_lasm_cluster_unavailable_response, LasmClusterUnavailableReason,
+    write_lasm_cluster_no_healthy_workers_response, write_lasm_cluster_worker_unavailable_response,
 };
 use crate::lasm_cluster_backend_selection::{
     rebuild_lasm_cluster_backend_selection_lookup, rebuild_lasm_cluster_worker_backend_addrs,
@@ -273,10 +273,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 if selected_backend_index == LASM_CLUSTER_SELECTION_LOOKUP_NONE {
                     saturation_events_pending_local += 1;
                     saturation_events_total_local += 1;
-                    let _ = write_lasm_cluster_unavailable_response(
-                        &mut client,
-                        LasmClusterUnavailableReason::NoHealthyWorkers,
-                    );
+                    let _ = write_lasm_cluster_no_healthy_workers_response(&mut client);
                     active_connection_decrements_local += 1;
                     continue;
                 }
@@ -349,10 +346,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             *warning_next_allowed_entry =
                                 Some(now + relay_warning_throttle_duration);
                         }
-                        let _ = write_lasm_cluster_unavailable_response(
-                            &mut client,
-                            LasmClusterUnavailableReason::WorkerUnavailable,
-                        );
+                        let _ = write_lasm_cluster_worker_unavailable_response(&mut client);
                         active_connection_decrements_local += 1;
                     }
                 }
