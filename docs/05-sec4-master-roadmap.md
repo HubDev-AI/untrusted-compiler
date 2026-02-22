@@ -1519,6 +1519,10 @@ Post-alpha track acceptance anchors:
       - `dispatch_lasm_cluster_relay_stream_fallback_multi` now advances scan index with direct increment + wrap reset (`scan_index += 1; if == sender_count {0}`) in the all-live branch,
       - preserves sender traversal order and fallback semantics while removing per-iteration wrapped-index helper call overhead from the all-live fallback scan loop.
       - documented in `docs/book/1339-m39-lasm-cluster-fallback-all-live-direct-wrap-increment.md`.
+   - [x] Removed remaining saturating arithmetic from fallback live-target setup:
+      - fallback scan slot limit now uses direct `sender_count - 1` under existing `sender_count > 1` invariant,
+      - fallback live-target setup now uses direct bounded decrement guards (`live_count - 1`) instead of `saturating_sub` for both initial and dynamic live-target tracking.
+      - documented in `docs/book/1340-m39-lasm-cluster-fallback-live-target-direct-guards.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
