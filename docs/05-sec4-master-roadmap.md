@@ -1801,6 +1801,10 @@ Post-alpha track acceptance anchors:
       - min-worker recovery port reservation now fills the existing autoscale spawn-port buffer directly instead of returning a temporary vector each tick,
       - this keeps recovery reservation on the same reusable autoscale buffer path while preserving deterministic port-reservation behavior.
       - documented in `docs/book/1423-m39-lasm-autoscale-recovery-port-buffer-reuse.md`.
+   - [x] Added reusable worker-port pool for cluster scaling cycles:
+      - cluster state now tracks reclaimed worker ports and reuses them for future scale-up/min-worker recovery reservations before consuming new `next_port` values,
+      - dead-worker pruning and autoscale scale-down paths now feed reclaimed ports into the reuse pool.
+      - documented in `docs/book/1424-m39-lasm-cluster-worker-port-reuse-pool.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
