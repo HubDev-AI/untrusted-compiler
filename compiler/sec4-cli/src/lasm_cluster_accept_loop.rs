@@ -10,7 +10,7 @@ use crate::lasm_cluster_accept_dispatch::{
 };
 use crate::lasm_cluster_fallback_dispatch::{
     dispatch_lasm_cluster_relay_stream_fallback_dual_live,
-    dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state,
+    dispatch_lasm_cluster_relay_stream_fallback_multi,
     dispatch_lasm_cluster_relay_stream_fallback_single_live, LasmClusterRelayDispatchError,
 };
 use crate::lasm_cluster_relay_send::{
@@ -342,9 +342,11 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 relay_single_live_sender_index = None;
                                 relay_dual_live_sender_indices = None;
                             }
-                            let relay_use_next_live_lookup_for_fallback =
+                            let relay_has_next_live_sender_lookup_for_fallback =
                                 relay_has_next_live_sender_lookup && relay_live_sender_count > 2;
-                            if primary_disconnected && relay_use_next_live_lookup_for_fallback {
+                            if primary_disconnected
+                                && relay_has_next_live_sender_lookup_for_fallback
+                            {
                                 refresh_lasm_cluster_next_live_sender_lookup(
                                     relay_sender_live.as_slice(),
                                     relay_next_live_sender_lookup.as_mut_slice(),
@@ -352,12 +354,12 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             }
                             let live_count_after_primary_dispatch = relay_live_sender_count;
                             let dispatch_result = if relay_all_senders_live {
-                                dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                dispatch_lasm_cluster_relay_stream_fallback_multi(
                                     stream,
                                     relay_senders,
                                     relay_sender_live.as_mut_slice(),
                                     relay_next_live_sender_lookup.as_slice(),
-                                    relay_use_next_live_lookup_for_fallback,
+                                    relay_has_next_live_sender_lookup_for_fallback,
                                     &mut relay_live_sender_count,
                                     &mut relay_all_senders_live,
                                     next_dispatch_index,
@@ -377,8 +379,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                                 );
                                                 relay_dual_live_sender_indices
                                             };
-                                        if let Some((first_live, second_live)) = dual_live_indices
-                                        {
+                                        if let Some((first_live, second_live)) = dual_live_indices {
                                             let alternate_live_index =
                                                 if stream_dispatch_start == first_live {
                                                     second_live
@@ -397,12 +398,12 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                                 saw_live_sender,
                                             )
                                         } else {
-                                            dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                            dispatch_lasm_cluster_relay_stream_fallback_multi(
                                                 stream,
                                                 relay_senders,
                                                 relay_sender_live.as_mut_slice(),
                                                 relay_next_live_sender_lookup.as_slice(),
-                                                relay_use_next_live_lookup_for_fallback,
+                                                relay_has_next_live_sender_lookup_for_fallback,
                                                 &mut relay_live_sender_count,
                                                 &mut relay_all_senders_live,
                                                 next_dispatch_index,
@@ -433,12 +434,12 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                                 saw_live_sender,
                                             )
                                         } else {
-                                            dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                            dispatch_lasm_cluster_relay_stream_fallback_multi(
                                                 stream,
                                                 relay_senders,
                                                 relay_sender_live.as_mut_slice(),
                                                 relay_next_live_sender_lookup.as_slice(),
-                                                relay_use_next_live_lookup_for_fallback,
+                                                relay_has_next_live_sender_lookup_for_fallback,
                                                 &mut relay_live_sender_count,
                                                 &mut relay_all_senders_live,
                                                 next_dispatch_index,
@@ -446,12 +447,12 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                             )
                                         }
                                     }
-                                    _ => dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(
+                                    _ => dispatch_lasm_cluster_relay_stream_fallback_multi(
                                         stream,
                                         relay_senders,
                                         relay_sender_live.as_mut_slice(),
                                         relay_next_live_sender_lookup.as_slice(),
-                                        relay_use_next_live_lookup_for_fallback,
+                                        relay_has_next_live_sender_lookup_for_fallback,
                                         &mut relay_live_sender_count,
                                         &mut relay_all_senders_live,
                                         next_dispatch_index,
