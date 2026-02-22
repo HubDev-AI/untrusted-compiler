@@ -72,6 +72,22 @@ fn release_lasm_cluster_relay_connection(
     *active_connection_decrements_local += 1;
 }
 
+fn emit_lasm_cluster_relay_pump_warning_if_allowed(
+    pump_warning_next_allowed: &mut Option<Instant>,
+    relay_warning_throttle_duration: Duration,
+    message: &str,
+) {
+    let now = Instant::now();
+    let warning_allowed = match *pump_warning_next_allowed {
+        Some(next_allowed_at) => now >= next_allowed_at,
+        None => true,
+    };
+    if warning_allowed {
+        eprintln!("warning: LASM cluster relay pump failed: {message}");
+        *pump_warning_next_allowed = Some(now + relay_warning_throttle_duration);
+    }
+}
+
 fn recompute_lasm_cluster_relay_selection_state(
     worker_port_count: usize,
     unhealthy_ports_until_by_index: &[Option<Instant>],
@@ -695,16 +711,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             progressed = true;
                         }
                         Err(err) => {
-                            let now = Instant::now();
-                            let warning_allowed = match pump_warning_next_allowed {
-                                Some(next_allowed_at) => now >= next_allowed_at,
-                                None => true,
-                            };
-                            if warning_allowed {
-                                eprintln!("warning: LASM cluster relay pump failed: {err}");
-                                pump_warning_next_allowed =
-                                    Some(now + relay_warning_throttle_duration);
-                            }
+                            emit_lasm_cluster_relay_pump_warning_if_allowed(
+                                &mut pump_warning_next_allowed,
+                                relay_warning_throttle_duration,
+                                &err,
+                            );
                             release_lasm_cluster_relay_connection(
                                 &mut relay_connections,
                                 index,
@@ -759,16 +770,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             }
                         }
                         Err(err) => {
-                            let now = Instant::now();
-                            let warning_allowed = match pump_warning_next_allowed {
-                                Some(next_allowed_at) => now >= next_allowed_at,
-                                None => true,
-                            };
-                            if warning_allowed {
-                                eprintln!("warning: LASM cluster relay pump failed: {err}");
-                                pump_warning_next_allowed =
-                                    Some(now + relay_warning_throttle_duration);
-                            }
+                            emit_lasm_cluster_relay_pump_warning_if_allowed(
+                                &mut pump_warning_next_allowed,
+                                relay_warning_throttle_duration,
+                                &err,
+                            );
                             release_lasm_cluster_relay_connection(
                                 &mut relay_connections,
                                 relay_pump_cursor,
