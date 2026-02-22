@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I accidentally triggered the web tool while continuing a local LASM autoscale implementation slice. | Keep local coding turns strictly on `functions.exec_command`/`functions.apply_patch`; only use web tools when external research is explicitly needed. |
 | 2026-02-22 | self | I ran two focused Cargo tests in one parallel call again and reintroduced package/build lock contention noise. | Keep Cargo checks/tests strictly sequential; parallel calls are only for read/search/syntax commands. |
 | 2026-02-22 | self | I launched `git checkout -b ...` in parallel with a branch-read command again, which returned stale branch state and violates branch-gate sequencing. | Keep branch creation/checkouts strictly sequential; only run parallel reads after branch state is settled. |
 | 2026-02-22 | self | I started this continuation with branch/status commands before the mandatory standalone `.claude/napkin.md` read. | Keep a strict first-command gate: run `cat .claude/napkin.md` alone before any git/status/search commands. |

@@ -1781,6 +1781,10 @@ Post-alpha track acceptance anchors:
       - relay-worker now builds per-backend fallback start cursors when lookup state is recomputed,
       - this removes repeated `selection_lookup` binary-search work from per-failure fallback scans in degraded cluster paths while preserving fallback ordering semantics.
       - documented in `docs/book/1418-m39-lasm-relay-fallback-start-cursor-precompute.md`.
+   - [x] Moved autoscale process spawn/stop operations outside the cluster-state write lock:
+      - autoscale loop now plans scale-up ports and scale-down worker removals under lock, then performs process spawn/kill/wait outside the lock and re-locks only to apply spawned workers + publish snapshots,
+      - this reduces lock hold time on cluster state during expensive process lifecycle operations while preserving existing autoscale cooldown and scaling semantics.
+      - documented in `docs/book/1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
