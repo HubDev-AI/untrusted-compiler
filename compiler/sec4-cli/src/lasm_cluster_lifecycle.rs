@@ -210,25 +210,29 @@ pub(crate) fn spawn_and_wait_lasm_cluster_worker(
 }
 
 pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
-    let mut kept = Vec::with_capacity(state.workers.len());
-    for mut worker in state.workers.drain(..) {
-        match worker.child.try_wait() {
+    let mut worker_index = 0usize;
+    while worker_index < state.workers.len() {
+        let worker_port = state.workers[worker_index].port;
+        match state.workers[worker_index].child.try_wait() {
             Ok(Some(status)) => {
                 eprintln!(
                     "warning: LASM cluster worker on port {} exited: {}",
-                    worker.port, status
+                    worker_port, status
                 );
+                state.workers.swap_remove(worker_index);
             }
-            Ok(None) => kept.push(worker),
+            Ok(None) => {
+                worker_index += 1;
+            }
             Err(err) => {
                 eprintln!(
                     "warning: could not inspect LASM cluster worker on port {}: {}",
-                    worker.port, err
+                    worker_port, err
                 );
+                state.workers.swap_remove(worker_index);
             }
         }
     }
-    state.workers = kept;
 }
 
 pub(crate) fn reserve_lasm_cluster_min_worker_ports(

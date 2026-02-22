@@ -1789,6 +1789,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now reserves recovery worker ports under lock and executes recovery worker spawn outside the lock,
       - this avoids holding cluster-state write lock during min-worker recovery process startup while preserving deterministic min-instance recovery behavior.
       - documented in `docs/book/1420-m39-lasm-autoscale-recovery-reserve-and-spawn-lock-light.md`.
+   - [x] Switched dead-worker pruning to in-place removal:
+      - cluster lifecycle now prunes exited/uninspectable workers with in-place `swap_remove` iteration instead of rebuilding a temporary worker vector each maintenance pass,
+      - this reduces autoscale maintenance allocation churn while preserving deterministic dead-worker warning behavior.
+      - documented in `docs/book/1421-m39-lasm-in-place-dead-worker-pruning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
