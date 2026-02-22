@@ -52,6 +52,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let mut relay_selection_reservation_offset = 0_usize;
         let mut relay_selection_reservation_next_index = 0_usize;
         let mut relay_selection_reservation_worker_port_count = 0_usize;
+        let relay_selection_reservation_chunk =
+            relay_accept_batch_max.max(relay_selection_reservation_min_chunk);
         let mut relay_pump_cursor = 0_usize;
         let mut unhealthy_prune_next_at: Option<Instant> = None;
         let relay_warning_throttle_duration =
@@ -247,11 +249,9 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
                         {
-                            let reservation_chunk =
-                                relay_accept_batch_max.max(relay_selection_reservation_min_chunk);
                             let relay_selection_reservation_base = relay_selection_counter
-                                .fetch_add(reservation_chunk, Ordering::Relaxed);
-                            relay_selection_reservation_len = reservation_chunk;
+                                .fetch_add(relay_selection_reservation_chunk, Ordering::Relaxed);
+                            relay_selection_reservation_len = relay_selection_reservation_chunk;
                             relay_selection_reservation_offset = 0;
                             relay_selection_reservation_worker_port_count = worker_port_count;
                             relay_selection_reservation_next_index =

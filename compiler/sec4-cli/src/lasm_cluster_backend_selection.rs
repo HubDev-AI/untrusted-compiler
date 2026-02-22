@@ -34,12 +34,9 @@ pub(crate) fn rebuild_lasm_cluster_backend_selection_lookup(
     let Some(first_healthy_index) = first_healthy_index else {
         return (false, false);
     };
-
-    for index in ((first_healthy_index.saturating_add(1))..worker_port_count).rev() {
-        if lookup[index] != LASM_CLUSTER_SELECTION_LOOKUP_NONE {
-            break;
-        }
-        lookup[index] = first_healthy_index;
+    let wrap_fill_start = first_healthy_index + 1;
+    if wrap_fill_start < worker_port_count {
+        lookup[wrap_fill_start..worker_port_count].fill(first_healthy_index);
     }
     (true, false)
 }

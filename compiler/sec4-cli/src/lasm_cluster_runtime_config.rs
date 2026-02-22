@@ -67,11 +67,11 @@ pub(crate) fn desired_lasm_cluster_instances(
     max_instances: usize,
     target_connections_per_instance: usize,
 ) -> usize {
+    let target_connections_per_instance = target_connections_per_instance.max(1);
     let needed = if active_connections == 0 {
         min_instances
     } else {
-        active_connections.saturating_add(target_connections_per_instance.saturating_sub(1))
-            / target_connections_per_instance
+        ((active_connections - 1) / target_connections_per_instance) + 1
     };
     needed.clamp(min_instances, max_instances)
 }
