@@ -1940,6 +1940,10 @@ Post-alpha track acceptance anchors:
       - `db.queryOne` runtime dispatch now skips `db_records` history scan on Postgres/SQLite adapter paths where row materialization is served directly by adapter runtime,
       - records-log fallback path keeps deterministic reverse-scan behavior for template/params matching, preserving existing not-found/result semantics.
       - documented in `docs/book/1440-m39-lasm-queryone-recordscan-recordslog-only.md`.
+   - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
+      - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
+      - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
+      - documented in `docs/book/1442-m39-lasm-exectx-parse-after-handle-validation.md`.
    - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
       - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
       - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.

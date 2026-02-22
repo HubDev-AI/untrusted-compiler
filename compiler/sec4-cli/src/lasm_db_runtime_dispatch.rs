@@ -296,19 +296,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(parse_lasm_postgres_query_template_and_params(
-                    template.as_str(),
-                    params.as_str(),
-                ))
-            } else {
-                None
-            };
-            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(parse_lasm_sqlite_query_params(params.as_str()))
-            } else {
-                None
-            };
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -376,6 +363,19 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             }
+            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+                Some(parse_lasm_postgres_query_template_and_params(
+                    template.as_str(),
+                    params.as_str(),
+                ))
+            } else {
+                None
+            };
+            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                Some(parse_lasm_sqlite_query_params(params.as_str()))
+            } else {
+                None
+            };
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
