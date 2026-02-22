@@ -1581,6 +1581,10 @@ Post-alpha track acceptance anchors:
       - fallback dual-live branch now computes second-attempt start index with direct increment+wrap arithmetic,
       - removed now-unused relay-topology wrapped-index helper symbol.
       - documented in `docs/book/1356-m39-lasm-cluster-accept-fallback-direct-wrap-step-elision.md`.
+   - [x] Added relay worker connect-failure single healthy-backend fallback attempt:
+      - when the primary selected backend connect fails, relay worker now marks it unhealthy and immediately tries one alternate currently-healthy backend before returning worker-unavailable response,
+      - keeps deterministic unhealthy/warning tracking while reducing request failures under transient single-backend connect faults.
+      - documented in `docs/book/1357-m39-lasm-cluster-relay-connect-failure-single-fallback-attempt.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

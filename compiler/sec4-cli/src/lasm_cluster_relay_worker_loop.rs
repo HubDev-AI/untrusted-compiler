@@ -366,6 +366,90 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             *warning_next_allowed_entry =
                                 Some(now + relay_warning_throttle_duration);
                         }
+                        if unhealthy_port_count < selected_worker_port_count {
+                            if let Some(fallback_backend_index) = unhealthy_ports_until_by_index
+                                .iter()
+                                .take(selected_worker_port_count)
+                                .position(|entry| entry.is_none())
+                            {
+                                let fallback_backend_addr =
+                                    selected_worker_backend_addrs[fallback_backend_index];
+                                match TcpStream::connect_timeout(
+                                    &fallback_backend_addr,
+                                    relay_backend_connect_timeout,
+                                ) {
+                                    Ok(upstream) => {
+                                        let _ = client.set_nodelay(true);
+                                        let _ = upstream.set_nodelay(true);
+                                        let relay_result = if let Some((
+                                            client_to_upstream,
+                                            upstream_to_client,
+                                        )) = relay_buffer_pool.pop()
+                                        {
+                                            LasmClusterRelayPump::new_with_buffers(
+                                                client,
+                                                upstream,
+                                                client_to_upstream,
+                                                upstream_to_client,
+                                            )
+                                        } else {
+                                            LasmClusterRelayPump::new(client, upstream)
+                                        };
+                                        match relay_result {
+                                            Ok(relay) => relay_connections.push(relay),
+                                            Err(message) => {
+                                                let warning_allowed = match pump_warning_next_allowed
+                                                {
+                                                    Some(next_allowed_at) => now >= next_allowed_at,
+                                                    None => true,
+                                                };
+                                                if warning_allowed {
+                                                    eprintln!(
+                                                        "warning: LASM cluster relay init failed: {message}"
+                                                    );
+                                                    pump_warning_next_allowed = Some(
+                                                        now + relay_warning_throttle_duration,
+                                                    );
+                                                }
+                                                active_connection_decrements_local += 1;
+                                            }
+                                        }
+                                        continue;
+                                    }
+                                    Err(fallback_err) => {
+                                        let fallback_unhealthy_entry = &mut unhealthy_ports_until_by_index
+                                            [fallback_backend_index];
+                                        let should_mark_fallback_unhealthy =
+                                            match *fallback_unhealthy_entry {
+                                                Some(existing_until) => existing_until <= now,
+                                                None => true,
+                                            };
+                                        if should_mark_fallback_unhealthy {
+                                            unhealthy_port_count += 1;
+                                            selection_lookup_dirty = true;
+                                        }
+                                        *fallback_unhealthy_entry = Some(unhealthy_until);
+                                        let fallback_warning_next_allowed_entry =
+                                            &mut connect_warning_next_allowed_by_index
+                                                [fallback_backend_index];
+                                        let fallback_warning_allowed =
+                                            match *fallback_warning_next_allowed_entry {
+                                                Some(next_allowed_at) => now >= next_allowed_at,
+                                                None => true,
+                                            };
+                                        if fallback_warning_allowed {
+                                            eprintln!(
+                                                "warning: LASM cluster worker {} connect failed: {}",
+                                                fallback_backend_addr.port(),
+                                                fallback_err
+                                            );
+                                            *fallback_warning_next_allowed_entry =
+                                                Some(now + relay_warning_throttle_duration);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         let _ = write_lasm_cluster_worker_unavailable_response(&mut client);
                         active_connection_decrements_local += 1;
                     }
