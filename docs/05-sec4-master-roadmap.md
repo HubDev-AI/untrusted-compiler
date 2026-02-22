@@ -1959,6 +1959,10 @@ Post-alpha track acceptance anchors:
       - records-log latest-match lookup and queryOne row-object materialization now live in `lasm_db_runtime_records_log.rs`,
       - `lasm_db_runtime_dispatch.rs` now delegates records-log adapter-specific behavior through helper calls instead of embedding adapter logic inline.
       - documented in `docs/book/1446-m39-lasm-db-recordslog-queryone-adapter-module-extraction.md`.
+   - [x] Added canonical JSON normalization for DB parameter signatures:
+      - `normalize_lasm_db_params` now canonicalizes JSON object key ordering recursively (while preserving non-JSON passthrough behavior),
+      - semantically equivalent JSON param payloads now map to deterministic normalized strings and stable records-log signature keys.
+      - documented in `docs/book/1447-m39-lasm-db-param-canonical-json-normalization.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
