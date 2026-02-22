@@ -1451,6 +1451,10 @@ Post-alpha track acceptance anchors:
       - moved accept-worker thread orchestration (listener clones, worker thread spawn/join, primary accept-loop run) from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_accept_workers.rs` (`run_lasm_cluster_accept_workers`, `LasmClusterAcceptWorkersConfig`),
       - cluster orchestration now delegates accept-worker lifecycle through module boundary while preserving deterministic accept-loop error reporting and stop-flag shutdown behavior.
       - documented in `docs/book/1322-m39-lasm-cluster-accept-workers-module-extraction.md`.
+   - [x] Extracted LASM cluster shutdown finalization into dedicated module:
+      - moved repeated cluster shutdown/join sequence from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_shutdown.rs` (`finalize_lasm_cluster_runtime`),
+      - nonblocking failure, accept-worker failure, and normal completion paths now share one deterministic finalizer for stop-flag set, relay/aux thread joins, and worker-stop lifecycle cleanup.
+      - documented in `docs/book/1323-m39-lasm-cluster-shutdown-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
