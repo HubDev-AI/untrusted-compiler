@@ -71,7 +71,7 @@ use lasm_cluster_runtime_config::{
     resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
-use lasm_cluster_shutdown::finalize_lasm_cluster_runtime;
+use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
@@ -7713,6 +7713,12 @@ const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
 const LASM_CLUSTER_RELAY_SENDER_LIVE: u8 = 1;
 const LASM_CLUSTER_RELAY_SENDER_DEAD: u8 = 0;
 
+fn report_lasm_cluster_shutdown_panics(summary: &LasmClusterShutdownSummary) {
+    if summary.has_thread_panics() {
+        eprintln!("run failed: {}", summary.panic_message());
+    }
+}
+
 fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let listener = match TcpListener::bind(("127.0.0.1", config.listen_port)) {
         Ok(listener) => listener,
@@ -7893,7 +7899,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_accept_batch_max,
     }) {
         eprintln!("run failed: {message}");
-        finalize_lasm_cluster_runtime(
+        let shutdown_summary = finalize_lasm_cluster_runtime(
             &stop_flag,
             relay_senders,
             relay_handles,
@@ -7901,9 +7907,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             status_writer_handle,
             &shared_state,
         );
+        report_lasm_cluster_shutdown_panics(&shutdown_summary);
         return Err(2);
     }
-    finalize_lasm_cluster_runtime(
+    let shutdown_summary = finalize_lasm_cluster_runtime(
         &stop_flag,
         relay_senders,
         relay_handles,
@@ -7911,6 +7918,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         status_writer_handle,
         &shared_state,
     );
+    if shutdown_summary.has_thread_panics() {
+        report_lasm_cluster_shutdown_panics(&shutdown_summary);
+        return Err(2);
+    }
     Ok(())
 }
 
