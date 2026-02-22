@@ -26,6 +26,14 @@ use crate::{
     LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE,
 };
 
+#[derive(Default)]
+struct LasmClusterAcceptDispatchCounters {
+    listener_saturation_pending_local: usize,
+    listener_saturation_total_local: u64,
+    listener_dispatch_fallback_total_local: u64,
+    listener_dispatch_short_circuit_total_local: u64,
+}
+
 fn dispatch_lasm_cluster_relay_stream_fallback_with_live_hints(
     stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
@@ -153,10 +161,7 @@ fn handle_lasm_cluster_accept_unavailable_stream(
     relay_dispatch_fallback_total: &AtomicU64,
     relay_dispatch_short_circuit_total: &AtomicU64,
     listener_enqueued_local: &mut usize,
-    listener_saturation_pending_local: &mut usize,
-    listener_saturation_total_local: &mut u64,
-    listener_dispatch_fallback_total_local: &mut u64,
-    listener_dispatch_short_circuit_total_local: &mut u64,
+    listener_dispatch_counters: &mut LasmClusterAcceptDispatchCounters,
 ) -> Result<(), String> {
     handle_lasm_cluster_accept_dispatch_error(
         LasmClusterRelayDispatchError::Unavailable(client_stream),
@@ -166,10 +171,10 @@ fn handle_lasm_cluster_accept_unavailable_stream(
         relay_dispatch_fallback_total,
         relay_dispatch_short_circuit_total,
         listener_enqueued_local,
-        listener_saturation_pending_local,
-        listener_saturation_total_local,
-        listener_dispatch_fallback_total_local,
-        listener_dispatch_short_circuit_total_local,
+        &mut listener_dispatch_counters.listener_saturation_pending_local,
+        &mut listener_dispatch_counters.listener_saturation_total_local,
+        &mut listener_dispatch_counters.listener_dispatch_fallback_total_local,
+        &mut listener_dispatch_counters.listener_dispatch_short_circuit_total_local,
     )
 }
 
@@ -178,29 +183,28 @@ fn flush_lasm_cluster_accept_dispatch_counters(
     relay_saturation_events_total: &AtomicU64,
     relay_dispatch_fallback_total: &AtomicU64,
     relay_dispatch_short_circuit_total: &AtomicU64,
-    listener_saturation_pending_local: &mut usize,
-    listener_saturation_total_local: &mut u64,
-    listener_dispatch_fallback_total_local: &mut u64,
-    listener_dispatch_short_circuit_total_local: &mut u64,
+    listener_dispatch_counters: &mut LasmClusterAcceptDispatchCounters,
 ) {
-    if *listener_saturation_pending_local > 0 || *listener_saturation_total_local > 0 {
+    if listener_dispatch_counters.listener_saturation_pending_local > 0
+        || listener_dispatch_counters.listener_saturation_total_local > 0
+    {
         flush_lasm_cluster_saturation_counters(
             relay_saturation_events,
             relay_saturation_events_total,
-            listener_saturation_pending_local,
-            listener_saturation_total_local,
+            &mut listener_dispatch_counters.listener_saturation_pending_local,
+            &mut listener_dispatch_counters.listener_saturation_total_local,
         );
     }
-    if *listener_dispatch_fallback_total_local > 0 {
+    if listener_dispatch_counters.listener_dispatch_fallback_total_local > 0 {
         flush_lasm_cluster_dispatch_fallback_total(
             relay_dispatch_fallback_total,
-            listener_dispatch_fallback_total_local,
+            &mut listener_dispatch_counters.listener_dispatch_fallback_total_local,
         );
     }
-    if *listener_dispatch_short_circuit_total_local > 0 {
+    if listener_dispatch_counters.listener_dispatch_short_circuit_total_local > 0 {
         flush_lasm_cluster_dispatch_short_circuit_total(
             relay_dispatch_short_circuit_total,
-            listener_dispatch_short_circuit_total_local,
+            &mut listener_dispatch_counters.listener_dispatch_short_circuit_total_local,
         );
     }
 }
@@ -218,10 +222,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
     stop_flag: &AtomicBool,
     relay_accept_batch_max: usize,
 ) -> Result<(), String> {
-    let mut listener_saturation_pending_local = 0_usize;
-    let mut listener_saturation_total_local = 0_u64;
-    let mut listener_dispatch_fallback_total_local = 0_u64;
-    let mut listener_dispatch_short_circuit_total_local = 0_u64;
+    let mut listener_dispatch_counters = LasmClusterAcceptDispatchCounters::default();
     let mut listener_idle_spins = 0_u32;
     let listener_idle_sleep_duration = Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS);
     let relay_sender_count = relay_senders.len();
@@ -278,10 +279,12 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 relay_dispatch_fallback_total,
                                 relay_dispatch_short_circuit_total,
                                 &mut listener_enqueued_local,
-                                &mut listener_saturation_pending_local,
-                                &mut listener_saturation_total_local,
-                                &mut listener_dispatch_fallback_total_local,
-                                &mut listener_dispatch_short_circuit_total_local,
+                                &mut listener_dispatch_counters.listener_saturation_pending_local,
+                                &mut listener_dispatch_counters.listener_saturation_total_local,
+                                &mut listener_dispatch_counters
+                                    .listener_dispatch_fallback_total_local,
+                                &mut listener_dispatch_counters
+                                    .listener_dispatch_short_circuit_total_local,
                             ) {
                                 return Err(message);
                             }
@@ -297,10 +300,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             relay_saturation_events_total,
                             relay_dispatch_fallback_total,
                             relay_dispatch_short_circuit_total,
-                            &mut listener_saturation_pending_local,
-                            &mut listener_saturation_total_local,
-                            &mut listener_dispatch_fallback_total_local,
-                            &mut listener_dispatch_short_circuit_total_local,
+                            &mut listener_dispatch_counters,
                         );
                         return Err(format!("LASM cluster proxy accept error: {err}"));
                     }
@@ -321,10 +321,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                     relay_dispatch_fallback_total,
                                     relay_dispatch_short_circuit_total,
                                     &mut listener_enqueued_local,
-                                    &mut listener_saturation_pending_local,
-                                    &mut listener_saturation_total_local,
-                                    &mut listener_dispatch_fallback_total_local,
-                                    &mut listener_dispatch_short_circuit_total_local,
+                                    &mut listener_dispatch_counters,
                                 ) {
                                     return Err(message);
                                 }
@@ -342,22 +339,19 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         );
                                         let Some(index) = relay_single_live_sender_index else {
                                             if let Err(message) =
-                                            handle_lasm_cluster_accept_unavailable_stream(
-                                                client_stream,
-                                                active_connections,
-                                                relay_saturation_events,
-                                                relay_saturation_events_total,
-                                                relay_dispatch_fallback_total,
-                                                relay_dispatch_short_circuit_total,
-                                                &mut listener_enqueued_local,
-                                                &mut listener_saturation_pending_local,
-                                                &mut listener_saturation_total_local,
-                                                &mut listener_dispatch_fallback_total_local,
-                                                &mut listener_dispatch_short_circuit_total_local,
-                                            )
-                                        {
-                                            return Err(message);
-                                        }
+                                                handle_lasm_cluster_accept_unavailable_stream(
+                                                    client_stream,
+                                                    active_connections,
+                                                    relay_saturation_events,
+                                                    relay_saturation_events_total,
+                                                    relay_dispatch_fallback_total,
+                                                    relay_dispatch_short_circuit_total,
+                                                    &mut listener_enqueued_local,
+                                                    &mut listener_dispatch_counters,
+                                                )
+                                            {
+                                                return Err(message);
+                                            }
                                             continue;
                                         };
                                         index
@@ -375,22 +369,19 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         );
                                         let Some(indices) = relay_dual_live_sender_indices else {
                                             if let Err(message) =
-                                            handle_lasm_cluster_accept_unavailable_stream(
-                                                client_stream,
-                                                active_connections,
-                                                relay_saturation_events,
-                                                relay_saturation_events_total,
-                                                relay_dispatch_fallback_total,
-                                                relay_dispatch_short_circuit_total,
-                                                &mut listener_enqueued_local,
-                                                &mut listener_saturation_pending_local,
-                                                &mut listener_saturation_total_local,
-                                                &mut listener_dispatch_fallback_total_local,
-                                                &mut listener_dispatch_short_circuit_total_local,
-                                            )
-                                        {
-                                            return Err(message);
-                                        }
+                                                handle_lasm_cluster_accept_unavailable_stream(
+                                                    client_stream,
+                                                    active_connections,
+                                                    relay_saturation_events,
+                                                    relay_saturation_events_total,
+                                                    relay_dispatch_fallback_total,
+                                                    relay_dispatch_short_circuit_total,
+                                                    &mut listener_enqueued_local,
+                                                    &mut listener_dispatch_counters,
+                                                )
+                                            {
+                                                return Err(message);
+                                            }
                                             continue;
                                         };
                                         indices
@@ -424,10 +415,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                             relay_dispatch_fallback_total,
                                             relay_dispatch_short_circuit_total,
                                             &mut listener_enqueued_local,
-                                            &mut listener_saturation_pending_local,
-                                            &mut listener_saturation_total_local,
-                                            &mut listener_dispatch_fallback_total_local,
-                                            &mut listener_dispatch_short_circuit_total_local,
+                                            &mut listener_dispatch_counters,
                                         )
                                     {
                                         return Err(message);
@@ -498,17 +486,21 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                     relay_dispatch_fallback_total,
                                     relay_dispatch_short_circuit_total,
                                     &mut listener_enqueued_local,
-                                    &mut listener_saturation_pending_local,
-                                    &mut listener_saturation_total_local,
-                                    &mut listener_dispatch_fallback_total_local,
-                                    &mut listener_dispatch_short_circuit_total_local,
+                                    &mut listener_dispatch_counters
+                                        .listener_saturation_pending_local,
+                                    &mut listener_dispatch_counters.listener_saturation_total_local,
+                                    &mut listener_dispatch_counters
+                                        .listener_dispatch_fallback_total_local,
+                                    &mut listener_dispatch_counters
+                                        .listener_dispatch_short_circuit_total_local,
                                 ) {
                                     return Err(message);
                                 }
-                                listener_dispatch_short_circuit_total_local += 1;
+                                listener_dispatch_counters
+                                    .listener_dispatch_short_circuit_total_local += 1;
                                 continue;
                             }
-                            listener_dispatch_fallback_total_local += 1;
+                            listener_dispatch_counters.listener_dispatch_fallback_total_local += 1;
                             let live_count_before_fallback = relay_live_sender_count;
                             let primary_disconnected =
                                 relay_live_sender_count != live_count_before_primary_dispatch;
@@ -591,10 +583,14 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                         relay_dispatch_fallback_total,
                                         relay_dispatch_short_circuit_total,
                                         &mut listener_enqueued_local,
-                                        &mut listener_saturation_pending_local,
-                                        &mut listener_saturation_total_local,
-                                        &mut listener_dispatch_fallback_total_local,
-                                        &mut listener_dispatch_short_circuit_total_local,
+                                        &mut listener_dispatch_counters
+                                            .listener_saturation_pending_local,
+                                        &mut listener_dispatch_counters
+                                            .listener_saturation_total_local,
+                                        &mut listener_dispatch_counters
+                                            .listener_dispatch_fallback_total_local,
+                                        &mut listener_dispatch_counters
+                                            .listener_dispatch_short_circuit_total_local,
                                     ) {
                                         return Err(message);
                                     }
@@ -613,10 +609,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             relay_saturation_events_total,
                             relay_dispatch_fallback_total,
                             relay_dispatch_short_circuit_total,
-                            &mut listener_saturation_pending_local,
-                            &mut listener_saturation_total_local,
-                            &mut listener_dispatch_fallback_total_local,
-                            &mut listener_dispatch_short_circuit_total_local,
+                            &mut listener_dispatch_counters,
                         );
                         return Err(format!("LASM cluster proxy accept error: {err}"));
                     }
@@ -641,16 +634,16 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                 &mut listener_enqueued_local,
             );
         }
-        if listener_dispatch_fallback_total_local > 0 {
+        if listener_dispatch_counters.listener_dispatch_fallback_total_local > 0 {
             flush_lasm_cluster_dispatch_fallback_total(
                 relay_dispatch_fallback_total,
-                &mut listener_dispatch_fallback_total_local,
+                &mut listener_dispatch_counters.listener_dispatch_fallback_total_local,
             );
         }
-        if listener_dispatch_short_circuit_total_local > 0 {
+        if listener_dispatch_counters.listener_dispatch_short_circuit_total_local > 0 {
             flush_lasm_cluster_dispatch_short_circuit_total(
                 relay_dispatch_short_circuit_total,
-                &mut listener_dispatch_short_circuit_total_local,
+                &mut listener_dispatch_counters.listener_dispatch_short_circuit_total_local,
             );
         }
     }
@@ -660,10 +653,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
         relay_saturation_events_total,
         relay_dispatch_fallback_total,
         relay_dispatch_short_circuit_total,
-        &mut listener_saturation_pending_local,
-        &mut listener_saturation_total_local,
-        &mut listener_dispatch_fallback_total_local,
-        &mut listener_dispatch_short_circuit_total_local,
+        &mut listener_dispatch_counters,
     );
     Ok(())
 }

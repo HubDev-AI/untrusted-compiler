@@ -1689,6 +1689,10 @@ Post-alpha track acceptance anchors:
       - relay pump mode resolver now short-circuits zero-relay cycles to `{cursor=0, budget=0}` without extra mode setup branches,
       - pump loop now updates progress signal with branchless boolean OR (`progressed |= ...`) to remove one per-step branch.
       - documented in `docs/book/1383-m39-lasm-cluster-relay-pump-zero-fastpath-and-branchless-progress.md`.
+   - [x] Consolidated accept-loop dispatch counters into one local struct:
+      - accept loop now tracks saturation/fallback/short-circuit local counters through `LasmClusterAcceptDispatchCounters` and passes one mutable counter state into helper paths,
+      - reduced repeated multi-counter argument threading across unavailable/error/flush call sites while preserving deterministic counter flush behavior.
+      - documented in `docs/book/1384-m39-lasm-cluster-accept-loop-dispatch-counter-struct.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
