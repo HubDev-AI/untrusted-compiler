@@ -1601,6 +1601,10 @@ Post-alpha track acceptance anchors:
       - connect-failure fallback candidate traversal now uses direct wrapped index progression (`index += 1; wrap to 0`) plus explicit remaining-scan counter, removing per-iteration offset arithmetic,
       - fallback scan now exits early when all backends become unhealthy during candidate failures.
       - documented in `docs/book/1361-m39-lasm-cluster-relay-fallback-scan-direct-wrap-and-terminal-break.md`.
+   - [x] Unified relay connect-success setup into one helper path:
+      - primary and fallback connect-success branches now share one relay-initialization helper (`set_nodelay`, pooled-buffer pump construction, throttled init-failure warning handling),
+      - removes duplicated connect-success setup branches in relay worker loop and keeps warning/decrement behavior aligned.
+      - documented in `docs/book/1362-m39-lasm-cluster-relay-connect-success-single-setup-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

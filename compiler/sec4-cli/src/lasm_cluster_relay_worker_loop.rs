@@ -19,6 +19,45 @@ use crate::{
     LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
 };
 
+fn initialize_lasm_cluster_relay_connection(
+    client: TcpStream,
+    upstream: TcpStream,
+    relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
+    relay_connections: &mut Vec<LasmClusterRelayPump>,
+    pump_warning_next_allowed: &mut Option<Instant>,
+    relay_warning_throttle_duration: Duration,
+    active_connection_decrements_local: &mut usize,
+) {
+    let _ = client.set_nodelay(true);
+    let _ = upstream.set_nodelay(true);
+    let relay_result =
+        if let Some((client_to_upstream, upstream_to_client)) = relay_buffer_pool.pop() {
+            LasmClusterRelayPump::new_with_buffers(
+                client,
+                upstream,
+                client_to_upstream,
+                upstream_to_client,
+            )
+        } else {
+            LasmClusterRelayPump::new(client, upstream)
+        };
+    match relay_result {
+        Ok(relay) => relay_connections.push(relay),
+        Err(message) => {
+            let relay_init_now = Instant::now();
+            let warning_allowed = match *pump_warning_next_allowed {
+                Some(next_allowed_at) => relay_init_now >= next_allowed_at,
+                None => true,
+            };
+            if warning_allowed {
+                eprintln!("warning: LASM cluster relay init failed: {message}");
+                *pump_warning_next_allowed = Some(relay_init_now + relay_warning_throttle_duration);
+            }
+            *active_connection_decrements_local += 1;
+        }
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_receiver: Receiver<TcpStream>,
     relay_active: Arc<AtomicUsize>,
@@ -301,36 +340,15 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 let backend_addr = selected_worker_backend_addrs[selected_backend_index];
                 match TcpStream::connect_timeout(&backend_addr, relay_backend_connect_timeout) {
                     Ok(upstream) => {
-                        let _ = client.set_nodelay(true);
-                        let _ = upstream.set_nodelay(true);
-                        let relay_result = if let Some((client_to_upstream, upstream_to_client)) =
-                            relay_buffer_pool.pop()
-                        {
-                            LasmClusterRelayPump::new_with_buffers(
-                                client,
-                                upstream,
-                                client_to_upstream,
-                                upstream_to_client,
-                            )
-                        } else {
-                            LasmClusterRelayPump::new(client, upstream)
-                        };
-                        match relay_result {
-                            Ok(relay) => relay_connections.push(relay),
-                            Err(message) => {
-                                let now = Instant::now();
-                                let warning_allowed = match pump_warning_next_allowed {
-                                    Some(next_allowed_at) => now >= next_allowed_at,
-                                    None => true,
-                                };
-                                if warning_allowed {
-                                    eprintln!("warning: LASM cluster relay init failed: {message}");
-                                    pump_warning_next_allowed =
-                                        Some(now + relay_warning_throttle_duration);
-                                }
-                                active_connection_decrements_local += 1;
-                            }
-                        }
+                        initialize_lasm_cluster_relay_connection(
+                            client,
+                            upstream,
+                            &mut relay_buffer_pool,
+                            &mut relay_connections,
+                            &mut pump_warning_next_allowed,
+                            relay_warning_throttle_duration,
+                            &mut active_connection_decrements_local,
+                        );
                     }
                     Err(err) => {
                         let now = Instant::now();
@@ -393,47 +411,15 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         let client_for_fallback = fallback_client.take().expect(
                                             "relay fallback keeps client stream until fallback connect succeeds",
                                         );
-                                        let _ = client_for_fallback.set_nodelay(true);
-                                        let _ = upstream.set_nodelay(true);
-                                        let relay_result =
-                                            if let Some((client_to_upstream, upstream_to_client)) =
-                                                relay_buffer_pool.pop()
-                                            {
-                                                LasmClusterRelayPump::new_with_buffers(
-                                                    client_for_fallback,
-                                                    upstream,
-                                                    client_to_upstream,
-                                                    upstream_to_client,
-                                                )
-                                            } else {
-                                                LasmClusterRelayPump::new(
-                                                    client_for_fallback,
-                                                    upstream,
-                                                )
-                                            };
-                                        match relay_result {
-                                            Ok(relay) => relay_connections.push(relay),
-                                            Err(message) => {
-                                                let relay_init_now = Instant::now();
-                                                let warning_allowed =
-                                                    match pump_warning_next_allowed {
-                                                        Some(next_allowed_at) => {
-                                                            relay_init_now >= next_allowed_at
-                                                        }
-                                                        None => true,
-                                                    };
-                                                if warning_allowed {
-                                                    eprintln!(
-                                                        "warning: LASM cluster relay init failed: {message}"
-                                                    );
-                                                    pump_warning_next_allowed = Some(
-                                                        relay_init_now
-                                                            + relay_warning_throttle_duration,
-                                                    );
-                                                }
-                                                active_connection_decrements_local += 1;
-                                            }
-                                        }
+                                        initialize_lasm_cluster_relay_connection(
+                                            client_for_fallback,
+                                            upstream,
+                                            &mut relay_buffer_pool,
+                                            &mut relay_connections,
+                                            &mut pump_warning_next_allowed,
+                                            relay_warning_throttle_duration,
+                                            &mut active_connection_decrements_local,
+                                        );
                                         fallback_connected = true;
                                         break;
                                     }
