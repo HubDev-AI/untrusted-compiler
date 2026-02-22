@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I again launched branch checkout in parallel with file reads while starting the records-log normalization-backfill slice. | Keep branch creation/checkouts as standalone sequential commands, then run parallel read/search only after branch state is settled. |
 | 2026-02-22 | self | After merging PR #678, I started the DB param canonicalization edits on local `dev` before creating the next `codex/*` branch. | Keep a hard post-merge branch gate: create the next `codex/*` branch immediately before any read/edit commands. |
 | 2026-02-22 | self | I accidentally triggered web-tool calls while continuing a local-only LASM DB runtime slice. | Keep local implementation loops strictly on `functions.exec_command` + `functions.apply_patch`; invoke web tooling only for explicit external research tasks. |
 | 2026-02-22 | self | I launched `git checkout -b ...` in parallel with read/search commands while starting the records-log adapter module slice, violating branch-gate sequencing. | Keep branch creation/checkouts strictly sequential before any parallel read/search tool calls. |
