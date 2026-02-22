@@ -1621,6 +1621,10 @@ Post-alpha track acceptance anchors:
       - fallback connect attempts now run through explicit single-candidate, identity-order, and healthy-lookup traversal loops instead of one mixed per-iteration mode branch path,
       - fallback connect attempt body moved into shared helper so all traversal modes reuse one deterministic connect/mark-failure flow.
       - documented in `docs/book/1366-m39-lasm-cluster-relay-fallback-traversal-mode-split-with-shared-attempt-helper.md`.
+   - [x] Extracted accept-loop fallback dispatch resolution into one helper:
+      - fallback dispatch strategy selection (all-live, dual-live, single-live, multi fallback) now routes through one helper that consumes live hints and refreshes hint caches only when missing,
+      - removes large inline strategy-branch duplication from the accept loop while preserving existing fallback dispatch behavior and hint-refresh semantics.
+      - documented in `docs/book/1367-m39-lasm-cluster-accept-loop-fallback-dispatch-resolution-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
