@@ -1769,6 +1769,10 @@ Post-alpha track acceptance anchors:
       - one-backend mode now resolves backend index directly from backend health (`unhealthy_port_count`) instead of full lookup pipeline,
       - this trims selection-path branch/lookup overhead in small-cluster deployments while preserving existing fallback/unhealthy behavior.
       - documented in `docs/book/1405-m39-lasm-relay-worker-single-backend-fastpath.md`.
+   - [x] Reduced relay-worker snapshot clone churn in hot loops:
+      - relay-worker now loads worker-port snapshots via pointer-checked `ArcSwap::load()` and clones only when topology changes,
+      - removes unconditional `load_full()` clone churn from prune and selection-refresh branches while preserving existing remap/selection behavior.
+      - documented in `docs/book/1416-m39-lasm-cluster-relay-worker-snapshot-clone-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
