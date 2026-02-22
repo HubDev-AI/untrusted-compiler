@@ -1645,6 +1645,10 @@ Post-alpha track acceptance anchors:
       - duplicated accept-error flush blocks now call one shared helper (`flush_lasm_cluster_accept_dispatch_counters`) for saturation/fallback/short-circuit local counter flushes,
       - accept-loop final-tail dispatch-counter flush now reuses the same helper path.
       - documented in `docs/book/1372-m39-lasm-cluster-accept-loop-dispatch-counter-flush-helper.md`.
+   - [x] Unified relay pump connection release blocks in one helper:
+      - relay worker loop now routes `Complete` and pump-error release paths through one helper (`release_lasm_cluster_relay_connection`) for swap-remove, buffer-pool return, and active-decrement bookkeeping,
+      - removes duplicated release branches in both full-scan and budgeted pump schedulers while preserving cursor progression and deterministic decrement semantics.
+      - documented in `docs/book/1373-m39-lasm-cluster-relay-pump-release-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

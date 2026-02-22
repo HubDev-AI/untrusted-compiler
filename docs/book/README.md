@@ -1342,5 +1342,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1370-m39-lasm-cluster-relay-fallback-lookup-start-cursor-helper.md`
 - `1371-m39-lasm-cluster-accept-loop-unavailable-stream-helper.md`
 - `1372-m39-lasm-cluster-accept-loop-dispatch-counter-flush-helper.md`
+- `1373-m39-lasm-cluster-relay-pump-release-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.
