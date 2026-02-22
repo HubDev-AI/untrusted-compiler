@@ -1523,6 +1523,10 @@ Post-alpha track acceptance anchors:
       - fallback scan slot limit now uses direct `sender_count - 1` under existing `sender_count > 1` invariant,
       - fallback live-target setup now uses direct bounded decrement guards (`live_count - 1`) instead of `saturating_sub` for both initial and dynamic live-target tracking.
       - documented in `docs/book/1340-m39-lasm-cluster-fallback-live-target-direct-guards.md`.
+   - [x] Removed redundant live-count guard in accept-loop dispatch-cursor realignment:
+      - accept-loop fallback completion path now uses only `relay_live_sender_count > 1` for dispatch-cursor live realignment, dropping redundant `relay_live_sender_count > 0` conjunction,
+      - preserves realignment behavior while trimming one redundant branch check on this hot path.
+      - documented in `docs/book/1341-m39-lasm-cluster-accept-loop-redundant-live-guard-removal.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

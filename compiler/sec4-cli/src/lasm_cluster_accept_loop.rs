@@ -445,7 +445,6 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                                 )
                             };
                             if !relay_all_senders_live
-                                && relay_live_sender_count > 0
                                 && relay_live_sender_count > 1
                                 && relay_sender_live[relay_dispatch_cursor]
                                     == LASM_CLUSTER_RELAY_SENDER_DEAD
