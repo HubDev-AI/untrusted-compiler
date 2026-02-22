@@ -238,15 +238,15 @@ pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
 pub(crate) fn reserve_lasm_cluster_min_worker_ports(
     state: &mut LasmClusterState,
     min_instances: usize,
-) -> Vec<u16> {
+    worker_ports_out: &mut Vec<u16>,
+) {
     let missing = min_instances.saturating_sub(state.workers.len());
-    let mut worker_ports = Vec::with_capacity(missing);
+    worker_ports_out.reserve(missing);
     for _ in 0..missing {
         let worker_port = state.next_port;
         state.next_port = state.next_port.saturating_add(1);
-        worker_ports.push(worker_port);
+        worker_ports_out.push(worker_port);
     }
-    worker_ports
 }
 
 pub(crate) fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {

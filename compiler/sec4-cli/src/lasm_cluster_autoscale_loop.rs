@@ -89,9 +89,11 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     Err(_) => break,
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
-                let recovery_ports =
-                    reserve_lasm_cluster_min_worker_ports(&mut state, shared_config.min_instances);
-                workers_to_spawn_ports.extend(recovery_ports);
+                reserve_lasm_cluster_min_worker_ports(
+                    &mut state,
+                    shared_config.min_instances,
+                    &mut workers_to_spawn_ports,
+                );
                 refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                     &state,
                     &worker_ports_snapshot,
