@@ -1813,6 +1813,10 @@ Post-alpha track acceptance anchors:
       - relay worker loop now tracks whether a worker-port snapshot was already loaded for the current batch and reuses the selected snapshot directly when topology is unchanged,
       - this avoids per-batch `Arc` clone churn on steady-state topology while preserving existing selection/remap logic when topology actually changes.
       - documented in `docs/book/1426-m39-lasm-relay-batch-snapshot-clone-elision.md`.
+   - [x] Routed autoscale scale-up reservations through reusable worker-port pool:
+      - autoscale scale-up path now reserves worker ports via shared lifecycle helper that consumes `reusable_ports` before advancing `next_port`,
+      - min-worker recovery and autoscale scale-up now share one reservation path, preserving deterministic reservation behavior while preventing avoidable new-port churn after scale-down/dead-worker reclaim events.
+      - documented in `docs/book/1427-m39-lasm-autoscale-scaleup-reuse-port-pool.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

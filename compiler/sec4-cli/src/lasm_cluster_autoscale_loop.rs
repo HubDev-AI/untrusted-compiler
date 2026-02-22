@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use crate::lasm_cluster_accept_dispatch::LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
 use crate::lasm_cluster_lifecycle::{
     prune_dead_lasm_cluster_workers, reserve_lasm_cluster_min_worker_ports,
+    reserve_lasm_cluster_worker_ports,
     spawn_and_wait_lasm_cluster_worker,
 };
 use crate::lasm_cluster_runtime_config::{
@@ -193,12 +194,11 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                         if desired > current_workers_after_recovery && scale_up_cooldown_elapsed {
                             let spawn_count =
                                 up_target.saturating_sub(current_workers_after_recovery);
-                            workers_to_spawn_ports.reserve(spawn_count);
-                            for _ in 0..spawn_count {
-                                let worker_port = state.next_port;
-                                state.next_port = state.next_port.saturating_add(1);
-                                workers_to_spawn_ports.push(worker_port);
-                            }
+                            reserve_lasm_cluster_worker_ports(
+                                &mut state,
+                                spawn_count,
+                                &mut workers_to_spawn_ports,
+                            );
                             last_scale_up_at = Some(now);
                             cooldown_anchor_changed = true;
                         }
