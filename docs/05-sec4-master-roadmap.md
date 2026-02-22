@@ -1754,6 +1754,11 @@ Post-alpha track acceptance anchors:
       - `run_lasm_cluster_accept_loop` and `spawn_lasm_cluster_relay_worker_loop` now resolve idle spin/sleep values via `lasm_cluster_runtime_config` instead of fixed compile-time constants,
       - this keeps previous defaults intact while enabling hot-path idle backoff tuning during throughput investigations without code changes.
       - documented in `docs/book/1398-m39-lasm-cluster-idle-backoff-env-tuning.md`.
+   - [x] Surfaced idle backoff env tuning values in LASM cluster status JSON:
+      - `spawn_lasm_cluster_status_writer` now snapshots `relayIdleSpinThreshold` and `relayIdleSleepMicros` from runtime env-resolved backoff controls,
+      - status payload serialization and snapshot equality now include both fields, preserving deterministic unchanged-snapshot suppression behavior,
+      - command integration coverage verifies env-overridden values are emitted in cluster status JSON while unchanged snapshots keep `updatedAtMs` stable.
+      - documented in `docs/book/1399-m39-lasm-cluster-status-json-idle-backoff-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

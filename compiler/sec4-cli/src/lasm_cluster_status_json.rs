@@ -22,6 +22,8 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_accept_batch_max: usize,
     pub(crate) relay_pump_batch_max: usize,
     pub(crate) relay_selection_reservation_min_chunk: usize,
+    pub(crate) relay_idle_spin_threshold: u32,
+    pub(crate) relay_idle_sleep_micros: u64,
     pub(crate) relay_accept_workers: usize,
     pub(crate) relay_backend_connect_timeout_ms: u64,
     pub(crate) relay_backend_connect_cooldown_ms: u64,
@@ -57,6 +59,8 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_pump_batch_max == other.relay_pump_batch_max
             && self.relay_selection_reservation_min_chunk
                 == other.relay_selection_reservation_min_chunk
+            && self.relay_idle_spin_threshold == other.relay_idle_spin_threshold
+            && self.relay_idle_sleep_micros == other.relay_idle_sleep_micros
             && self.relay_accept_workers == other.relay_accept_workers
             && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
             && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
@@ -98,6 +102,8 @@ struct LasmClusterStatusPayload<'a> {
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
     relay_selection_reservation_min_chunk: usize,
+    relay_idle_spin_threshold: u32,
+    relay_idle_sleep_micros: u64,
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
@@ -173,6 +179,8 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_accept_batch_max: snapshot.relay_accept_batch_max,
         relay_pump_batch_max: snapshot.relay_pump_batch_max,
         relay_selection_reservation_min_chunk: snapshot.relay_selection_reservation_min_chunk,
+        relay_idle_spin_threshold: snapshot.relay_idle_spin_threshold,
+        relay_idle_sleep_micros: snapshot.relay_idle_sleep_micros,
         relay_accept_workers: snapshot.relay_accept_workers,
         relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
         relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
