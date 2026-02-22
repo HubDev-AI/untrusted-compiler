@@ -22,9 +22,15 @@ pub(crate) fn attempt_lasm_cluster_relay_send(
             Err(next_stream)
         }
         Err(TrySendError::Disconnected(next_stream)) => {
-            relay_sender_live[relay_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-            *relay_all_senders_live = false;
+            if relay_sender_live[relay_index] != LASM_CLUSTER_RELAY_SENDER_DEAD {
+                relay_sender_live[relay_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
+                if *relay_live_sender_count > 0 {
+                    *relay_live_sender_count -= 1;
+                } else {
+                    debug_assert_eq!(*relay_live_sender_count, 0);
+                }
+                *relay_all_senders_live = false;
+            }
             Err(next_stream)
         }
     }

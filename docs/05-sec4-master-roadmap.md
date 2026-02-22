@@ -1491,6 +1491,10 @@ Post-alpha track acceptance anchors:
       - `resolve_lasm_cluster_next_live_sender_index` now performs explicit empty-slice guard + direct `relay_sender_live[start_index_wrapped]` check instead of option-chain access (`get().copied().unwrap_or(...)`),
       - preserves next-live resolution semantics while removing option-chain overhead from a shared relay topology helper used in degraded dispatch paths.
       - documented in `docs/book/1332-m39-lasm-cluster-relay-topology-direct-start-index-check.md`.
+   - [x] Tightened relay-send disconnected path to avoid repeated live-count decrements:
+      - `attempt_lasm_cluster_relay_send` now marks sender dead/count-down only when sender state transitions from live to dead, replacing unconditional saturating decrement on every disconnected attempt,
+      - preserves disconnected fallback behavior while avoiding duplicate counter decrements under repeated disconnected sends and removing saturating arithmetic from this path.
+      - documented in `docs/book/1333-m39-lasm-cluster-relay-send-dead-transition-guard.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
