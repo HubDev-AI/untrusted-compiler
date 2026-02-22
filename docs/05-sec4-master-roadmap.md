@@ -1609,6 +1609,10 @@ Post-alpha track acceptance anchors:
       - relay worker loop now calls saturation/active-decrement flush helpers only when local pending counters are non-zero,
       - removes per-cycle helper-call overhead on idle/steady-state cycles with no pending counter deltas.
       - documented in `docs/book/1363-m39-lasm-cluster-relay-flush-helper-nonzero-gates.md`.
+   - [x] Reused one selection-state recompute helper across steady and failure paths:
+      - relay worker selection-state derivation (`has_healthy`, identity, cycle-span, single-healthy index) now comes from one shared recompute helper,
+      - connect-failure fallback traversal now reuses freshly recomputed healthy lookup state instead of scanning all worker slots for healthy candidates.
+      - documented in `docs/book/1364-m39-lasm-cluster-relay-shared-selection-recompute-and-fallback-lookup-traversal.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
