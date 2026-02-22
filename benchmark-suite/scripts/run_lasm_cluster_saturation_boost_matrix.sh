@@ -32,6 +32,8 @@ Options:
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
+  --build-profile <debug|release>                  sec4 build profile forwarded to probe runs (default: release)
+  --samples <n>                                    Number of wrk samples per probe run (default: 1)
   --out <path>                                     Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
   --skip-analysis                                  Skip post-run matrix analysis/recommendation output
@@ -65,6 +67,8 @@ cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
+build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
+samples="${LASM_CAPACITY_SAMPLES:-1}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -172,6 +176,14 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
+    --build-profile)
+      build_profile="${2:-}"
+      shift 2
+      ;;
+    --samples)
+      samples="${2:-}"
+      shift 2
+      ;;
     --out)
       out_rel="${2:-}"
       shift 2
@@ -247,6 +259,21 @@ if [ "${fixed_reuse_port_mode}" != "true" ] && [ "${fixed_reuse_port_mode}" != "
   echo "fixed-reuse-port-mode must be true or false, got: ${fixed_reuse_port_mode}" >&2
   exit 2
 fi
+case "${build_profile}" in
+  debug|release) ;;
+  *)
+    echo "build-profile must be one of: debug, release (got: ${build_profile})" >&2
+    exit 2
+    ;;
+esac
+if ! [[ "${samples}" =~ ^[0-9]+$ ]]; then
+  echo "samples must be an integer >= 1, got: ${samples}" >&2
+  exit 2
+fi
+if [ "${samples}" -lt 1 ]; then
+  echo "samples must be >= 1, got: ${samples}" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -309,6 +336,8 @@ sec4 LASM saturation boost matrix plan:
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
+  buildProfile=${build_profile}
+  samples=${samples}
   out=${out_path}
   analysisOut=${analysis_out_path}
   skipAnalysis=${skip_analysis}
@@ -340,6 +369,8 @@ for step in "${boost_steps[@]}"; do
     --autoscale-scale-up-step "${autoscale_scale_up_step}"
     --autoscale-scale-down-step "${autoscale_scale_down_step}"
     --autoscale-saturation-boost-step "${step}"
+    --build-profile "${build_profile}"
+    --samples "${samples}"
     --out "${step_out}"
   )
   if [ "${fixed_reuse_port_mode}" = "true" ]; then
@@ -419,7 +450,7 @@ if [ "${dry_run}" = "true" ]; then
     echo "analysisCmd=${analyze_script} ${out_path} ${analysis_out_path}"
     if [ "${verify_recommended}" = "true" ]; then
       echo "verifyRecommendedAfterAnalysis=true"
-      echo "verifyCmd=${probe_script} ... --autoscale-saturation-boost-step <recommended> --out ${verify_out_path} --skip-build"
+      echo "verifyCmd=${probe_script} ... --autoscale-saturation-boost-step <recommended> --build-profile ${build_profile} --samples ${samples} --out ${verify_out_path} --skip-build"
     fi
   fi
   exit 0
@@ -431,11 +462,13 @@ jq -n \
   --arg requestPath "${request_path}" \
   --arg requestHeader "${request_header}" \
   --arg duration "${duration}" \
+  --arg buildProfile "${build_profile}" \
   --arg clusterRelayWorkers "${cluster_relay_workers:-auto}" \
   --arg clusterRelayQueue "${cluster_relay_queue:-auto}" \
   --arg clusterAcceptWorkers "${cluster_accept_workers:-auto}" \
   --arg clusterRelayAcceptBatchMax "${cluster_relay_accept_batch_max:-auto}" \
   --arg clusterRelayPumpBatchMax "${cluster_relay_pump_batch_max:-auto}" \
+  --argjson samples "${samples}" \
   --argjson fixedReusePortMode "${fixed_reuse_port_mode}" \
   --argjson threads "${threads}" \
   --argjson connections "${connections}" \
@@ -449,8 +482,10 @@ jq -n \
       requestPath: $requestPath,
       requestHeader: $requestHeader,
       duration: $duration,
+      buildProfile: $buildProfile,
       threads: $threads,
       connections: $connections,
+      samples: $samples,
       targetRequests: $targetRequests,
       clusterRelayWorkers: $clusterRelayWorkers,
       clusterRelayQueue: $clusterRelayQueue,
@@ -490,6 +525,8 @@ if [ "${skip_analysis}" != "true" ]; then
       --autoscale-scale-up-step "${autoscale_scale_up_step}"
       --autoscale-scale-down-step "${autoscale_scale_down_step}"
       --autoscale-saturation-boost-step "${recommended_step}"
+      --build-profile "${build_profile}"
+      --samples "${samples}"
       --out "${verify_out_path}"
       --skip-build
     )

@@ -16,6 +16,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
   --cluster-accept-workers 5 \
   --cluster-relay-accept-batch-max 222 \
   --cluster-relay-pump-batch-max 333 \
+  --build-profile debug \
+  --samples 3 \
   --summary-out results/summaries/custom-saturation-boost-summary.md \
   2>&1)"
 
@@ -41,6 +43,14 @@ if ! grep -q 'clusterRelayAcceptBatchMax=222' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayPumpBatchMax=333' <<<"$out"; then
   echo "saturation boost bundle dry-run missing relay pump batch passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'buildProfile=debug' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing build profile passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing samples passthrough" >&2
   exit 1
 fi
 if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary.md ${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json" <<<"$out"; then
@@ -84,6 +94,22 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run -
 fi
 if ! grep -q 'boost-steps must contain positive integers, got: abc' /tmp/lasm-sat-boost-bundle-invalid-shape.log; then
   echo "saturation boost bundle missing invalid-shape diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --samples 0 >/tmp/lasm-sat-boost-bundle-invalid-samples.log 2>&1; then
+  echo "saturation boost bundle accepted invalid samples value" >&2
+  exit 1
+fi
+if ! grep -q 'samples must be >= 1, got: 0' /tmp/lasm-sat-boost-bundle-invalid-samples.log; then
+  echo "saturation boost bundle missing invalid samples diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --build-profile fast >/tmp/lasm-sat-boost-bundle-invalid-profile.log 2>&1; then
+  echo "saturation boost bundle accepted invalid build profile value" >&2
+  exit 1
+fi
+if ! grep -q 'build-profile must be one of: debug, release' /tmp/lasm-sat-boost-bundle-invalid-profile.log; then
+  echo "saturation boost bundle missing invalid build profile diagnostic passthrough" >&2
   exit 1
 fi
 

@@ -16,6 +16,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --autoscale-target-connections 111 \
   --autoscale-scale-up-step 2 \
   --autoscale-scale-down-step 1 \
+  --build-profile debug \
+  --samples 3 \
   --cluster-accept-workers 3 \
   --cluster-relay-accept-batch-max 123 \
   --cluster-relay-pump-batch-max 456 \
@@ -61,6 +63,14 @@ if ! grep -q 'clusterRelayPumpBatchMax=456' <<<"$out"; then
   echo "saturation boost matrix dry-run missing relay pump batch override output" >&2
   exit 1
 fi
+if ! grep -q 'buildProfile=debug' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing build profile output" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing samples output" >&2
+  exit 1
+fi
 if ! grep -q "out=${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-7.json" <<<"$out"; then
   echo "saturation boost matrix dry-run missing resolved per-step output path" >&2
   exit 1
@@ -85,7 +95,7 @@ if ! grep -q 'verifyRecommendedAfterAnalysis=true' <<<"$out"; then
   echo "saturation boost matrix dry-run missing verify-after-analysis marker" >&2
   exit 1
 fi
-if ! grep -q "verifyCmd=${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh ... --autoscale-saturation-boost-step <recommended> --out ${root_dir}/results/summaries/custom-saturation-boost-verify.json --skip-build" <<<"$out"; then
+if ! grep -q "verifyCmd=${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh ... --autoscale-saturation-boost-step <recommended> --build-profile debug --samples 3 --out ${root_dir}/results/summaries/custom-saturation-boost-verify.json --skip-build" <<<"$out"; then
   echo "saturation boost matrix dry-run missing verify command plan" >&2
   exit 1
 fi
@@ -144,6 +154,22 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run -
 fi
 if ! grep -q 'boost-steps must be >= 1, got: 0' /tmp/lasm-sat-boost-matrix-invalid-range.log; then
   echo "saturation boost matrix missing invalid-range diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --samples 0 >/tmp/lasm-sat-boost-matrix-invalid-samples.log 2>&1; then
+  echo "saturation boost matrix accepted invalid samples value" >&2
+  exit 1
+fi
+if ! grep -q 'samples must be >= 1, got: 0' /tmp/lasm-sat-boost-matrix-invalid-samples.log; then
+  echo "saturation boost matrix missing invalid samples diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --build-profile fast >/tmp/lasm-sat-boost-matrix-invalid-profile.log 2>&1; then
+  echo "saturation boost matrix accepted invalid build profile value" >&2
+  exit 1
+fi
+if ! grep -q 'build-profile must be one of: debug, release' /tmp/lasm-sat-boost-matrix-invalid-profile.log; then
+  echo "saturation boost matrix missing invalid build profile diagnostic" >&2
   exit 1
 fi
 
