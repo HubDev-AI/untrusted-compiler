@@ -86,7 +86,7 @@ pub(crate) use lasm_db_headers::{
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 pub(crate) use lasm_dynamic_state::{
-    append_lasm_dynamic_db_record, build_lasm_dynamic_response_state,
+    append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
     persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
     LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };

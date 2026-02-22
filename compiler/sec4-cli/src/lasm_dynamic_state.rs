@@ -12,7 +12,7 @@ use crate::lasm_db_config::{
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,6 +42,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_by_id: HashMap<String, serde_json::Value>,
     pub(crate) users_store_path: Option<PathBuf>,
     pub(crate) db_records: Vec<LasmDbRecord>,
+    pub(crate) db_record_signatures: HashSet<String>,
     pub(crate) db_records_max: usize,
     pub(crate) db_records_dropped_total: u64,
     pub(crate) db_records_adapter: LasmDbRecordsAdapter,
@@ -74,6 +75,17 @@ pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
 pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
 pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
 
+pub(crate) fn lasm_db_record_signature_key(db: i64, template: &str, params: &str) -> String {
+    format!("{db}\u{1f}{template}\u{1f}{params}")
+}
+
+fn rebuild_lasm_db_record_signatures(records: &[LasmDbRecord]) -> HashSet<String> {
+    records
+        .iter()
+        .map(|record| lasm_db_record_signature_key(record.db, &record.template, &record.params))
+        .collect()
+}
+
 fn truncate_lasm_db_records_to_capacity(records: &mut Vec<LasmDbRecord>, capacity: usize) -> usize {
     let bounded_capacity = capacity.max(1);
     if records.len() > bounded_capacity {
@@ -88,13 +100,16 @@ pub(crate) fn append_lasm_dynamic_db_record(
     state: &mut LasmDynamicResponseState,
     record: LasmDbRecord,
 ) -> bool {
+    let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
     state.db_records.push(record);
+    state.db_record_signatures.insert(signature);
     let overflow =
         truncate_lasm_db_records_to_capacity(&mut state.db_records, state.db_records_max);
     if overflow > 0 {
         state.db_records_dropped_total = state
             .db_records_dropped_total
             .saturating_add(overflow as u64);
+        state.db_record_signatures = rebuild_lasm_db_record_signatures(&state.db_records);
         return true;
     }
     false
@@ -230,6 +245,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         }
     };
     let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
+    let db_record_signatures = rebuild_lasm_db_record_signatures(&db_records);
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -247,6 +263,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         users_by_id,
         users_store_path,
         db_records,
+        db_record_signatures,
         db_records_max,
         db_records_dropped_total: startup_dropped as u64,
         db_records_adapter,
@@ -376,7 +393,8 @@ pub(crate) fn persist_lasm_dynamic_users_to_disk(
 #[cfg(test)]
 mod tests {
     use super::{
-        append_lasm_dynamic_db_record, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
+        append_lasm_dynamic_db_record, lasm_db_record_signature_key, LasmDbRecord,
+        LasmDbRecordsAdapter, LasmDynamicResponseState,
     };
 
     fn sample_record(id: u64) -> LasmDbRecord {
@@ -384,8 +402,8 @@ mod tests {
             id,
             op: "exec".to_string(),
             db: 1,
-            template: "SELECT 1".to_string(),
-            params: "0".to_string(),
+            template: format!("SELECT {id}"),
+            params: id.to_string(),
             tx: 0,
             affected_rows: 0,
             created_at_ms: 1,
@@ -409,5 +427,9 @@ mod tests {
         assert_eq!(state.db_records[0].id, 2);
         assert_eq!(state.db_records[1].id, 3);
         assert_eq!(state.db_records_dropped_total, 1);
+        assert!(!state
+            .db_record_signatures
+            .contains(&lasm_db_record_signature_key(1, "SELECT 1", "1")));
+        assert_eq!(state.db_record_signatures.len(), 2);
     }
 }

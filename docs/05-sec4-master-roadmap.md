@@ -1940,6 +1940,11 @@ Post-alpha track acceptance anchors:
       - `db.queryOne` runtime dispatch now skips `db_records` history scan on Postgres/SQLite adapter paths where row materialization is served directly by adapter runtime,
       - records-log fallback path keeps deterministic reverse-scan behavior for template/params matching, preserving existing not-found/result semantics.
       - documented in `docs/book/1440-m39-lasm-queryone-recordscan-recordslog-only.md`.
+   - [x] Added records-log query signature index for O(1) fallback match checks:
+      - dynamic state now maintains a DB record signature index (`db + template + params`) across bootstrap/append/overflow compaction paths,
+      - records-log `db.queryOne` fallback now checks signature membership directly instead of reverse-scanning record history on each call,
+      - overflow compaction rebuilds the signature index to keep match behavior deterministic.
+      - documented in `docs/book/1443-m39-lasm-db-record-signature-index-for-queryone.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
