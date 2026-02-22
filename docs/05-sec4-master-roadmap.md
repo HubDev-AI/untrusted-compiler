@@ -1564,6 +1564,10 @@ Post-alpha track acceptance anchors:
       - backend selection lookup tail wrap-fill now uses direct slice fill for post-first-healthy indices,
       - desired autoscale instance calculation now uses direct ceil-division math on active connections (`((active-1)/target)+1`) with explicit `target>=1` guard.
       - documented in `docs/book/1350-m39-lasm-cluster-relay-selection-and-runtime-config-direct-arithmetic-batch.md`.
+   - [x] Elided redundant autoscale cooldown atomic stores on unchanged anchors:
+      - autoscale loop now tracks whether scale-up/down cooldown anchors changed in the current tick and only rewrites cooldown-remaining atomics at loop tail when anchors changed,
+      - avoids duplicate cooldown atomic writes on steady-state no-op ticks while preserving immediate cooldown reset semantics after scale actions.
+      - documented in `docs/book/1353-m39-lasm-cluster-autoscale-cooldown-tail-store-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
