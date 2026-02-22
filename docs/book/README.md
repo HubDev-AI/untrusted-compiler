@@ -1399,5 +1399,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1427-m39-lasm-autoscale-scaleup-reuse-port-pool.md`
 - `1428-m39-lasm-db-positional-object-sql-params.md`
 - `1429-m39-lasm-bulk-reuse-port-reservation.md`
+- `1430-m39-lasm-db-dispatch-preparse-postgres-params.md`
 
 As milestones progress, chapters will be added and linked from this index.
