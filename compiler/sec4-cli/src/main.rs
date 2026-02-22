@@ -24,6 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod lasm_cluster_accept_dispatch;
 mod lasm_cluster_accept_loop;
+mod lasm_cluster_accept_workers;
 mod lasm_cluster_autoscale_loop;
 mod lasm_cluster_backend_selection;
 mod lasm_cluster_fallback_dispatch;
@@ -49,7 +50,9 @@ mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
 
-use lasm_cluster_accept_loop::run_lasm_cluster_accept_loop;
+use lasm_cluster_accept_workers::{
+    run_lasm_cluster_accept_workers, LasmClusterAcceptWorkersConfig,
+};
 use lasm_cluster_autoscale_loop::{
     spawn_lasm_cluster_autoscale_loop, LasmClusterAutoscaleLoopConfig,
 };
@@ -7886,81 +7889,33 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         return Err(2);
     }
 
-    let accept_error_reported = Arc::new(AtomicBool::new(false));
-    let mut accept_handles = Vec::with_capacity(relay_accept_worker_count.saturating_sub(1));
-    for accept_worker_index in 1..relay_accept_worker_count {
-        let accept_listener = match listener.try_clone() {
-            Ok(listener) => listener,
-            Err(err) => {
-                eprintln!("run failed: could not clone LASM cluster listener: {err}");
-                stop_flag.store(true, Ordering::Relaxed);
-                drop(relay_senders);
-                for handle in relay_handles {
-                    let _ = handle.join();
-                }
-                let _ = autoscale_handle.join();
-                if let Some(handle) = status_writer_handle {
-                    let _ = handle.join();
-                }
-                if let Ok(mut state) = shared_state.write() {
-                    stop_lasm_cluster_workers(&mut state);
-                }
-                return Err(2);
-            }
-        };
-        let accept_relay_senders = Arc::clone(&relay_senders);
-        let accept_active_connections = Arc::clone(&active_connections);
-        let accept_saturation_events = Arc::clone(&relay_saturation_events);
-        let accept_saturation_events_total = Arc::clone(&relay_saturation_events_total);
-        let accept_dispatch_fallback_total = Arc::clone(&relay_dispatch_fallback_total);
-        let accept_dispatch_short_circuit_total =
-            Arc::clone(&relay_dispatch_saturation_short_circuit_total);
-        let accept_relay_live_sender_count = Arc::clone(&relay_live_sender_count);
-        let accept_stop_flag = Arc::clone(&stop_flag);
-        let accept_error_reported = Arc::clone(&accept_error_reported);
-        accept_handles.push(std::thread::spawn(move || {
-            if let Err(message) = run_lasm_cluster_accept_loop(
-                &accept_listener,
-                accept_relay_senders.as_slice(),
-                accept_active_connections.as_ref(),
-                accept_saturation_events.as_ref(),
-                accept_saturation_events_total.as_ref(),
-                accept_relay_live_sender_count.as_ref(),
-                accept_worker_index,
-                accept_dispatch_fallback_total.as_ref(),
-                accept_dispatch_short_circuit_total.as_ref(),
-                accept_stop_flag.as_ref(),
-                relay_accept_batch_max,
-            ) {
-                if !accept_error_reported.swap(true, Ordering::Relaxed) {
-                    eprintln!("run failed: {message}");
-                }
-                accept_stop_flag.store(true, Ordering::Relaxed);
-            }
-        }));
-    }
-
-    if let Err(message) = run_lasm_cluster_accept_loop(
-        &listener,
-        relay_senders.as_slice(),
-        active_connections.as_ref(),
-        relay_saturation_events.as_ref(),
-        relay_saturation_events_total.as_ref(),
-        relay_live_sender_count.as_ref(),
-        0,
-        relay_dispatch_fallback_total.as_ref(),
-        relay_dispatch_saturation_short_circuit_total.as_ref(),
-        stop_flag.as_ref(),
+    if let Err(message) = run_lasm_cluster_accept_workers(LasmClusterAcceptWorkersConfig {
+        listener: &listener,
+        relay_accept_worker_count,
+        relay_senders: &relay_senders,
+        active_connections: &active_connections,
+        relay_saturation_events: &relay_saturation_events,
+        relay_saturation_events_total: &relay_saturation_events_total,
+        relay_dispatch_fallback_total: &relay_dispatch_fallback_total,
+        relay_dispatch_saturation_short_circuit_total:
+            &relay_dispatch_saturation_short_circuit_total,
+        relay_live_sender_count: &relay_live_sender_count,
+        stop_flag: &stop_flag,
         relay_accept_batch_max,
-    ) {
-        if !accept_error_reported.swap(true, Ordering::Relaxed) {
-            eprintln!("run failed: {message}");
+    }) {
+        eprintln!("run failed: {message}");
+        drop(relay_senders);
+        for handle in relay_handles {
+            let _ = handle.join();
         }
-    }
-
-    stop_flag.store(true, Ordering::Relaxed);
-    for handle in accept_handles {
-        let _ = handle.join();
+        let _ = autoscale_handle.join();
+        if let Some(handle) = status_writer_handle {
+            let _ = handle.join();
+        }
+        if let Ok(mut state) = shared_state.write() {
+            stop_lasm_cluster_workers(&mut state);
+        }
+        return Err(2);
     }
     drop(relay_senders);
     for handle in relay_handles {
