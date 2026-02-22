@@ -772,7 +772,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             let mut progressed = false;
             if relay_connections.len() <= relay_pump_batch_max {
                 let mut index = 0_usize;
-                while index < relay_connections.len() {
+                let mut relay_count = relay_connections.len();
+                while index < relay_count {
                     let pump_outcome = pump_lasm_cluster_relay_connection_once(
                         &mut relay_connections,
                         index,
@@ -785,8 +786,10 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     if pump_outcome.progressed {
                         progressed = true;
                     }
-                    if !pump_outcome.removed {
-                        index += 1;
+                    if pump_outcome.removed {
+                        relay_count -= 1;
+                    } else {
+                        index += 1
                     }
                 }
                 relay_pump_cursor = 0;

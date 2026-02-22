@@ -1661,6 +1661,10 @@ Post-alpha track acceptance anchors:
       - full-scan and budgeted relay pump schedulers now route `pump_once` outcomes through one helper (`pump_lasm_cluster_relay_connection_once`) that handles progressed/idle/release/error paths and warning/decrement side effects,
       - removes duplicated pump outcome branch bodies across both schedulers while preserving deterministic release, warning-throttle, and progression semantics.
       - documented in `docs/book/1376-m39-lasm-cluster-relay-pump-step-shared-helper.md`.
+   - [x] Full-scan relay pump loop now reuses local relay-count budget:
+      - full-scan scheduler tracks mutable `relay_count` alongside index instead of repeatedly calling `relay_connections.len()` in the loop condition after each pump step,
+      - keeps deterministic index/removal traversal semantics unchanged while reducing repeated length reads in the relay hot path.
+      - documented in `docs/book/1377-m39-lasm-cluster-relay-pump-fullscan-local-count.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
