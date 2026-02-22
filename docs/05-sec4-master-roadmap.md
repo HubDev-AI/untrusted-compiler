@@ -1950,6 +1950,11 @@ Post-alpha track acceptance anchors:
       - overflow eviction decrements/removes only dropped-record signatures in O(overflow) time instead of rebuilding signature index over full retained history,
       - records-log `db.queryOne` fallback keeps the same deterministic signature-membership contract via key presence checks.
       - documented in `docs/book/1444-m39-lasm-db-record-signature-refcount-overflow-updates.md`.
+   - [x] Added latest-record signature map for records-log `db.queryOne` fallback row materialization:
+      - dynamic state now keeps `signature -> latest retained record` map updated on bootstrap/append/overflow,
+      - records-log fallback now returns row metadata from the latest matching retained DB record (instead of mirroring the synthetic queryOne record),
+      - signature-count and latest-record maps are maintained together so fallback remains deterministic and O(1) on hot lookup path.
+      - documented in `docs/book/1445-m39-lasm-db-record-signature-latest-row-materialization.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
