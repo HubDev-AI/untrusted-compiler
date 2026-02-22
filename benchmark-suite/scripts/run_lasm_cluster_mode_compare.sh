@@ -37,6 +37,7 @@ Options:
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override for proxy-relay probe
   --build-profile <debug|release>                  sec4 build profile forwarded to both probe runs (default: release)
   --samples <n>                                    Number of wrk samples per probe run (default: 1)
+  --wrk-processes <n>                              Number of parallel wrk processes per probe run (default: 1)
   --proxy-out <path>                               Proxy probe output path (default: results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-proxy.json)
   --fixed-out <path>                               Fixed probe output path (default: results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-fixed.json)
   --out <path>                                     Comparison output path (default: results/summaries/sec4-lasm-cluster-mode-compare.json)
@@ -88,6 +89,7 @@ cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
+wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
 proxy_out_rel="${LASM_CAPACITY_MODE_COMPARE_PROXY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-proxy.json}"
 fixed_out_rel="${LASM_CAPACITY_MODE_COMPARE_FIXED_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe-mode-compare-fixed.json}"
 out_rel="${LASM_CAPACITY_MODE_COMPARE_OUT:-results/summaries/sec4-lasm-cluster-mode-compare.json}"
@@ -192,6 +194,10 @@ while [ "$#" -gt 0 ]; do
       samples="${2:-}"
       shift 2
       ;;
+    --wrk-processes)
+      wrk_processes="${2:-}"
+      shift 2
+      ;;
     --proxy-out)
       proxy_out_rel="${2:-}"
       shift 2
@@ -270,6 +276,14 @@ if [ "$samples" -lt 1 ]; then
   echo "samples must be >= 1, got: $samples" >&2
   exit 2
 fi
+if ! [[ "$wrk_processes" =~ ^[0-9]+$ ]]; then
+  echo "wrk-processes must be an integer >= 1, got: $wrk_processes" >&2
+  exit 2
+fi
+if [ "$wrk_processes" -lt 1 ]; then
+  echo "wrk-processes must be >= 1, got: $wrk_processes" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -308,6 +322,7 @@ sec4 LASM cluster mode compare plan:
   proxyClusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   buildProfile=${build_profile}
   samples=${samples}
+  wrkProcesses=${wrk_processes}
   proxyOut=${proxy_out_path}
   fixedOut=${fixed_out_path}
   out=${out_path}
@@ -334,6 +349,7 @@ common_args=(
   --autoscale-saturation-boost-step "${autoscale_saturation_boost_step}"
   --build-profile "${build_profile}"
   --samples "${samples}"
+  --wrk-processes "${wrk_processes}"
 )
 
 proxy_cmd=(
@@ -384,10 +400,13 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "required command not found: jq" >&2
   exit 127
 fi
+wrk_total_connections="$(awk -v c="$connections" -v p="$wrk_processes" 'BEGIN { printf "%.0f", (c + 0) * (p + 0) }')"
 
 jq -n \
   --arg proxyPath "${proxy_out_path}" \
   --arg fixedPath "${fixed_out_path}" \
+  --argjson wrkProcesses "${wrk_processes}" \
+  --argjson wrkTotalConnections "${wrk_total_connections}" \
   --argjson proxy "$(cat "${proxy_out_path}")" \
   --argjson fixed "$(cat "${fixed_out_path}")" \
   '
@@ -429,6 +448,8 @@ jq -n \
       duration: ($proxy.run.duration // $fixed.run.duration // ""),
       threads: ($proxy.run.threads // $fixed.run.threads // 0),
       connections: ($proxy.run.connections // $fixed.run.connections // 0),
+      wrkProcesses: $wrkProcesses,
+      wrkTotalConnections: $wrkTotalConnections,
       targetRequests: ($proxy.run.targetRequests // $fixed.run.targetRequests // 0),
       proxySummaryPath: $proxyPath,
       fixedSummaryPath: $fixedPath

@@ -35,6 +35,7 @@ Options:
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
   --build-profile <debug|release>                  sec4 build profile forwarded to matrix/verify probes (default: release)
   --samples <n>                                    Number of wrk samples per probe run (default: 1)
+  --wrk-processes <n>                              Number of parallel wrk processes per probe run (default: 1)
   --skip-verify                                    Skip recommended-step follow-up probe
   --matrix-out <path>                              Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
@@ -70,6 +71,7 @@ cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
+wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 matrix_out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -181,6 +183,10 @@ while [ "$#" -gt 0 ]; do
       samples="${2:-}"
       shift 2
       ;;
+    --wrk-processes)
+      wrk_processes="${2:-}"
+      shift 2
+      ;;
     --skip-verify)
       verify_recommended="false"
       shift
@@ -240,6 +246,14 @@ if [ "${samples}" -lt 1 ]; then
   echo "samples must be >= 1, got: ${samples}" >&2
   exit 2
 fi
+if ! [[ "${wrk_processes}" =~ ^[0-9]+$ ]]; then
+  echo "wrk-processes must be an integer >= 1, got: ${wrk_processes}" >&2
+  exit 2
+fi
+if [ "${wrk_processes}" -lt 1 ]; then
+  echo "wrk-processes must be >= 1, got: ${wrk_processes}" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -290,6 +304,7 @@ sec4 LASM saturation boost bundle plan:
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   buildProfile=${build_profile}
   samples=${samples}
+  wrkProcesses=${wrk_processes}
   verifyRecommended=${verify_recommended}
   matrixOut=${matrix_out_path}
   analysisOut=${analysis_out_path}
@@ -320,6 +335,7 @@ matrix_cmd=(
   --autoscale-scale-down-step "${autoscale_scale_down_step}"
   --build-profile "${build_profile}"
   --samples "${samples}"
+  --wrk-processes "${wrk_processes}"
   --out "${matrix_out_path}"
   --analysis-out "${analysis_out_path}"
 )

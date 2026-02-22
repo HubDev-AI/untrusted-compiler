@@ -18,6 +18,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
   --cluster-relay-pump-batch-max 333 \
   --build-profile debug \
   --samples 3 \
+  --wrk-processes 4 \
   --summary-out results/summaries/custom-saturation-boost-summary.md \
   2>&1)"
 
@@ -51,6 +52,10 @@ if ! grep -q 'buildProfile=debug' <<<"$out"; then
 fi
 if ! grep -q 'samples=3' <<<"$out"; then
   echo "saturation boost bundle dry-run missing samples passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'wrkProcesses=4' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing wrk-processes passthrough" >&2
   exit 1
 fi
 if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary.md ${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json" <<<"$out"; then
@@ -102,6 +107,22 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run -
 fi
 if ! grep -q 'samples must be >= 1, got: 0' /tmp/lasm-sat-boost-bundle-invalid-samples.log; then
   echo "saturation boost bundle missing invalid samples diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --wrk-processes 0 >/tmp/lasm-sat-boost-bundle-invalid-wrk-processes.log 2>&1; then
+  echo "saturation boost bundle accepted invalid wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q 'wrk-processes must be >= 1, got: 0' /tmp/lasm-sat-boost-bundle-invalid-wrk-processes.log; then
+  echo "saturation boost bundle missing invalid wrk-processes diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --wrk-processes nope >/tmp/lasm-sat-boost-bundle-invalid-wrk-processes-type.log 2>&1; then
+  echo "saturation boost bundle accepted non-integer wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q 'wrk-processes must be an integer >= 1' /tmp/lasm-sat-boost-bundle-invalid-wrk-processes-type.log; then
+  echo "saturation boost bundle missing invalid wrk-processes type diagnostic passthrough" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --build-profile fast >/tmp/lasm-sat-boost-bundle-invalid-profile.log 2>&1; then

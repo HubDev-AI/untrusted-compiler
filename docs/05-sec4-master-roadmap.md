@@ -1742,6 +1742,11 @@ Post-alpha track acceptance anchors:
       - sample metrics now aggregate across wrk processes (`requests` sum, `requestsPerSec` sum, conservative `p99` max normalized to `ms`) and persist per-process metadata in `observed.samples[].wrkProcessRuns[]`,
       - dry-run/test coverage now validates `wrkProcesses` plan output and deterministic invalid-input diagnostics (`wrk-processes >= 1`, integer-only).
       - documented in `docs/book/1396-m39-lasm-capacity-probe-wrk-process-fanout.md`.
+   - [x] Wired wrk-process fanout through benchmark orchestration wrappers:
+      - `run_lasm_cluster_mode_compare.sh`, `run_lasm_cluster_saturation_boost_matrix.sh`, and `run_lasm_cluster_saturation_boost_bundle.sh` now accept/forward `--wrk-processes <n>` to delegated capacity probe runs,
+      - `run_full_benchmark_suite.sh` now accepts `--saturation-wrk-processes <n>` and forwards it to both LASM saturation bundle and LASM mode-compare phases,
+      - wrapper dry-run/test contracts now validate `wrkProcesses` passthrough and deterministic invalid-input diagnostics for integer/positive constraints.
+      - documented in `docs/book/1397-m39-lasm-benchmark-wrapper-wrk-process-passthrough.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

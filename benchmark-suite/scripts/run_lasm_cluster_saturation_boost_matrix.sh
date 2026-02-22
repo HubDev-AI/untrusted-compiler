@@ -34,6 +34,7 @@ Options:
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
   --build-profile <debug|release>                  sec4 build profile forwarded to probe runs (default: release)
   --samples <n>                                    Number of wrk samples per probe run (default: 1)
+  --wrk-processes <n>                              Number of parallel wrk processes per probe run (default: 1)
   --out <path>                                     Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
   --skip-analysis                                  Skip post-run matrix analysis/recommendation output
@@ -69,6 +70,7 @@ cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
+wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -184,6 +186,10 @@ while [ "$#" -gt 0 ]; do
       samples="${2:-}"
       shift 2
       ;;
+    --wrk-processes)
+      wrk_processes="${2:-}"
+      shift 2
+      ;;
     --out)
       out_rel="${2:-}"
       shift 2
@@ -274,6 +280,14 @@ if [ "${samples}" -lt 1 ]; then
   echo "samples must be >= 1, got: ${samples}" >&2
   exit 2
 fi
+if ! [[ "${wrk_processes}" =~ ^[0-9]+$ ]]; then
+  echo "wrk-processes must be an integer >= 1, got: ${wrk_processes}" >&2
+  exit 2
+fi
+if [ "${wrk_processes}" -lt 1 ]; then
+  echo "wrk-processes must be >= 1, got: ${wrk_processes}" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -338,6 +352,7 @@ sec4 LASM saturation boost matrix plan:
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   buildProfile=${build_profile}
   samples=${samples}
+  wrkProcesses=${wrk_processes}
   out=${out_path}
   analysisOut=${analysis_out_path}
   skipAnalysis=${skip_analysis}
@@ -371,6 +386,7 @@ for step in "${boost_steps[@]}"; do
     --autoscale-saturation-boost-step "${step}"
     --build-profile "${build_profile}"
     --samples "${samples}"
+    --wrk-processes "${wrk_processes}"
     --out "${step_out}"
   )
   if [ "${fixed_reuse_port_mode}" = "true" ]; then
@@ -420,6 +436,8 @@ for step in "${boost_steps[@]}"; do
       --argjson clusterRelayDispatchSaturationShortCircuitTotal "$(jq '.run.clusterRelayDispatchSaturationShortCircuitTotal // null' "${step_out}")" \
       --argjson clusterRelayDispatchSaturationShortCircuitPerSec "$(jq '.run.clusterRelayDispatchSaturationShortCircuitPerSec // null' "${step_out}")" \
       --argjson clusterRelayLiveSenderCountResolved "$(jq '.run.clusterRelayLiveSenderCountResolved // null' "${step_out}")" \
+      --argjson wrkProcesses "$(jq '.run.wrkProcesses // null' "${step_out}")" \
+      --argjson wrkTotalConnections "$(jq '.run.wrkTotalConnections // null' "${step_out}")" \
       '{
         saturationBoostStep: $saturationBoostStep,
         summaryFile: $summaryFile,
@@ -428,6 +446,8 @@ for step in "${boost_steps[@]}"; do
         requestsPerSec: $requestsPerSec,
         peakRssKb: $peakRssKb,
         p99: $p99,
+        wrkProcesses: $wrkProcesses,
+        wrkTotalConnections: $wrkTotalConnections,
         clusterRelayWorkersResolved: $clusterRelayWorkersResolved,
         clusterAcceptWorkersResolved: $clusterAcceptWorkersResolved,
         clusterRelayAcceptBatchMaxResolved: $clusterRelayAcceptBatchMaxResolved,
@@ -450,11 +470,12 @@ if [ "${dry_run}" = "true" ]; then
     echo "analysisCmd=${analyze_script} ${out_path} ${analysis_out_path}"
     if [ "${verify_recommended}" = "true" ]; then
       echo "verifyRecommendedAfterAnalysis=true"
-      echo "verifyCmd=${probe_script} ... --autoscale-saturation-boost-step <recommended> --build-profile ${build_profile} --samples ${samples} --out ${verify_out_path} --skip-build"
+      echo "verifyCmd=${probe_script} ... --autoscale-saturation-boost-step <recommended> --build-profile ${build_profile} --samples ${samples} --wrk-processes ${wrk_processes} --out ${verify_out_path} --skip-build"
     fi
   fi
   exit 0
 fi
+wrk_total_connections="$(awk -v c="${connections}" -v p="${wrk_processes}" 'BEGIN { printf "%.0f", (c + 0) * (p + 0) }')"
 
 jq -n \
   --arg impl "sec4-lasm-cluster" \
@@ -469,6 +490,8 @@ jq -n \
   --arg clusterRelayAcceptBatchMax "${cluster_relay_accept_batch_max:-auto}" \
   --arg clusterRelayPumpBatchMax "${cluster_relay_pump_batch_max:-auto}" \
   --argjson samples "${samples}" \
+  --argjson wrkProcesses "${wrk_processes}" \
+  --argjson wrkTotalConnections "${wrk_total_connections}" \
   --argjson fixedReusePortMode "${fixed_reuse_port_mode}" \
   --argjson threads "${threads}" \
   --argjson connections "${connections}" \
@@ -486,6 +509,8 @@ jq -n \
       threads: $threads,
       connections: $connections,
       samples: $samples,
+      wrkProcesses: $wrkProcesses,
+      wrkTotalConnections: $wrkTotalConnections,
       targetRequests: $targetRequests,
       clusterRelayWorkers: $clusterRelayWorkers,
       clusterRelayQueue: $clusterRelayQueue,
@@ -527,6 +552,7 @@ if [ "${skip_analysis}" != "true" ]; then
       --autoscale-saturation-boost-step "${recommended_step}"
       --build-profile "${build_profile}"
       --samples "${samples}"
+      --wrk-processes "${wrk_processes}"
       --out "${verify_out_path}"
       --skip-build
     )
