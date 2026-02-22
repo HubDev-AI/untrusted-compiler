@@ -1323,5 +1323,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1351-m39-lasm-db-exectx-inline-tx-handle-cleanup.md`
 - `1352-m39-lasm-db-tx-handle-wrap-and-collision-safe-allocation.md`
 - `1353-m39-lasm-cluster-autoscale-cooldown-tail-store-elision.md`
+- `1354-m39-lasm-cluster-cyclic-healthy-lookup-selection.md`
 
 As milestones progress, chapters will be added and linked from this index.
