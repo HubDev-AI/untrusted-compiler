@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-22 | self | I launched two focused Cargo tests in one parallel call again during the worker-port reuse slice and hit package/build lock waits. | Keep Cargo commands strictly sequential; use parallel calls only for read/search/syntax operations. |
 | 2026-02-22 | self | After merge, I started this slice on local `dev` and only noticed at pre-commit branch gate. | Keep a hard post-merge branch gate: immediately create the next `codex/*` branch before any edits. |
 | 2026-02-22 | self | I started the autoscale recovery reserve/spawn slice on local `dev` again and only created the branch after code edits. | Run a hard pre-edit branch gate (`git branch --show-current`) after every merge and create the next `codex/*` branch before opening or patching files. |
 | 2026-02-22 | self | I committed the autoscale lock-scope slice on local `dev` before creating a `codex/*` branch. | Keep a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, branch before staging/commit. If missed, branch from the commit immediately and repoint local `dev` to `origin/dev`. |

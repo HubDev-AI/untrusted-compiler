@@ -220,6 +220,7 @@ pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
                     worker_port, status
                 );
                 state.workers.swap_remove(worker_index);
+                state.reusable_ports.push(worker_port);
             }
             Ok(None) => {
                 worker_index += 1;
@@ -230,6 +231,7 @@ pub(crate) fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
                     worker_port, err
                 );
                 state.workers.swap_remove(worker_index);
+                state.reusable_ports.push(worker_port);
             }
         }
     }
@@ -243,8 +245,14 @@ pub(crate) fn reserve_lasm_cluster_min_worker_ports(
     let missing = min_instances.saturating_sub(state.workers.len());
     worker_ports_out.reserve(missing);
     for _ in 0..missing {
-        let worker_port = state.next_port;
-        state.next_port = state.next_port.saturating_add(1);
+        let worker_port = match state.reusable_ports.pop() {
+            Some(port) => port,
+            None => {
+                let port = state.next_port;
+                state.next_port = state.next_port.saturating_add(1);
+                port
+            }
+        };
         worker_ports_out.push(worker_port);
     }
 }
@@ -255,6 +263,7 @@ pub(crate) fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
         let _ = worker.child.wait();
     }
     state.workers.clear();
+    state.reusable_ports.clear();
 }
 
 pub(crate) fn bind_lasm_listener(
@@ -292,6 +301,7 @@ pub(crate) fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Resul
     let mut state = LasmClusterState {
         workers: Vec::new(),
         next_port: config.listen_port,
+        reusable_ports: Vec::new(),
     };
     for _ in 0..config.min_instances {
         match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {

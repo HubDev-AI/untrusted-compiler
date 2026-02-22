@@ -221,6 +221,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                         if desired < state.workers.len() && scale_down_cooldown_elapsed {
                             while state.workers.len() > down_target {
                                 if let Some(worker) = state.workers.pop() {
+                                    state.reusable_ports.push(worker.port);
                                     workers_to_stop.push(worker);
                                 }
                             }

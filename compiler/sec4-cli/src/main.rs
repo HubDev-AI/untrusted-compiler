@@ -7752,6 +7752,7 @@ struct LasmClusterWorker {
 struct LasmClusterState {
     workers: Vec<LasmClusterWorker>,
     next_port: u16,
+    reusable_ports: Vec<u16>,
 }
 
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
@@ -7798,6 +7799,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let mut state = LasmClusterState {
         workers: Vec::new(),
         next_port: base_port,
+        reusable_ports: Vec::new(),
     };
     for _ in 0..config.min_instances {
         let worker_port = state.next_port;
