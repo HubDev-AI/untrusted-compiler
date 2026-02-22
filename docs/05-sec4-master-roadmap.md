@@ -1499,6 +1499,10 @@ Post-alpha track acceptance anchors:
       - `handle_lasm_cluster_accept_dispatch_error` now writes relay-saturated/relay-unavailable static response buffers directly in the dispatch-error handler instead of routing through reason enum + helper dispatch,
       - preserves overload response payloads and terminal semantics while removing per-error reason dispatch overhead in the accept hot path.
       - documented in `docs/book/1334-m39-lasm-cluster-accept-dispatch-direct-overload-buffer-writes.md`.
+   - [x] Replaced enum-based unavailable-response dispatch with dedicated helper entry points:
+      - `lasm_cluster_accept_dispatch` now exposes dedicated no-healthy-worker / worker-unavailable response writers instead of reason-enum routing,
+      - relay worker loop now calls these dedicated helpers directly, preserving response payloads while removing reason-enum dispatch plumbing from unavailable response paths.
+      - documented in `docs/book/1335-m39-lasm-cluster-unavailable-response-helper-split.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

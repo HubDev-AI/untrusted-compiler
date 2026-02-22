@@ -11,31 +11,32 @@ const LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 5
 const LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 59\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay saturated\"}";
 const LASM_CLUSTER_UNAVAILABLE_RELAY_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 61\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay unavailable\"}";
 
-pub(crate) enum LasmClusterUnavailableReason {
-    NoHealthyWorkers,
-    WorkerUnavailable,
-}
-
 #[inline(always)]
-fn lasm_cluster_unavailable_response(reason: LasmClusterUnavailableReason) -> &'static [u8] {
-    match reason {
-        LasmClusterUnavailableReason::NoHealthyWorkers => {
-            LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE
-        }
-        LasmClusterUnavailableReason::WorkerUnavailable => {
-            LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE
-        }
-    }
-}
-
-pub(crate) fn write_lasm_cluster_unavailable_response(
+fn write_lasm_cluster_unavailable_response_bytes(
     client: &mut TcpStream,
-    reason: LasmClusterUnavailableReason,
+    response: &'static [u8],
 ) -> Result<(), String> {
-    let response = lasm_cluster_unavailable_response(reason);
     client
         .write_all(response)
         .map_err(|err| format!("could not write LASM cluster overload response: {err}"))
+}
+
+pub(crate) fn write_lasm_cluster_no_healthy_workers_response(
+    client: &mut TcpStream,
+) -> Result<(), String> {
+    write_lasm_cluster_unavailable_response_bytes(
+        client,
+        LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE,
+    )
+}
+
+pub(crate) fn write_lasm_cluster_worker_unavailable_response(
+    client: &mut TcpStream,
+) -> Result<(), String> {
+    write_lasm_cluster_unavailable_response_bytes(
+        client,
+        LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE,
+    )
 }
 
 #[inline(always)]
