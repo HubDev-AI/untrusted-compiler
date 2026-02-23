@@ -37,6 +37,12 @@ fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path
     }
 }
 
+fn push_optional_string_run_arg(cmd: &mut Command, flag: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        cmd.arg(flag).arg(value);
+    }
+}
+
 fn spawn_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
@@ -108,6 +114,16 @@ fn spawn_lasm_cluster_worker(
         &mut cmd,
         "--db-sqlite-busy-timeout-ms",
         config.db_sqlite_busy_timeout_ms,
+    );
+    push_optional_string_run_arg(
+        &mut cmd,
+        "--db-sqlite-journal-mode",
+        config.db_sqlite_journal_mode.as_deref(),
+    );
+    push_optional_string_run_arg(
+        &mut cmd,
+        "--db-sqlite-synchronous",
+        config.db_sqlite_synchronous.as_deref(),
     );
     push_optional_u64_run_arg(
         &mut cmd,

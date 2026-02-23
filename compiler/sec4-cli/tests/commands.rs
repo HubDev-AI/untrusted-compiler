@@ -17544,6 +17544,152 @@ fn run_command_rejects_db_sqlite_busy_timeout_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_db_sqlite_journal_mode_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-journal-mode-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sqlite-journal-mode",
+        "wal",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-journal-mode is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sqlite-journal-mode is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-sqlite-journal-mode guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_invalid_db_sqlite_journal_mode() {
+    let project_dir = temp_dir("sec4-run-command-invalid-db-sqlite-journal-mode");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-sqlite-journal-mode",
+        "invalid",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-journal-mode is invalid"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-sqlite-journal-mode must be one of wal, delete, truncate, persist, memory, off"
+        ),
+        "stderr should include deterministic sqlite journal mode validation guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_sqlite_synchronous_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-synchronous-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sqlite-synchronous",
+        "normal",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-synchronous is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sqlite-synchronous is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-sqlite-synchronous guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_invalid_db_sqlite_synchronous() {
+    let project_dir = temp_dir("sec4-run-command-invalid-db-sqlite-synchronous");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-sqlite-synchronous",
+        "invalid",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-synchronous is invalid"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sqlite-synchronous must be one of off, normal, full, extra"),
+        "stderr should include deterministic sqlite synchronous validation guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_retryable_conflict_retry_max_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-retryable-retries-c-backend");
     let project_path = project_dir
