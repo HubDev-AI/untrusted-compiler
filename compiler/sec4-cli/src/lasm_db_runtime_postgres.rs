@@ -797,6 +797,26 @@ pub(crate) fn run_lasm_postgres_exec(
                 )?
             }
         }
+        Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+            if use_prepared {
+                let retry_statement =
+                    lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
+                    .map_err(|retry_err| {
+                        format!(
+                            "postgres execution failed after retryable conflict retry: {retry_err}"
+                        )
+                    })?
+            } else {
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                run_lasm_postgres_unprepared_exec_with_count(client, query_template).map_err(
+                    |retry_err| {
+                        format!("postgres execution failed after retryable conflict retry: {retry_err}")
+                    },
+                )?
+            }
+        }
         Err(err)
             if use_prepared
                 && err
