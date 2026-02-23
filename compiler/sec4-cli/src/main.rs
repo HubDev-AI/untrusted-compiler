@@ -69,7 +69,8 @@ use lasm_cluster_runtime_config::{
     lasm_cluster_proxy_queue_capacity, lasm_cluster_proxy_worker_count,
     lasm_cluster_relay_accept_batch_max, lasm_cluster_relay_pump_batch_max,
     lasm_cluster_selection_reservation_min_chunk, resolve_lasm_cluster_relay_accept_batch_max,
-    resolve_lasm_cluster_relay_pump_batch_max,
+    resolve_lasm_cluster_relay_buffer_bytes, resolve_lasm_cluster_relay_buffer_pool_max,
+    resolve_lasm_cluster_relay_buffer_pool_prewarm, resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
@@ -80,13 +81,13 @@ use lasm_db_cli::{
     run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode,
 };
 use lasm_db_config::load_lasm_db_postgres_dsn_from_file;
-use lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
     LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
+use lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 pub(crate) use lasm_dynamic_state::{
     append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
     persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
@@ -7842,6 +7843,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_pump_batch_max = lasm_cluster_relay_pump_batch_max(shared_config.as_ref());
     let relay_selection_reservation_min_chunk =
         lasm_cluster_selection_reservation_min_chunk(shared_config.as_ref());
+    let relay_buffer_bytes = resolve_lasm_cluster_relay_buffer_bytes();
+    let relay_buffer_pool_max = resolve_lasm_cluster_relay_buffer_pool_max(relay_accept_batch_max);
+    let relay_buffer_pool_prewarm =
+        resolve_lasm_cluster_relay_buffer_pool_prewarm(relay_buffer_pool_max);
     let relay_queue_shard_capacity = relay_queue_capacity
         .saturating_add(relay_worker_count.saturating_sub(1))
         / relay_worker_count.max(1);
@@ -7877,6 +7882,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             relay_accept_batch_max,
             relay_pump_batch_max,
             relay_selection_reservation_min_chunk,
+            relay_buffer_bytes,
+            relay_buffer_pool_max,
+            relay_buffer_pool_prewarm,
         ));
     }
 
@@ -7900,6 +7908,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_worker_count,
         relay_queue_capacity,
         relay_queue_shard_capacity,
+        relay_buffer_bytes,
+        relay_buffer_pool_max,
+        relay_buffer_pool_prewarm,
         relay_accept_worker_count,
         relay_dispatch_fallback_total: Arc::clone(&relay_dispatch_fallback_total),
         relay_dispatch_saturation_short_circuit_total: Arc::clone(

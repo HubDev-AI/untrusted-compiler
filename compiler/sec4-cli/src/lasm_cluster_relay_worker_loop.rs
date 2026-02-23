@@ -16,8 +16,6 @@ use crate::lasm_cluster_backend_selection::{
 use crate::lasm_cluster_relay_pump::{LasmClusterRelayPump, LasmClusterRelayPumpStep};
 use crate::lasm_cluster_runtime_config::{
     resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
-    resolve_lasm_cluster_relay_buffer_bytes, resolve_lasm_cluster_relay_buffer_pool_max,
-    resolve_lasm_cluster_relay_buffer_pool_prewarm,
 };
 use crate::{LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS};
 
@@ -496,20 +494,18 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
     relay_selection_reservation_min_chunk: usize,
+    relay_buffer_bytes: usize,
+    relay_buffer_pool_max: usize,
+    relay_buffer_pool_prewarm: usize,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        let relay_buffer_bytes = resolve_lasm_cluster_relay_buffer_bytes();
-        let relay_buffer_pool_max =
-            resolve_lasm_cluster_relay_buffer_pool_max(relay_accept_batch_max);
-        let relay_buffer_pool_prewarm =
-            resolve_lasm_cluster_relay_buffer_pool_prewarm(relay_buffer_pool_max);
         let mut relay_connections: Vec<LasmClusterRelayPump> =
             Vec::with_capacity(relay_accept_batch_max.max(1));
         let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> =
             Vec::with_capacity(relay_buffer_pool_max);
         prewarm_lasm_cluster_relay_buffer_pool(
             &mut relay_buffer_pool,
-            relay_buffer_pool_prewarm,
+            relay_buffer_pool_prewarm.min(relay_buffer_pool_max),
             relay_buffer_bytes,
         );
         let mut unhealthy_ports_until_by_index: Vec<Option<Instant>> = Vec::new();
