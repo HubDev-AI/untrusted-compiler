@@ -949,6 +949,14 @@ pub(crate) fn run_lasm_postgres_query_one(
                     format!("postgres queryOne execution failed after reconnect: {retry_err}")
                 })?
             }
+            Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                execute_query(client, &prepared_statement).map_err(|retry_err| {
+                    format!(
+                        "postgres queryOne execution failed after retryable conflict retry: {retry_err}"
+                    )
+                })?
+            }
             Err(err)
                 if err
                     .to_string()
