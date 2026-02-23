@@ -10039,6 +10039,8 @@ fn apply_lasm_dynamic_response_materialization(
                 records_capacity,
                 records_dropped_total,
                 affected_rows_total,
+                affected_rows_filtered_total,
+                affected_rows_global_total,
                 records_exec_count,
                 records_exec_tx_count,
                 records_query_one_count,
@@ -10120,6 +10122,13 @@ fn apply_lasm_dynamic_response_materialization(
                             }
                         },
                     );
+                    let affected_rows_filtered_total = records_filtered
+                        .iter()
+                        .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
+                    let affected_rows_global_total = state
+                        .db_records
+                        .iter()
+                        .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
                     let total = records_filtered.len();
                     let records = if let Some(limit) = records_limit {
                         records_filtered
@@ -10140,6 +10149,8 @@ fn apply_lasm_dynamic_response_materialization(
                         state.db_records_max,
                         state.db_records_dropped_total,
                         affected_rows_total,
+                        affected_rows_filtered_total,
+                        affected_rows_global_total,
                         records_exec_count,
                         records_exec_tx_count,
                         records_query_one_count,
@@ -10188,6 +10199,8 @@ fn apply_lasm_dynamic_response_materialization(
                     "recordsCapacity": records_capacity,
                     "recordsDroppedTotal": records_dropped_total,
                     "affectedRowsTotal": affected_rows_total,
+                    "affectedRowsFilteredTotal": affected_rows_filtered_total,
+                    "affectedRowsGlobalTotal": affected_rows_global_total,
                     "adapter": adapter,
                     "filters": {
                         "op": records_op_filter,
