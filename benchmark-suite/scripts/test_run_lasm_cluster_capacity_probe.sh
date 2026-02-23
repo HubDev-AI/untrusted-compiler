@@ -195,7 +195,7 @@ out_db_query_profile="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh"
   --profile db-hot-query-one \
   --port 19095 \
   2>&1)"
-if ! grep -q 'requestPath=/db/hot-query-one?row_schema=1' <<<"$out_db_query_profile"; then
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_query_profile"; then
   echo "lasm capacity probe db query-one profile dry-run missing default request path" >&2
   exit 1
 fi

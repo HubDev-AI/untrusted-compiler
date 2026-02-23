@@ -20,6 +20,15 @@ fn dbHotWriteTx() effects { net, db.write, db.tx } -> Int {
   0
 }
 
+fn dbHotQueryOne() effects { net, db.read, db.write } -> Int {
+  let db = DbCap();
+  let query = sql.q("select benchmark_query_one limit 1", "bench-hot-query");
+  db.exec(db, query);
+  db.queryOne(db, query, schema.row(1));
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
 fn dbListRecords() effects { net } -> Int {
   res.json(200, "DbListRecordsResponse", 0);
   0
@@ -53,6 +62,7 @@ fn main() effects { net } -> Int {
   http.get(router, "/users/:id", getUser);
   http.get(router, "/db/hot-write", dbHotWrite);
   http.get(router, "/db/hot-write-tx", dbHotWriteTx);
+  http.get(router, "/db/hot-query-one", dbHotQueryOne);
   http.get(router, "/db/records", dbListRecords);
 
   http.serve(8080, router);

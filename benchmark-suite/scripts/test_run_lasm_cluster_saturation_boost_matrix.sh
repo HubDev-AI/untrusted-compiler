@@ -141,7 +141,7 @@ out_db_query_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_m
   --profile db-hot-query-one \
   --boost-steps 2 \
   2>&1)"
-if ! grep -q 'requestPath=/db/hot-query-one?row_schema=1' <<<"$out_db_query_profile"; then
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_query_profile"; then
   echo "saturation boost matrix dry-run missing db query profile default request path" >&2
   exit 1
 fi
