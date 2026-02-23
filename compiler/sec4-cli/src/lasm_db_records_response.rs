@@ -6,6 +6,8 @@ use crate::{
 };
 use std::sync::Mutex;
 
+const LASM_DB_RECORDS_LIMIT_MAX: usize = 1000;
+
 pub(crate) fn apply_lasm_db_list_records_response_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
@@ -15,7 +17,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let records_limit = if let Some(raw_limit) = request.query_params.get("limit") {
         let trimmed = raw_limit.trim();
         match trimmed.parse::<usize>() {
-            Ok(value) if value >= 1 => Some(value),
+            Ok(value) if (1..=LASM_DB_RECORDS_LIMIT_MAX).contains(&value) => Some(value),
             _ => {
                 set_lasm_json_response(
                     response,
@@ -23,7 +25,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                     &lasm_error_envelope(
                         "DB.RECORDS_LIMIT_INVALID",
                         "validation",
-                        "db records limit must be an integer >= 1",
+                        "db records limit must be an integer between 1 and 1000",
                         400,
                         trace_id,
                     ),
@@ -616,6 +618,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "createdToMs": records_created_to_ms_filter,
                 "idFrom": records_id_from_filter,
                 "idTo": records_id_to_filter,
+                "limit": records_limit,
                 "offset": records_offset,
                 "order": records_order_filter,
                 "includeRecords": include_records,

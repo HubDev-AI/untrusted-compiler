@@ -15492,6 +15492,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"idFrom\":null")
             && list_response.contains("\"idTo\":null")
+            && list_response.contains("\"limit\":null")
             && list_response.contains("\"offset\":null")
             && list_response.contains("\"order\":\"asc\"")
             && list_response.contains("\"includeRecords\":true")
@@ -15532,6 +15533,7 @@ fn main() effects { net } -> Int {
         limited_list_response.contains("\"count\":2")
             && limited_list_response.contains("\"recordsTotal\":3")
             && limited_list_response.contains("\"recordsGlobalTotal\":3")
+            && limited_list_response.contains("\"limit\":2")
             && limited_list_response.contains("\"records\":")
             && limited_list_response.contains("\"op\":\"execTx\"")
             && limited_list_response.contains("\"op\":\"queryOne\""),
@@ -15756,6 +15758,19 @@ fn main() effects { net } -> Int {
         invalid_filter_response.contains("HTTP/1.1 400 Bad Request")
             && invalid_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\""),
         "db records invalid filter response should return deterministic validation error:\n{invalid_filter_response}"
+    );
+
+    let invalid_limit_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?limit=1001 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_limit_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_limit_filter_response.contains("\"code\":\"DB.RECORDS_LIMIT_INVALID\"")
+            && invalid_limit_filter_response
+                .contains("db records limit must be an integer between 1 and 1000"),
+        "db records invalid limit filter should return deterministic validation error:\n{invalid_limit_filter_response}"
     );
 
     let invalid_op_filter_response = run_lasm_oneshot_request(
