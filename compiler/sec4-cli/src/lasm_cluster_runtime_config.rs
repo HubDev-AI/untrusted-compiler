@@ -132,6 +132,17 @@ pub(crate) fn resolve_lasm_cluster_relay_pump_scan_multiplier() -> usize {
     usize::try_from(value).unwrap_or(default_value)
 }
 
+pub(crate) fn resolve_lasm_cluster_fallback_connect_max_attempts() -> usize {
+    let default_value = 4usize;
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS",
+        default_value as u64,
+        1,
+        256,
+    );
+    usize::try_from(value).unwrap_or(default_value)
+}
+
 pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
