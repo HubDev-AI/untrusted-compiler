@@ -127,12 +127,14 @@ fn normalize_lasm_cluster_relay_pump_cursor(
 struct LasmClusterRelayPumpDispatchOutcome {
     progressed: bool,
     removed: bool,
+    consumed_pump_budget: bool,
 }
 
 struct LasmClusterRelayPumpModeResolution {
     full_scan_pump_mode: bool,
     initial_cursor: usize,
     pump_budget: usize,
+    scan_budget: usize,
 }
 
 fn resolve_lasm_cluster_relay_pump_mode(
@@ -145,6 +147,7 @@ fn resolve_lasm_cluster_relay_pump_mode(
             full_scan_pump_mode: true,
             initial_cursor: 0,
             pump_budget: 0,
+            scan_budget: 0,
         };
     }
     let full_scan_pump_mode = relay_count <= relay_pump_batch_max;
@@ -160,10 +163,16 @@ fn resolve_lasm_cluster_relay_pump_mode(
     } else {
         relay_pump_batch_max.min(relay_count)
     };
+    let scan_budget = if full_scan_pump_mode {
+        relay_count
+    } else {
+        relay_count.min(relay_pump_batch_max.saturating_mul(4).max(1))
+    };
     LasmClusterRelayPumpModeResolution {
         full_scan_pump_mode,
         initial_cursor,
         pump_budget,
+        scan_budget,
     }
 }
 
@@ -180,10 +189,17 @@ fn pump_lasm_cluster_relay_connection_once(
         Ok(LasmClusterRelayPumpStep::Progressed) => LasmClusterRelayPumpDispatchOutcome {
             progressed: true,
             removed: false,
+            consumed_pump_budget: true,
         },
         Ok(LasmClusterRelayPumpStep::Idle) => LasmClusterRelayPumpDispatchOutcome {
             progressed: false,
             removed: false,
+            consumed_pump_budget: true,
+        },
+        Ok(LasmClusterRelayPumpStep::BackoffDeferred) => LasmClusterRelayPumpDispatchOutcome {
+            progressed: false,
+            removed: false,
+            consumed_pump_budget: false,
         },
         Ok(LasmClusterRelayPumpStep::Complete) => {
             release_lasm_cluster_relay_connection(
@@ -196,6 +212,7 @@ fn pump_lasm_cluster_relay_connection_once(
             LasmClusterRelayPumpDispatchOutcome {
                 progressed: true,
                 removed: true,
+                consumed_pump_budget: true,
             }
         }
         Err(err) => {
@@ -214,6 +231,7 @@ fn pump_lasm_cluster_relay_connection_once(
             LasmClusterRelayPumpDispatchOutcome {
                 progressed: true,
                 removed: true,
+                consumed_pump_budget: true,
             }
         }
     }
@@ -235,7 +253,8 @@ fn pump_lasm_cluster_relay_connections(
         resolve_lasm_cluster_relay_pump_mode(relay_count, relay_pump_batch_max, *relay_pump_cursor);
     let mut relay_scan_cursor = pump_mode.initial_cursor;
     let mut pump_budget = pump_mode.pump_budget;
-    while pump_budget > 0 {
+    let mut scan_budget = pump_mode.scan_budget;
+    while pump_budget > 0 && scan_budget > 0 {
         let relay_len_before_step = relay_count;
         let pump_outcome = pump_lasm_cluster_relay_connection_once(
             relay_connections,
@@ -247,7 +266,10 @@ fn pump_lasm_cluster_relay_connections(
             active_connection_decrements_local,
         );
         progressed |= pump_outcome.progressed;
-        pump_budget -= 1;
+        if pump_outcome.consumed_pump_budget {
+            pump_budget -= 1;
+        }
+        scan_budget -= 1;
         if pump_outcome.removed {
             relay_count -= 1;
             if normalize_lasm_cluster_relay_pump_cursor(&mut relay_scan_cursor, relay_count) {

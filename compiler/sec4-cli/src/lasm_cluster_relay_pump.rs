@@ -14,6 +14,7 @@ const LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_MAX: usize = 32;
 pub(crate) enum LasmClusterRelayPumpStep {
     Progressed,
     Idle,
+    BackoffDeferred,
     Complete,
 }
 
@@ -115,7 +116,7 @@ impl LasmClusterRelayPump {
     pub(crate) fn pump_once(&mut self) -> Result<LasmClusterRelayPumpStep, String> {
         if self.idle_backoff_remaining > 0 {
             self.idle_backoff_remaining -= 1;
-            return Ok(LasmClusterRelayPumpStep::Idle);
+            return Ok(LasmClusterRelayPumpStep::BackoffDeferred);
         }
 
         let mut progressed = false;

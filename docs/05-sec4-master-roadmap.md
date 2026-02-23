@@ -1879,6 +1879,11 @@ Post-alpha track acceptance anchors:
       - relay pump now applies bounded per-connection idle deferral after fully idle ticks and resets backoff immediately on any real IO progress,
       - cluster status JSON now emits `relayIdleBackoffMax` so active idle-scheduling tuning is visible in operator/benchmark snapshots.
       - documented in `docs/book/1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`.
+   - [x] Made relay pump budget accounting backoff-skip aware:
+      - relay pumps now emit explicit `BackoffDeferred` steps when idle-backoff countdown is active,
+      - relay worker loop now uses separate bounded scan-budget accounting so deferred-idle scans do not consume main per-tick pump budget,
+      - batch mode now scans up to a bounded multiple of `relay_pump_batch_max` to skip deferred-idle relays and reach active relays in the same tick.
+      - documented in `docs/book/1488-m39-lasm-relay-backoff-skip-budget-aware-pump-scanning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
