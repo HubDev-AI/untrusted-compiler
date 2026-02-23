@@ -239,11 +239,13 @@ pub(crate) fn run_lasm_sqlite_exec(
             .transaction()
             .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
         if sqlite_params.is_empty() && has_lasm_sql_non_trailing_statement_separator(query_template) {
+            let before_changes = tx.total_changes();
             tx.execute_batch(query_template)
                 .map_err(|err| format!("sqlite execution failed: {err}"))?;
+            let affected_rows = tx.total_changes().saturating_sub(before_changes);
             tx.commit()
                 .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
-            return Ok(0);
+            return Ok(affected_rows);
         }
         let mut statement = tx
             .prepare_cached(query_template)
