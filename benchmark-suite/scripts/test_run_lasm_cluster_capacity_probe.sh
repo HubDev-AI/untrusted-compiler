@@ -41,6 +41,11 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --db-sqlite-busy-timeout-ms 999 \
   --db-sqlite-journal-mode WAL \
   --db-sqlite-synchronous NORMAL \
+  --db-query-one-row-max-bytes 1001 \
+  --db-query-one-row-max-columns 1002 \
+  --db-sql-template-max-bytes 1003 \
+  --db-params-max-bytes 1004 \
+  --db-params-max-entries 1005 \
   --db-postgres-retryable-conflict-retry-max 10 \
   --db-sqlite-lock-retry-max 11 \
   --db-sqlite-lock-retry-delay-ms 12 \
@@ -124,6 +129,26 @@ if ! grep -q 'dbMaxTxHandles=22' <<<"$out"; then
 fi
 if ! grep -q 'dbSqliteJournalMode=WAL' <<<"$out"; then
   echo "lasm capacity probe dry-run missing db-sqlite-journal-mode output" >&2
+  exit 1
+fi
+if ! grep -q 'dbQueryOneRowMaxBytes=1001' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-query-one-row-max-bytes output" >&2
+  exit 1
+fi
+if ! grep -q 'dbQueryOneRowMaxColumns=1002' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-query-one-row-max-columns output" >&2
+  exit 1
+fi
+if ! grep -q 'dbSqlTemplateMaxBytes=1003' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-sql-template-max-bytes output" >&2
+  exit 1
+fi
+if ! grep -q 'dbParamsMaxBytes=1004' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-params-max-bytes output" >&2
+  exit 1
+fi
+if ! grep -q 'dbParamsMaxEntries=1005' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-params-max-entries output" >&2
   exit 1
 fi
 if ! grep -q 'dbSqliteLockRetryDelayMs=12' <<<"$out"; then
@@ -288,6 +313,14 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --db-max-t
 fi
 if ! grep -q "db-max-tx-handles must be numeric" /tmp/lasm-capacity-probe-invalid-db-max-tx.log; then
   echo "lasm capacity probe invalid db-max-tx-handles error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --db-query-one-row-max-bytes nope >/tmp/lasm-capacity-probe-invalid-db-query-row-bytes.log 2>&1; then
+  echo "lasm capacity probe accepted invalid db-query-one-row-max-bytes value" >&2
+  exit 1
+fi
+if ! grep -q "db-query-one-row-max-bytes must be numeric" /tmp/lasm-capacity-probe-invalid-db-query-row-bytes.log; then
+  echo "lasm capacity probe invalid db-query-one-row-max-bytes error missing" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --samples 0 >/tmp/lasm-capacity-probe-invalid-samples.log 2>&1; then

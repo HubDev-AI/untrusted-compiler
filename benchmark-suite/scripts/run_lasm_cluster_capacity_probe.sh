@@ -49,6 +49,11 @@ Options:
   --db-sqlite-busy-timeout-ms <n>                  Optional LASM sqlite busy timeout override
   --db-sqlite-journal-mode <mode>                  Optional LASM sqlite journal mode override
   --db-sqlite-synchronous <mode>                   Optional LASM sqlite synchronous override
+  --db-query-one-row-max-bytes <n>                 Optional LASM db query-one row max-bytes override
+  --db-query-one-row-max-columns <n>               Optional LASM db query-one row max-columns override
+  --db-sql-template-max-bytes <n>                  Optional LASM db SQL template max-bytes override
+  --db-params-max-bytes <n>                        Optional LASM db params max-bytes override
+  --db-params-max-entries <n>                      Optional LASM db params max-entries override
   --db-postgres-retryable-conflict-retry-max <n>   Optional LASM postgres retryable conflict retry max
   --db-sqlite-lock-retry-max <n>                   Optional LASM sqlite lock retry max
   --db-sqlite-lock-retry-delay-ms <n>              Optional LASM sqlite lock retry delay override
@@ -165,6 +170,11 @@ db_postgres_connect_timeout_ms="${LASM_CAPACITY_DB_POSTGRES_CONNECT_TIMEOUT_MS:-
 db_sqlite_busy_timeout_ms="${LASM_CAPACITY_DB_SQLITE_BUSY_TIMEOUT_MS:-}"
 db_sqlite_journal_mode="${LASM_CAPACITY_DB_SQLITE_JOURNAL_MODE:-}"
 db_sqlite_synchronous="${LASM_CAPACITY_DB_SQLITE_SYNCHRONOUS:-}"
+db_query_one_row_max_bytes="${LASM_CAPACITY_DB_QUERY_ONE_ROW_MAX_BYTES:-}"
+db_query_one_row_max_columns="${LASM_CAPACITY_DB_QUERY_ONE_ROW_MAX_COLUMNS:-}"
+db_sql_template_max_bytes="${LASM_CAPACITY_DB_SQL_TEMPLATE_MAX_BYTES:-}"
+db_params_max_bytes="${LASM_CAPACITY_DB_PARAMS_MAX_BYTES:-}"
+db_params_max_entries="${LASM_CAPACITY_DB_PARAMS_MAX_ENTRIES:-}"
 db_postgres_retryable_conflict_retry_max="${LASM_CAPACITY_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX:-}"
 db_sqlite_lock_retry_max="${LASM_CAPACITY_DB_SQLITE_LOCK_RETRY_MAX:-}"
 db_sqlite_lock_retry_delay_ms="${LASM_CAPACITY_DB_SQLITE_LOCK_RETRY_DELAY_MS:-}"
@@ -337,6 +347,26 @@ while [ "$#" -gt 0 ]; do
       db_sqlite_synchronous="${2:-}"
       shift 2
       ;;
+    --db-query-one-row-max-bytes)
+      db_query_one_row_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-query-one-row-max-columns)
+      db_query_one_row_max_columns="${2:-}"
+      shift 2
+      ;;
+    --db-sql-template-max-bytes)
+      db_sql_template_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-params-max-bytes)
+      db_params_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-params-max-entries)
+      db_params_max_entries="${2:-}"
+      shift 2
+      ;;
     --db-postgres-retryable-conflict-retry-max)
       db_postgres_retryable_conflict_retry_max="${2:-}"
       shift 2
@@ -416,7 +446,7 @@ if [ -n "$cluster_relay_pump_batch_max" ] && ! is_number "$cluster_relay_pump_ba
   echo "cluster-relay-pump-batch-max must be numeric, got: $cluster_relay_pump_batch_max" >&2
   exit 2
 fi
-for field in db_max_tx_handles db_records_max db_postgres_statement_cache_max db_postgres_placeholder_cache_max db_postgres_statement_timeout_ms db_postgres_lock_timeout_ms db_postgres_connect_timeout_ms db_sqlite_busy_timeout_ms db_postgres_retryable_conflict_retry_max db_sqlite_lock_retry_max db_sqlite_lock_retry_delay_ms; do
+for field in db_max_tx_handles db_records_max db_postgres_statement_cache_max db_postgres_placeholder_cache_max db_postgres_statement_timeout_ms db_postgres_lock_timeout_ms db_postgres_connect_timeout_ms db_sqlite_busy_timeout_ms db_query_one_row_max_bytes db_query_one_row_max_columns db_sql_template_max_bytes db_params_max_bytes db_params_max_entries db_postgres_retryable_conflict_retry_max db_sqlite_lock_retry_max db_sqlite_lock_retry_delay_ms; do
   value="${!field}"
   if [ -n "$value" ] && ! is_number "$value"; then
     echo "${field//_/-} must be numeric, got: $value" >&2
@@ -633,6 +663,11 @@ sec4 LASM cluster capacity probe plan:
   dbSqliteBusyTimeoutMs=${db_sqlite_busy_timeout_ms:-auto}
   dbSqliteJournalMode=${db_sqlite_journal_mode:-auto}
   dbSqliteSynchronous=${db_sqlite_synchronous:-auto}
+  dbQueryOneRowMaxBytes=${db_query_one_row_max_bytes:-auto}
+  dbQueryOneRowMaxColumns=${db_query_one_row_max_columns:-auto}
+  dbSqlTemplateMaxBytes=${db_sql_template_max_bytes:-auto}
+  dbParamsMaxBytes=${db_params_max_bytes:-auto}
+  dbParamsMaxEntries=${db_params_max_entries:-auto}
   dbPostgresRetryableConflictRetryMax=${db_postgres_retryable_conflict_retry_max:-auto}
   dbSqliteLockRetryMax=${db_sqlite_lock_retry_max:-auto}
   dbSqliteLockRetryDelayMs=${db_sqlite_lock_retry_delay_ms:-auto}
@@ -742,6 +777,21 @@ if [ -n "$db_sqlite_journal_mode" ]; then
 fi
 if [ -n "$db_sqlite_synchronous" ]; then
   run_args+=(--db-sqlite-synchronous "$db_sqlite_synchronous")
+fi
+if [ -n "$db_query_one_row_max_bytes" ]; then
+  run_args+=(--db-query-one-row-max-bytes "$db_query_one_row_max_bytes")
+fi
+if [ -n "$db_query_one_row_max_columns" ]; then
+  run_args+=(--db-query-one-row-max-columns "$db_query_one_row_max_columns")
+fi
+if [ -n "$db_sql_template_max_bytes" ]; then
+  run_args+=(--db-sql-template-max-bytes "$db_sql_template_max_bytes")
+fi
+if [ -n "$db_params_max_bytes" ]; then
+  run_args+=(--db-params-max-bytes "$db_params_max_bytes")
+fi
+if [ -n "$db_params_max_entries" ]; then
+  run_args+=(--db-params-max-entries "$db_params_max_entries")
 fi
 if [ -n "$db_postgres_retryable_conflict_retry_max" ]; then
   run_args+=(--db-postgres-retryable-conflict-retry-max "$db_postgres_retryable_conflict_retry_max")
@@ -1001,6 +1051,11 @@ resolved_db_postgres_connect_timeout_ms="null"
 resolved_db_sqlite_busy_timeout_ms="null"
 resolved_db_sqlite_journal_mode=""
 resolved_db_sqlite_synchronous=""
+resolved_db_query_one_row_max_bytes="null"
+resolved_db_query_one_row_max_columns="null"
+resolved_db_sql_template_max_bytes="null"
+resolved_db_params_max_bytes="null"
+resolved_db_params_max_entries="null"
 resolved_db_postgres_retryable_conflict_retry_max="null"
 resolved_db_sqlite_lock_retry_max="null"
 resolved_db_sqlite_lock_retry_delay_ms="null"
@@ -1095,6 +1150,26 @@ if [ -f "$status_json_file" ]; then
   if [ -n "$status_db_sqlite_synchronous" ]; then
     resolved_db_sqlite_synchronous="$status_db_sqlite_synchronous"
   fi
+  status_db_query_one_row_max_bytes="$(jq -r '.dbQueryOneRowMaxBytes // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_query_one_row_max_bytes"; then
+    resolved_db_query_one_row_max_bytes="$status_db_query_one_row_max_bytes"
+  fi
+  status_db_query_one_row_max_columns="$(jq -r '.dbQueryOneRowMaxColumns // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_query_one_row_max_columns"; then
+    resolved_db_query_one_row_max_columns="$status_db_query_one_row_max_columns"
+  fi
+  status_db_sql_template_max_bytes="$(jq -r '.dbSqlTemplateMaxBytes // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_sql_template_max_bytes"; then
+    resolved_db_sql_template_max_bytes="$status_db_sql_template_max_bytes"
+  fi
+  status_db_params_max_bytes="$(jq -r '.dbParamsMaxBytes // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_params_max_bytes"; then
+    resolved_db_params_max_bytes="$status_db_params_max_bytes"
+  fi
+  status_db_params_max_entries="$(jq -r '.dbParamsMaxEntries // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_params_max_entries"; then
+    resolved_db_params_max_entries="$status_db_params_max_entries"
+  fi
   status_db_postgres_retryable_conflict_retry_max="$(jq -r '.dbPostgresRetryableConflictRetryMax // empty' "$status_json_file" 2>/dev/null || true)"
   if is_number "$status_db_postgres_retryable_conflict_retry_max"; then
     resolved_db_postgres_retryable_conflict_retry_max="$status_db_postgres_retryable_conflict_retry_max"
@@ -1182,6 +1257,11 @@ jq -n \
   --argjson resolvedDbSqliteBusyTimeoutMs "$resolved_db_sqlite_busy_timeout_ms" \
   --arg resolvedDbSqliteJournalMode "$resolved_db_sqlite_journal_mode" \
   --arg resolvedDbSqliteSynchronous "$resolved_db_sqlite_synchronous" \
+  --argjson resolvedDbQueryOneRowMaxBytes "$resolved_db_query_one_row_max_bytes" \
+  --argjson resolvedDbQueryOneRowMaxColumns "$resolved_db_query_one_row_max_columns" \
+  --argjson resolvedDbSqlTemplateMaxBytes "$resolved_db_sql_template_max_bytes" \
+  --argjson resolvedDbParamsMaxBytes "$resolved_db_params_max_bytes" \
+  --argjson resolvedDbParamsMaxEntries "$resolved_db_params_max_entries" \
   --argjson resolvedDbPostgresRetryableConflictRetryMax "$resolved_db_postgres_retryable_conflict_retry_max" \
   --argjson resolvedDbSqliteLockRetryMax "$resolved_db_sqlite_lock_retry_max" \
   --argjson resolvedDbSqliteLockRetryDelayMs "$resolved_db_sqlite_lock_retry_delay_ms" \
@@ -1199,6 +1279,11 @@ jq -n \
   --argjson dbSqliteBusyTimeoutMs "${db_sqlite_busy_timeout_ms:-null}" \
   --arg dbSqliteJournalMode "${db_sqlite_journal_mode}" \
   --arg dbSqliteSynchronous "${db_sqlite_synchronous}" \
+  --argjson dbQueryOneRowMaxBytes "${db_query_one_row_max_bytes:-null}" \
+  --argjson dbQueryOneRowMaxColumns "${db_query_one_row_max_columns:-null}" \
+  --argjson dbSqlTemplateMaxBytes "${db_sql_template_max_bytes:-null}" \
+  --argjson dbParamsMaxBytes "${db_params_max_bytes:-null}" \
+  --argjson dbParamsMaxEntries "${db_params_max_entries:-null}" \
   --argjson dbPostgresRetryableConflictRetryMax "${db_postgres_retryable_conflict_retry_max:-null}" \
   --argjson dbSqliteLockRetryMax "${db_sqlite_lock_retry_max:-null}" \
   --argjson dbSqliteLockRetryDelayMs "${db_sqlite_lock_retry_delay_ms:-null}" \
@@ -1258,6 +1343,11 @@ jq -n \
       dbSqliteBusyTimeoutMs: $dbSqliteBusyTimeoutMs,
       dbSqliteJournalMode: (if $dbSqliteJournalMode == "" then null else $dbSqliteJournalMode end),
       dbSqliteSynchronous: (if $dbSqliteSynchronous == "" then null else $dbSqliteSynchronous end),
+      dbQueryOneRowMaxBytes: $dbQueryOneRowMaxBytes,
+      dbQueryOneRowMaxColumns: $dbQueryOneRowMaxColumns,
+      dbSqlTemplateMaxBytes: $dbSqlTemplateMaxBytes,
+      dbParamsMaxBytes: $dbParamsMaxBytes,
+      dbParamsMaxEntries: $dbParamsMaxEntries,
       dbPostgresRetryableConflictRetryMax: $dbPostgresRetryableConflictRetryMax,
       dbSqliteLockRetryMax: $dbSqliteLockRetryMax,
       dbSqliteLockRetryDelayMs: $dbSqliteLockRetryDelayMs,
@@ -1282,6 +1372,11 @@ jq -n \
       clusterDbSqliteBusyTimeoutMsResolved: $resolvedDbSqliteBusyTimeoutMs,
       clusterDbSqliteJournalModeResolved: (if $resolvedDbSqliteJournalMode == "" then null else $resolvedDbSqliteJournalMode end),
       clusterDbSqliteSynchronousResolved: (if $resolvedDbSqliteSynchronous == "" then null else $resolvedDbSqliteSynchronous end),
+      clusterDbQueryOneRowMaxBytesResolved: $resolvedDbQueryOneRowMaxBytes,
+      clusterDbQueryOneRowMaxColumnsResolved: $resolvedDbQueryOneRowMaxColumns,
+      clusterDbSqlTemplateMaxBytesResolved: $resolvedDbSqlTemplateMaxBytes,
+      clusterDbParamsMaxBytesResolved: $resolvedDbParamsMaxBytes,
+      clusterDbParamsMaxEntriesResolved: $resolvedDbParamsMaxEntries,
       clusterDbPostgresRetryableConflictRetryMaxResolved: $resolvedDbPostgresRetryableConflictRetryMax,
       clusterDbSqliteLockRetryMaxResolved: $resolvedDbSqliteLockRetryMax,
       clusterDbSqliteLockRetryDelayMsResolved: $resolvedDbSqliteLockRetryDelayMs

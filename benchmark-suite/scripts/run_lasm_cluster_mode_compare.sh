@@ -13,8 +13,11 @@ Then emits one comparison JSON artifact with throughput/latency/memory deltas
 and a deterministic recommended mode.
 
 Options:
+  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one>
+                                                 Probe profile forwarded to both runs (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
+  --warmup-path <path>                             Optional warmup HTTP path forwarded to both runs
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
   --duration <duration>                            wrk duration (default: 40s)
   --threads <n>                                    wrk threads (default: 8)
@@ -35,6 +38,11 @@ Options:
   --cluster-accept-workers <n>                     Optional relay accept-worker override for proxy-relay probe
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override for proxy-relay probe
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override for proxy-relay probe
+  --db-query-one-row-max-bytes <n>                 Optional LASM db query-one row max-bytes override forwarded to both probes
+  --db-query-one-row-max-columns <n>               Optional LASM db query-one row max-columns override forwarded to both probes
+  --db-sql-template-max-bytes <n>                  Optional LASM db SQL template max-bytes override forwarded to both probes
+  --db-params-max-bytes <n>                        Optional LASM db params max-bytes override forwarded to both probes
+  --db-params-max-entries <n>                      Optional LASM db params max-entries override forwarded to both probes
   --build-profile <debug|release>                  sec4 build profile forwarded to both probe runs (default: release)
   --samples <n>                                    Number of wrk samples per probe run (default: 1)
   --wrk-processes <n>                              Number of parallel wrk processes per probe run (default: 1)
@@ -65,8 +73,18 @@ resolve_path() {
   fi
 }
 
-project_path="${LASM_CAPACITY_PROJECT_PATH:-examples/lasm-alpha-full}"
-request_path="${LASM_CAPACITY_REQUEST_PATH:-/health}"
+profile="${LASM_CAPACITY_PROFILE:-ping}"
+project_path="${LASM_CAPACITY_PROJECT_PATH:-}"
+project_path_explicit="false"
+if [ -n "${LASM_CAPACITY_PROJECT_PATH:-}" ]; then
+  project_path_explicit="true"
+fi
+request_path="${LASM_CAPACITY_REQUEST_PATH:-}"
+request_path_explicit="false"
+if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
+  request_path_explicit="true"
+fi
+warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -87,6 +105,11 @@ cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
+db_query_one_row_max_bytes="${LASM_CAPACITY_DB_QUERY_ONE_ROW_MAX_BYTES:-}"
+db_query_one_row_max_columns="${LASM_CAPACITY_DB_QUERY_ONE_ROW_MAX_COLUMNS:-}"
+db_sql_template_max_bytes="${LASM_CAPACITY_DB_SQL_TEMPLATE_MAX_BYTES:-}"
+db_params_max_bytes="${LASM_CAPACITY_DB_PARAMS_MAX_BYTES:-}"
+db_params_max_entries="${LASM_CAPACITY_DB_PARAMS_MAX_ENTRIES:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
 wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
@@ -98,12 +121,22 @@ dry_run="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --profile)
+      profile="${2:-}"
+      shift 2
+      ;;
     --project-path)
       project_path="${2:-}"
+      project_path_explicit="true"
       shift 2
       ;;
     --request-path)
       request_path="${2:-}"
+      request_path_explicit="true"
+      shift 2
+      ;;
+    --warmup-path)
+      warmup_path="${2:-}"
       shift 2
       ;;
     --request-header)
@@ -186,6 +219,26 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
+    --db-query-one-row-max-bytes)
+      db_query_one_row_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-query-one-row-max-columns)
+      db_query_one_row_max_columns="${2:-}"
+      shift 2
+      ;;
+    --db-sql-template-max-bytes)
+      db_sql_template_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-params-max-bytes)
+      db_params_max_bytes="${2:-}"
+      shift 2
+      ;;
+    --db-params-max-entries)
+      db_params_max_entries="${2:-}"
+      shift 2
+      ;;
     --build-profile)
       build_profile="${2:-}"
       shift 2
@@ -257,10 +310,24 @@ if [ -n "$cluster_relay_pump_batch_max" ] && ! is_number "$cluster_relay_pump_ba
   echo "cluster-relay-pump-batch-max must be numeric, got: $cluster_relay_pump_batch_max" >&2
   exit 2
 fi
+for field in db_query_one_row_max_bytes db_query_one_row_max_columns db_sql_template_max_bytes db_params_max_bytes db_params_max_entries; do
+  value="${!field}"
+  if [ -n "$value" ] && ! is_number "$value"; then
+    echo "${field//_/-} must be numeric, got: $value" >&2
+    exit 2
+  fi
+done
 if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   echo "request-header must include ':' (example: Authorization: Bearer token123)" >&2
   exit 2
 fi
+case "$profile" in
+  ping|db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one) ;;
+  *)
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one, db-hot-postgres-query-one (got: $profile)" >&2
+    exit 2
+    ;;
+esac
 case "$build_profile" in
   debug|release) ;;
   *)
@@ -297,11 +364,43 @@ proxy_out_path="$(resolve_path "${root_dir}" "${repo_root}" "${proxy_out_rel}")"
 fixed_out_path="$(resolve_path "${root_dir}" "${repo_root}" "${fixed_out_rel}")"
 out_path="$(resolve_path "${root_dir}" "${repo_root}" "${out_rel}")"
 mkdir -p "$(dirname "${proxy_out_path}")" "$(dirname "${fixed_out_path}")" "$(dirname "${out_path}")"
+if [ "${project_path_explicit}" != "true" ]; then
+  case "$profile" in
+    ping)
+      project_path="examples/lasm-alpha-full"
+      ;;
+    db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one)
+      project_path="benchmark-suite/services/sec4-lasm"
+      ;;
+  esac
+fi
+if [ "${request_path_explicit}" != "true" ]; then
+  case "$profile" in
+    ping)
+      request_path="/health"
+      ;;
+    db-hot-write)
+      request_path="/db/hot-write"
+      ;;
+    db-hot-write-tx)
+      request_path="/db/hot-write-tx"
+      ;;
+    db-hot-query-one|db-hot-postgres-query-one)
+      request_path="/db/hot-query-one"
+      ;;
+  esac
+fi
+if { [ "$profile" = "db-hot-query-one" ] || [ "$profile" = "db-hot-postgres-query-one" ]; } \
+  && [ -z "$warmup_path" ]; then
+  warmup_path="/db/hot-write"
+fi
 
 cat <<PLAN
 sec4 LASM cluster mode compare plan:
+  profile=${profile}
   projectPath=${project_path}
   requestPath=${request_path}
+  warmupPath=${warmup_path:-none}
   duration=${duration}
   threads=${threads}
   connections=${connections}
@@ -320,6 +419,11 @@ sec4 LASM cluster mode compare plan:
   proxyClusterAcceptWorkers=${cluster_accept_workers:-auto}
   proxyClusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   proxyClusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
+  dbQueryOneRowMaxBytes=${db_query_one_row_max_bytes:-auto}
+  dbQueryOneRowMaxColumns=${db_query_one_row_max_columns:-auto}
+  dbSqlTemplateMaxBytes=${db_sql_template_max_bytes:-auto}
+  dbParamsMaxBytes=${db_params_max_bytes:-auto}
+  dbParamsMaxEntries=${db_params_max_entries:-auto}
   buildProfile=${build_profile}
   samples=${samples}
   wrkProcesses=${wrk_processes}
@@ -330,6 +434,7 @@ sec4 LASM cluster mode compare plan:
 PLAN
 
 common_args=(
+  --profile "${profile}"
   --project-path "${project_path}"
   --request-path "${request_path}"
   --request-header "${request_header}"
@@ -351,6 +456,24 @@ common_args=(
   --samples "${samples}"
   --wrk-processes "${wrk_processes}"
 )
+if [ -n "${warmup_path}" ]; then
+  common_args+=(--warmup-path "${warmup_path}")
+fi
+if [ -n "${db_query_one_row_max_bytes}" ]; then
+  common_args+=(--db-query-one-row-max-bytes "${db_query_one_row_max_bytes}")
+fi
+if [ -n "${db_query_one_row_max_columns}" ]; then
+  common_args+=(--db-query-one-row-max-columns "${db_query_one_row_max_columns}")
+fi
+if [ -n "${db_sql_template_max_bytes}" ]; then
+  common_args+=(--db-sql-template-max-bytes "${db_sql_template_max_bytes}")
+fi
+if [ -n "${db_params_max_bytes}" ]; then
+  common_args+=(--db-params-max-bytes "${db_params_max_bytes}")
+fi
+if [ -n "${db_params_max_entries}" ]; then
+  common_args+=(--db-params-max-entries "${db_params_max_entries}")
+fi
 
 proxy_cmd=(
   "${probe_script}"
