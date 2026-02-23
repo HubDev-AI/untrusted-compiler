@@ -72,6 +72,7 @@ use lasm_cluster_runtime_config::{
     resolve_lasm_cluster_relay_buffer_bytes, resolve_lasm_cluster_relay_buffer_pool_max,
     resolve_lasm_cluster_relay_buffer_pool_prewarm, resolve_lasm_cluster_relay_idle_backoff_max,
     resolve_lasm_cluster_relay_io_burst_max, resolve_lasm_cluster_relay_pump_batch_max,
+    resolve_lasm_cluster_relay_pump_scan_multiplier,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
@@ -7945,6 +7946,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
     let relay_pump_batch_max = lasm_cluster_relay_pump_batch_max(shared_config.as_ref());
+    let relay_pump_scan_multiplier = resolve_lasm_cluster_relay_pump_scan_multiplier();
     let relay_selection_reservation_min_chunk =
         lasm_cluster_selection_reservation_min_chunk(shared_config.as_ref());
     let relay_buffer_bytes = resolve_lasm_cluster_relay_buffer_bytes();
@@ -7989,6 +7991,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             relay_backend_connect_cooldown,
             relay_accept_batch_max,
             relay_pump_batch_max,
+            relay_pump_scan_multiplier,
             relay_selection_reservation_min_chunk,
             relay_buffer_bytes,
             relay_io_burst_max,
@@ -8026,6 +8029,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_idle_backoff_max,
         relay_buffer_pool_max,
         relay_buffer_pool_prewarm,
+        relay_pump_scan_multiplier,
         relay_accept_worker_count,
         relay_dispatch_fallback_total: Arc::clone(&relay_dispatch_fallback_total),
         relay_dispatch_saturation_short_circuit_total: Arc::clone(

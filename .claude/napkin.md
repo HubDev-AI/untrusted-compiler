@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | While wiring new relay status telemetry, I accidentally assigned the same struct field (`relay_pump_scan_multiplier`) twice in one snapshot initializer, causing a compile failure (`E0062`). | When extending large struct initializers, add new fields in one location only and run a focused compile/test immediately after the wiring change before continuing. |
 | 2026-02-23 | self | I proceeded with a relay slice while unrelated tracked DB files were already dirty in the workspace, creating risk of accidental mixed-scope staging. | Before staging/commit, explicitly stage only the target slice files (`git add <file...>`) and confirm with `git diff --cached --name-only` so unrelated dirty files stay untouched. |
 | 2026-02-23 | self | I ran two Cargo test commands in one parallel tool call and reintroduced package/build lock contention. | Keep every Cargo command strictly sequential; use parallel tool calls only for read/search/syntax operations. |
 | 2026-02-23 | self | I accidentally triggered `web.run` while patching a local relay-pump file in a local-only implementation slice. | Keep local coding turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tool calls unless external research is explicitly required. |

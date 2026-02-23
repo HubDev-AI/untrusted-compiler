@@ -140,6 +140,7 @@ struct LasmClusterRelayPumpModeResolution {
 fn resolve_lasm_cluster_relay_pump_mode(
     relay_count: usize,
     relay_pump_batch_max: usize,
+    relay_pump_scan_multiplier: usize,
     relay_pump_cursor: usize,
 ) -> LasmClusterRelayPumpModeResolution {
     if relay_count == 0 {
@@ -166,7 +167,11 @@ fn resolve_lasm_cluster_relay_pump_mode(
     let scan_budget = if full_scan_pump_mode {
         relay_count
     } else {
-        relay_count.min(relay_pump_batch_max.saturating_mul(4).max(1))
+        relay_count.min(
+            relay_pump_batch_max
+                .saturating_mul(relay_pump_scan_multiplier.max(1))
+                .max(1),
+        )
     };
     LasmClusterRelayPumpModeResolution {
         full_scan_pump_mode,
@@ -240,6 +245,7 @@ fn pump_lasm_cluster_relay_connection_once(
 fn pump_lasm_cluster_relay_connections(
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     relay_pump_batch_max: usize,
+    relay_pump_scan_multiplier: usize,
     relay_pump_cursor: &mut usize,
     relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
     relay_buffer_pool_max: usize,
@@ -249,8 +255,12 @@ fn pump_lasm_cluster_relay_connections(
 ) -> bool {
     let mut progressed = false;
     let mut relay_count = relay_connections.len();
-    let pump_mode =
-        resolve_lasm_cluster_relay_pump_mode(relay_count, relay_pump_batch_max, *relay_pump_cursor);
+    let pump_mode = resolve_lasm_cluster_relay_pump_mode(
+        relay_count,
+        relay_pump_batch_max,
+        relay_pump_scan_multiplier,
+        *relay_pump_cursor,
+    );
     let mut relay_scan_cursor = pump_mode.initial_cursor;
     let mut pump_budget = pump_mode.pump_budget;
     let mut scan_budget = pump_mode.scan_budget;
@@ -541,6 +551,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_backend_connect_cooldown: Duration,
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
+    relay_pump_scan_multiplier: usize,
     relay_selection_reservation_min_chunk: usize,
     relay_buffer_bytes: usize,
     relay_io_burst_max: usize,
@@ -1045,6 +1056,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             let progressed = pump_lasm_cluster_relay_connections(
                 &mut relay_connections,
                 relay_pump_batch_max,
+                relay_pump_scan_multiplier,
                 &mut relay_pump_cursor,
                 &mut relay_buffer_pool,
                 relay_buffer_pool_max,

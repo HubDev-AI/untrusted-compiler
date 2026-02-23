@@ -1884,6 +1884,11 @@ Post-alpha track acceptance anchors:
       - relay worker loop now uses separate bounded scan-budget accounting so deferred-idle scans do not consume main per-tick pump budget,
       - batch mode now scans up to a bounded multiple of `relay_pump_batch_max` to skip deferred-idle relays and reach active relays in the same tick.
       - documented in `docs/book/1488-m39-lasm-relay-backoff-skip-budget-aware-pump-scanning.md`.
+   - [x] Added runtime-tunable relay pump scan multiplier + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_PUMP_SCAN_MULTIPLIER` (bounded `1..16`, default `4`) and threads the value into relay worker scheduling,
+      - relay batch-mode scan budget now uses the configured multiplier to tune how far workers scan past deferred-idle relays per tick,
+      - cluster status JSON now emits `relayPumpScanMultiplier` so active scan tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1489-m39-lasm-relay-pump-scan-multiplier-runtime-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

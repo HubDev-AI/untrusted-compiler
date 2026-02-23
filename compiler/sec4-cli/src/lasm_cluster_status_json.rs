@@ -26,6 +26,7 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_saturation_events_per_sec: f64,
     pub(crate) relay_accept_batch_max: usize,
     pub(crate) relay_pump_batch_max: usize,
+    pub(crate) relay_pump_scan_multiplier: usize,
     pub(crate) relay_selection_reservation_min_chunk: usize,
     pub(crate) relay_idle_spin_threshold: u32,
     pub(crate) relay_idle_sleep_micros: u64,
@@ -87,6 +88,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_saturation_events_per_sec == other.relay_saturation_events_per_sec
             && self.relay_accept_batch_max == other.relay_accept_batch_max
             && self.relay_pump_batch_max == other.relay_pump_batch_max
+            && self.relay_pump_scan_multiplier == other.relay_pump_scan_multiplier
             && self.relay_selection_reservation_min_chunk
                 == other.relay_selection_reservation_min_chunk
             && self.relay_idle_spin_threshold == other.relay_idle_spin_threshold
@@ -157,6 +159,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
+    relay_pump_scan_multiplier: usize,
     relay_selection_reservation_min_chunk: usize,
     relay_idle_spin_threshold: u32,
     relay_idle_sleep_micros: u64,
@@ -259,6 +262,7 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_saturation_events_per_sec: snapshot.relay_saturation_events_per_sec,
         relay_accept_batch_max: snapshot.relay_accept_batch_max,
         relay_pump_batch_max: snapshot.relay_pump_batch_max,
+        relay_pump_scan_multiplier: snapshot.relay_pump_scan_multiplier,
         relay_selection_reservation_min_chunk: snapshot.relay_selection_reservation_min_chunk,
         relay_idle_spin_threshold: snapshot.relay_idle_spin_threshold,
         relay_idle_sleep_micros: snapshot.relay_idle_sleep_micros,
