@@ -133,6 +133,27 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         } else {
             None
         };
+    let records_params_contains_filter =
+        if let Some(raw_params_contains) = request.query_params.get("paramsContains") {
+            let trimmed = raw_params_contains.trim();
+            if trimmed.is_empty() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records paramsContains filter must be a non-empty string",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            Some(trimmed.to_string())
+        } else {
+            None
+        };
     let records_created_from_ms_filter =
         if let Some(raw_created_from_ms) = request.query_params.get("createdFromMs") {
             let trimmed = raw_created_from_ms.trim();
@@ -413,6 +434,10 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                             .as_ref()
                             .map(|needle| record.template.contains(needle))
                             .unwrap_or(true)
+                        && records_params_contains_filter
+                            .as_ref()
+                            .map(|needle| record.params.contains(needle))
+                            .unwrap_or(true)
                         && records_created_from_ms_filter
                             .map(|from_ms| record.created_at_ms >= from_ms)
                             .unwrap_or(true)
@@ -552,6 +577,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "db": records_db_filter,
                 "tx": records_tx_filter,
                 "templateContains": records_template_contains_filter,
+                "paramsContains": records_params_contains_filter,
                 "createdFromMs": records_created_from_ms_filter,
                 "createdToMs": records_created_to_ms_filter,
                 "idFrom": records_id_from_filter,
