@@ -3,18 +3,19 @@ use crate::lasm_db_adapter_state::{
 };
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
-    normalize_lasm_db_params, parse_lasm_positive_i64,
+    normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
 };
 use crate::lasm_db_runtime_postgres::{
-    parse_lasm_postgres_query_template_and_params, run_lasm_postgres_exec,
+    parse_lasm_postgres_query_template_and_params,
+    parse_lasm_postgres_query_template_and_params_value, run_lasm_postgres_exec,
     run_lasm_postgres_exec_tx, run_lasm_postgres_query_one,
 };
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
 };
 use crate::lasm_db_runtime_sqlite::{
-    parse_lasm_sqlite_query_params, run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx,
-    run_lasm_sqlite_query_one,
+    parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
+    run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
 };
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
@@ -219,8 +220,12 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
-            if !enforce_lasm_db_sql_template_max_bytes(response, "exec", template.as_str(), trace_id)
-            {
+            if !enforce_lasm_db_sql_template_max_bytes(
+                response,
+                "exec",
+                template.as_str(),
+                trace_id,
+            ) {
                 return true;
             }
             if template.trim().is_empty() {
@@ -284,17 +289,26 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 return true;
             }
             let template = template.trim().to_string();
-            let params = normalize_lasm_db_params(params.as_str());
+            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
             let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(parse_lasm_postgres_query_template_and_params(
-                    template.as_str(),
-                    params.as_str(),
-                ))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
+                        template.as_str(),
+                        parsed,
+                    ),
+                    None => parse_lasm_postgres_query_template_and_params(
+                        template.as_str(),
+                        params.as_str(),
+                    ),
+                })
             } else {
                 None
             };
             let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(parse_lasm_sqlite_query_params(params.as_str()))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
+                    None => parse_lasm_sqlite_query_params(params.as_str()),
+                })
             } else {
                 None
             };
@@ -485,7 +499,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
                 );
             let template = template.trim().to_string();
-            let params = normalize_lasm_db_params(params.as_str());
+            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -554,15 +568,24 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 }
             }
             let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(parse_lasm_postgres_query_template_and_params(
-                    template.as_str(),
-                    params.as_str(),
-                ))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
+                        template.as_str(),
+                        parsed,
+                    ),
+                    None => parse_lasm_postgres_query_template_and_params(
+                        template.as_str(),
+                        params.as_str(),
+                    ),
+                })
             } else {
                 None
             };
             let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(parse_lasm_sqlite_query_params(params.as_str()))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
+                    None => parse_lasm_sqlite_query_params(params.as_str()),
+                })
             } else {
                 None
             };
@@ -852,17 +875,26 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 }
             };
             let template = template.trim().to_string();
-            let params = normalize_lasm_db_params(params.as_str());
+            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
             let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(parse_lasm_postgres_query_template_and_params(
-                    template.as_str(),
-                    params.as_str(),
-                ))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
+                        template.as_str(),
+                        parsed,
+                    ),
+                    None => parse_lasm_postgres_query_template_and_params(
+                        template.as_str(),
+                        params.as_str(),
+                    ),
+                })
             } else {
                 None
             };
             let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(parse_lasm_sqlite_query_params(params.as_str()))
+                Some(match parsed_params.as_ref() {
+                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
+                    None => parse_lasm_sqlite_query_params(params.as_str()),
+                })
             } else {
                 None
             };
@@ -944,8 +976,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-                        if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id)
-                        {
+                        if !enforce_lasm_db_query_one_row_max_bytes(
+                            response,
+                            row.as_str(),
+                            trace_id,
+                        ) {
                             return true;
                         }
                         let record = LasmDbRecord {
@@ -1019,8 +1054,11 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-                        if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id)
-                        {
+                        if !enforce_lasm_db_query_one_row_max_bytes(
+                            response,
+                            row.as_str(),
+                            trace_id,
+                        ) {
                             return true;
                         }
                         let record = LasmDbRecord {

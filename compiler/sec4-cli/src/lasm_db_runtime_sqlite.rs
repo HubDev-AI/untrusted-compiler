@@ -156,34 +156,41 @@ pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> Result<LasmSqliteQu
         return Ok(LasmSqliteQueryParams::Positional(Vec::new()));
     }
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        return match parsed {
-            serde_json::Value::Array(entries) => Ok(LasmSqliteQueryParams::Positional(
-                entries
-                    .into_iter()
-                    .map(parse_lasm_sqlite_query_param_value)
-                    .collect(),
-            )),
-            serde_json::Value::Object(entries) => {
-                match classify_lasm_sqlite_params_object_keys(&entries)? {
-                    LasmSqliteParamsObjectKeyStyle::Positional => {
-                        Ok(LasmSqliteQueryParams::Positional(
-                            parse_lasm_sqlite_positional_object_params(&entries),
-                        ))
-                    }
-                    LasmSqliteParamsObjectKeyStyle::Named => Ok(LasmSqliteQueryParams::Named(
-                        parse_lasm_sqlite_named_object_params(&entries)?,
-                    )),
-                }
-            }
-            serde_json::Value::Null => Ok(LasmSqliteQueryParams::Positional(Vec::new())),
-            other => Ok(LasmSqliteQueryParams::Positional(vec![
-                parse_lasm_sqlite_query_param_value(other),
-            ])),
-        };
+        return parse_lasm_sqlite_query_params_value(&parsed);
     }
     Ok(LasmSqliteQueryParams::Positional(vec![SqliteValue::Text(
         trimmed.to_string(),
     )]))
+}
+
+pub(crate) fn parse_lasm_sqlite_query_params_value(
+    parsed: &serde_json::Value,
+) -> Result<LasmSqliteQueryParams, String> {
+    match parsed {
+        serde_json::Value::Array(entries) => Ok(LasmSqliteQueryParams::Positional(
+            entries
+                .iter()
+                .cloned()
+                .map(parse_lasm_sqlite_query_param_value)
+                .collect(),
+        )),
+        serde_json::Value::Object(entries) => {
+            match classify_lasm_sqlite_params_object_keys(entries)? {
+                LasmSqliteParamsObjectKeyStyle::Positional => {
+                    Ok(LasmSqliteQueryParams::Positional(
+                        parse_lasm_sqlite_positional_object_params(entries),
+                    ))
+                }
+                LasmSqliteParamsObjectKeyStyle::Named => Ok(LasmSqliteQueryParams::Named(
+                    parse_lasm_sqlite_named_object_params(entries)?,
+                )),
+            }
+        }
+        serde_json::Value::Null => Ok(LasmSqliteQueryParams::Positional(Vec::new())),
+        other => Ok(LasmSqliteQueryParams::Positional(vec![
+            parse_lasm_sqlite_query_param_value(other.clone()),
+        ])),
+    }
 }
 
 fn lasm_dynamic_sqlite_runtime_connection_mut(

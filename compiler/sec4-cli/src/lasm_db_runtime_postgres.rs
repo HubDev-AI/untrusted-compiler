@@ -344,41 +344,7 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params(
         return Ok((query_template.to_string(), Vec::new()));
     }
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        return match parsed {
-            serde_json::Value::Array(entries) => Ok((
-                query_template.to_string(),
-                entries
-                    .into_iter()
-                    .map(parse_lasm_postgres_query_param_value)
-                    .collect(),
-            )),
-            serde_json::Value::Object(entries) => match classify_lasm_postgres_params_object_keys(
-                &entries,
-            )? {
-                LasmPostgresParamsObjectKeyStyle::Positional => Ok((
-                    query_template.to_string(),
-                    parse_lasm_postgres_positional_object_params(&entries),
-                )),
-                LasmPostgresParamsObjectKeyStyle::Named => {
-                    let named = parse_lasm_postgres_named_object_params(&entries)?;
-                    if let Some((rewritten_template, params)) =
-                        rewrite_lasm_postgres_named_query_template(query_template, &named)?
-                    {
-                        Ok((rewritten_template, params))
-                    } else {
-                        Err(
-                            "postgres named parameterized execution requires SQL placeholders to be named (:name, @name, or $name)"
-                                .to_string(),
-                        )
-                    }
-                }
-            },
-            serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
-            other => Ok((
-                query_template.to_string(),
-                vec![parse_lasm_postgres_query_param_value(other)],
-            )),
-        };
+        return parse_lasm_postgres_query_template_and_params_value(query_template, &parsed);
     }
     Ok((
         query_template.to_string(),
@@ -386,8 +352,52 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params(
     ))
 }
 
+pub(crate) fn parse_lasm_postgres_query_template_and_params_value(
+    query_template: &str,
+    parsed: &serde_json::Value,
+) -> Result<(String, Vec<LasmPostgresParam>), String> {
+    match parsed {
+        serde_json::Value::Array(entries) => Ok((
+            query_template.to_string(),
+            entries
+                .iter()
+                .cloned()
+                .map(parse_lasm_postgres_query_param_value)
+                .collect(),
+        )),
+        serde_json::Value::Object(entries) => {
+            match classify_lasm_postgres_params_object_keys(entries)? {
+                LasmPostgresParamsObjectKeyStyle::Positional => Ok((
+                    query_template.to_string(),
+                    parse_lasm_postgres_positional_object_params(entries),
+                )),
+                LasmPostgresParamsObjectKeyStyle::Named => {
+                    let named = parse_lasm_postgres_named_object_params(entries)?;
+                    if let Some((rewritten_template, params)) =
+                        rewrite_lasm_postgres_named_query_template(query_template, &named)?
+                    {
+                        Ok((rewritten_template, params))
+                    } else {
+                        Err(
+                        "postgres named parameterized execution requires SQL placeholders to be named (:name, @name, or $name)"
+                            .to_string(),
+                    )
+                    }
+                }
+            }
+        }
+        serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
+        other => Ok((
+            query_template.to_string(),
+            vec![parse_lasm_postgres_query_param_value(other.clone())],
+        )),
+    }
+}
+
 #[cfg(test)]
-pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Result<Vec<LasmPostgresParam>, String> {
+pub(crate) fn parse_lasm_postgres_query_params(
+    value: &str,
+) -> Result<Vec<LasmPostgresParam>, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
         return Ok(Vec::new());
@@ -1231,14 +1241,13 @@ mod tests {
         let error = match parse_lasm_postgres_query_template_and_params(
             "SELECT $1::text",
             "{\"name\":\"alice\"}",
-        )
-        {
+        ) {
             Ok(_) => panic!("named params with positional SQL placeholders should fail"),
             Err(error) => error,
         };
-        assert!(
-            error.contains("postgres named parameterized execution requires SQL placeholders to be named")
-        );
+        assert!(error.contains(
+            "postgres named parameterized execution requires SQL placeholders to be named"
+        ));
     }
 
     #[test]
