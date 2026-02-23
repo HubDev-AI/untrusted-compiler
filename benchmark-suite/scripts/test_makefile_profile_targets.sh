@@ -55,6 +55,8 @@ require_target_contains_token() {
 
 require_target_contains_token "bench-full-saturation" "--include-lasm-saturation"
 require_target_contains_token "bench-full-saturation" "--saturation-boost-steps"
+require_target_contains_token "bench-full-saturation" "--saturation-profile"
+require_target_contains_token "bench-full-saturation" '$(FULL_SATURATION_WARMUP_PATH_FLAG)'
 require_target_contains_token "bench-full-saturation" "--saturation-project-path"
 require_target_contains_token "bench-full-saturation" "--saturation-target-requests"
 require_target_contains_token "bench-full-saturation" "--saturation-duration"
@@ -69,12 +71,16 @@ require_target_contains_token "bench-full-saturation" '$(SATURATION_FIXED_REUSE_
 require_target_contains_token "bench-full-saturation" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full-saturation-dry" "--dry-run"
 require_target_contains_token "bench-full-saturation-dry" "--include-lasm-saturation"
+require_target_contains_token "bench-full-saturation-dry" "--saturation-profile"
+require_target_contains_token "bench-full-saturation-dry" '$(FULL_SATURATION_WARMUP_PATH_FLAG)'
 require_target_contains_token "bench-full-saturation-dry" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full-dry" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full-saturation-throughput" '$(MAKE) bench-full-saturation'
 require_target_contains_token "bench-full-saturation-throughput" 'FULL_SATURATION_SKIP_VERIFY=true'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)"'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_PROFILE="$(LASM_SATURATION_THROUGHPUT_PROFILE)"'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_WARMUP_PATH="$(LASM_SATURATION_THROUGHPUT_WARMUP_PATH)"'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)"'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX="$(LASM_SATURATION_THROUGHPUT_RELAY_PUMP_BATCH_MAX)"'
@@ -84,6 +90,8 @@ require_target_contains_token "bench-full-saturation-throughput-dry" 'FULL_SATUR
 require_target_contains_token "bench-full-saturation-latency" '$(MAKE) bench-full-saturation'
 require_target_contains_token "bench-full-saturation-latency" 'FULL_SATURATION_SKIP_VERIFY=true'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)"'
+require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_PROFILE="$(LASM_SATURATION_LATENCY_PROFILE)"'
+require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_WARMUP_PATH="$(LASM_SATURATION_LATENCY_WARMUP_PATH)"'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)"'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX="$(LASM_SATURATION_LATENCY_RELAY_PUMP_BATCH_MAX)"'
@@ -95,5 +103,13 @@ require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-ful
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-throughput-dry'
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-latency-dry'
 require_target_contains_token "lasm-cluster-mode-compare" "run_lasm_cluster_mode_compare.sh"
+require_target_contains_token "lasm-cluster-capacity-probe" '--profile "$(LASM_CAPACITY_PROFILE)"'
+require_target_contains_token "lasm-cluster-capacity-probe" '$(SATURATION_WARMUP_PATH_FLAG)'
+require_target_contains_token "lasm-cluster-saturation-boost-matrix" '--profile "$(LASM_CAPACITY_PROFILE)"'
+require_target_contains_token "lasm-cluster-saturation-boost-matrix" '$(SATURATION_WARMUP_PATH_FLAG)'
+require_target_contains_token "lasm-cluster-saturation-boost-verify" '--profile "$(LASM_CAPACITY_PROFILE)"'
+require_target_contains_token "lasm-cluster-saturation-boost-verify" '$(SATURATION_WARMUP_PATH_FLAG)'
+require_target_contains_token "lasm-cluster-saturation-boost-bundle" '--profile "$(LASM_CAPACITY_PROFILE)"'
+require_target_contains_token "lasm-cluster-saturation-boost-bundle" '$(SATURATION_WARMUP_PATH_FLAG)'
 
 echo "makefile profile target test passed"
