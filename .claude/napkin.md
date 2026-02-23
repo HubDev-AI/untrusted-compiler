@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I started the relay fallback rotating-cursor slice on local `dev` before branching (again). | Enforce non-negotiable pre-edit branch gate after each merge: create `codex/*` first, then edit. |
 | 2026-02-23 | self | I started the status-writer visibility slice on local `dev` before branching again. | Keep a strict branch-first rhythm after each merge: create the next `codex/*` branch immediately, then begin edits. |
 | 2026-02-23 | self | I started the relay-worker fallback-attempt cap slice on local `dev` again and only branched after edits. | Enforce a hard pre-edit branch gate after every merge: if on `dev`, branch to `codex/*` before opening any target runtime file. |
 | 2026-02-23 | self | I committed another accept-loop slice on local `dev` before branching (`ae5f2dd6`), repeating the post-merge branch-gate miss. | After every merge, immediately verify branch and create next `codex/*` branch before opening/editing any runtime files. |

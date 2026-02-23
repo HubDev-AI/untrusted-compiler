@@ -522,6 +522,24 @@ fn rebuild_lasm_cluster_fallback_lookup_start_cursor_by_backend(
     }
 }
 
+fn rebuild_lasm_cluster_fallback_identity_start_cursor_by_backend(
+    selected_worker_port_count: usize,
+    fallback_lookup_start_cursor_by_backend: &mut Vec<usize>,
+) {
+    fallback_lookup_start_cursor_by_backend.clear();
+    if selected_worker_port_count <= 1 {
+        return;
+    }
+    fallback_lookup_start_cursor_by_backend.resize(selected_worker_port_count, 0);
+    for selected_backend_index in 0..selected_worker_port_count {
+        let mut next_index = selected_backend_index + 1;
+        if next_index == selected_worker_port_count {
+            next_index = 0;
+        }
+        fallback_lookup_start_cursor_by_backend[selected_backend_index] = next_index;
+    }
+}
+
 fn load_lasm_cluster_worker_ports_snapshot_if_changed(
     relay_worker_ports: &Arc<ArcSwap<Vec<u16>>>,
     selected_worker_ports_snapshot: &Arc<Vec<u16>>,
@@ -815,7 +833,12 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             unhealthy_port_count,
                             &mut selection_lookup,
                         );
-                        if selection_lookup_is_identity || selection_lookup_cycle_span == 0 {
+                        if selection_lookup_is_identity {
+                            rebuild_lasm_cluster_fallback_identity_start_cursor_by_backend(
+                                worker_port_count,
+                                &mut fallback_lookup_start_cursor_by_backend,
+                            );
+                        } else if selection_lookup_cycle_span == 0 {
                             fallback_lookup_start_cursor_by_backend.clear();
                         } else {
                             rebuild_lasm_cluster_fallback_lookup_start_cursor_by_backend(
@@ -930,7 +953,12 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 unhealthy_port_count,
                                 &mut selection_lookup,
                             );
-                            if selection_lookup_is_identity || selection_lookup_cycle_span == 0 {
+                            if selection_lookup_is_identity {
+                                rebuild_lasm_cluster_fallback_identity_start_cursor_by_backend(
+                                    selected_worker_port_count,
+                                    &mut fallback_lookup_start_cursor_by_backend,
+                                );
+                            } else if selection_lookup_cycle_span == 0 {
                                 fallback_lookup_start_cursor_by_backend.clear();
                             } else {
                                 rebuild_lasm_cluster_fallback_lookup_start_cursor_by_backend(
@@ -972,20 +1000,35 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                 }
                             } else if selection_has_healthy_backends {
                                 if selection_lookup_is_identity {
-                                    let mut fallback_backend_index = selected_backend_index + 1;
-                                    if fallback_backend_index == selected_worker_port_count {
-                                        fallback_backend_index = 0;
-                                    }
+                                    let mut fallback_backend_index =
+                                        fallback_lookup_start_cursor_by_backend
+                                            .get(selected_backend_index)
+                                            .copied()
+                                            .unwrap_or_else(|| {
+                                                let mut next_index = selected_backend_index + 1;
+                                                if next_index == selected_worker_port_count {
+                                                    next_index = 0;
+                                                }
+                                                next_index
+                                            });
                                     let mut connect_attempts_remaining =
                                         relay_fallback_connect_max_attempts
                                             .min(selected_worker_port_count.saturating_sub(1));
                                     while connect_attempts_remaining > 0 {
+                                        let candidate_backend_index = fallback_backend_index;
+                                        fallback_backend_index += 1;
+                                        if fallback_backend_index == selected_worker_port_count {
+                                            fallback_backend_index = 0;
+                                        }
+                                        if candidate_backend_index == selected_backend_index {
+                                            continue;
+                                        }
                                         let fallback_backend_addr =
-                                            selected_worker_backend_addrs[fallback_backend_index];
+                                            selected_worker_backend_addrs[candidate_backend_index];
                                         fallback_connected =
                                             try_lasm_cluster_relay_fallback_connect(
                                                 fallback_backend_addr,
-                                                fallback_backend_index,
+                                                candidate_backend_index,
                                                 relay_backend_connect_timeout,
                                                 &mut fallback_client,
                                                 relay_buffer_bytes,
@@ -1011,10 +1054,12 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                             break;
                                         }
                                         connect_attempts_remaining -= 1;
-                                        fallback_backend_index += 1;
-                                        if fallback_backend_index == selected_worker_port_count {
-                                            fallback_backend_index = 0;
-                                        }
+                                    }
+                                    if let Some(next_cursor) =
+                                        fallback_lookup_start_cursor_by_backend
+                                            .get_mut(selected_backend_index)
+                                    {
+                                        *next_cursor = fallback_backend_index;
                                     }
                                 } else {
                                     let mut fallback_lookup_cursor =
@@ -1076,6 +1121,12 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                             break;
                                         }
                                         connect_attempts_remaining -= 1;
+                                    }
+                                    if let Some(next_cursor) =
+                                        fallback_lookup_start_cursor_by_backend
+                                            .get_mut(selected_backend_index)
+                                    {
+                                        *next_cursor = fallback_lookup_cursor;
                                     }
                                 }
                             }
