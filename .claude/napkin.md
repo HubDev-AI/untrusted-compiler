@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | In a zsh validation loop I used `path` as an iteration variable, which overwrote shell `PATH` and made commands like `curl`/`cat` appear missing. | Never use `path` as a shell variable name in zsh scripts/one-liners; use `req_path` or similar non-special names. |
+| 2026-02-23 | self | I started the DB-runtime gap slice by branching in parallel with file reads again. | Keep branch creation/switch operations standalone and run parallel read commands only after branch state is finalized. |
 | 2026-02-23 | self | I again started a slice by launching `git checkout -b ...` in parallel with file reads while opening analysis/render scripts. | Keep a strict branch gate: run branch create/switch commands standalone first, then run parallel read/search commands only after branch state is final. |
 | 2026-02-23 | self | I assumed `db.queryOne` benchmark route could self-prime by calling `db.exec` in the same LASM handler, but dynamic route execution still returned `DB.QUERY_ONE_NOT_FOUND` until a prior matching `db.exec` request existed. | For LASM benchmark queryOne profiles, add an explicit warmup path that executes matching `db.exec` before readiness/probe traffic, and keep query templates/params identical between warmup and queryOne routes. |
 | 2026-02-23 | self | I launched `git checkout -b ...` in parallel with read commands again while starting the capacity-profile slice. | Keep branch creation/checkouts strictly sequential, and only run parallel read/search commands after branch state is settled. |
