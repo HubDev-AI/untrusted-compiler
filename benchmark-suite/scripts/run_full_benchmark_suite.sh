@@ -6,6 +6,8 @@ usage() {
 usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
           [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
+          [--saturation-profile ping|db-hot-write|db-hot-write-tx|db-hot-query-one]
+          [--saturation-warmup-path path]
           [--saturation-build-profile debug|release] [--saturation-samples n]
           [--saturation-wrk-processes n]
           [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
@@ -27,6 +29,8 @@ include_lasm_mode_compare="${LASM_INCLUDE_MODE_COMPARE:-false}"
 include_lasm_saturation="false"
 saturation_skip_verify="false"
 saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
+saturation_profile="${LASM_CAPACITY_PROFILE:-}"
+saturation_warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
 saturation_build_profile=""
 saturation_samples=""
 saturation_wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-}"
@@ -106,6 +110,30 @@ while [ "$#" -gt 0 ]; do
       ;;
     --saturation-boost-steps=*)
       saturation_boost_steps_csv="${1#--saturation-boost-steps=}"
+      shift
+      ;;
+    --saturation-profile)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_profile="$2"
+      shift 2
+      ;;
+    --saturation-profile=*)
+      saturation_profile="${1#--saturation-profile=}"
+      shift
+      ;;
+    --saturation-warmup-path)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_warmup_path="$2"
+      shift 2
+      ;;
+    --saturation-warmup-path=*)
+      saturation_warmup_path="${1#--saturation-warmup-path=}"
       shift
       ;;
     --saturation-build-profile)
@@ -348,6 +376,12 @@ if [ "${include_lasm_saturation}" = "true" ]; then
     --boost-steps "$saturation_boost_steps_csv"
     --summary-out "$saturation_summary_path"
   )
+  if [ -n "${saturation_profile}" ]; then
+    saturation_args+=(--profile "${saturation_profile}")
+  fi
+  if [ -n "${saturation_warmup_path}" ]; then
+    saturation_args+=(--warmup-path "${saturation_warmup_path}")
+  fi
   if [ -n "${saturation_project_path}" ]; then
     saturation_args+=(--project-path "${saturation_project_path}")
   fi

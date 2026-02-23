@@ -43,7 +43,19 @@ if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*an
   exit 1
 fi
 
-tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-build-profile debug --saturation-samples 3 --saturation-wrk-processes 3 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-cluster-accept-workers 4 --saturation-cluster-relay-accept-batch-max 333 --saturation-cluster-relay-pump-batch-max 444 --saturation-skip-verify)"
+tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-profile db-hot-query-one --saturation-warmup-path /db/hot-write-tx --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-build-profile debug --saturation-samples 3 --saturation-wrk-processes 3 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-cluster-accept-workers 4 --saturation-cluster-relay-accept-batch-max 333 --saturation-cluster-relay-pump-batch-max 444 --saturation-skip-verify)"
+if ! grep -q 'profile=db-hot-query-one' <<<"$tuned_sat"; then
+  echo "missing delegated saturation profile override" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$tuned_sat"; then
+  echo "missing delegated saturation profile-derived request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write-tx' <<<"$tuned_sat"; then
+  echo "missing delegated saturation warmup-path override" >&2
+  exit 1
+fi
 if ! grep -q 'projectPath=examples/hello' <<<"$tuned_sat"; then
   echo "missing delegated saturation project-path override" >&2
   exit 1
