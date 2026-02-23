@@ -15476,9 +15476,13 @@ fn main() effects { net } -> Int {
     assert!(
         list_response.contains("\"count\":3")
             && list_response.contains("\"recordsTotal\":3")
+            && list_response.contains("\"recordsGlobalTotal\":3")
             && list_response.contains("\"recordsCapacity\":")
             && list_response.contains("\"recordsDroppedTotal\":")
             && list_response.contains("\"affectedRowsTotal\":")
+            && list_response.contains("\"filters\":{")
+            && list_response.contains("\"op\":null")
+            && list_response.contains("\"db\":null")
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"txHandleCount\":")
             && list_response.contains("\"txHandleCapacity\":")
@@ -15508,10 +15512,61 @@ fn main() effects { net } -> Int {
     assert!(
         limited_list_response.contains("\"count\":2")
             && limited_list_response.contains("\"recordsTotal\":3")
+            && limited_list_response.contains("\"recordsGlobalTotal\":3")
             && limited_list_response.contains("\"records\":")
             && limited_list_response.contains("\"op\":\"execTx\"")
             && limited_list_response.contains("\"op\":\"queryOne\""),
         "db records limited response should return trailing record window deterministically:\n{limited_list_response}"
+    );
+
+    let op_filtered_list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?op=execTx HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        op_filtered_list_response.contains("HTTP/1.1 200 OK"),
+        "db records op-filter response should contain deterministic 200 status:\n{op_filtered_list_response}"
+    );
+    assert!(
+        op_filtered_list_response.contains("\"count\":1")
+            && op_filtered_list_response.contains("\"recordsTotal\":1")
+            && op_filtered_list_response.contains("\"recordsGlobalTotal\":3")
+            && op_filtered_list_response.contains("\"filters\":{")
+            && op_filtered_list_response.contains("\"op\":\"execTx\"")
+            && op_filtered_list_response.contains("\"db\":null")
+            && op_filtered_list_response.contains("\"op\":\"execTx\"")
+            && !op_filtered_list_response.contains("\"op\":\"exec\","),
+        "db records op-filter response should return deterministic filtered record window:\n{op_filtered_list_response}"
+    );
+
+    let db_filtered_list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?db=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        db_filtered_list_response.contains("HTTP/1.1 200 OK"),
+        "db records db-filter response should contain deterministic 200 status:\n{db_filtered_list_response}"
+    );
+    assert!(
+        db_filtered_list_response.contains("\"count\":3")
+            && db_filtered_list_response.contains("\"recordsTotal\":3")
+            && db_filtered_list_response.contains("\"recordsGlobalTotal\":3")
+            && db_filtered_list_response.contains("\"filters\":{")
+            && db_filtered_list_response.contains("\"op\":null")
+            && db_filtered_list_response.contains("\"db\":1"),
+        "db records db-filter response should include deterministic db filter metadata:\n{db_filtered_list_response}"
+    );
+
+    let invalid_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\""),
+        "db records invalid filter response should return deterministic validation error:\n{invalid_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
