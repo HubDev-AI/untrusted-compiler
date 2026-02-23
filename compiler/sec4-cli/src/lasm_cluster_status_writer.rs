@@ -1,4 +1,6 @@
 use arc_swap::ArcSwap;
+use crossbeam_channel::Sender;
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -17,6 +19,7 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) active_connections: Arc<AtomicUsize>,
     pub(crate) relay_saturation_events: Arc<AtomicUsize>,
     pub(crate) relay_saturation_events_total: Arc<AtomicU64>,
+    pub(crate) relay_senders: Arc<Vec<Sender<TcpStream>>>,
     pub(crate) worker_ports_snapshot: Arc<ArcSwap<Vec<u16>>>,
     pub(crate) relay_worker_count: usize,
     pub(crate) relay_queue_capacity: usize,
@@ -48,6 +51,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         active_connections,
         relay_saturation_events,
         relay_saturation_events_total,
+        relay_senders,
         worker_ports_snapshot,
         relay_worker_count,
         relay_queue_capacity,
@@ -115,6 +119,13 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
             let dispatch_fallback_per_sec = (dispatch_fallback_delta as f64) / elapsed_secs;
             let dispatch_saturation_short_circuit_per_sec =
                 (dispatch_saturation_short_circuit_delta as f64) / elapsed_secs;
+            let mut relay_queue_depth = 0usize;
+            let mut relay_queue_max_depth = 0usize;
+            for sender in relay_senders.iter() {
+                let depth = sender.len();
+                relay_queue_depth = relay_queue_depth.saturating_add(depth);
+                relay_queue_max_depth = relay_queue_max_depth.max(depth);
+            }
             if let Some(next_snapshot) = {
                 let snapshot = worker_ports_snapshot.load();
                 if Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
@@ -167,6 +178,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_dispatch_saturation_short_circuit_per_sec:
                     dispatch_saturation_short_circuit_per_sec,
                 relay_live_sender_count: relay_live_sender_count.load(Ordering::Relaxed),
+                relay_queue_depth,
+                relay_queue_max_depth,
                 relay_pump_connections: relay_pump_connections_total.load(Ordering::Relaxed),
                 relay_buffer_pool_entries: relay_buffer_pool_entries_total.load(Ordering::Relaxed),
                 reusable_ports_count: reusable_ports_count.load(Ordering::Relaxed),

@@ -7908,6 +7908,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         active_connections: Arc::clone(&active_connections),
         relay_saturation_events: Arc::clone(&relay_saturation_events),
         relay_saturation_events_total: Arc::clone(&relay_saturation_events_total),
+        relay_senders: Arc::clone(&relay_senders),
         worker_ports_snapshot: Arc::clone(&worker_ports_snapshot),
         relay_worker_count,
         relay_queue_capacity,

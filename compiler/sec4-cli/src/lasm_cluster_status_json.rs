@@ -35,6 +35,8 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_dispatch_saturation_short_circuit_total: u64,
     pub(crate) relay_dispatch_saturation_short_circuit_per_sec: f64,
     pub(crate) relay_live_sender_count: usize,
+    pub(crate) relay_queue_depth: usize,
+    pub(crate) relay_queue_max_depth: usize,
     pub(crate) relay_pump_connections: usize,
     pub(crate) relay_buffer_pool_entries: usize,
     pub(crate) reusable_ports_count: usize,
@@ -80,6 +82,8 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_dispatch_saturation_short_circuit_per_sec
                 == other.relay_dispatch_saturation_short_circuit_per_sec
             && self.relay_live_sender_count == other.relay_live_sender_count
+            && self.relay_queue_depth == other.relay_queue_depth
+            && self.relay_queue_max_depth == other.relay_queue_max_depth
             && self.relay_pump_connections == other.relay_pump_connections
             && self.relay_buffer_pool_entries == other.relay_buffer_pool_entries
             && self.reusable_ports_count == other.reusable_ports_count
@@ -127,6 +131,8 @@ struct LasmClusterStatusPayload<'a> {
     relay_dispatch_saturation_short_circuit_total: u64,
     relay_dispatch_saturation_short_circuit_per_sec: f64,
     relay_live_sender_count: usize,
+    relay_queue_depth: usize,
+    relay_queue_max_depth: usize,
     relay_pump_connections: usize,
     relay_buffer_pool_entries: usize,
     reusable_ports_count: usize,
@@ -212,6 +218,8 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_dispatch_saturation_short_circuit_per_sec: snapshot
             .relay_dispatch_saturation_short_circuit_per_sec,
         relay_live_sender_count: snapshot.relay_live_sender_count,
+        relay_queue_depth: snapshot.relay_queue_depth,
+        relay_queue_max_depth: snapshot.relay_queue_max_depth,
         relay_pump_connections: snapshot.relay_pump_connections,
         relay_buffer_pool_entries: snapshot.relay_buffer_pool_entries,
         reusable_ports_count: snapshot.reusable_ports_count,

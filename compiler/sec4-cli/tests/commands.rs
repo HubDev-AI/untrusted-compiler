@@ -27855,6 +27855,20 @@ fn main() effects { net } -> Int {
     );
     assert!(
         first_status
+            .get("relayQueueDepth")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayQueueDepth"
+    );
+    assert!(
+        first_status
+            .get("relayQueueMaxDepth")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayQueueMaxDepth"
+    );
+    assert!(
+        first_status
             .get("relayPumpConnections")
             .and_then(serde_json::Value::as_u64)
             .is_some(),
