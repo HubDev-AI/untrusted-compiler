@@ -12,6 +12,29 @@ use crate::lasm_cluster_runtime_config::{
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
 use crate::{LasmClusterConfig, RunDbAdapter, RunDbPostgresTlsMode};
 
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV: &str =
+    "SEC4_RT_LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS";
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT: usize = 4;
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN: usize = 1;
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX: usize = 256;
+
+fn resolve_lasm_cluster_fallback_connect_max_attempts() -> usize {
+    let Ok(raw) = std::env::var(LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV) else {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    }
+    let Ok(parsed) = trimmed.parse::<usize>() else {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    };
+    parsed.clamp(
+        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN,
+        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX,
+    )
+}
+
 pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) status_path: Option<PathBuf>,
     pub(crate) stop_flag: Arc<AtomicBool>,
@@ -127,6 +150,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         let mut selected_worker_ports_snapshot = Arc::clone(&worker_ports_snapshot.load());
         let mut selected_worker_ports_generation = worker_ports_generation.load(Ordering::Relaxed);
         let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
+        let relay_fallback_connect_max_attempts =
+            resolve_lasm_cluster_fallback_connect_max_attempts();
         loop {
             let sample_now = Instant::now();
             let saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
@@ -205,6 +230,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_backend_connect_timeout_ms: shared_config.cluster_backend_connect_timeout_ms,
                 relay_backend_connect_cooldown_ms: shared_config
                     .cluster_backend_connect_cooldown_ms,
+                relay_fallback_connect_max_attempts,
                 db_adapter: lasm_cluster_status_db_adapter_label(shared_config.db_adapter)
                     .map(str::to_string),
                 db_postgres_tls_mode: lasm_cluster_status_db_postgres_tls_mode_label(
