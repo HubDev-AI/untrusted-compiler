@@ -10637,6 +10637,9 @@ fn apply_lasm_text_placeholder_materialization(
     if response.body.is_empty() {
         return;
     }
+    if !lasm_body_might_contain_placeholder_tokens(&response.body) {
+        return;
+    }
     let original = String::from_utf8_lossy(&response.body);
     if !contains_lasm_request_placeholder_tokens(original.as_ref()) {
         return;
@@ -10648,11 +10651,20 @@ fn apply_lasm_text_placeholder_materialization(
     }
 }
 
+fn lasm_body_might_contain_placeholder_tokens(body: &[u8]) -> bool {
+    body.windows(2).any(|pair| pair == b"{{")
+}
+
 fn apply_lasm_header_placeholder_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
 ) {
+    if response.headers.is_empty()
+        || !lasm_header_placeholder_materialization_required(&response.headers)
+    {
+        return;
+    }
     let mut materialized_headers = BTreeMap::new();
     for (name, value) in std::mem::take(&mut response.headers) {
         let materialized_name = if contains_lasm_request_placeholder_tokens(name.as_str()) {
@@ -10686,6 +10698,35 @@ fn apply_lasm_header_placeholder_materialization(
         materialized_headers.insert(materialized_name, materialized_value);
     }
     response.headers = materialized_headers;
+}
+
+fn lasm_header_placeholder_materialization_required(headers: &BTreeMap<String, String>) -> bool {
+    for (name, value) in headers {
+        if contains_lasm_request_placeholder_tokens(name.as_str())
+            || contains_lasm_request_placeholder_tokens(value.as_str())
+        {
+            return true;
+        }
+        if name.trim().is_empty()
+            || name != name.trim()
+            || !is_lasm_response_header_name_valid(name.as_str())
+        {
+            return true;
+        }
+        if name.eq_ignore_ascii_case("Set-Cookie") {
+            if value.contains('\n') {
+                return true;
+            }
+            if !is_lasm_response_header_value_valid(value.as_str()) {
+                return true;
+            }
+            continue;
+        }
+        if !is_lasm_response_header_value_valid(value.as_str()) {
+            return true;
+        }
+    }
+    false
 }
 
 fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) {
