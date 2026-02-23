@@ -303,6 +303,22 @@ fn rewrite_lasm_postgres_named_query_template(
     if !saw_named_placeholder {
         return Ok(None);
     }
+    let mut unused_params: Vec<&str> = named_params
+        .keys()
+        .filter_map(|name| {
+            if named_placeholder_indices.contains_key(name.as_str()) {
+                None
+            } else {
+                Some(name.as_str())
+            }
+        })
+        .collect();
+    unused_params.sort_unstable();
+    if let Some(unused_name) = unused_params.first() {
+        return Err(format!(
+            "postgres query parameter `{unused_name}` is not present in SQL statement"
+        ));
+    }
     let rewritten_query = String::from_utf8(rewritten)
         .map_err(|_| "postgres named parameter rewrite produced invalid UTF-8".to_string())?;
     Ok(Some((rewritten_query, ordered_params)))
@@ -1212,6 +1228,18 @@ mod tests {
         assert!(
             error.contains("postgres named parameterized execution requires SQL placeholders to be named")
         );
+    }
+
+    #[test]
+    fn named_object_params_reject_extra_params_not_present_in_sql() {
+        let error = match parse_lasm_postgres_query_template_and_params(
+            "SELECT :name::text",
+            "{\"name\":\"alice\",\"role\":\"admin\"}",
+        ) {
+            Ok(_) => panic!("extra named params should fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains("postgres query parameter `role` is not present in SQL statement"));
     }
 
     #[test]
