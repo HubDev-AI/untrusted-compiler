@@ -44,10 +44,15 @@ const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX: usize = 16 * 1024 * 1024;
+const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS";
+const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT: usize = 1024;
+const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN: usize = 1;
+const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX: usize = 16_384;
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
 
 #[inline(always)]
 fn resolve_lasm_db_sql_template_max_bytes() -> usize {
@@ -245,6 +250,62 @@ fn enforce_lasm_db_query_one_row_max_bytes(
         413,
         &lasm_error_envelope(
             "DB.QUERY_ONE_ROW_LIMIT",
+            "resource_limit",
+            message.as_str(),
+            413,
+            trace_id,
+        ),
+    );
+    false
+}
+
+#[inline(always)]
+fn resolve_lasm_db_query_one_row_max_columns() -> usize {
+    *LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV) else {
+            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN,
+            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
+        )
+    })
+}
+
+#[inline(always)]
+fn lasm_db_query_one_row_column_count(row_object: &serde_json::Value) -> usize {
+    match row_object {
+        serde_json::Value::Object(values) => values.len(),
+        serde_json::Value::Null => 0,
+        _ => 1,
+    }
+}
+
+#[inline(always)]
+fn enforce_lasm_db_query_one_row_max_columns(
+    response: &mut sec4_core::HttpResponse,
+    row_object: &serde_json::Value,
+    trace_id: &str,
+) -> bool {
+    let max_columns = resolve_lasm_db_query_one_row_max_columns();
+    let columns = lasm_db_query_one_row_column_count(row_object);
+    if columns <= max_columns {
+        return true;
+    }
+    let message =
+        format!("db.queryOne row column count exceeds configured max columns ({max_columns})");
+    set_lasm_json_response(
+        response,
+        413,
+        &lasm_error_envelope(
+            "DB.QUERY_ONE_COLUMN_LIMIT",
             "resource_limit",
             message.as_str(),
             413,
@@ -1077,6 +1138,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+                        if !enforce_lasm_db_query_one_row_max_columns(
+                            response,
+                            &row_object,
+                            trace_id,
+                        ) {
+                            return true;
+                        }
                         if !enforce_lasm_db_query_one_row_max_bytes(
                             response,
                             row.as_str(),
@@ -1155,6 +1223,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+                        if !enforce_lasm_db_query_one_row_max_columns(
+                            response,
+                            &row_object,
+                            trace_id,
+                        ) {
+                            return true;
+                        }
                         if !enforce_lasm_db_query_one_row_max_bytes(
                             response,
                             row.as_str(),
@@ -1244,6 +1319,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let row_object =
                 build_lasm_records_log_query_one_row_object(&matched_source_record, row_schema);
             let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+            if !enforce_lasm_db_query_one_row_max_columns(response, &row_object, trace_id) {
+                return true;
+            }
             if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
                 return true;
             }

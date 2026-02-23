@@ -16390,6 +16390,145 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_query_one_enforces_max_columns_limit_when_sqlite_adapter() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-query-one-max-columns-sqlite");
+    let db_base = project_dir.join("lasm-db");
+    let query_one_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbqueryonemaxcolumnssqlitecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn dbQueryOne() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = query_one_port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--db-adapter",
+            "sqlite",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env("SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", query_one_port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /db/query-one?template=SELECT%201%20AS%20left_value%2C%202%20AS%20right_value&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM sqlite queryOne max-columns flow could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM sqlite queryOne max-columns process did not exit in expected window");
+        }
+    };
+    assert!(
+        status.success(),
+        "run command LASM sqlite queryOne max-columns process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 413 Payload Too Large")
+            && response.contains("\"code\":\"DB.QUERY_ONE_COLUMN_LIMIT\"")
+            && response.contains("db.queryOne row column count exceeds configured max columns (1)"),
+        "sqlite queryOne should enforce deterministic row max-columns guard:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_invalid_exec_db_handle_does_not_execute_sql_when_sqlite_adapter() {
     let project_dir = temp_dir("sec4-run-command-lasm-invalid-exec-db-handle-sqlite");
     let db_base = project_dir.join("lasm-db");
