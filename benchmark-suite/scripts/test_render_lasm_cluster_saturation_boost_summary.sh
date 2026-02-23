@@ -40,7 +40,13 @@ cat >"${matrix}" <<'JSON'
       "clusterRelayPumpBatchMaxResolved": 256,
       "clusterRelayLiveSenderCountResolved": 2,
       "clusterRelayDispatchSaturationShortCircuitTotal": 18,
-      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1
+      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1,
+      "clusterDbAdapterResolved": "sqlite",
+      "clusterDbSqliteBusyTimeoutMsResolved": 2500,
+      "clusterDbSqliteJournalModeResolved": "WAL",
+      "clusterDbSqliteSynchronousResolved": "NORMAL",
+      "clusterDbSqliteLockRetryMaxResolved": 7,
+      "clusterDbSqliteLockRetryDelayMsResolved": 9
     },
     {
       "saturationBoostStep": 6,
@@ -111,7 +117,13 @@ cat >"${verify}" <<'JSON'
     "clusterRelayQueueShardCapacityResolved": 1024,
     "clusterRelayLiveSenderCountResolved": 2,
     "clusterRelayDispatchSaturationShortCircuitTotal": 22,
-    "clusterRelayDispatchSaturationShortCircuitPerSec": 2.8
+    "clusterRelayDispatchSaturationShortCircuitPerSec": 2.8,
+    "clusterDbAdapterResolved": "sqlite",
+    "clusterDbSqliteBusyTimeoutMsResolved": 2500,
+    "clusterDbSqliteJournalModeResolved": "WAL",
+    "clusterDbSqliteSynchronousResolved": "NORMAL",
+    "clusterDbSqliteLockRetryMaxResolved": 7,
+    "clusterDbSqliteLockRetryDelayMsResolved": 9
   },
   "observed": {
     "requests": 1280000,
@@ -149,6 +161,18 @@ if ! grep -q '^## Recommended Step Verification$' "${out}"; then
   echo "summary missing verification section" >&2
   exit 1
 fi
+if ! grep -q '^## Resolved DB Runtime (Recommended Step)$' "${out}"; then
+  echo "summary missing resolved DB runtime section" >&2
+  exit 1
+fi
+if ! grep -q '^- DB adapter (resolved): sqlite$' "${out}"; then
+  echo "summary missing resolved DB adapter line for recommended row" >&2
+  exit 1
+fi
+if ! grep -q '^- DB sqlite lock retry max (resolved): 7$' "${out}"; then
+  echo "summary missing resolved DB sqlite lock retry max line for recommended row" >&2
+  exit 1
+fi
 if ! grep -q '^- Requests/sec: 64000$' "${out}"; then
   echo "summary missing verification throughput line" >&2
   exit 1
@@ -171,6 +195,14 @@ if ! grep -q '^- Relay dispatch short-circuit total (resolved): 22$' "${out}"; t
 fi
 if ! grep -q '^- Relay dispatch short-circuit per sec (resolved): 2.8$' "${out}"; then
   echo "summary missing verification short-circuit per-sec line" >&2
+  exit 1
+fi
+if ! grep -q '^- DB sqlite journal mode (resolved): WAL$' "${out}"; then
+  echo "summary missing verification db sqlite journal mode line" >&2
+  exit 1
+fi
+if ! grep -q '^- DB sqlite lock retry delay ms (resolved): 9$' "${out}"; then
+  echo "summary missing verification db sqlite lock retry delay line" >&2
   exit 1
 fi
 
