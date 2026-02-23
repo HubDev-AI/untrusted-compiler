@@ -21,6 +21,7 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) relay_saturation_events_total: Arc<AtomicU64>,
     pub(crate) relay_senders: Arc<Vec<Sender<TcpStream>>>,
     pub(crate) worker_ports_snapshot: Arc<ArcSwap<Vec<u16>>>,
+    pub(crate) worker_ports_generation: Arc<AtomicU64>,
     pub(crate) relay_worker_count: usize,
     pub(crate) relay_queue_capacity: usize,
     pub(crate) relay_queue_shard_capacity: usize,
@@ -74,6 +75,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         relay_saturation_events_total,
         relay_senders,
         worker_ports_snapshot,
+        worker_ports_generation,
         relay_worker_count,
         relay_queue_capacity,
         relay_queue_shard_capacity,
@@ -123,6 +125,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         let mut status_write_warning_next_allowed_at: Option<Instant> = None;
         let status_write_warning_throttle_duration = Duration::from_millis(1000);
         let mut selected_worker_ports_snapshot = Arc::clone(&worker_ports_snapshot.load());
+        let mut selected_worker_ports_generation = worker_ports_generation.load(Ordering::Relaxed);
         let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
         loop {
             let sample_now = Instant::now();
@@ -150,16 +153,20 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_queue_depth = relay_queue_depth.saturating_add(depth);
                 relay_queue_max_depth = relay_queue_max_depth.max(depth);
             }
-            if let Some(next_snapshot) = {
-                let snapshot = worker_ports_snapshot.load();
-                if Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
-                    None
-                } else {
-                    Some(Arc::clone(&snapshot))
+            let observed_worker_ports_generation = worker_ports_generation.load(Ordering::Relaxed);
+            if observed_worker_ports_generation != selected_worker_ports_generation {
+                selected_worker_ports_generation = observed_worker_ports_generation;
+                if let Some(next_snapshot) = {
+                    let snapshot = worker_ports_snapshot.load();
+                    if Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
+                        None
+                    } else {
+                        Some(Arc::clone(&snapshot))
+                    }
+                } {
+                    selected_worker_port_count = next_snapshot.len();
+                    selected_worker_ports_snapshot = next_snapshot;
                 }
-            } {
-                selected_worker_port_count = next_snapshot.len();
-                selected_worker_ports_snapshot = next_snapshot;
             }
             let worker_count = selected_worker_port_count;
             let active_connections = active_connections.load(Ordering::Relaxed);
