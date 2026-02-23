@@ -1842,6 +1842,10 @@ Post-alpha track acceptance anchors:
       - autoscale loop now tracks last published values for desired instances, saturation counters, dynamic boost step, and cooldown remaining telemetry,
       - corresponding shared atomics are now updated only when values change, avoiding redundant per-tick store churn while preserving deterministic telemetry semantics.
       - documented in `docs/book/1441-m39-lasm-autoscale-telemetry-store-elision.md`.
+   - [x] Added runtime-tunable relay pump buffer sizing for LASM cluster proxy path:
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES` (clamped `1 KiB..1 MiB`) and threads it into relay pump allocation/reuse paths,
+      - relay pumps now resize pooled buffers to the resolved byte budget, allowing hot-path throughput/memory tuning without code changes.
+      - documented in `docs/book/1461-m39-lasm-cluster-relay-buffer-size-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

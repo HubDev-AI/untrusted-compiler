@@ -2,6 +2,7 @@ use arc_swap::ArcSwap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::lasm_cluster_relay_pump::default_lasm_cluster_relay_buffer_bytes;
 use crate::{
     LasmClusterConfig, LasmClusterState, LASM_CLUSTER_IDLE_SLEEP_MICROS,
     LASM_CLUSTER_IDLE_SPIN_THRESHOLD, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
@@ -53,6 +54,17 @@ pub(crate) fn resolve_lasm_cluster_idle_sleep_micros() -> u64 {
         1,
         50_000,
     )
+}
+
+pub(crate) fn resolve_lasm_cluster_relay_buffer_bytes() -> usize {
+    let default_value = default_lasm_cluster_relay_buffer_bytes();
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES",
+        default_value as u64,
+        1024,
+        1024 * 1024,
+    );
+    usize::try_from(value).unwrap_or(default_value)
 }
 
 pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
