@@ -1895,6 +1895,11 @@ Post-alpha track acceptance anchors:
       - deterministic runtime validation now rejects missing named parameters, extra params not present in SQL template, and named-param payloads against unnamed `?` placeholders,
       - DB runtime classification now maps these named-parameter contract failures to `400 DB.*_INVALID` validation envelopes.
       - documented in `docs/book/1469-m39-lasm-sqlite-named-parameter-binding-contract.md`.
+   - [x] Added retry-once handling for Postgres transactional concurrency conflicts:
+      - `db.execTx` now detects retryable SQLSTATE conflicts (`40001` serialization failure, `40P01` deadlock) and performs one immediate retry on the existing runtime client path before surfacing failure,
+      - keeps reconnect-on-closed behavior unchanged and preserves existing prepared/unprepared execution flow,
+      - DB runtime classifier now maps common Postgres serialization/deadlock text to deterministic `409` conflict envelopes.
+      - documented in `docs/book/1470-m39-lasm-postgres-exectx-retryable-conflict-retry.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,

@@ -690,6 +690,14 @@ fn is_lasm_postgres_execute_rows_error(err: &postgres::Error) -> bool {
     message.contains("query returned rows") || message.contains("execute returned rows")
 }
 
+fn is_lasm_postgres_retryable_tx_sqlstate(code: Option<&str>) -> bool {
+    matches!(code, Some("40001") | Some("40P01"))
+}
+
+fn is_lasm_postgres_retryable_tx_error(err: &postgres::Error) -> bool {
+    is_lasm_postgres_retryable_tx_sqlstate(err.code().map(|code| code.code()))
+}
+
 fn run_lasm_postgres_unprepared_exec_with_count(
     client: &mut impl GenericClient,
     query_template: &str,
@@ -854,6 +862,23 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     format!("postgres transaction execution failed after reconnect: {retry_err}")
                 })?
         }
+        Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+            let retry_statement = if use_prepared {
+                Some(lasm_dynamic_postgres_prepared_statement(
+                    state,
+                    query_template,
+                )?)
+            } else {
+                None
+            };
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
+                .map_err(|retry_err| {
+                    format!(
+                        "postgres transaction execution failed after retryable conflict retry: {retry_err}"
+                    )
+                })?
+        }
         Err(err)
             if use_prepared
                 && err
@@ -951,8 +976,9 @@ pub(crate) fn run_lasm_postgres_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
-        parse_lasm_postgres_query_template_and_params, LasmPostgresParam,
+        is_lasm_postgres_retryable_tx_sqlstate, max_lasm_postgres_placeholder_index_cached,
+        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
+        LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -971,6 +997,14 @@ mod tests {
         assert_eq!(second, 2);
         assert_eq!(state.db_postgres_placeholder_cache_evictions_total, 1);
         assert_eq!(state.db_postgres_placeholder_max_cache.len(), 1);
+    }
+
+    #[test]
+    fn retryable_tx_sqlstate_detection_matches_serialization_and_deadlock_codes() {
+        assert!(is_lasm_postgres_retryable_tx_sqlstate(Some("40001")));
+        assert!(is_lasm_postgres_retryable_tx_sqlstate(Some("40P01")));
+        assert!(!is_lasm_postgres_retryable_tx_sqlstate(Some("23505")));
+        assert!(!is_lasm_postgres_retryable_tx_sqlstate(None));
     }
 
     #[test]

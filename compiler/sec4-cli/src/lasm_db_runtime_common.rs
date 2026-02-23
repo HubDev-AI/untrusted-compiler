@@ -25,6 +25,8 @@ pub(crate) fn classify_lasm_db_runtime_error(
     }
     if message.contains("canceling statement due to lock timeout")
         || message.contains("database is locked")
+        || message.contains("could not serialize access due to")
+        || message.contains("deadlock detected")
     {
         let code = match operation {
             "exec" => "DB.EXEC_LOCK_TIMEOUT",
@@ -277,6 +279,17 @@ mod tests {
         let (status, code, kind) = classify_lasm_db_runtime_error("queryOne", "database is locked");
         assert_eq!(status, 409);
         assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_postgres_retryable_conflict_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "ERROR: could not serialize access due to concurrent update",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_TX_LOCK_TIMEOUT");
         assert_eq!(kind, "conflict");
     }
 
