@@ -25,7 +25,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 use std::env;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_MAX_BYTES";
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
@@ -35,23 +35,27 @@ const LASM_DB_PARAMS_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_BYTES";
 const LASM_DB_PARAMS_MAX_BYTES_DEFAULT: usize = 128 * 1024;
 const LASM_DB_PARAMS_MAX_BYTES_MIN: usize = 256;
 const LASM_DB_PARAMS_MAX_BYTES_MAX: usize = 8 * 1024 * 1024;
+static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 
 #[inline(always)]
 fn resolve_lasm_db_sql_template_max_bytes() -> usize {
-    let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
-        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-    }
-    let Ok(parsed) = trimmed.parse::<usize>() else {
-        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-    };
-    parsed.clamp(
-        LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
-        LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
-    )
+    *LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
+            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
+            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
+        )
+    })
 }
 
 #[inline(always)]
@@ -83,17 +87,19 @@ fn enforce_lasm_db_sql_template_max_bytes(
 
 #[inline(always)]
 fn resolve_lasm_db_params_max_bytes() -> usize {
-    let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
-        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-    }
-    let Ok(parsed) = trimmed.parse::<usize>() else {
-        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-    };
-    parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
+    *LASM_DB_PARAMS_MAX_BYTES_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
+            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+        };
+        parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
+    })
 }
 
 #[inline(always)]
