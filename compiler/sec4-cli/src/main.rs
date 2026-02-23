@@ -179,6 +179,12 @@ enum Commands {
         db_postgres_connect_timeout_ms: Option<u64>,
         #[arg(long)]
         db_sqlite_busy_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_retryable_conflict_retry_max: Option<u64>,
+        #[arg(long)]
+        db_sqlite_lock_retry_max: Option<u64>,
+        #[arg(long)]
+        db_sqlite_lock_retry_delay_ms: Option<u64>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -585,6 +591,9 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -630,6 +639,9 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -6894,6 +6906,9 @@ fn cmd_run(
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_postgres_retryable_conflict_retry_max: Option<u64>,
+    db_sqlite_lock_retry_max: Option<u64>,
+    db_sqlite_lock_retry_delay_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -7089,6 +7104,22 @@ fn cmd_run(
         eprintln!("run failed: --db-sqlite-busy-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_retryable_conflict_retry_max.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-retryable-conflict-retry-max is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_sqlite_lock_retry_max.is_some() {
+        eprintln!("run failed: --db-sqlite-lock-retry-max is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_sqlite_lock_retry_delay_ms.is_some() {
+        eprintln!(
+            "run failed: --db-sqlite-lock-retry-delay-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if db_max_tx_handles == Some(0) {
         eprintln!("run failed: --db-max-tx-handles must be >= 1");
         return Err(2);
@@ -7132,8 +7163,11 @@ fn cmd_run(
         || db_postgres_placeholder_cache_max.is_some()
         || db_postgres_statement_timeout_ms.is_some()
         || db_postgres_lock_timeout_ms.is_some()
-        || db_postgres_connect_timeout_ms.is_some();
-    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some();
+        || db_postgres_connect_timeout_ms.is_some()
+        || db_postgres_retryable_conflict_retry_max.is_some();
+    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
+        || db_sqlite_lock_retry_max.is_some()
+        || db_sqlite_lock_retry_delay_ms.is_some();
     if backend == RunBackend::Lasm && postgres_runtime_overrides && sqlite_runtime_overrides {
         eprintln!(
             "run failed: postgres and sqlite runtime overrides cannot be combined in the same run"
@@ -7156,7 +7190,7 @@ fn cmd_run(
             Some(RunDbAdapter::Sqlite) => Some(RunDbAdapter::Sqlite),
             Some(_) => {
                 eprintln!(
-                    "run failed: --db-sqlite-busy-timeout-ms requires --db-adapter sqlite when adapter is set explicitly"
+                    "run failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
                 );
                 return Err(2);
             }
@@ -7366,6 +7400,9 @@ fn cmd_run(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -7723,6 +7760,9 @@ struct LasmClusterConfig {
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_postgres_retryable_conflict_retry_max: Option<u64>,
+    db_sqlite_lock_retry_max: Option<u64>,
+    db_sqlite_lock_retry_delay_ms: Option<u64>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -8028,6 +8068,9 @@ fn cmd_run_lasm_backend(
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_postgres_retryable_conflict_retry_max: Option<u64>,
+    db_sqlite_lock_retry_max: Option<u64>,
+    db_sqlite_lock_retry_delay_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -8332,6 +8375,9 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -8384,6 +8430,9 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
@@ -8438,6 +8487,23 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_postgres_retryable_conflict_retry_max
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!(
+                        "run failed: --db-postgres-retryable-conflict-retry-max exceeds platform limits"
+                    );
+                    2
+                })?,
+            db_sqlite_lock_retry_max
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!("run failed: --db-sqlite-lock-retry-max exceeds platform limits");
+                    2
+                })?,
+            db_sqlite_lock_retry_delay_ms,
             db_max_tx_handles
                 .map(|value| usize::try_from(value))
                 .transpose()
