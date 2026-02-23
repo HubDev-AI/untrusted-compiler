@@ -33,6 +33,7 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_accept_workers: usize,
     pub(crate) relay_backend_connect_timeout_ms: u64,
     pub(crate) relay_backend_connect_cooldown_ms: u64,
+    pub(crate) relay_fallback_connect_max_attempts: usize,
     pub(crate) db_adapter: Option<String>,
     pub(crate) db_postgres_tls_mode: Option<String>,
     pub(crate) db_max_tx_handles: Option<u64>,
@@ -96,6 +97,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_accept_workers == other.relay_accept_workers
             && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
             && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
+            && self.relay_fallback_connect_max_attempts == other.relay_fallback_connect_max_attempts
             && self.db_adapter == other.db_adapter
             && self.db_postgres_tls_mode == other.db_postgres_tls_mode
             && self.db_max_tx_handles == other.db_max_tx_handles
@@ -166,6 +168,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
+    relay_fallback_connect_max_attempts: usize,
     db_adapter: Option<&'a str>,
     db_postgres_tls_mode: Option<&'a str>,
     db_max_tx_handles: Option<u64>,
@@ -269,6 +272,7 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_accept_workers: snapshot.relay_accept_workers,
         relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
         relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
+        relay_fallback_connect_max_attempts: snapshot.relay_fallback_connect_max_attempts,
         db_adapter: snapshot.db_adapter.as_deref(),
         db_postgres_tls_mode: snapshot.db_postgres_tls_mode.as_deref(),
         db_max_tx_handles: snapshot.db_max_tx_handles,
