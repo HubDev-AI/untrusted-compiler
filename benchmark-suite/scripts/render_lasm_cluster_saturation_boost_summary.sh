@@ -108,6 +108,75 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
   ' "${analysis_path}"
   echo
 
+  echo "## Resolved DB Runtime (Recommended Step)"
+  echo
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB adapter (resolved): \(.clusterDbAdapterResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres TLS mode (resolved): \(.clusterDbPostgresTlsModeResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB max tx handles (resolved): \(.clusterDbMaxTxHandlesResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB records max (resolved): \(.clusterDbRecordsMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres statement timeout ms (resolved): \(.clusterDbPostgresStatementTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres lock timeout ms (resolved): \(.clusterDbPostgresLockTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres connect timeout ms (resolved): \(.clusterDbPostgresConnectTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite busy timeout ms (resolved): \(.clusterDbSqliteBusyTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite journal mode (resolved): \(.clusterDbSqliteJournalModeResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite synchronous (resolved): \(.clusterDbSqliteSynchronousResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres retryable conflict retry max (resolved): \(.clusterDbPostgresRetryableConflictRetryMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite lock retry max (resolved): \(.clusterDbSqliteLockRetryMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite lock retry delay ms (resolved): \(.clusterDbSqliteLockRetryDelayMsResolved // "n/a")"
+  ' "${analysis_path}"
+  echo
+
   if [ -n "${verify_path}" ]; then
     echo "## Recommended Step Verification"
     echo
@@ -127,6 +196,19 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
     echo "- Relay live sender count (resolved): $(jq -r '.run.clusterRelayLiveSenderCountResolved // "unknown"' "${verify_path}")"
     echo "- Relay dispatch short-circuit total (resolved): $(jq -r '.run.clusterRelayDispatchSaturationShortCircuitTotal // "unknown"' "${verify_path}")"
     echo "- Relay dispatch short-circuit per sec (resolved): $(jq -r '.run.clusterRelayDispatchSaturationShortCircuitPerSec // "unknown"' "${verify_path}")"
+    echo "- DB adapter (resolved): $(jq -r '.run.clusterDbAdapterResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres TLS mode (resolved): $(jq -r '.run.clusterDbPostgresTlsModeResolved // "unknown"' "${verify_path}")"
+    echo "- DB max tx handles (resolved): $(jq -r '.run.clusterDbMaxTxHandlesResolved // "unknown"' "${verify_path}")"
+    echo "- DB records max (resolved): $(jq -r '.run.clusterDbRecordsMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres statement timeout ms (resolved): $(jq -r '.run.clusterDbPostgresStatementTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres lock timeout ms (resolved): $(jq -r '.run.clusterDbPostgresLockTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres connect timeout ms (resolved): $(jq -r '.run.clusterDbPostgresConnectTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite busy timeout ms (resolved): $(jq -r '.run.clusterDbSqliteBusyTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite journal mode (resolved): $(jq -r '.run.clusterDbSqliteJournalModeResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite synchronous (resolved): $(jq -r '.run.clusterDbSqliteSynchronousResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres retryable conflict retry max (resolved): $(jq -r '.run.clusterDbPostgresRetryableConflictRetryMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite lock retry max (resolved): $(jq -r '.run.clusterDbSqliteLockRetryMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite lock retry delay ms (resolved): $(jq -r '.run.clusterDbSqliteLockRetryDelayMsResolved // "unknown"' "${verify_path}")"
     echo
   fi
 } > "${out_path}"
