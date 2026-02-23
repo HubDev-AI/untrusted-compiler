@@ -1975,6 +1975,11 @@ Post-alpha track acceptance anchors:
       - unprepared single-statement `db.exec` / `db.execTx` paths now attempt direct execution-row counts and fallback to query-row counting for row-returning statements,
       - multi-statement unprepared SQL keeps batch-execute path and deterministic zero-count fallback behavior.
       - documented in `docs/book/1450-m39-lasm-postgres-unprepared-affected-row-accounting.md`.
+   - [x] Expanded `DbListRecordsResponse` filters and operation-count telemetry:
+      - `/db/records` now supports deterministic `tx` (`>= 0`) and `templateContains` (non-empty) filters in addition to `op`/`db`/`limit`,
+      - response now includes `opCounts` (filtered set) and `opCountsGlobal` (full retained history) for `exec`/`execTx`/`queryOne`,
+      - invalid `op`, `db`, `tx`, and `templateContains` filters now return deterministic `DB.RECORDS_FILTER_INVALID` envelopes.
+      - documented in `docs/book/1451-m39-lasm-db-records-filter-and-op-count-expansion.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

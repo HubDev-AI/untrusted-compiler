@@ -15483,6 +15483,13 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"filters\":{")
             && list_response.contains("\"op\":null")
             && list_response.contains("\"db\":null")
+            && list_response.contains("\"tx\":null")
+            && list_response.contains("\"templateContains\":null")
+            && list_response.contains("\"opCounts\":{")
+            && list_response.contains("\"exec\":1")
+            && list_response.contains("\"execTx\":1")
+            && list_response.contains("\"queryOne\":1")
+            && list_response.contains("\"opCountsGlobal\":{")
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"txHandleCount\":")
             && list_response.contains("\"txHandleCapacity\":")
@@ -15535,6 +15542,11 @@ fn main() effects { net } -> Int {
             && op_filtered_list_response.contains("\"filters\":{")
             && op_filtered_list_response.contains("\"op\":\"execTx\"")
             && op_filtered_list_response.contains("\"db\":null")
+            && op_filtered_list_response.contains("\"tx\":null")
+            && op_filtered_list_response.contains("\"templateContains\":null")
+            && op_filtered_list_response.contains("\"opCounts\":{")
+            && op_filtered_list_response.contains("\"exec\":0")
+            && op_filtered_list_response.contains("\"queryOne\":0")
             && op_filtered_list_response.contains("\"op\":\"execTx\"")
             && !op_filtered_list_response.contains("\"op\":\"exec\","),
         "db records op-filter response should return deterministic filtered record window:\n{op_filtered_list_response}"
@@ -15554,8 +15566,30 @@ fn main() effects { net } -> Int {
             && db_filtered_list_response.contains("\"recordsGlobalTotal\":3")
             && db_filtered_list_response.contains("\"filters\":{")
             && db_filtered_list_response.contains("\"op\":null")
-            && db_filtered_list_response.contains("\"db\":1"),
+            && db_filtered_list_response.contains("\"db\":1")
+            && db_filtered_list_response.contains("\"tx\":null")
+            && db_filtered_list_response.contains("\"templateContains\":null"),
         "db records db-filter response should include deterministic db filter metadata:\n{db_filtered_list_response}"
+    );
+
+    let tx_filtered_list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?tx=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        tx_filtered_list_response.contains("HTTP/1.1 200 OK"),
+        "db records tx-filter response should contain deterministic 200 status:\n{tx_filtered_list_response}"
+    );
+    assert!(
+        tx_filtered_list_response.contains("\"count\":2")
+            && tx_filtered_list_response.contains("\"recordsTotal\":2")
+            && tx_filtered_list_response.contains("\"recordsGlobalTotal\":3")
+            && tx_filtered_list_response.contains("\"filters\":{")
+            && tx_filtered_list_response.contains("\"tx\":0")
+            && tx_filtered_list_response.contains("\"op\":\"exec\"")
+            && tx_filtered_list_response.contains("\"op\":\"queryOne\"")
+            && !tx_filtered_list_response.contains("\"op\":\"execTx\""),
+        "db records tx-filter response should deterministically exclude tx-backed execTx records:\n{tx_filtered_list_response}"
     );
 
     let invalid_filter_response = run_lasm_oneshot_request(
@@ -15581,6 +15615,33 @@ fn main() effects { net } -> Int {
                 "db records op filter must be one of exec, execTx, queryOne"
             ),
         "db records invalid op filter should return deterministic validation error:\n{invalid_op_filter_response}"
+    );
+
+    let invalid_tx_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?tx=-1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_tx_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_tx_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_tx_filter_response
+                .contains("db records tx filter must be an integer >= 0"),
+        "db records invalid tx filter should return deterministic validation error:\n{invalid_tx_filter_response}"
+    );
+
+    let invalid_template_contains_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?templateContains=%20 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_template_contains_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_template_contains_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_template_contains_filter_response
+                .contains("db records templateContains filter must be a non-empty string"),
+        "db records invalid templateContains filter should return deterministic validation error:\n{invalid_template_contains_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

@@ -1420,5 +1420,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1448-m39-lasm-records-log-load-param-normalization-backfill.md`
 - `1449-m39-lasm-sqlite-postgres-load-param-normalization.md`
 - `1450-m39-lasm-postgres-unprepared-affected-row-accounting.md`
+- `1451-m39-lasm-db-records-filter-and-op-count-expansion.md`
 
 As milestones progress, chapters will be added and linked from this index.

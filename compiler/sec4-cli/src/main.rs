@@ -9989,6 +9989,49 @@ fn apply_lasm_dynamic_response_materialization(
             } else {
                 None
             };
+            let records_tx_filter = if let Some(raw_tx) = request.query_params.get("tx") {
+                let trimmed = raw_tx.trim();
+                match trimmed.parse::<i64>() {
+                    Ok(value) if value >= 0 => Some(value),
+                    _ => {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.RECORDS_FILTER_INVALID",
+                                "validation",
+                                "db records tx filter must be an integer >= 0",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
+            let records_template_contains_filter =
+                if let Some(raw_template_contains) = request.query_params.get("templateContains") {
+                    let trimmed = raw_template_contains.trim();
+                    if trimmed.is_empty() {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.RECORDS_FILTER_INVALID",
+                                "validation",
+                                "db records templateContains filter must be a non-empty string",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        return;
+                    }
+                    Some(trimmed.to_string())
+                } else {
+                    None
+                };
             let (
                 records,
                 records_total,
@@ -9996,6 +10039,12 @@ fn apply_lasm_dynamic_response_materialization(
                 records_capacity,
                 records_dropped_total,
                 affected_rows_total,
+                records_exec_count,
+                records_exec_tx_count,
+                records_query_one_count,
+                records_exec_global_count,
+                records_exec_tx_global_count,
+                records_query_one_global_count,
                 adapter,
                 tx_handle_count,
                 tx_handle_capacity,
@@ -10021,9 +10070,56 @@ fn apply_lasm_dynamic_response_materialization(
                                 .map(|op| record.op == *op)
                                 .unwrap_or(true)
                                 && records_db_filter.map(|db| record.db == db).unwrap_or(true)
+                                && records_tx_filter.map(|tx| record.tx == tx).unwrap_or(true)
+                                && records_template_contains_filter
+                                    .as_ref()
+                                    .map(|needle| record.template.contains(needle))
+                                    .unwrap_or(true)
                         })
                         .cloned()
                         .collect::<Vec<_>>();
+                    let (
+                        records_exec_count,
+                        records_exec_tx_count,
+                        records_query_one_count,
+                    ) = records_filtered.iter().fold(
+                        (0usize, 0usize, 0usize),
+                        |(exec_count, exec_tx_count, query_one_count), record| {
+                            match record.op.as_str() {
+                                "exec" => {
+                                    (exec_count + 1, exec_tx_count, query_one_count)
+                                }
+                                "execTx" => {
+                                    (exec_count, exec_tx_count + 1, query_one_count)
+                                }
+                                "queryOne" => {
+                                    (exec_count, exec_tx_count, query_one_count + 1)
+                                }
+                                _ => (exec_count, exec_tx_count, query_one_count),
+                            }
+                        },
+                    );
+                    let (
+                        records_exec_global_count,
+                        records_exec_tx_global_count,
+                        records_query_one_global_count,
+                    ) = state.db_records.iter().fold(
+                        (0usize, 0usize, 0usize),
+                        |(exec_count, exec_tx_count, query_one_count), record| {
+                            match record.op.as_str() {
+                                "exec" => {
+                                    (exec_count + 1, exec_tx_count, query_one_count)
+                                }
+                                "execTx" => {
+                                    (exec_count, exec_tx_count + 1, query_one_count)
+                                }
+                                "queryOne" => {
+                                    (exec_count, exec_tx_count, query_one_count + 1)
+                                }
+                                _ => (exec_count, exec_tx_count, query_one_count),
+                            }
+                        },
+                    );
                     let total = records_filtered.len();
                     let records = if let Some(limit) = records_limit {
                         records_filtered
@@ -10044,6 +10140,12 @@ fn apply_lasm_dynamic_response_materialization(
                         state.db_records_max,
                         state.db_records_dropped_total,
                         affected_rows_total,
+                        records_exec_count,
+                        records_exec_tx_count,
+                        records_query_one_count,
+                        records_exec_global_count,
+                        records_exec_tx_global_count,
+                        records_query_one_global_count,
                         lasm_db_records_adapter_label(state.db_records_adapter),
                         state.db_tx_handles.len(),
                         state.db_tx_max_handles,
@@ -10090,6 +10192,18 @@ fn apply_lasm_dynamic_response_materialization(
                     "filters": {
                         "op": records_op_filter,
                         "db": records_db_filter,
+                        "tx": records_tx_filter,
+                        "templateContains": records_template_contains_filter,
+                    },
+                    "opCounts": {
+                        "exec": records_exec_count,
+                        "execTx": records_exec_tx_count,
+                        "queryOne": records_query_one_count,
+                    },
+                    "opCountsGlobal": {
+                        "exec": records_exec_global_count,
+                        "execTx": records_exec_tx_global_count,
+                        "queryOne": records_query_one_global_count,
                     },
                     "txHandleCount": tx_handle_count,
                     "txHandleCapacity": tx_handle_capacity,
