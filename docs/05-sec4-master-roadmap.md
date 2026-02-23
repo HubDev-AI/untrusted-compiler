@@ -1998,6 +1998,10 @@ Post-alpha track acceptance anchors:
       - `desc` mode now returns latest-first windows (with existing `limit` behavior preserved as descending take-window),
       - `filters.order` now surfaces the effective order mode in responses.
       - documented in `docs/book/1456-m39-lasm-db-records-order-filter.md`.
+   - [x] Added summary-only mode for `DbListRecordsResponse`:
+      - `/db/records` now supports `includeRecords=<true|false|1|0>` for deterministic summary-only payload control,
+      - when disabled, response keeps counts/telemetry/filters while returning `records: []`.
+      - documented in `docs/book/1457-m39-lasm-db-records-include-records-filter.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

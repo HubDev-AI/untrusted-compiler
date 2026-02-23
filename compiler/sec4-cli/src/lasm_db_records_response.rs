@@ -279,6 +279,30 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     } else {
         "asc".to_string()
     };
+    let include_records = if let Some(raw_include_records) = request.query_params.get("includeRecords")
+    {
+        let normalized = raw_include_records.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "true" | "1" => true,
+            "false" | "0" => false,
+            _ => {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records includeRecords filter must be one of true, false, 1, 0",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+        }
+    } else {
+        true
+    };
     let (
         records,
         records_total,
@@ -462,6 +486,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "idFrom": records_id_from_filter,
                 "idTo": records_id_to_filter,
                 "order": records_order_filter,
+                "includeRecords": include_records,
             },
             "opCounts": {
                 "exec": records_exec_count,
@@ -490,7 +515,11 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresTlsMode": postgres_tls_mode,
                 "sqliteBusy": sqlite_busy_timeout_ms,
             },
-            "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),
+            "records": if include_records {
+                records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>()
+            } else {
+                Vec::<serde_json::Value>::new()
+            },
         }),
     );
 }
