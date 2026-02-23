@@ -707,6 +707,21 @@ resolved_relay_queue_shard_capacity="null"
 resolved_relay_dispatch_short_circuit_total="null"
 resolved_relay_dispatch_short_circuit_per_sec="null"
 resolved_relay_live_sender_count="null"
+resolved_db_adapter=""
+resolved_db_postgres_tls_mode=""
+resolved_db_max_tx_handles="null"
+resolved_db_records_max="null"
+resolved_db_postgres_statement_cache_max="null"
+resolved_db_postgres_placeholder_cache_max="null"
+resolved_db_postgres_statement_timeout_ms="null"
+resolved_db_postgres_lock_timeout_ms="null"
+resolved_db_postgres_connect_timeout_ms="null"
+resolved_db_sqlite_busy_timeout_ms="null"
+resolved_db_sqlite_journal_mode=""
+resolved_db_sqlite_synchronous=""
+resolved_db_postgres_retryable_conflict_retry_max="null"
+resolved_db_sqlite_lock_retry_max="null"
+resolved_db_sqlite_lock_retry_delay_ms="null"
 if [ -f "$rss_peak_file" ]; then
   peak_rss_raw="$(cat "$rss_peak_file")"
   if is_number "$peak_rss_raw"; then
@@ -749,6 +764,66 @@ if [ -f "$status_json_file" ]; then
   status_relay_live_sender_count="$(jq -r '.relayLiveSenderCount // empty' "$status_json_file" 2>/dev/null || true)"
   if is_number "$status_relay_live_sender_count"; then
     resolved_relay_live_sender_count="$status_relay_live_sender_count"
+  fi
+  status_db_adapter="$(jq -r '.dbAdapter // empty' "$status_json_file" 2>/dev/null || true)"
+  if [ -n "$status_db_adapter" ]; then
+    resolved_db_adapter="$status_db_adapter"
+  fi
+  status_db_postgres_tls_mode="$(jq -r '.dbPostgresTlsMode // empty' "$status_json_file" 2>/dev/null || true)"
+  if [ -n "$status_db_postgres_tls_mode" ]; then
+    resolved_db_postgres_tls_mode="$status_db_postgres_tls_mode"
+  fi
+  status_db_max_tx_handles="$(jq -r '.dbMaxTxHandles // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_max_tx_handles"; then
+    resolved_db_max_tx_handles="$status_db_max_tx_handles"
+  fi
+  status_db_records_max="$(jq -r '.dbRecordsMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_records_max"; then
+    resolved_db_records_max="$status_db_records_max"
+  fi
+  status_db_postgres_statement_cache_max="$(jq -r '.dbPostgresStatementCacheMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_statement_cache_max"; then
+    resolved_db_postgres_statement_cache_max="$status_db_postgres_statement_cache_max"
+  fi
+  status_db_postgres_placeholder_cache_max="$(jq -r '.dbPostgresPlaceholderCacheMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_placeholder_cache_max"; then
+    resolved_db_postgres_placeholder_cache_max="$status_db_postgres_placeholder_cache_max"
+  fi
+  status_db_postgres_statement_timeout_ms="$(jq -r '.dbPostgresStatementTimeoutMs // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_statement_timeout_ms"; then
+    resolved_db_postgres_statement_timeout_ms="$status_db_postgres_statement_timeout_ms"
+  fi
+  status_db_postgres_lock_timeout_ms="$(jq -r '.dbPostgresLockTimeoutMs // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_lock_timeout_ms"; then
+    resolved_db_postgres_lock_timeout_ms="$status_db_postgres_lock_timeout_ms"
+  fi
+  status_db_postgres_connect_timeout_ms="$(jq -r '.dbPostgresConnectTimeoutMs // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_connect_timeout_ms"; then
+    resolved_db_postgres_connect_timeout_ms="$status_db_postgres_connect_timeout_ms"
+  fi
+  status_db_sqlite_busy_timeout_ms="$(jq -r '.dbSqliteBusyTimeoutMs // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_sqlite_busy_timeout_ms"; then
+    resolved_db_sqlite_busy_timeout_ms="$status_db_sqlite_busy_timeout_ms"
+  fi
+  status_db_sqlite_journal_mode="$(jq -r '.dbSqliteJournalMode // empty' "$status_json_file" 2>/dev/null || true)"
+  if [ -n "$status_db_sqlite_journal_mode" ]; then
+    resolved_db_sqlite_journal_mode="$status_db_sqlite_journal_mode"
+  fi
+  status_db_sqlite_synchronous="$(jq -r '.dbSqliteSynchronous // empty' "$status_json_file" 2>/dev/null || true)"
+  if [ -n "$status_db_sqlite_synchronous" ]; then
+    resolved_db_sqlite_synchronous="$status_db_sqlite_synchronous"
+  fi
+  status_db_postgres_retryable_conflict_retry_max="$(jq -r '.dbPostgresRetryableConflictRetryMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_postgres_retryable_conflict_retry_max"; then
+    resolved_db_postgres_retryable_conflict_retry_max="$status_db_postgres_retryable_conflict_retry_max"
+  fi
+  status_db_sqlite_lock_retry_max="$(jq -r '.dbSqliteLockRetryMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_sqlite_lock_retry_max"; then
+    resolved_db_sqlite_lock_retry_max="$status_db_sqlite_lock_retry_max"
+  fi
+  status_db_sqlite_lock_retry_delay_ms="$(jq -r '.dbSqliteLockRetryDelayMs // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_db_sqlite_lock_retry_delay_ms"; then
+    resolved_db_sqlite_lock_retry_delay_ms="$status_db_sqlite_lock_retry_delay_ms"
   fi
 fi
 
@@ -811,6 +886,21 @@ jq -n \
   --argjson resolvedRelayDispatchShortCircuitTotal "$resolved_relay_dispatch_short_circuit_total" \
   --argjson resolvedRelayDispatchShortCircuitPerSec "$resolved_relay_dispatch_short_circuit_per_sec" \
   --argjson resolvedRelayLiveSenderCount "$resolved_relay_live_sender_count" \
+  --arg resolvedDbAdapter "$resolved_db_adapter" \
+  --arg resolvedDbPostgresTlsMode "$resolved_db_postgres_tls_mode" \
+  --argjson resolvedDbMaxTxHandles "$resolved_db_max_tx_handles" \
+  --argjson resolvedDbRecordsMax "$resolved_db_records_max" \
+  --argjson resolvedDbPostgresStatementCacheMax "$resolved_db_postgres_statement_cache_max" \
+  --argjson resolvedDbPostgresPlaceholderCacheMax "$resolved_db_postgres_placeholder_cache_max" \
+  --argjson resolvedDbPostgresStatementTimeoutMs "$resolved_db_postgres_statement_timeout_ms" \
+  --argjson resolvedDbPostgresLockTimeoutMs "$resolved_db_postgres_lock_timeout_ms" \
+  --argjson resolvedDbPostgresConnectTimeoutMs "$resolved_db_postgres_connect_timeout_ms" \
+  --argjson resolvedDbSqliteBusyTimeoutMs "$resolved_db_sqlite_busy_timeout_ms" \
+  --arg resolvedDbSqliteJournalMode "$resolved_db_sqlite_journal_mode" \
+  --arg resolvedDbSqliteSynchronous "$resolved_db_sqlite_synchronous" \
+  --argjson resolvedDbPostgresRetryableConflictRetryMax "$resolved_db_postgres_retryable_conflict_retry_max" \
+  --argjson resolvedDbSqliteLockRetryMax "$resolved_db_sqlite_lock_retry_max" \
+  --argjson resolvedDbSqliteLockRetryDelayMs "$resolved_db_sqlite_lock_retry_delay_ms" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
@@ -857,7 +947,22 @@ jq -n \
       clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity,
       clusterRelayDispatchSaturationShortCircuitTotal: $resolvedRelayDispatchShortCircuitTotal,
       clusterRelayDispatchSaturationShortCircuitPerSec: $resolvedRelayDispatchShortCircuitPerSec,
-      clusterRelayLiveSenderCountResolved: $resolvedRelayLiveSenderCount
+      clusterRelayLiveSenderCountResolved: $resolvedRelayLiveSenderCount,
+      clusterDbAdapterResolved: (if $resolvedDbAdapter == "" then null else $resolvedDbAdapter end),
+      clusterDbPostgresTlsModeResolved: (if $resolvedDbPostgresTlsMode == "" then null else $resolvedDbPostgresTlsMode end),
+      clusterDbMaxTxHandlesResolved: $resolvedDbMaxTxHandles,
+      clusterDbRecordsMaxResolved: $resolvedDbRecordsMax,
+      clusterDbPostgresStatementCacheMaxResolved: $resolvedDbPostgresStatementCacheMax,
+      clusterDbPostgresPlaceholderCacheMaxResolved: $resolvedDbPostgresPlaceholderCacheMax,
+      clusterDbPostgresStatementTimeoutMsResolved: $resolvedDbPostgresStatementTimeoutMs,
+      clusterDbPostgresLockTimeoutMsResolved: $resolvedDbPostgresLockTimeoutMs,
+      clusterDbPostgresConnectTimeoutMsResolved: $resolvedDbPostgresConnectTimeoutMs,
+      clusterDbSqliteBusyTimeoutMsResolved: $resolvedDbSqliteBusyTimeoutMs,
+      clusterDbSqliteJournalModeResolved: (if $resolvedDbSqliteJournalMode == "" then null else $resolvedDbSqliteJournalMode end),
+      clusterDbSqliteSynchronousResolved: (if $resolvedDbSqliteSynchronous == "" then null else $resolvedDbSqliteSynchronous end),
+      clusterDbPostgresRetryableConflictRetryMaxResolved: $resolvedDbPostgresRetryableConflictRetryMax,
+      clusterDbSqliteLockRetryMaxResolved: $resolvedDbSqliteLockRetryMax,
+      clusterDbSqliteLockRetryDelayMsResolved: $resolvedDbSqliteLockRetryDelayMs
     },
     observed: {
       requests: $observedRequests,
