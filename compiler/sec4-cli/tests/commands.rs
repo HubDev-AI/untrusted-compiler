@@ -16187,6 +16187,18 @@ fn main() effects { net } -> Int {
         "db queryOne response should return deterministic sqlite-backed row payload and rowObject metadata:\n{query_one_response}"
     );
 
+    let query_one_returning_response = run_lasm_oneshot_request(
+        query_one_port,
+        "GET /db/query-one?template=INSERT%20INTO%20lasm_db_records%20(id%2C%20op%2C%20db%2C%20template%2C%20params%2C%20tx%2C%20affected_rows%2C%20created_at_ms)%20VALUES%20(9999%2C%20%27probe%27%2C%201%2C%20%27x%27%2C%20%270%27%2C%200%2C%200%2C%201)%20RETURNING%20id%20AS%20value&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_returning_response.contains("HTTP/1.1 200 OK")
+            && query_one_returning_response.contains("\"recordId\":4")
+            && query_one_returning_response.contains("\"op\":\"queryOne\"")
+            && query_one_returning_response.contains("\"rowObject\":{\"value\":9999}"),
+        "sqlite queryOne should support INSERT ... RETURNING row materialization deterministically:\n{query_one_returning_response}"
+    );
+
     let query_one_missing_param_response = run_lasm_oneshot_request(
         query_one_missing_param_port,
         "GET /db/query-one?template=SELECT%20%3F1&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
@@ -16207,7 +16219,7 @@ fn main() effects { net } -> Int {
         query_one_non_select_response.contains("HTTP/1.1 400 Bad Request")
             && query_one_non_select_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && query_one_non_select_response
-                .contains("sqlite queryOne requires SELECT-style SQL statement"),
+                .contains("sqlite queryOne requires row-returning SQL statement"),
         "sqlite queryOne should reject non-row-returning SQL deterministically:\n{query_one_non_select_response}"
     );
 
@@ -16232,7 +16244,7 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"count\":3")
+        list_response.contains("\"count\":5")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"sqlite\"")
             && list_response.contains("\"txHandleCount\":")
@@ -18193,6 +18205,18 @@ fn main() effects { net } -> Int {
         "db queryOne rowObject should expose boolean values"
     );
 
+    let query_one_returning_response = run_lasm_oneshot_request(
+        query_one_port,
+        "GET /db/query-one?template=INSERT%20INTO%20sec4_lasm_db_records%20(id%2C%20op%2C%20db%2C%20template%2C%20params%2C%20tx%2C%20affected_rows%2C%20created_at_ms)%20VALUES%20(9999%2C%20%27probe%27%2C%201%2C%20%27x%27%2C%20%270%27%2C%200%2C%200%2C%201)%20RETURNING%20id%20AS%20value&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_returning_response.contains("HTTP/1.1 200 OK")
+            && query_one_returning_response.contains("\"recordId\":4")
+            && query_one_returning_response.contains("\"op\":\"queryOne\"")
+            && query_one_returning_response.contains("\"rowObject\":{\"value\":9999}"),
+        "postgres queryOne should support INSERT ... RETURNING row materialization deterministically:\n{query_one_returning_response}"
+    );
+
     let missing_param_response = run_lasm_oneshot_request(
         missing_param_port,
         "GET /db/query-one?template=SELECT%20$2::int%20AS%20value&params=%5B42%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
@@ -18218,7 +18242,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         non_select_query_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
-            && non_select_query_response.contains("postgres queryOne requires SELECT-style SQL statement"),
+            && non_select_query_response.contains("postgres queryOne requires row-returning SQL statement"),
         "db queryOne non-select response should include deterministic statement-shape diagnostic:\n{non_select_query_response}"
     );
 
@@ -18247,7 +18271,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"adapter\":\"postgres\"")
-            && list_response.contains("\"count\":3")
+            && list_response.contains("\"count\":5")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"txHandleCount\":")
             && list_response.contains("\"txHandleCapacity\":")

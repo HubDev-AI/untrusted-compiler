@@ -36,6 +36,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
     }
     if message.contains("requires at least")
         || message.contains("requires SELECT-style SQL statement")
+        || message.contains("requires row-returning SQL statement")
         || message.contains("requires non-empty SQL statement")
         || message.contains("requires a single SQL statement")
     {
@@ -274,6 +275,17 @@ mod tests {
         assert_eq!(status, 409);
         assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
         assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_row_returning_shape_error_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "sqlite queryOne requires row-returning SQL statement (SELECT/WITH/VALUES/TABLE or DML ... RETURNING)",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
     }
 
     #[test]
