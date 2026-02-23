@@ -39,6 +39,9 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || message.contains("requires row-returning SQL statement")
         || message.contains("requires non-empty SQL statement")
         || message.contains("requires a single SQL statement")
+        || message.contains("requires named parameter")
+        || message.contains("requires SQL placeholders to be named")
+        || message.contains("is not present in SQL statement")
     {
         let code = match operation {
             "exec" => "DB.EXEC_INVALID",
@@ -285,6 +288,17 @@ mod tests {
         );
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_named_param_errors_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "sqlite query requires named parameter `role` in params object",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
         assert_eq!(kind, "validation");
     }
 

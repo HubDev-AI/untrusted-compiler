@@ -1890,6 +1890,11 @@ Post-alpha track acceptance anchors:
       - supported journal modes are `DELETE|TRUNCATE|PERSIST|MEMORY|WAL|OFF` and supported synchronous values are `OFF|NORMAL|FULL|EXTRA`,
       - invalid/empty env values deterministically fall back to `WAL` / `NORMAL` with runtime warning output, preserving stable defaults.
       - documented in `docs/book/1468-m39-lasm-sqlite-pragmas-env-config.md`.
+   - [x] Hardened SQLite named-parameter runtime binding contract:
+      - sqlite exec/queryOne runtime paths now resolve named params against prepared statement placeholder names (`:name`, `@name`, `$name`) instead of blindly forwarding canonicalized `:name` bindings,
+      - deterministic runtime validation now rejects missing named parameters, extra params not present in SQL template, and named-param payloads against unnamed `?` placeholders,
+      - DB runtime classification now maps these named-parameter contract failures to `400 DB.*_INVALID` validation envelopes.
+      - documented in `docs/book/1469-m39-lasm-sqlite-named-parameter-binding-contract.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,

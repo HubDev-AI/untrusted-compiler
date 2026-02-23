@@ -3,7 +3,7 @@ use rusqlite::{
     types::{Value as SqliteValue, ValueRef as SqliteValueRef},
     Connection, ToSql,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::lasm_db_adapter_state::connect_lasm_dynamic_db_records_sqlite;
 use crate::lasm_db_runtime_postgres::{
@@ -75,7 +75,7 @@ fn parse_lasm_sqlite_named_object_params(
     Some(named.into_iter().collect())
 }
 
-fn parse_lasm_sqlite_named_param_key(key: &str) -> Option<String> {
+fn normalize_lasm_sqlite_named_param_raw(key: &str) -> Option<String> {
     let trimmed = key.trim();
     if trimmed.is_empty() {
         return None;
@@ -94,6 +94,11 @@ fn parse_lasm_sqlite_named_param_key(key: &str) -> Option<String> {
     {
         return None;
     }
+    Some(raw.to_string())
+}
+
+fn parse_lasm_sqlite_named_param_key(key: &str) -> Option<String> {
+    let raw = normalize_lasm_sqlite_named_param_raw(key)?;
     Some(format!(":{raw}"))
 }
 
@@ -222,7 +227,52 @@ fn validate_lasm_sqlite_parameter_arity(
     ))
 }
 
-fn lasm_sqlite_named_param_refs(params: &[(String, SqliteValue)]) -> Vec<(&str, &dyn ToSql)> {
+fn resolve_lasm_sqlite_named_param_bindings<'a>(
+    statement: &rusqlite::Statement<'_>,
+    values: &'a [(String, SqliteValue)],
+) -> Result<Vec<(String, &'a SqliteValue)>, String> {
+    let mut provided = BTreeMap::new();
+    for (name, value) in values {
+        let raw = normalize_lasm_sqlite_named_param_raw(name.as_str())
+            .ok_or_else(|| format!("sqlite query requires valid named parameter key `{name}`"))?;
+        provided.insert(raw, value);
+    }
+
+    let mut used = BTreeSet::new();
+    let mut bindings = Vec::new();
+    for parameter_index in 1..=statement.parameter_count() {
+        let Some(parameter_name) = statement.parameter_name(parameter_index) else {
+            return Err(
+                "sqlite named parameterized execution requires SQL placeholders to be named (:name, @name, or $name)"
+                    .to_string(),
+            );
+        };
+        let Some(raw) = normalize_lasm_sqlite_named_param_raw(parameter_name) else {
+            return Err(format!(
+                "sqlite named parameterized execution requires valid named placeholder `{parameter_name}`"
+            ));
+        };
+        let Some(value) = provided.get(raw.as_str()) else {
+            return Err(format!(
+                "sqlite query requires named parameter `{raw}` in params object"
+            ));
+        };
+        used.insert(raw);
+        bindings.push((parameter_name.to_string(), *value));
+    }
+    for raw in provided.keys() {
+        if !used.contains(raw) {
+            return Err(format!(
+                "sqlite query parameter `{raw}` is not present in SQL statement"
+            ));
+        }
+    }
+    Ok(bindings)
+}
+
+fn lasm_sqlite_named_param_refs<'a>(
+    params: &'a [(String, &'a SqliteValue)],
+) -> Vec<(&'a str, &'a dyn ToSql)> {
     params
         .iter()
         .map(|(name, value)| (name.as_str(), value as &dyn ToSql))
@@ -238,7 +288,8 @@ pub(crate) fn run_lasm_sqlite_exec(
         let tx = connection
             .transaction()
             .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
-        if sqlite_params.is_empty() && has_lasm_sql_non_trailing_statement_separator(query_template) {
+        if sqlite_params.is_empty() && has_lasm_sql_non_trailing_statement_separator(query_template)
+        {
             let before_changes = tx.total_changes();
             tx.execute_batch(query_template)
                 .map_err(|err| format!("sqlite execution failed: {err}"))?;
@@ -266,7 +317,9 @@ pub(crate) fn run_lasm_sqlite_exec(
                     statement.execute(rusqlite::params_from_iter(values.iter()))
                 }
                 LasmSqliteQueryParams::Named(values) => {
-                    let named_refs = lasm_sqlite_named_param_refs(values.as_slice());
+                    let named_bindings =
+                        resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())?;
+                    let named_refs = lasm_sqlite_named_param_refs(named_bindings.as_slice());
                     statement.execute(named_refs.as_slice())
                 }
             }
@@ -282,7 +335,12 @@ pub(crate) fn run_lasm_sqlite_exec(
                             .query(rusqlite::params_from_iter(values.iter()))
                             .map_err(|err| format!("sqlite execution query failed: {err}"))?,
                         LasmSqliteQueryParams::Named(values) => {
-                            let named_refs = lasm_sqlite_named_param_refs(values.as_slice());
+                            let named_bindings = resolve_lasm_sqlite_named_param_bindings(
+                                &statement,
+                                values.as_slice(),
+                            )?;
+                            let named_refs =
+                                lasm_sqlite_named_param_refs(named_bindings.as_slice());
                             statement
                                 .query(named_refs.as_slice())
                                 .map_err(|err| format!("sqlite execution query failed: {err}"))?
@@ -355,7 +413,9 @@ pub(crate) fn run_lasm_sqlite_query_one(
                     .query(rusqlite::params_from_iter(values.iter()))
                     .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?,
                 LasmSqliteQueryParams::Named(values) => {
-                    let named_refs = lasm_sqlite_named_param_refs(values.as_slice());
+                    let named_bindings =
+                        resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())?;
+                    let named_refs = lasm_sqlite_named_param_refs(named_bindings.as_slice());
                     statement
                         .query(named_refs.as_slice())
                         .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
@@ -388,7 +448,11 @@ pub(crate) fn run_lasm_sqlite_query_one(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_lasm_sqlite_query_params, LasmSqliteQueryParams};
+    use super::{
+        parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
+        LasmSqliteQueryParams,
+    };
+    use rusqlite::Connection;
     use rusqlite::types::Value as SqliteValue;
 
     #[test]
@@ -453,5 +517,52 @@ mod tests {
             values[0],
             SqliteValue::Text("{\"user-name\":\"alice\"}".to_string())
         );
+    }
+
+    #[test]
+    fn named_bindings_match_statement_prefix_variants() {
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}");
+        let LasmSqliteQueryParams::Named(values) = params else {
+            panic!("expected named params");
+        };
+        let connection = Connection::open_in_memory().expect("sqlite in-memory connection");
+        let statement = connection
+            .prepare("SELECT :name, @role")
+            .expect("statement should prepare");
+        let bindings = resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())
+            .expect("bindings should resolve");
+        assert_eq!(bindings.len(), 2);
+        assert_eq!(bindings[0].0, ":name");
+        assert_eq!(bindings[1].0, "@role");
+    }
+
+    #[test]
+    fn named_bindings_fail_when_required_param_is_missing() {
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\"}");
+        let LasmSqliteQueryParams::Named(values) = params else {
+            panic!("expected named params");
+        };
+        let connection = Connection::open_in_memory().expect("sqlite in-memory connection");
+        let statement = connection
+            .prepare("SELECT :name, :role")
+            .expect("statement should prepare");
+        let error = resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())
+            .expect_err("missing named param should fail");
+        assert!(error.contains("requires named parameter `role` in params object"));
+    }
+
+    #[test]
+    fn named_bindings_fail_when_extra_param_is_provided() {
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}");
+        let LasmSqliteQueryParams::Named(values) = params else {
+            panic!("expected named params");
+        };
+        let connection = Connection::open_in_memory().expect("sqlite in-memory connection");
+        let statement = connection
+            .prepare("SELECT :name")
+            .expect("statement should prepare");
+        let error = resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())
+            .expect_err("extra named param should fail");
+        assert!(error.contains("query parameter `role` is not present in SQL statement"));
     }
 }

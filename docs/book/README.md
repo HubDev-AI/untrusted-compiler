@@ -1438,5 +1438,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1466-m39-lasm-sqlite-pragmas-wal-normal.md`
 - `1467-m39-lasm-accept-loop-pre-dispatch-saturated-short-circuit.md`
 - `1468-m39-lasm-sqlite-pragmas-env-config.md`
+- `1469-m39-lasm-sqlite-named-parameter-binding-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.
