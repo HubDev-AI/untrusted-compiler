@@ -2,6 +2,7 @@ use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
     ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
     load_lasm_dynamic_db_records_from_sqlite, parse_lasm_db_postgres_tls_mode,
+    resolve_lasm_db_sqlite_journal_mode, resolve_lasm_db_sqlite_synchronous,
     LasmDbPostgresTlsMode, LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
     LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT,
     LASM_DB_POSTGRES_TLS_MODE_ENV, LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
@@ -67,6 +68,8 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_postgres_connect_timeout_ms: u64,
     pub(crate) db_postgres_tls_mode: LasmDbPostgresTlsMode,
     pub(crate) db_sqlite_busy_timeout_ms: u64,
+    pub(crate) db_sqlite_journal_mode: String,
+    pub(crate) db_sqlite_synchronous: String,
     pub(crate) next_db_tx_handle: i64,
     pub(crate) next_db_record_id: u64,
 }
@@ -245,6 +248,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
             )
         });
+    let db_sqlite_journal_mode = resolve_lasm_db_sqlite_journal_mode().to_string();
+    let db_sqlite_synchronous = resolve_lasm_db_sqlite_synchronous().to_string();
     let db_postgres_tls_mode = resolve_lasm_db_postgres_tls_mode(explicit_db_postgres_tls_mode)?;
     let db_postgres_statement_cache_max = explicit_db_postgres_statement_cache_max
         .filter(|value| *value > 0)
@@ -292,8 +297,12 @@ pub(crate) fn build_lasm_dynamic_response_state(
             .as_ref()
             .map(|path| {
                 let records = load_lasm_dynamic_db_records_from_sqlite(path.as_path());
-                match connect_lasm_dynamic_db_records_sqlite(path.as_path(), db_sqlite_busy_timeout_ms)
-                {
+                match connect_lasm_dynamic_db_records_sqlite(
+                    path.as_path(),
+                    db_sqlite_busy_timeout_ms,
+                    db_sqlite_journal_mode.as_str(),
+                    db_sqlite_synchronous.as_str(),
+                ) {
                     Ok(connection) => {
                         db_records_sqlite_connection = Some(connection);
                     }
@@ -373,6 +382,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_postgres_connect_timeout_ms,
         db_postgres_tls_mode,
         db_sqlite_busy_timeout_ms,
+        db_sqlite_journal_mode,
+        db_sqlite_synchronous,
         next_db_tx_handle,
         next_db_record_id,
     })

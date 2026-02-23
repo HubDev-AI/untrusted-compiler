@@ -159,6 +159,8 @@ fn lasm_dynamic_sqlite_runtime_connection_mut(
         let connection = connect_lasm_dynamic_db_records_sqlite(
             path.as_path(),
             state.db_sqlite_busy_timeout_ms.max(1),
+            state.db_sqlite_journal_mode.as_str(),
+            state.db_sqlite_synchronous.as_str(),
         )?;
         state.db_records_sqlite_connection = Some(connection);
     }
@@ -219,6 +221,9 @@ fn validate_lasm_sqlite_parameter_arity(
     parameter_count: usize,
     provided_count: usize,
 ) -> Result<(), String> {
+    if parameter_count == 0 {
+        return Ok(());
+    }
     if provided_count < parameter_count {
         return Err(format!(
             "sqlite query requires at least {parameter_count} sql parameters but received {provided_count}"
@@ -577,5 +582,11 @@ mod tests {
         let error =
             validate_lasm_sqlite_parameter_arity(1, 2).expect_err("extra params should fail");
         assert!(error.contains("expects exactly 1 sql parameters but received 2"));
+    }
+
+    #[test]
+    fn positional_arity_validation_allows_extra_params_when_sql_has_no_placeholders() {
+        validate_lasm_sqlite_parameter_arity(0, 2)
+            .expect("zero-placeholder sql should ignore extra params for compatibility");
     }
 }

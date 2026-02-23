@@ -1911,11 +1911,13 @@ Post-alpha track acceptance anchors:
       - documented in `docs/book/1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`.
    - [x] Tightened SQLite positional parameter-count contract:
       - sqlite positional execution now rejects extra parameter payload entries instead of silently ignoring them when SQL template expects fewer placeholders,
+      - zero-placeholder SQL keeps compatibility behavior (extra params ignored),
       - deterministic runtime validation now emits `sqlite query expects exactly N sql parameters but received M` for too-many positional params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1472-m39-lasm-sqlite-positional-parameter-count-contract.md`.
    - [x] Tightened Postgres parameter-count contract to exact arity:
       - Postgres runtime (`db.exec`, `db.execTx`, `db.queryOne`) now rejects extra SQL params instead of relying on driver/runtime mismatch errors,
+      - zero-placeholder SQL keeps compatibility behavior (extra params ignored),
       - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
@@ -1938,6 +1940,11 @@ Post-alpha track acceptance anchors:
       - DB records response `dbTimeoutsMs` now includes `sqliteJournalMode` and `sqliteSynchronous` fields from effective runtime pragma resolution,
       - keeps existing DB response shape and adds operator visibility for sqlite runtime tuning values.
       - documented in `docs/book/1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`.
+   - [x] Cached effective SQLite pragma settings in LASM dynamic runtime state:
+      - sqlite journal/synchronous modes are now resolved once during dynamic-state bootstrap and stored in runtime state,
+      - sqlite connect/reconnect and `/db/records` telemetry now consume cached values instead of re-resolving env on each call,
+      - preserves existing pragma behavior while avoiding repeated env parsing and repeated invalid-env warning spam.
+      - documented in `docs/book/1479-m39-lasm-sqlite-pragma-state-cache.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,

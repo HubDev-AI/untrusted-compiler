@@ -7,8 +7,9 @@ LASM sqlite positional parameter validation now enforces exact parameter count.
 Behavior:
 
 - keeps existing “too few params” validation (`requires at least N`),
-- now also rejects “too many params” with deterministic runtime error:
+- for SQL templates with placeholders, now also rejects “too many params” with deterministic runtime error:
   - `sqlite query expects exactly N sql parameters but received M`.
+- for zero-placeholder SQL templates, existing compatibility behavior is preserved (extra params are ignored).
 
 DB runtime classification maps this arity error to deterministic `400 DB.*_INVALID`.
 

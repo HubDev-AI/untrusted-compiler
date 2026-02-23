@@ -11,8 +11,9 @@ LASM Postgres runtime arity validation now enforces exact SQL parameter count fo
 Behavior:
 
 - keeps existing “too few params” validation (`requires at least N`),
-- now also rejects extra params with deterministic runtime error:
+- for SQL templates with placeholders, now also rejects extra params with deterministic runtime error:
   - `postgres query expects exactly N sql parameters but received M`.
+- for zero-placeholder SQL templates, existing compatibility behavior is preserved (extra params are ignored).
 
 DB runtime classifier maps this arity error to deterministic `400 DB.*_INVALID`.
 
