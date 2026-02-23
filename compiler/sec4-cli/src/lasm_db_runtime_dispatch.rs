@@ -138,6 +138,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             } else {
                 None
             };
+            if let Some(Err(message)) = sqlite_params.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
@@ -190,12 +204,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = postgres_affected_rows;
                     } else if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        let sqlite_params = sqlite_params
+                            .as_ref()
+                            .expect("sqlite params should exist for sqlite adapter path")
+                            .as_ref()
+                            .expect("sqlite params should be validated before runtime execution");
                         let sqlite_affected_rows = match run_lasm_sqlite_exec(
                             &mut state,
                             template.as_str(),
-                            sqlite_params
-                                .as_ref()
-                                .expect("sqlite params should exist for sqlite adapter path"),
+                            sqlite_params,
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -379,6 +396,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             } else {
                 None
             };
+            if let Some(Err(message)) = sqlite_params.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
@@ -475,12 +506,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = postgres_affected_rows;
                     } else if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        let sqlite_params = sqlite_params
+                            .as_ref()
+                            .expect("sqlite params should exist for sqlite adapter path")
+                            .as_ref()
+                            .expect("sqlite params should be validated before runtime execution");
                         let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
                             &mut state,
                             template.as_str(),
-                            sqlite_params
-                                .as_ref()
-                                .expect("sqlite params should exist for sqlite adapter path"),
+                            sqlite_params,
                         ) {
                             Ok(value) => value,
                             Err(message) => {
@@ -655,6 +689,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             } else {
                 None
             };
+            if let Some(Err(message)) = sqlite_params.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
@@ -747,12 +795,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         return true;
                     }
                     if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        let sqlite_params = sqlite_params
+                            .as_ref()
+                            .expect("sqlite params should exist for sqlite adapter path")
+                            .as_ref()
+                            .expect("sqlite params should be validated before runtime execution");
                         let row_object = match run_lasm_sqlite_query_one(
                             &mut state,
                             template.as_str(),
-                            sqlite_params
-                                .as_ref()
-                                .expect("sqlite params should exist for sqlite adapter path"),
+                            sqlite_params,
                         ) {
                             Ok(Some(value)) => value,
                             Ok(None) => {

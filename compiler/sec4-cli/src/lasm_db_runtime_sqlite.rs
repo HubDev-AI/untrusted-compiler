@@ -47,14 +47,12 @@ impl LasmSqliteQueryParams {
 
 fn parse_lasm_sqlite_positional_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Option<Vec<SqliteValue>> {
+) -> Vec<SqliteValue> {
     let mut indexed = Vec::with_capacity(entries.len());
     let mut max_index = 0usize;
     for (key, value) in entries {
-        let index = parse_lasm_sqlite_positional_param_index(key.as_str())?;
-        if index == 0 {
-            return None;
-        }
+        let index = parse_lasm_sqlite_positional_param_index(key.as_str())
+            .expect("positional object keys should be validated before parsing");
         max_index = max_index.max(index);
         indexed.push((index, parse_lasm_sqlite_query_param_value(value.clone())));
     }
@@ -62,18 +60,19 @@ fn parse_lasm_sqlite_positional_object_params(
     for (index, value) in indexed {
         params[index - 1] = value;
     }
-    Some(params)
+    params
 }
 
 fn parse_lasm_sqlite_named_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Option<Vec<(String, SqliteValue)>> {
+) -> Vec<(String, SqliteValue)> {
     let mut named = BTreeMap::new();
     for (key, value) in entries {
-        let key = parse_lasm_sqlite_named_param_key(key.as_str())?;
+        let key = parse_lasm_sqlite_named_param_key(key.as_str())
+            .expect("named object keys should be validated before parsing");
         named.insert(key, parse_lasm_sqlite_query_param_value(value.clone()));
     }
-    Some(named.into_iter().collect())
+    named.into_iter().collect()
 }
 
 fn normalize_lasm_sqlite_named_param_raw(key: &str) -> Option<String> {
@@ -87,6 +86,9 @@ fn normalize_lasm_sqlite_named_param_raw(key: &str) -> Option<String> {
         .or_else(|| trimmed.strip_prefix('$'))
         .unwrap_or(trimmed);
     if raw.is_empty() {
+        return None;
+    }
+    if raw.chars().all(|ch| ch.is_ascii_digit()) {
         return None;
     }
     if !raw
@@ -116,37 +118,66 @@ fn parse_lasm_sqlite_positional_param_index(key: &str) -> Option<usize> {
     Some(index)
 }
 
-pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> LasmSqliteQueryParams {
+enum LasmSqliteParamsObjectKeyStyle {
+    Positional,
+    Named,
+}
+
+fn classify_lasm_sqlite_params_object_keys(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Result<LasmSqliteParamsObjectKeyStyle, String> {
+    let mut positional_all = true;
+    let mut named_all = true;
+    for key in entries.keys() {
+        positional_all &= parse_lasm_sqlite_positional_param_index(key.as_str()).is_some();
+        named_all &= parse_lasm_sqlite_named_param_key(key.as_str()).is_some();
+    }
+    if positional_all {
+        return Ok(LasmSqliteParamsObjectKeyStyle::Positional);
+    }
+    if named_all {
+        return Ok(LasmSqliteParamsObjectKeyStyle::Named);
+    }
+    Err(
+        "sqlite params object keys must be all positional ($1/?1/1) or all named (:name/@name/$name/name)"
+            .to_string(),
+    )
+}
+
+pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> Result<LasmSqliteQueryParams, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
-        return LasmSqliteQueryParams::Positional(Vec::new());
+        return Ok(LasmSqliteQueryParams::Positional(Vec::new()));
     }
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
         return match parsed {
-            serde_json::Value::Array(entries) => LasmSqliteQueryParams::Positional(
+            serde_json::Value::Array(entries) => Ok(LasmSqliteQueryParams::Positional(
                 entries
                     .into_iter()
                     .map(parse_lasm_sqlite_query_param_value)
                     .collect(),
-            ),
+            )),
             serde_json::Value::Object(entries) => {
-                if let Some(params) = parse_lasm_sqlite_positional_object_params(&entries) {
-                    LasmSqliteQueryParams::Positional(params)
-                } else if let Some(named) = parse_lasm_sqlite_named_object_params(&entries) {
-                    LasmSqliteQueryParams::Named(named)
-                } else {
-                    LasmSqliteQueryParams::Positional(vec![parse_lasm_sqlite_query_param_value(
-                        serde_json::Value::Object(entries),
-                    )])
+                match classify_lasm_sqlite_params_object_keys(&entries)? {
+                    LasmSqliteParamsObjectKeyStyle::Positional => {
+                        Ok(LasmSqliteQueryParams::Positional(
+                            parse_lasm_sqlite_positional_object_params(&entries),
+                        ))
+                    }
+                    LasmSqliteParamsObjectKeyStyle::Named => Ok(LasmSqliteQueryParams::Named(
+                        parse_lasm_sqlite_named_object_params(&entries),
+                    )),
                 }
             }
-            serde_json::Value::Null => LasmSqliteQueryParams::Positional(Vec::new()),
-            other => {
-                LasmSqliteQueryParams::Positional(vec![parse_lasm_sqlite_query_param_value(other)])
-            }
+            serde_json::Value::Null => Ok(LasmSqliteQueryParams::Positional(Vec::new())),
+            other => Ok(LasmSqliteQueryParams::Positional(vec![
+                parse_lasm_sqlite_query_param_value(other),
+            ])),
         };
     }
-    LasmSqliteQueryParams::Positional(vec![SqliteValue::Text(trimmed.to_string())])
+    Ok(LasmSqliteQueryParams::Positional(vec![SqliteValue::Text(
+        trimmed.to_string(),
+    )]))
 }
 
 fn lasm_dynamic_sqlite_runtime_connection_mut(
@@ -196,9 +227,8 @@ where
         Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
             let mut latest_message = message;
             for _ in 0..state.db_sqlite_lock_retry_max {
-                state.db_sqlite_lock_retry_attempts_total = state
-                    .db_sqlite_lock_retry_attempts_total
-                    .saturating_add(1);
+                state.db_sqlite_lock_retry_attempts_total =
+                    state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
                 if state.db_sqlite_lock_retry_delay_ms > 0 {
                     std::thread::sleep(Duration::from_millis(state.db_sqlite_lock_retry_delay_ms));
                 }
@@ -208,9 +238,8 @@ where
                 };
                 match retry {
                     Ok(value) => {
-                        state.db_sqlite_lock_retry_success_total = state
-                            .db_sqlite_lock_retry_success_total
-                            .saturating_add(1);
+                        state.db_sqlite_lock_retry_success_total =
+                            state.db_sqlite_lock_retry_success_total.saturating_add(1);
                         return Ok(value);
                     }
                     Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
@@ -495,15 +524,15 @@ pub(crate) fn run_lasm_sqlite_query_one(
 mod tests {
     use super::{
         parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
-        validate_lasm_sqlite_parameter_arity,
-        LasmSqliteQueryParams,
+        validate_lasm_sqlite_parameter_arity, LasmSqliteQueryParams,
     };
-    use rusqlite::Connection;
     use rusqlite::types::Value as SqliteValue;
+    use rusqlite::Connection;
 
     #[test]
     fn positional_object_params_expand_with_null_fill() {
-        let params = parse_lasm_sqlite_query_params("{\"2\":5}");
+        let params =
+            parse_lasm_sqlite_query_params("{\"2\":5}").expect("positional params should parse");
         let LasmSqliteQueryParams::Positional(values) = params else {
             panic!("expected positional params");
         };
@@ -514,7 +543,8 @@ mod tests {
 
     #[test]
     fn non_numeric_object_params_fall_back_to_single_text_param() {
-        let params = parse_lasm_sqlite_query_params("{\"user\":\"alice\"}");
+        let params = parse_lasm_sqlite_query_params("{\"user\":\"alice\"}")
+            .expect("named params should parse");
         let LasmSqliteQueryParams::Named(values) = params else {
             panic!("expected named params");
         };
@@ -527,7 +557,8 @@ mod tests {
 
     #[test]
     fn positional_object_params_accept_placeholder_prefixed_keys() {
-        let params = parse_lasm_sqlite_query_params("{\"?3\":7}");
+        let params =
+            parse_lasm_sqlite_query_params("{\"?3\":7}").expect("positional params should parse");
         let LasmSqliteQueryParams::Positional(values) = params else {
             panic!("expected positional params");
         };
@@ -539,7 +570,8 @@ mod tests {
 
     #[test]
     fn named_object_params_accept_prefixed_and_plain_names() {
-        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"@role\":\"admin\"}");
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"@role\":\"admin\"}")
+            .expect("named params should parse");
         let LasmSqliteQueryParams::Named(values) = params else {
             panic!("expected named params");
         };
@@ -553,21 +585,23 @@ mod tests {
     }
 
     #[test]
-    fn invalid_named_object_params_fall_back_to_single_text_param() {
-        let params = parse_lasm_sqlite_query_params("{\"user-name\":\"alice\"}");
-        let LasmSqliteQueryParams::Positional(values) = params else {
-            panic!("expected fallback positional params");
-        };
-        assert_eq!(values.len(), 1);
-        assert_eq!(
-            values[0],
-            SqliteValue::Text("{\"user-name\":\"alice\"}".to_string())
-        );
+    fn invalid_named_object_params_return_validation_error() {
+        let error = parse_lasm_sqlite_query_params("{\"user-name\":\"alice\"}")
+            .expect_err("invalid keys should fail");
+        assert!(error.contains("sqlite params object keys must be all positional"));
+    }
+
+    #[test]
+    fn mixed_object_params_return_validation_error() {
+        let error = parse_lasm_sqlite_query_params("{\"1\":\"alice\",\"name\":\"bob\"}")
+            .expect_err("mixed positional and named keys should fail");
+        assert!(error.contains("sqlite params object keys must be all positional"));
     }
 
     #[test]
     fn named_bindings_match_statement_prefix_variants() {
-        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}");
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}")
+            .expect("named params should parse");
         let LasmSqliteQueryParams::Named(values) = params else {
             panic!("expected named params");
         };
@@ -584,7 +618,8 @@ mod tests {
 
     #[test]
     fn named_bindings_fail_when_required_param_is_missing() {
-        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\"}");
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\"}")
+            .expect("named params should parse");
         let LasmSqliteQueryParams::Named(values) = params else {
             panic!("expected named params");
         };
@@ -599,7 +634,8 @@ mod tests {
 
     #[test]
     fn named_bindings_fail_when_extra_param_is_provided() {
-        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}");
+        let params = parse_lasm_sqlite_query_params("{\"name\":\"alice\",\"role\":\"admin\"}")
+            .expect("named params should parse");
         let LasmSqliteQueryParams::Named(values) = params else {
             panic!("expected named params");
         };

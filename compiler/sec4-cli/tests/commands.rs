@@ -18152,6 +18152,7 @@ fn run_command_lasm_backend_maps_sqlite_not_null_exec_to_validation() {
     let project_dir = temp_dir("sec4-run-command-lasm-sqlite-exec-validation");
     let db_base = project_dir.join("lasm-db");
     let invalid_exec_port = find_available_tcp_port();
+    let invalid_params_exec_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -18179,6 +18180,21 @@ entry = "src/main.ut"
   0
 }
 
+fn invalidParamsExec() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("exec"));
+  res.setHeader(headers.name("X-Sec4-Internal-Db"), headers.value("1"));
+  res.setHeader(
+    headers.name("X-Sec4-Internal-Db-Template"),
+    headers.value("INSERT INTO lasm_db_records (id, op, db, template, params, tx, created_at_ms) VALUES (?1, 'exec', 1, 'x', 'x', 0, 1)")
+  );
+  res.setHeader(
+    headers.name("X-Sec4-Internal-Db-Params"),
+    headers.value("{\"1\":5,\"name\":\"alice\"}")
+  );
+  res.json(200, "DbExecRuntimeResponse", 0);
+  0
+}
+
 fn dbListRecords() effects { net } -> Int {
   res.json(200, "DbListRecordsResponse", 0);
   0
@@ -18187,6 +18203,7 @@ fn dbListRecords() effects { net } -> Int {
 fn main() effects { net } -> Int {
   let router = http.router();
   http.post(router, "/db/invalid-exec", invalidExec);
+  http.post(router, "/db/invalid-params-exec", invalidParamsExec);
   http.get(router, "/db/records", dbListRecords);
   http.serve(8080, router);
   0
@@ -18297,6 +18314,20 @@ fn main() effects { net } -> Int {
     assert!(
         invalid_exec_response.contains("\"code\":\"DB.EXEC_INVALID\""),
         "sqlite invalid exec should expose deterministic DB.EXEC_INVALID code:\n{invalid_exec_response}"
+    );
+
+    let invalid_params_response = run_lasm_oneshot_request(
+        invalid_params_exec_port,
+        "POST /db/invalid-params-exec HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        invalid_params_response.contains("HTTP/1.1 400 Bad Request"),
+        "sqlite mixed params object should map to deterministic 400 validation status:\n{invalid_params_response}"
+    );
+    assert!(
+        invalid_params_response.contains("\"code\":\"DB.EXEC_INVALID\"")
+            && invalid_params_response.contains("sqlite params object keys must be all positional"),
+        "sqlite mixed params object should expose deterministic DB.EXEC_INVALID parse diagnostic:\n{invalid_params_response}"
     );
 
     let list_response = run_lasm_oneshot_request(
