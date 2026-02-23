@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I assumed the C benchmark fixture (`benchmark-suite/services/sec4`) could accept `db.*` routes like LASM; C build failed because its benchmark runtime shim does not export DB runtime symbols. | Keep DB benchmark traffic slices scoped to `benchmark-suite/services/sec4-lasm` until the C benchmark runtime adapter is explicitly extended with DB ABI functions. |
 | 2026-02-23 | self | I started this continuation with git/search commands before the mandatory standalone `.claude/napkin.md` read. | Keep a strict first-command gate on every continuation: run `cat .claude/napkin.md` alone before any git/status/search commands. |
 | 2026-02-23 | self | I repeated the same mistake and committed a new accept-loop slice directly on local `dev` before creating `codex/*`. | Keep a hard pre-commit guard (`git branch --show-current`) and never commit on `dev`; if it happens, immediately branch from the commit and continue PR flow from that branch. |
 | 2026-02-23 | self | `gh pr merge` repeatedly failed local fast-forward because local `dev` was diverged from `origin/dev` after earlier direct local commits. | Keep `dev` exact-tracking: if drift appears, preserve old branch as backup and recreate local `dev` from `origin/dev` before next PR merges. |
