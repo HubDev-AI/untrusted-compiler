@@ -1447,5 +1447,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1475-m39-lasm-db-records-limit-max-guard.md`
 - `1476-m39-lasm-db-records-pagination-metadata.md`
 - `1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`
+- `1478-m39-lasm-postgres-exec-retryable-conflict-retry.md`
 
 As milestones progress, chapters will be added and linked from this index.
