@@ -1426,5 +1426,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1454-m39-lasm-db-records-created-time-range-filters.md`
 - `1455-m39-lasm-db-records-id-range-filters.md`
 - `1456-m39-lasm-db-records-order-filter.md`
+- `1457-m39-lasm-db-records-include-records-filter.md`
 
 As milestones progress, chapters will be added and linked from this index.
