@@ -1105,6 +1105,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let row_object =
                 build_lasm_records_log_query_one_row_object(&matched_source_record, row_schema);
             let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+            if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
+                return true;
+            }
             set_lasm_json_response(
                 response,
                 200,
