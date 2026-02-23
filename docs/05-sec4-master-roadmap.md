@@ -1866,6 +1866,10 @@ Post-alpha track acceptance anchors:
       - in saturated-recently mode, accept loop now short-circuits directly to deterministic `503` saturated handling when the preferred live relay sender is already `is_full()`, before primary `try_send`/fallback dispatch attempts,
       - reduces avoidable dispatch attempt overhead during sustained queue pressure while preserving existing saturation/error semantics.
       - documented in `docs/book/1467-m39-lasm-accept-loop-pre-dispatch-saturated-short-circuit.md`.
+   - [x] Added per-connection relay IO burst caps in relay pump ticks:
+      - relay pump loops now bound per-direction nonblocking read/write bursts (`LASM_CLUSTER_RELAY_IO_BURST_MAX=4`) for client->upstream and upstream->client paths,
+      - keeps per-connection tick work finite so one busy relay session cannot monopolize worker pump cycles under mixed traffic.
+      - documented in `docs/book/1485-m39-lasm-relay-pump-io-burst-fairness-cap.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
