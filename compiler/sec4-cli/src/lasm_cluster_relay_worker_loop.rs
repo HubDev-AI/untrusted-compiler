@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use crate::lasm_cluster_accept_dispatch::{
     flush_lasm_cluster_active_connection_decrements, flush_lasm_cluster_saturation_counters,
     write_lasm_cluster_no_healthy_workers_response, write_lasm_cluster_worker_unavailable_response,
+    LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH,
 };
 use crate::lasm_cluster_backend_selection::{
     rebuild_lasm_cluster_backend_selection_lookup, rebuild_lasm_cluster_worker_backend_addrs,
@@ -19,6 +20,9 @@ use crate::lasm_cluster_runtime_config::{
     resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::{LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS};
+
+const LASM_CLUSTER_RELAY_ACTIVE_DECREMENTS_FLUSH_BATCH: usize =
+    LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH;
 
 fn initialize_lasm_cluster_relay_connection(
     client: TcpStream,
@@ -1136,7 +1140,17 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 &mut active_connection_decrements_local,
             );
 
-            if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
+            let counters_flush_due_to_batch = saturation_events_pending_local
+                >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH
+                || active_connection_decrements_local
+                    >= LASM_CLUSTER_RELAY_ACTIVE_DECREMENTS_FLUSH_BATCH;
+            let counters_flush_due_to_idle = !accepted && !progressed;
+            let counters_flush_due_to_shutdown = receiver_closed && relay_connections.is_empty();
+            if (counters_flush_due_to_batch
+                || counters_flush_due_to_idle
+                || counters_flush_due_to_shutdown)
+                && (saturation_events_pending_local > 0 || saturation_events_total_local > 0)
+            {
                 flush_lasm_cluster_saturation_counters(
                     &relay_saturation_events,
                     &relay_saturation_events_total,
@@ -1144,7 +1158,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     &mut saturation_events_total_local,
                 );
             }
-            if active_connection_decrements_local > 0 {
+            if (counters_flush_due_to_batch
+                || counters_flush_due_to_idle
+                || counters_flush_due_to_shutdown)
+                && active_connection_decrements_local > 0
+            {
                 flush_lasm_cluster_active_connection_decrements(
                     &relay_active,
                     &mut active_connection_decrements_local,
@@ -1185,6 +1203,20 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 std::thread::sleep(relay_idle_sleep_duration);
                 idle_spins = 0;
             }
+        }
+        if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
+            flush_lasm_cluster_saturation_counters(
+                &relay_saturation_events,
+                &relay_saturation_events_total,
+                &mut saturation_events_pending_local,
+                &mut saturation_events_total_local,
+            );
+        }
+        if active_connection_decrements_local > 0 {
+            flush_lasm_cluster_active_connection_decrements(
+                &relay_active,
+                &mut active_connection_decrements_local,
+            );
         }
         if last_published_relay_connections > 0 {
             relay_pump_connections_total
