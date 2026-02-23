@@ -15493,6 +15493,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"createdFromMs\":null")
             && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"idFrom\":null")
+            && list_response.contains("\"id\":null")
             && list_response.contains("\"idTo\":null")
             && list_response.contains("\"limit\":null")
             && list_response.contains("\"offset\":null")
@@ -15650,6 +15651,27 @@ fn main() effects { net } -> Int {
             && id_from_filter_response.contains("\"op\":\"queryOne\"")
             && !id_from_filter_response.contains("\"id\":1,"),
         "db records idFrom filter response should deterministically return trailing id range:\n{id_from_filter_response}"
+    );
+
+    let id_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?id=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        id_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records id filter response should contain deterministic 200 status:\n{id_filter_response}"
+    );
+    assert!(
+        id_filter_response.contains("\"count\":1")
+            && id_filter_response.contains("\"recordsTotal\":1")
+            && id_filter_response.contains("\"recordsGlobalTotal\":3")
+            && id_filter_response.contains("\"filters\":{")
+            && id_filter_response.contains("\"id\":2")
+            && id_filter_response.contains("\"op\":\"execTx\"")
+            && !id_filter_response.contains("\"id\":1,")
+            && !id_filter_response.contains("\"id\":3,"),
+        "db records id filter response should deterministically return exact id window:\n{id_filter_response}"
     );
 
     let desc_order_filter_response = run_lasm_oneshot_request(
@@ -15876,6 +15898,18 @@ fn main() effects { net } -> Int {
             && invalid_id_from_filter_response
                 .contains("db records idFrom filter must be an integer >= 1"),
         "db records invalid idFrom filter should return deterministic validation error:\n{invalid_id_from_filter_response}"
+    );
+
+    let invalid_id_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?id=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_id_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_id_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_id_filter_response.contains("db records id filter must be an integer >= 1"),
+        "db records invalid id filter should return deterministic validation error:\n{invalid_id_filter_response}"
     );
 
     let invalid_id_range_filter_response = run_lasm_oneshot_request(

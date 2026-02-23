@@ -264,6 +264,28 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     } else {
         None
     };
+    let records_id_filter = if let Some(raw_id) = request.query_params.get("id") {
+        let trimmed = raw_id.trim();
+        match trimmed.parse::<u64>() {
+            Ok(value) if value >= 1 => Some(value),
+            _ => {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records id filter must be an integer >= 1",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
     let records_id_to_filter = if let Some(raw_id_to) = request.query_params.get("idTo") {
         let trimmed = raw_id_to.trim();
         match trimmed.parse::<u64>() {
@@ -474,6 +496,9 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                         && records_id_from_filter
                             .map(|id_from| record.id >= id_from)
                             .unwrap_or(true)
+                        && records_id_filter
+                            .map(|id| record.id == id)
+                            .unwrap_or(true)
                         && records_id_to_filter
                             .map(|id_to| record.id <= id_to)
                             .unwrap_or(true)
@@ -644,6 +669,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "createdFromMs": records_created_from_ms_filter,
                 "createdToMs": records_created_to_ms_filter,
                 "idFrom": records_id_from_filter,
+                "id": records_id_filter,
                 "idTo": records_id_to_filter,
                 "limit": records_limit,
                 "offset": records_offset,

@@ -1931,6 +1931,11 @@ Post-alpha track acceptance anchors:
       - `offset` is now echoed in response filter metadata,
       - invalid offset values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
       - documented in `docs/book/1474-m39-lasm-db-records-offset-filter.md`.
+   - [x] Added exact `id` filter support for `/db/records`:
+      - list-records response now accepts `id` (`>= 1`) for deterministic single-record slicing,
+      - `id` is now echoed in filter metadata alongside `idFrom`/`idTo`,
+      - invalid id values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1481-m39-lasm-db-records-id-filter.md`.
    - [x] Added bounded `limit` guard for `/db/records` payload sizing:
       - list-records `limit` now accepts only integer values in `[1..1000]`,
       - invalid limit values return deterministic `400 DB.RECORDS_LIMIT_INVALID`,
