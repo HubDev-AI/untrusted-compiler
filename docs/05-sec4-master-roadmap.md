@@ -1984,6 +1984,11 @@ Post-alpha track acceptance anchors:
       - `/db/records` summary now includes `affectedRowsFilteredTotal` (all records after filters, before limit window) and `affectedRowsGlobalTotal` (all retained records),
       - existing `affectedRowsTotal` field is preserved as response-window total for backward compatibility.
       - documented in `docs/book/1452-m39-lasm-db-records-affected-rows-filtered-global.md`.
+   - [x] Added timestamp-window filters to `DbListRecordsResponse`:
+      - `/db/records` now supports `createdFromMs` and `createdToMs` filters with deterministic integer/range validation,
+      - `filters` metadata now surfaces both timestamp filters in list responses,
+      - invalid timestamp values/ranges return deterministic `DB.RECORDS_FILTER_INVALID` envelopes.
+      - documented in `docs/book/1454-m39-lasm-db-records-created-time-range-filters.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

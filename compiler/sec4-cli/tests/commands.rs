@@ -15487,6 +15487,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"db\":null")
             && list_response.contains("\"tx\":null")
             && list_response.contains("\"templateContains\":null")
+            && list_response.contains("\"createdFromMs\":null")
+            && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"opCounts\":{")
             && list_response.contains("\"exec\":1")
             && list_response.contains("\"execTx\":1")
@@ -15594,6 +15596,24 @@ fn main() effects { net } -> Int {
         "db records tx-filter response should deterministically exclude tx-backed execTx records:\n{tx_filtered_list_response}"
     );
 
+    let created_to_zero_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?createdToMs=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        created_to_zero_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records createdToMs filter response should contain deterministic 200 status:\n{created_to_zero_filter_response}"
+    );
+    assert!(
+        created_to_zero_filter_response.contains("\"count\":0")
+            && created_to_zero_filter_response.contains("\"recordsTotal\":0")
+            && created_to_zero_filter_response.contains("\"recordsGlobalTotal\":3")
+            && created_to_zero_filter_response.contains("\"filters\":{")
+            && created_to_zero_filter_response.contains("\"createdToMs\":0"),
+        "db records createdToMs filter response should deterministically return empty time-window set:\n{created_to_zero_filter_response}"
+    );
+
     let invalid_filter_response = run_lasm_oneshot_request(
         list_port,
         "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
@@ -15644,6 +15664,34 @@ fn main() effects { net } -> Int {
             && invalid_template_contains_filter_response
                 .contains("db records templateContains filter must be a non-empty string"),
         "db records invalid templateContains filter should return deterministic validation error:\n{invalid_template_contains_filter_response}"
+    );
+
+    let invalid_created_from_ms_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?createdFromMs=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_created_from_ms_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_created_from_ms_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_created_from_ms_filter_response
+                .contains("db records createdFromMs filter must be an integer >= 0"),
+        "db records invalid createdFromMs filter should return deterministic validation error:\n{invalid_created_from_ms_filter_response}"
+    );
+
+    let invalid_created_range_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?createdFromMs=2&createdToMs=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_created_range_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_created_range_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_created_range_filter_response
+                .contains("db records createdFromMs filter must be <= createdToMs"),
+        "db records invalid created-range filter should return deterministic validation error:\n{invalid_created_range_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
