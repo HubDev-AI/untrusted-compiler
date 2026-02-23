@@ -415,6 +415,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let (
         records,
         records_total,
+        records_has_more,
+        records_next_offset,
         records_global_total,
         records_capacity,
         records_dropped_total,
@@ -548,9 +550,28 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             let affected_rows_total = records
                 .iter()
                 .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
+            let records_has_more = if records_limit.is_some() {
+                if records_order_filter == "desc" {
+                    offset.saturating_add(records.len()) < total
+                } else {
+                    total
+                        .saturating_sub(offset)
+                        .saturating_sub(records.len())
+                        > 0
+                }
+            } else {
+                false
+            };
+            let records_next_offset = if records_has_more {
+                Some(offset.saturating_add(records.len()))
+            } else {
+                None
+            };
             (
                 records,
                 total,
+                records_has_more,
+                records_next_offset,
                 state.db_records.len(),
                 state.db_records_max,
                 state.db_records_dropped_total,
@@ -601,6 +622,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             "ok": true,
             "count": records.len(),
             "recordsTotal": records_total,
+            "hasMore": records_has_more,
+            "nextOffset": records_next_offset,
             "recordsGlobalTotal": records_global_total,
             "recordsCapacity": records_capacity,
             "recordsDroppedTotal": records_dropped_total,

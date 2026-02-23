@@ -15476,6 +15476,8 @@ fn main() effects { net } -> Int {
     assert!(
         list_response.contains("\"count\":3")
             && list_response.contains("\"recordsTotal\":3")
+            && list_response.contains("\"hasMore\":false")
+            && list_response.contains("\"nextOffset\":null")
             && list_response.contains("\"recordsGlobalTotal\":3")
             && list_response.contains("\"recordsCapacity\":")
             && list_response.contains("\"recordsDroppedTotal\":")
@@ -15532,6 +15534,8 @@ fn main() effects { net } -> Int {
     assert!(
         limited_list_response.contains("\"count\":2")
             && limited_list_response.contains("\"recordsTotal\":3")
+            && limited_list_response.contains("\"hasMore\":true")
+            && limited_list_response.contains("\"nextOffset\":2")
             && limited_list_response.contains("\"recordsGlobalTotal\":3")
             && limited_list_response.contains("\"limit\":2")
             && limited_list_response.contains("\"records\":")
@@ -15683,6 +15687,8 @@ fn main() effects { net } -> Int {
     assert!(
         desc_offset_limit_filter_response.contains("\"count\":1")
             && desc_offset_limit_filter_response.contains("\"recordsTotal\":3")
+            && desc_offset_limit_filter_response.contains("\"hasMore\":true")
+            && desc_offset_limit_filter_response.contains("\"nextOffset\":2")
             && desc_offset_limit_filter_response.contains("\"offset\":1")
             && desc_offset_limit_filter_response.contains("\"order\":\"desc\"")
             && desc_offset_limit_filter_response.contains("\"op\":\"execTx\"")
