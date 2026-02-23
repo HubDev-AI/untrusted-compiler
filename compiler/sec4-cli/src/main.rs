@@ -70,7 +70,8 @@ use lasm_cluster_runtime_config::{
     lasm_cluster_relay_accept_batch_max, lasm_cluster_relay_pump_batch_max,
     lasm_cluster_selection_reservation_min_chunk, resolve_lasm_cluster_relay_accept_batch_max,
     resolve_lasm_cluster_relay_buffer_bytes, resolve_lasm_cluster_relay_buffer_pool_max,
-    resolve_lasm_cluster_relay_buffer_pool_prewarm, resolve_lasm_cluster_relay_pump_batch_max,
+    resolve_lasm_cluster_relay_buffer_pool_prewarm, resolve_lasm_cluster_relay_io_burst_max,
+    resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
@@ -7947,6 +7948,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_selection_reservation_min_chunk =
         lasm_cluster_selection_reservation_min_chunk(shared_config.as_ref());
     let relay_buffer_bytes = resolve_lasm_cluster_relay_buffer_bytes();
+    let relay_io_burst_max = resolve_lasm_cluster_relay_io_burst_max();
     let relay_buffer_pool_max = resolve_lasm_cluster_relay_buffer_pool_max(relay_accept_batch_max);
     let relay_buffer_pool_prewarm =
         resolve_lasm_cluster_relay_buffer_pool_prewarm(relay_buffer_pool_max);
@@ -7988,6 +7990,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             relay_pump_batch_max,
             relay_selection_reservation_min_chunk,
             relay_buffer_bytes,
+            relay_io_burst_max,
             relay_buffer_pool_max,
             relay_buffer_pool_prewarm,
             Arc::clone(&relay_pump_connections_total),
@@ -8017,6 +8020,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_queue_capacity,
         relay_queue_shard_capacity,
         relay_buffer_bytes,
+        relay_io_burst_max,
         relay_buffer_pool_max,
         relay_buffer_pool_prewarm,
         relay_accept_worker_count,

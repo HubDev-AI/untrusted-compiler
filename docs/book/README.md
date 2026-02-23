@@ -1455,5 +1455,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1483-m39-lasm-db-records-ops-filter.md`
 - `1484-m39-lasm-sqlite-lock-retry-runtime-controls.md`
 - `1485-m39-lasm-relay-pump-io-burst-fairness-cap.md`
+- `1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`
 
 As milestones progress, chapters will be added and linked from this index.

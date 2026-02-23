@@ -23,6 +23,7 @@ fn initialize_lasm_cluster_relay_connection(
     client: TcpStream,
     upstream: TcpStream,
     relay_buffer_bytes: usize,
+    relay_io_burst_max: usize,
     relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     pump_warning_next_allowed: &mut Option<Instant>,
@@ -39,9 +40,10 @@ fn initialize_lasm_cluster_relay_connection(
                 client_to_upstream,
                 upstream_to_client,
                 relay_buffer_bytes,
+                relay_io_burst_max,
             )
         } else {
-            LasmClusterRelayPump::new(client, upstream, relay_buffer_bytes)
+            LasmClusterRelayPump::new(client, upstream, relay_buffer_bytes, relay_io_burst_max)
         };
     match relay_result {
         Ok(relay) => relay_connections.push(relay),
@@ -355,6 +357,7 @@ fn try_lasm_cluster_relay_fallback_connect(
     relay_backend_connect_timeout: Duration,
     fallback_client: &mut Option<TcpStream>,
     relay_buffer_bytes: usize,
+    relay_io_burst_max: usize,
     relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     pump_warning_next_allowed: &mut Option<Instant>,
@@ -377,6 +380,7 @@ fn try_lasm_cluster_relay_fallback_connect(
                 client_for_fallback,
                 upstream,
                 relay_buffer_bytes,
+                relay_io_burst_max,
                 relay_buffer_pool,
                 relay_connections,
                 pump_warning_next_allowed,
@@ -507,6 +511,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_pump_batch_max: usize,
     relay_selection_reservation_min_chunk: usize,
     relay_buffer_bytes: usize,
+    relay_io_burst_max: usize,
     relay_buffer_pool_max: usize,
     relay_buffer_pool_prewarm: usize,
     relay_pump_connections_total: Arc<AtomicUsize>,
@@ -800,6 +805,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             client,
                             upstream,
                             relay_buffer_bytes,
+                            relay_io_burst_max,
                             &mut relay_buffer_pool,
                             &mut relay_connections,
                             &mut pump_warning_next_allowed,
@@ -861,6 +867,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         relay_backend_connect_timeout,
                                         &mut fallback_client,
                                         relay_buffer_bytes,
+                                        relay_io_burst_max,
                                         &mut relay_buffer_pool,
                                         &mut relay_connections,
                                         &mut pump_warning_next_allowed,
@@ -893,6 +900,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                 relay_backend_connect_timeout,
                                                 &mut fallback_client,
                                                 relay_buffer_bytes,
+                                                relay_io_burst_max,
                                                 &mut relay_buffer_pool,
                                                 &mut relay_connections,
                                                 &mut pump_warning_next_allowed,
@@ -953,6 +961,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                 relay_backend_connect_timeout,
                                                 &mut fallback_client,
                                                 relay_buffer_bytes,
+                                                relay_io_burst_max,
                                                 &mut relay_buffer_pool,
                                                 &mut relay_connections,
                                                 &mut pump_warning_next_allowed,
