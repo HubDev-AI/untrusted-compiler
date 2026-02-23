@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::lasm_cluster_relay_pump::{
-    default_lasm_cluster_relay_buffer_bytes, default_lasm_cluster_relay_io_burst_max,
+    default_lasm_cluster_relay_buffer_bytes, default_lasm_cluster_relay_idle_backoff_max,
+    default_lasm_cluster_relay_io_burst_max,
 };
 use crate::{
     LasmClusterConfig, LasmClusterState, LASM_CLUSTER_IDLE_SLEEP_MICROS,
@@ -105,6 +106,17 @@ pub(crate) fn resolve_lasm_cluster_relay_io_burst_max() -> usize {
         default_value as u64,
         1,
         64,
+    );
+    usize::try_from(value).unwrap_or(default_value)
+}
+
+pub(crate) fn resolve_lasm_cluster_relay_idle_backoff_max() -> usize {
+    let default_value = default_lasm_cluster_relay_idle_backoff_max();
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX",
+        default_value as u64,
+        0,
+        32,
     );
     usize::try_from(value).unwrap_or(default_value)
 }

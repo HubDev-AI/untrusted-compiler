@@ -1456,5 +1456,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1484-m39-lasm-sqlite-lock-retry-runtime-controls.md`
 - `1485-m39-lasm-relay-pump-io-burst-fairness-cap.md`
 - `1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`
+- `1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`
 
 As milestones progress, chapters will be added and linked from this index.

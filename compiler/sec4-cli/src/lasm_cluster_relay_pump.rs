@@ -7,6 +7,9 @@ const LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX: usize = 1024 * 1024;
 const LASM_CLUSTER_RELAY_IO_BURST_MAX_DEFAULT: usize = 4;
 const LASM_CLUSTER_RELAY_IO_BURST_MAX_MIN: usize = 1;
 const LASM_CLUSTER_RELAY_IO_BURST_MAX_MAX: usize = 64;
+const LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_DEFAULT: usize = 1;
+const LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_MIN: usize = 0;
+const LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_MAX: usize = 32;
 
 pub(crate) enum LasmClusterRelayPumpStep {
     Progressed,
@@ -28,6 +31,8 @@ pub(crate) struct LasmClusterRelayPump {
     client_write_closed: bool,
     upstream_write_closed: bool,
     io_burst_max: usize,
+    idle_backoff_max: u8,
+    idle_backoff_remaining: u8,
 }
 
 impl LasmClusterRelayPump {
@@ -36,6 +41,7 @@ impl LasmClusterRelayPump {
         upstream: TcpStream,
         relay_buffer_bytes: usize,
         relay_io_burst_max: usize,
+        relay_idle_backoff_max: usize,
     ) -> Result<Self, String> {
         let buffer_bytes = relay_buffer_bytes.clamp(
             LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
@@ -48,6 +54,7 @@ impl LasmClusterRelayPump {
             vec![0_u8; buffer_bytes],
             buffer_bytes,
             relay_io_burst_max,
+            relay_idle_backoff_max,
         )
     }
 
@@ -58,6 +65,7 @@ impl LasmClusterRelayPump {
         mut upstream_to_client: Vec<u8>,
         relay_buffer_bytes: usize,
         relay_io_burst_max: usize,
+        relay_idle_backoff_max: usize,
     ) -> Result<Self, String> {
         let buffer_bytes = relay_buffer_bytes.clamp(
             LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
@@ -66,6 +74,13 @@ impl LasmClusterRelayPump {
         let io_burst_max = relay_io_burst_max
             .max(LASM_CLUSTER_RELAY_IO_BURST_MAX_MIN)
             .min(LASM_CLUSTER_RELAY_IO_BURST_MAX_MAX);
+        let idle_backoff_max = relay_idle_backoff_max
+            .clamp(
+                LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_MIN,
+                LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_MAX,
+            )
+            .try_into()
+            .unwrap_or(0_u8);
         client
             .set_nonblocking(true)
             .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
@@ -92,10 +107,17 @@ impl LasmClusterRelayPump {
             client_write_closed: false,
             upstream_write_closed: false,
             io_burst_max,
+            idle_backoff_max,
+            idle_backoff_remaining: 0,
         })
     }
 
     pub(crate) fn pump_once(&mut self) -> Result<LasmClusterRelayPumpStep, String> {
+        if self.idle_backoff_remaining > 0 {
+            self.idle_backoff_remaining -= 1;
+            return Ok(LasmClusterRelayPumpStep::Idle);
+        }
+
         let mut progressed = false;
 
         let mut client_read_burst = 0usize;
@@ -227,8 +249,12 @@ impl LasmClusterRelayPump {
         }
 
         if progressed {
+            self.idle_backoff_remaining = 0;
             Ok(LasmClusterRelayPumpStep::Progressed)
         } else {
+            if self.idle_backoff_max > 0 {
+                self.idle_backoff_remaining = self.idle_backoff_max;
+            }
             Ok(LasmClusterRelayPumpStep::Idle)
         }
     }
@@ -244,4 +270,8 @@ pub(crate) fn default_lasm_cluster_relay_buffer_bytes() -> usize {
 
 pub(crate) fn default_lasm_cluster_relay_io_burst_max() -> usize {
     LASM_CLUSTER_RELAY_IO_BURST_MAX_DEFAULT
+}
+
+pub(crate) fn default_lasm_cluster_relay_idle_backoff_max() -> usize {
+    LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX_DEFAULT
 }
