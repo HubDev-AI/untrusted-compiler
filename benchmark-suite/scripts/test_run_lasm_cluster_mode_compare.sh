@@ -5,6 +5,7 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
 out="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
   --dry-run \
+  --profile ping \
   --project-path examples/lasm-alpha-full \
   --request-path /health \
   --request-header 'Authorization: Bearer token123' \
@@ -27,6 +28,11 @@ out="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
   --cluster-accept-workers 4 \
   --cluster-relay-accept-batch-max 321 \
   --cluster-relay-pump-batch-max 654 \
+  --db-query-one-row-max-bytes 1001 \
+  --db-query-one-row-max-columns 1002 \
+  --db-sql-template-max-bytes 1003 \
+  --db-params-max-bytes 1004 \
+  --db-params-max-entries 1005 \
   --build-profile debug \
   --samples 3 \
   --wrk-processes 4 \
@@ -37,6 +43,10 @@ out="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
 
 if ! grep -q 'sec4 LASM cluster mode compare plan:' <<<"$out"; then
   echo "mode compare dry-run missing plan header" >&2
+  exit 1
+fi
+if ! grep -q 'profile=ping' <<<"$out"; then
+  echo "mode compare dry-run missing profile marker" >&2
   exit 1
 fi
 if ! grep -q "proxyOut=${root_dir}/results/summaries/custom-lasm-mode-compare-proxy.json" <<<"$out"; then
@@ -55,6 +65,14 @@ if ! grep -q 'clusterRelayWorkers=9' <<<"$out"; then
   echo "mode compare dry-run missing proxy relay workers passthrough" >&2
   exit 1
 fi
+if ! grep -q 'dbQueryOneRowMaxBytes=1001' <<<"$out"; then
+  echo "mode compare dry-run missing db-query-one-row-max-bytes passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'dbParamsMaxEntries=1005' <<<"$out"; then
+  echo "mode compare dry-run missing db-params-max-entries passthrough" >&2
+  exit 1
+fi
 if ! grep -q 'buildProfile=debug' <<<"$out"; then
   echo "mode compare dry-run missing build profile marker" >&2
   exit 1
@@ -69,6 +87,27 @@ if ! grep -q 'wrkProcesses=4' <<<"$out"; then
 fi
 if ! grep -q 'fixedReusePortMode=true' <<<"$out"; then
   echo "mode compare dry-run missing delegated fixed reuse-port mode marker" >&2
+  exit 1
+fi
+out_db_query_profile="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
+  --dry-run \
+  --profile db-hot-query-one \
+  --port 19095 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-query-one' <<<"$out_db_query_profile"; then
+  echo "mode compare db query-one dry-run missing profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'projectPath=benchmark-suite/services/sec4-lasm' <<<"$out_db_query_profile"; then
+  echo "mode compare db query-one dry-run missing default project path" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_query_profile"; then
+  echo "mode compare db query-one dry-run missing default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
+  echo "mode compare db query-one dry-run missing default warmup path" >&2
   exit 1
 fi
 
@@ -87,6 +126,14 @@ if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --cluster-re
 fi
 if ! grep -q "cluster-relay-pump-batch-max must be numeric" /tmp/lasm-mode-compare-invalid-pump.log; then
   echo "mode compare missing invalid relay pump batch diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --db-query-one-row-max-bytes nope >/tmp/lasm-mode-compare-invalid-db-query-row-bytes.log 2>&1; then
+  echo "mode compare accepted invalid db-query-one-row-max-bytes value" >&2
+  exit 1
+fi
+if ! grep -q "db-query-one-row-max-bytes must be numeric" /tmp/lasm-mode-compare-invalid-db-query-row-bytes.log; then
+  echo "mode compare missing invalid db-query-one-row-max-bytes diagnostic" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --samples 0 >/tmp/lasm-mode-compare-invalid-samples.log 2>&1; then
@@ -119,6 +166,14 @@ if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --build-prof
 fi
 if ! grep -q "build-profile must be one of: debug, release" /tmp/lasm-mode-compare-invalid-profile.log; then
   echo "mode compare missing invalid build profile diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --profile nope >/tmp/lasm-mode-compare-invalid-run-profile.log 2>&1; then
+  echo "mode compare accepted invalid profile value" >&2
+  exit 1
+fi
+if ! grep -q "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one, db-hot-postgres-query-one" /tmp/lasm-mode-compare-invalid-run-profile.log; then
+  echo "mode compare missing invalid profile diagnostic" >&2
   exit 1
 fi
 
