@@ -340,10 +340,37 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
+                        if listener_all_senders_saturated_recently && relay_single_sender.is_full()
+                        {
+                            if let Err(message) =
+                                handle_lasm_cluster_accept_dispatch_error_with_counters(
+                                    LasmClusterRelayDispatchError::Saturated(client_stream),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    relay_dispatch_short_circuit_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_dispatch_counters,
+                                )
+                            {
+                                return Err(message);
+                            }
+                            listener_dispatch_counters
+                                .listener_dispatch_short_circuit_total_local += 1;
+                            listener_all_senders_saturated_recently = true;
+                            continue;
+                        }
                         if let Err(dispatch_error) = attempt_lasm_cluster_relay_send_single(
                             client_stream,
                             relay_single_sender,
                         ) {
+                            if matches!(dispatch_error, LasmClusterRelayDispatchError::Saturated(_))
+                            {
+                                listener_all_senders_saturated_recently = true;
+                            } else {
+                                listener_all_senders_saturated_recently = false;
+                            }
                             if let Err(message) =
                                 handle_lasm_cluster_accept_dispatch_error_with_counters(
                                     dispatch_error,
@@ -360,6 +387,7 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                             }
                         } else {
                             listener_enqueued_local += 1;
+                            listener_all_senders_saturated_recently = false;
                         }
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
