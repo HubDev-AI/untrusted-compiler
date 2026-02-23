@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | `gh pr merge` repeatedly failed local fast-forward because local `dev` was diverged from `origin/dev` after earlier direct local commits. | Keep `dev` exact-tracking: if drift appears, preserve old branch as backup and recreate local `dev` from `origin/dev` before next PR merges. |
 | 2026-02-23 | self | After merging PR #704 I forgot the post-merge branch gate and committed the next telemetry slice directly on local `dev`. | After every merge, run `git branch --show-current` and create the next `codex/*` branch before editing or committing any new slice. |
 | 2026-02-23 | self | I accidentally triggered `web.run` during a local-only LASM relay telemetry coding slice. | Keep LASM/compiler implementation turns strictly on local tooling (`exec_command`, `apply_patch`) and avoid web tools unless external research is explicitly required. |
 | 2026-02-23 | self | I ran `rg -n "- [ ]"` without `-e/--`, so ripgrep parsed the pattern as a flag and failed. | For patterns that start with `-`, always pass `-e "<pattern>"` (or `--`) so the pattern is not interpreted as a flag. |
