@@ -27855,6 +27855,20 @@ fn main() effects { net } -> Int {
     );
     assert!(
         first_status
+            .get("relayPumpConnections")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayPumpConnections"
+    );
+    assert!(
+        first_status
+            .get("relayBufferPoolEntries")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include relayBufferPoolEntries"
+    );
+    assert!(
+        first_status
             .get("reusablePortsCount")
             .and_then(serde_json::Value::as_u64)
             .is_some(),

@@ -35,6 +35,8 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_dispatch_saturation_short_circuit_total: u64,
     pub(crate) relay_dispatch_saturation_short_circuit_per_sec: f64,
     pub(crate) relay_live_sender_count: usize,
+    pub(crate) relay_pump_connections: usize,
+    pub(crate) relay_buffer_pool_entries: usize,
     pub(crate) reusable_ports_count: usize,
     pub(crate) autoscale_desired_instances: usize,
     pub(crate) autoscale_last_saturation_events: usize,
@@ -78,6 +80,8 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_dispatch_saturation_short_circuit_per_sec
                 == other.relay_dispatch_saturation_short_circuit_per_sec
             && self.relay_live_sender_count == other.relay_live_sender_count
+            && self.relay_pump_connections == other.relay_pump_connections
+            && self.relay_buffer_pool_entries == other.relay_buffer_pool_entries
             && self.reusable_ports_count == other.reusable_ports_count
             && self.autoscale_desired_instances == other.autoscale_desired_instances
             && self.autoscale_last_saturation_events == other.autoscale_last_saturation_events
@@ -123,6 +127,8 @@ struct LasmClusterStatusPayload<'a> {
     relay_dispatch_saturation_short_circuit_total: u64,
     relay_dispatch_saturation_short_circuit_per_sec: f64,
     relay_live_sender_count: usize,
+    relay_pump_connections: usize,
+    relay_buffer_pool_entries: usize,
     reusable_ports_count: usize,
     autoscale_desired_instances: usize,
     autoscale_last_saturation_events: usize,
@@ -206,6 +212,8 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_dispatch_saturation_short_circuit_per_sec: snapshot
             .relay_dispatch_saturation_short_circuit_per_sec,
         relay_live_sender_count: snapshot.relay_live_sender_count,
+        relay_pump_connections: snapshot.relay_pump_connections,
+        relay_buffer_pool_entries: snapshot.relay_buffer_pool_entries,
         reusable_ports_count: snapshot.reusable_ports_count,
         autoscale_desired_instances: snapshot.autoscale_desired_instances,
         autoscale_last_saturation_events: snapshot.autoscale_last_saturation_events,

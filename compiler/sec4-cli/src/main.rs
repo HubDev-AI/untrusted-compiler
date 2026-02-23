@@ -7863,6 +7863,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_dispatch_fallback_total = Arc::new(AtomicU64::new(0));
     let relay_dispatch_saturation_short_circuit_total = Arc::new(AtomicU64::new(0));
     let relay_live_sender_count = Arc::new(AtomicUsize::new(relay_worker_count));
+    let relay_pump_connections_total = Arc::new(AtomicUsize::new(0));
+    let relay_buffer_pool_entries_total = Arc::new(AtomicUsize::new(0));
     let relay_backend_connect_timeout =
         lasm_cluster_backend_connect_timeout(shared_config.as_ref());
     let relay_backend_connect_cooldown =
@@ -7885,6 +7887,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             relay_buffer_bytes,
             relay_buffer_pool_max,
             relay_buffer_pool_prewarm,
+            Arc::clone(&relay_pump_connections_total),
+            Arc::clone(&relay_buffer_pool_entries_total),
         ));
     }
 
@@ -7917,6 +7921,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             &relay_dispatch_saturation_short_circuit_total,
         ),
         relay_live_sender_count: Arc::clone(&relay_live_sender_count),
+        relay_pump_connections_total: Arc::clone(&relay_pump_connections_total),
+        relay_buffer_pool_entries_total: Arc::clone(&relay_buffer_pool_entries_total),
         reusable_ports_count: Arc::clone(&reusable_ports_count),
         autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
         autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),

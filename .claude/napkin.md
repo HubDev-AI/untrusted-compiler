@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I accidentally triggered `web.run` during a local-only LASM relay telemetry coding slice. | Keep LASM/compiler implementation turns strictly on local tooling (`exec_command`, `apply_patch`) and avoid web tools unless external research is explicitly required. |
 | 2026-02-23 | self | I ran `rg -n "- [ ]"` without `-e/--`, so ripgrep parsed the pattern as a flag and failed. | For patterns that start with `-`, always pass `-e "<pattern>"` (or `--`) so the pattern is not interpreted as a flag. |
 | 2026-02-23 | self | I accidentally triggered `web.run` while continuing a local-only LASM implementation loop. | Keep local coding turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tools unless external research is explicitly required. |
 | 2026-02-23 | self | In relay-buffer tuning I initially wrapped resolved env value with `.max(default)`, accidentally blocking lower buffer-size tuning and conflicting with the documented clamp range. | When adding runtime tuning knobs, keep resolver return value authoritative (clamped once in resolver), and avoid secondary min/max overrides in call sites unless explicitly documented. |
