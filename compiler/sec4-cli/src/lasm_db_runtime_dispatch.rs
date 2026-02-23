@@ -152,33 +152,32 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             }
+            if let Some(Err(message)) = postgres_preparsed.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     let mut affected_rows = 0u64;
                     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match postgres_preparsed
+                        let (postgres_template, postgres_params) = postgres_preparsed
                             .as_ref()
                             .expect("postgres preparse should exist for postgres adapter path")
-                        {
-                            Ok((rewritten_template, parsed_params)) => {
-                                (rewritten_template.as_str(), parsed_params.as_slice())
-                            }
-                            Err(message) => {
-                                set_lasm_json_response(
-                                    response,
-                                    400,
-                                    &lasm_error_envelope(
-                                        "DB.EXEC_INVALID",
-                                        "validation",
-                                        message.as_str(),
-                                        400,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            }
-                        };
+                            .as_ref()
+                            .expect("postgres params should be validated before runtime execution");
+                        let (postgres_template, postgres_params) =
+                            (postgres_template.as_str(), postgres_params.as_slice());
                         let postgres_affected_rows = match run_lasm_postgres_exec(
                             &mut state,
                             postgres_template,
@@ -410,6 +409,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             }
+            if let Some(Err(message)) = postgres_preparsed.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
@@ -453,31 +466,13 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     };
                     let mut affected_rows = 0u64;
                     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match postgres_preparsed
+                        let (postgres_template, postgres_params) = postgres_preparsed
                             .as_ref()
                             .expect("postgres preparse should exist for postgres adapter path")
-                        {
-                            Ok((rewritten_template, parsed_params)) => {
-                                (rewritten_template.as_str(), parsed_params.as_slice())
-                            }
-                            Err(message) => {
-                                if let Some(tx_handle) = allocated_tx_handle {
-                                    state.db_tx_handles.remove(&tx_handle);
-                                }
-                                set_lasm_json_response(
-                                    response,
-                                    400,
-                                    &lasm_error_envelope(
-                                        "DB.EXEC_TX_INVALID",
-                                        "validation",
-                                        message.as_str(),
-                                        400,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            }
-                        };
+                            .as_ref()
+                            .expect("postgres params should be validated before runtime execution");
+                        let (postgres_template, postgres_params) =
+                            (postgres_template.as_str(), postgres_params.as_slice());
                         let postgres_affected_rows = match run_lasm_postgres_exec_tx(
                             &mut state,
                             postgres_template,
@@ -703,32 +698,31 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             }
+            if let Some(Err(message)) = postgres_preparsed.as_ref() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_INVALID",
+                        "validation",
+                        message.as_str(),
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let (postgres_template, postgres_params) = match postgres_preparsed
+                        let (postgres_template, postgres_params) = postgres_preparsed
                             .as_ref()
                             .expect("postgres preparse should exist for postgres adapter path")
-                        {
-                            Ok((rewritten_template, parsed_params)) => {
-                                (rewritten_template.as_str(), parsed_params.as_slice())
-                            }
-                            Err(message) => {
-                                set_lasm_json_response(
-                                    response,
-                                    400,
-                                    &lasm_error_envelope(
-                                        "DB.QUERY_ONE_INVALID",
-                                        "validation",
-                                        message.as_str(),
-                                        400,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            }
-                        };
+                            .as_ref()
+                            .expect("postgres params should be validated before runtime execution");
+                        let (postgres_template, postgres_params) =
+                            (postgres_template.as_str(), postgres_params.as_slice());
                         let row_object = match run_lasm_postgres_query_one(
                             &mut state,
                             postgres_template,
