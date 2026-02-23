@@ -1431,5 +1431,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1459-m39-lasm-db-records-params-contains-filter.md`
 - `1460-m39-lasm-db-query-one-returning-shape-support.md`
 - `1461-m39-lasm-cluster-relay-buffer-size-tuning.md`
+- `1462-m39-lasm-cluster-relay-buffer-pool-tuning-and-prewarm.md`
 
 As milestones progress, chapters will be added and linked from this index.
