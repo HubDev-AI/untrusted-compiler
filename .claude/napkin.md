@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I accidentally triggered `web.run` while continuing a local-only LASM implementation loop. | Keep local coding turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tools unless external research is explicitly required. |
 | 2026-02-23 | self | In relay-buffer tuning I initially wrapped resolved env value with `.max(default)`, accidentally blocking lower buffer-size tuning and conflicting with the documented clamp range. | When adding runtime tuning knobs, keep resolver return value authoritative (clamped once in resolver), and avoid secondary min/max overrides in call sites unless explicitly documented. |
 | 2026-02-23 | self | I ran `cargo check` and a focused cargo test in one parallel tool call while validating relay-buffer tuning, reintroducing package/build lock contention noise. | Keep every Cargo command strictly sequential; use `multi_tool_use.parallel` only for read/search/syntax commands. |
 | 2026-02-23 | self | I changed `queryOne` invalid-shape diagnostics from `SELECT-style` to `row-returning` but initially forgot to update `classify_lasm_db_runtime_error`, so invalid-shape responses were misclassified as `DB.QUERY_ONE_FAILED` (`500`). | Whenever diagnostic text changes on runtime DB paths, update shared classifier string matching in the same slice and rerun the focused command test that asserts deterministic status/code mapping. |
