@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I committed another accept-loop slice on local `dev` before branching (`ae5f2dd6`), repeating the post-merge branch-gate miss. | After every merge, immediately verify branch and create next `codex/*` branch before opening/editing any runtime files. |
 | 2026-02-23 | self | After merging PR #760, I started the next runtime slice on local `dev` and only branched after making edits. | Keep the post-merge gate strict: create the next `codex/*` branch immediately after merge, before any code changes. |
 | 2026-02-23 | self | I started this continuation with a parallel napkin+status/search command and also launched Cargo check/test in parallel, repeating known first-command and Cargo-lock contention mistakes. | Keep a strict startup gate (`cat .claude/napkin.md` standalone first), then run branch/read commands; keep all Cargo commands strictly sequential and reserve parallel calls for read/search only. |
 | 2026-02-23 | self | After merging PR #746 I started coding on local `dev` and committed once before branching, then had to recover via `codex/*` branch + rebase skip. | Keep a strict post-merge gate every time: run `git branch --show-current` and create the next `codex/*` branch before any code edits. |
