@@ -504,6 +504,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         postgres_connect_timeout_ms,
         postgres_tls_mode,
         sqlite_busy_timeout_ms,
+        sqlite_lock_retry_max,
+        sqlite_lock_retry_delay_ms,
         sqlite_journal_mode,
         sqlite_synchronous,
     ) = match dynamic_state.lock() {
@@ -673,6 +675,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 state.db_postgres_connect_timeout_ms,
                 lasm_db_postgres_tls_mode_label(state.db_postgres_tls_mode),
                 state.db_sqlite_busy_timeout_ms,
+                state.db_sqlite_lock_retry_max,
+                state.db_sqlite_lock_retry_delay_ms,
                 state.db_sqlite_journal_mode.clone(),
                 state.db_sqlite_synchronous.clone(),
             )
@@ -753,6 +757,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresConnect": postgres_connect_timeout_ms,
                 "postgresTlsMode": postgres_tls_mode,
                 "sqliteBusy": sqlite_busy_timeout_ms,
+                "sqliteLockRetryMax": sqlite_lock_retry_max,
+                "sqliteLockRetryDelayMs": sqlite_lock_retry_delay_ms,
                 "sqliteJournalMode": sqlite_journal_mode,
                 "sqliteSynchronous": sqlite_synchronous,
             },

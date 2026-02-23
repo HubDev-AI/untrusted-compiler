@@ -15520,6 +15520,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"dbTimeoutsMs\":{")
             && list_response.contains("\"sqliteJournalMode\":")
             && list_response.contains("\"sqliteSynchronous\":")
+            && list_response.contains("\"sqliteLockRetryMax\":")
+            && list_response.contains("\"sqliteLockRetryDelayMs\":")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("\"op\":\"queryOne\"")

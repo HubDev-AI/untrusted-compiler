@@ -1959,6 +1959,12 @@ Post-alpha track acceptance anchors:
       - DB records response `dbTimeoutsMs` now includes `sqliteJournalMode` and `sqliteSynchronous` fields from effective runtime pragma resolution,
       - keeps existing DB response shape and adds operator visibility for sqlite runtime tuning values.
       - documented in `docs/book/1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`.
+   - [x] Added SQLite lock-contention retry controls in runtime path:
+      - sqlite runtime now retries `database is locked` failures with configurable retry count/delay via env:
+        - `SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_MAX` (default `2`)
+        - `SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS` (default `5`)
+      - `/db/records` telemetry now exposes effective sqlite lock-retry settings in `dbTimeoutsMs`.
+      - documented in `docs/book/1484-m39-lasm-sqlite-lock-retry-runtime-controls.md`.
    - [x] Cached effective SQLite pragma settings in LASM dynamic runtime state:
       - sqlite journal/synchronous modes are now resolved once during dynamic-state bootstrap and stored in runtime state,
       - sqlite connect/reconnect and `/db/records` telemetry now consume cached values instead of re-resolving env on each call,
