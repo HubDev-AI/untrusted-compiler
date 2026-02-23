@@ -1435,5 +1435,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1463-m39-lasm-cluster-status-relay-buffer-tuning-fields.md`
 - `1464-m39-lasm-cluster-relay-pump-and-buffer-pool-occupancy-telemetry.md`
 - `1465-m39-lasm-cluster-relay-queue-depth-telemetry.md`
+- `1466-m39-lasm-sqlite-pragmas-wal-normal.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -19,6 +19,8 @@ use std::path::Path;
 use std::time::Duration;
 
 pub(crate) const LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT: u64 = 2000;
+pub(crate) const LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT: &str = "WAL";
+pub(crate) const LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT: &str = "NORMAL";
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT: u64 = 5000;
 pub(crate) const LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT: u64 = 2000;
 pub(crate) const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
@@ -273,10 +275,16 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
             )
         })?;
     connection
-        .execute_batch("PRAGMA foreign_keys = ON;")
+        .execute_batch(
+            format!(
+                "PRAGMA foreign_keys = ON; PRAGMA journal_mode = {}; PRAGMA synchronous = {};",
+                LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT, LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
+            )
+            .as_str(),
+        )
         .map_err(|err| {
             format!(
-                "could not enable LASM dynamic sqlite foreign keys `{}`: {err}",
+                "could not configure LASM dynamic sqlite pragmas `{}`: {err}",
                 path.display()
             )
         })?;
