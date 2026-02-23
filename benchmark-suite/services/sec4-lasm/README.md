@@ -9,6 +9,7 @@ It implements:
 - `GET /users/:id`
 - `GET /db/hot-write`
 - `GET /db/hot-write-tx`
+- `GET /db/hot-query-one?row_schema=<int64>`
 - `GET /db/records`
 
 ## Run
@@ -28,4 +29,5 @@ benchmark-suite/services/sec4-lasm/smoke.sh
 - This service exercises the same benchmark contract as `services/sec4` but executes through the LASM backend directly.
 - Current LASM benchmark fixture materializes request-aware benchmark JSON contracts (`/decode`, `/users`, `/users/:id`) from LASM route schemas while preserving status-code behavior.
 - It is intended for side-by-side C-runtime vs LASM benchmark orchestration.
-- DB routes execute real DB intrinsics (`db.exec`, `db.execTx`) and can be used with `--request-path /db/hot-write` or `--request-path /db/hot-write-tx` in capacity probes.
+- DB routes execute real DB intrinsics (`db.exec`, `db.execTx`, `db.queryOne`) and can be used with `--profile db-hot-write`, `--profile db-hot-write-tx`, or `--profile db-hot-query-one` in capacity probes.
+- The `db-hot-query-one` profile auto-warms with `/db/hot-write` before readiness checks so queryOne resolves deterministically.

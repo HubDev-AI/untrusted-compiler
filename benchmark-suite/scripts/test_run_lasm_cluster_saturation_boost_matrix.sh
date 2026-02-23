@@ -136,6 +136,19 @@ if ! grep -q 'requestPath=/db/hot-write-tx' <<<"$out_db_profile"; then
   echo "saturation boost matrix dry-run missing db profile default request path" >&2
   exit 1
 fi
+out_db_query_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --profile db-hot-query-one \
+  --boost-steps 2 \
+  2>&1)"
+if ! grep -q 'requestPath=/db/hot-query-one?row_schema=1' <<<"$out_db_query_profile"; then
+  echo "saturation boost matrix dry-run missing db query profile default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
+  echo "saturation boost matrix dry-run missing db query profile default warmup path" >&2
+  exit 1
+fi
 
 out_skip_analysis="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --dry-run \
@@ -229,7 +242,7 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run -
   echo "saturation boost matrix accepted invalid profile value" >&2
   exit 1
 fi
-if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx' /tmp/lasm-sat-boost-matrix-invalid-run-profile.log; then
+if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one' /tmp/lasm-sat-boost-matrix-invalid-run-profile.log; then
   echo "saturation boost matrix missing invalid profile diagnostic" >&2
   exit 1
 fi

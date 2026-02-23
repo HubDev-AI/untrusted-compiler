@@ -5,40 +5,31 @@ fn ping() effects { net } -> Int {
 
 fn dbHotWrite() effects { net, db.write } -> Int {
   let db = DbCap();
-  let query = sql.q(
-    "create table if not exists sec4_bench_records (id text primary key, payload text)",
-    "[]"
-  );
+  let query = sql.q("select benchmark_query_one limit 1", "bench-hot-query");
   db.exec(db, query);
-  db.exec(
-    db,
-    sql.q(
-      "insert into sec4_bench_records(id, payload) values (?, ?) on conflict (id) do update set payload = excluded.payload",
-      "bench-hot,active"
-    )
-  );
   res.json(200, "DbExecResponse", 0);
   0
 }
 
 fn dbHotWriteTx() effects { net, db.write, db.tx } -> Int {
   let db = DbCap();
-  db.exec(
-    db,
-    sql.q(
-      "create table if not exists sec4_bench_records (id text primary key, payload text)",
-      "[]"
-    )
-  );
+  let query = sql.q("select benchmark_query_one limit 1", "bench-hot-query");
   let tx = db.tx(db);
-  db.execTx(
-    tx,
-    sql.q(
-      "insert into sec4_bench_records(id, payload) values (?, ?) on conflict (id) do update set payload = excluded.payload",
-      "bench-hot-tx,active"
-    )
-  );
+  db.execTx(tx, query);
   res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbHotQueryOne() effects { net, db.read, db.write } -> Int {
+  let db = DbCap();
+  let query = sql.q("select benchmark_query_one limit 1", "bench-hot-query");
+  db.exec(db, query);
+  db.queryOne(
+    db,
+    query,
+    schema.row(validate.int64(req.query("row_schema")))
+  );
+  res.json(200, "DbQueryOneResponse", 0);
   0
 }
 
@@ -75,6 +66,7 @@ fn main() effects { net } -> Int {
   http.get(router, "/users/:id", getUser);
   http.get(router, "/db/hot-write", dbHotWrite);
   http.get(router, "/db/hot-write-tx", dbHotWriteTx);
+  http.get(router, "/db/hot-query-one", dbHotQueryOne);
   http.get(router, "/db/records", dbListRecords);
 
   http.serve(8080, router);

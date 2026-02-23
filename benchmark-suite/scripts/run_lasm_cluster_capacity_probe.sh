@@ -9,9 +9,11 @@ Runs sec4 LASM cluster mode under load, samples peak RSS, and writes a
 capacity probe result JSON.
 
 Options:
-  --profile <ping|db-hot-write|db-hot-write-tx>   Probe profile (default: ping)
+  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one>
+                                                 Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
+  --warmup-path <path>                             Optional warmup HTTP path hit before readiness checks
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
   --duration <duration>                            wrk duration (default: 40s)
   --threads <n>                                    wrk threads (default: 8)
@@ -128,6 +130,7 @@ request_path_explicit="false"
 if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
   request_path_explicit="true"
 fi
+warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -188,6 +191,10 @@ while [ "$#" -gt 0 ]; do
     --request-path)
       request_path="${2:-}"
       request_path_explicit="true"
+      shift 2
+      ;;
+    --warmup-path)
+      warmup_path="${2:-}"
       shift 2
       ;;
     --request-header)
@@ -466,9 +473,9 @@ if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   exit 2
 fi
 case "$profile" in
-  ping|db-hot-write|db-hot-write-tx) ;;
+  ping|db-hot-write|db-hot-write-tx|db-hot-query-one) ;;
   *)
-    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx (got: $profile)" >&2
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one (got: $profile)" >&2
     exit 2
     ;;
 esac
@@ -507,7 +514,7 @@ if [ "$project_path_explicit" != "true" ]; then
     ping)
       project_path="examples/lasm-alpha-full"
       ;;
-    db-hot-write|db-hot-write-tx)
+    db-hot-write|db-hot-write-tx|db-hot-query-one)
       project_path="benchmark-suite/services/sec4-lasm"
       ;;
   esac
@@ -523,7 +530,13 @@ if [ "$request_path_explicit" != "true" ]; then
     db-hot-write-tx)
       request_path="/db/hot-write-tx"
       ;;
+    db-hot-query-one)
+      request_path="/db/hot-query-one?row_schema=1"
+      ;;
   esac
+fi
+if [ "$profile" = "db-hot-query-one" ] && [ -z "$warmup_path" ]; then
+  warmup_path="/db/hot-write"
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_adapter" ]; then
   db_adapter="records-log"
@@ -571,6 +584,7 @@ sec4 LASM cluster capacity probe plan:
   projectPath=$project_abs
   baseUrl=$base_url
   requestPath=$request_path
+  warmupPath=${warmup_path:-none}
   requestHeader=$request_header
   duration=$duration
   threads=$threads
@@ -743,7 +757,13 @@ trap cleanup EXIT
 server_pid=$!
 
 ready="false"
+warmup_done="false"
 for _ in $(seq 1 200); do
+  if [ -n "$warmup_path" ] && [ "$warmup_done" != "true" ]; then
+    if curl -fsS -H "$request_header" "${base_url}${warmup_path}" >/dev/null 2>&1; then
+      warmup_done="true"
+    fi
+  fi
   if curl -fsS -H "$request_header" "${base_url}${request_path}" >/dev/null 2>&1; then
     ready="true"
     break
@@ -1093,6 +1113,7 @@ jq -n \
   --arg projectPath "$project_abs" \
   --arg baseUrl "$base_url" \
   --arg requestPath "$request_path" \
+  --arg warmupPath "$warmup_path" \
   --arg requestHeader "$request_header" \
   --arg duration "$duration" \
   --arg buildProfile "$build_profile" \
@@ -1178,12 +1199,14 @@ jq -n \
     projectPath: $projectPath,
     baseUrl: $baseUrl,
     requestPath: $requestPath,
+    warmupPath: (if $warmupPath == "" then null else $warmupPath end),
     requestHeader: $requestHeader,
     pass: $pass,
     runExitCode: $runExitCode,
     requestsTargetMet: $requestsTargetMet,
     run: {
       profile: $profile,
+      warmupPath: (if $warmupPath == "" then null else $warmupPath end),
       duration: $duration,
       buildProfile: $buildProfile,
       threads: $threads,
