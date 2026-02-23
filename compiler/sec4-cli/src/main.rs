@@ -9949,6 +9949,20 @@ fn apply_lasm_dynamic_response_materialization(
                     );
                     return;
                 }
+                if !matches!(trimmed, "exec" | "execTx" | "queryOne") {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records op filter must be one of exec, execTx, queryOne",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
                 Some(trimmed.to_string())
             } else {
                 None

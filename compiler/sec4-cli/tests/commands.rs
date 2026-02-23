@@ -15569,6 +15569,20 @@ fn main() effects { net } -> Int {
         "db records invalid filter response should return deterministic validation error:\n{invalid_filter_response}"
     );
 
+    let invalid_op_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?op=unknown HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_op_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_op_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_op_filter_response.contains(
+                "db records op filter must be one of exec, execTx, queryOne"
+            ),
+        "db records invalid op filter should return deterministic validation error:\n{invalid_op_filter_response}"
+    );
+
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
 
