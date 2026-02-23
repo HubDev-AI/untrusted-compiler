@@ -19,6 +19,29 @@ use crate::lasm_cluster_runtime_config::{
 };
 use crate::{LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS};
 
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV: &str =
+    "SEC4_RT_LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS";
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT: usize = 4;
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN: usize = 1;
+const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX: usize = 256;
+
+fn resolve_lasm_cluster_fallback_connect_max_attempts() -> usize {
+    let Ok(raw) = std::env::var(LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV) else {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    }
+    let Ok(parsed) = trimmed.parse::<usize>() else {
+        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
+    };
+    parsed.clamp(
+        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN,
+        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX,
+    )
+}
+
 fn initialize_lasm_cluster_relay_connection(
     client: TcpStream,
     upstream: TcpStream,
@@ -596,6 +619,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let mut relay_selection_reservation_span = 0_usize;
         let relay_selection_reservation_chunk =
             relay_accept_batch_max.max(relay_selection_reservation_min_chunk);
+        let relay_fallback_connect_max_attempts =
+            resolve_lasm_cluster_fallback_connect_max_attempts();
         let mut relay_pump_cursor = 0_usize;
         let mut unhealthy_prune_next_at: Option<Instant> = None;
         let relay_warning_throttle_duration =
@@ -951,9 +976,10 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                     if fallback_backend_index == selected_worker_port_count {
                                         fallback_backend_index = 0;
                                     }
-                                    let mut remaining_fallback_scan =
-                                        selected_worker_port_count.saturating_sub(1);
-                                    while remaining_fallback_scan > 0 {
+                                    let mut connect_attempts_remaining =
+                                        relay_fallback_connect_max_attempts
+                                            .min(selected_worker_port_count.saturating_sub(1));
+                                    while connect_attempts_remaining > 0 {
                                         let fallback_backend_addr =
                                             selected_worker_backend_addrs[fallback_backend_index];
                                         fallback_connected =
@@ -984,11 +1010,11 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         {
                                             break;
                                         }
+                                        connect_attempts_remaining -= 1;
                                         fallback_backend_index += 1;
                                         if fallback_backend_index == selected_worker_port_count {
                                             fallback_backend_index = 0;
                                         }
-                                        remaining_fallback_scan -= 1;
                                     }
                                 } else {
                                     let mut fallback_lookup_cursor =
@@ -1003,17 +1029,20 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                     selected_worker_port_count,
                                                 )
                                             });
-                                    let mut remaining_fallback_scan = selection_lookup_cycle_span;
-                                    while remaining_fallback_scan > 0 {
+                                    let mut scan_steps_remaining = selection_lookup_cycle_span;
+                                    let mut connect_attempts_remaining =
+                                        relay_fallback_connect_max_attempts
+                                            .min(selection_lookup_cycle_span.saturating_sub(1));
+                                    while scan_steps_remaining > 0 && connect_attempts_remaining > 0
+                                    {
                                         let fallback_backend_index =
                                             selection_lookup[fallback_lookup_cursor];
+                                        fallback_lookup_cursor += 1;
+                                        if fallback_lookup_cursor == selection_lookup_cycle_span {
+                                            fallback_lookup_cursor = 0;
+                                        }
+                                        scan_steps_remaining -= 1;
                                         if fallback_backend_index == selected_backend_index {
-                                            fallback_lookup_cursor += 1;
-                                            if fallback_lookup_cursor == selection_lookup_cycle_span
-                                            {
-                                                fallback_lookup_cursor = 0;
-                                            }
-                                            remaining_fallback_scan -= 1;
                                             continue;
                                         }
                                         let fallback_backend_addr =
@@ -1046,11 +1075,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         {
                                             break;
                                         }
-                                        fallback_lookup_cursor += 1;
-                                        if fallback_lookup_cursor == selection_lookup_cycle_span {
-                                            fallback_lookup_cursor = 0;
-                                        }
-                                        remaining_fallback_scan -= 1;
+                                        connect_attempts_remaining -= 1;
                                     }
                                 }
                             }
