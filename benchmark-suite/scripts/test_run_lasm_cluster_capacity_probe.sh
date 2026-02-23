@@ -27,6 +27,23 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --cluster-accept-workers 4 \
   --cluster-relay-accept-batch-max 321 \
   --cluster-relay-pump-batch-max 654 \
+  --db-base /tmp/lasm-db-probe \
+  --db-adapter sqlite \
+  --db-postgres-dsn-file /tmp/lasm-postgres-dsn.txt \
+  --db-postgres-tls-mode require \
+  --db-max-tx-handles 22 \
+  --db-records-max 333 \
+  --db-postgres-statement-cache-max 444 \
+  --db-postgres-placeholder-cache-max 555 \
+  --db-postgres-statement-timeout-ms 666 \
+  --db-postgres-lock-timeout-ms 777 \
+  --db-postgres-connect-timeout-ms 888 \
+  --db-sqlite-busy-timeout-ms 999 \
+  --db-sqlite-journal-mode WAL \
+  --db-sqlite-synchronous NORMAL \
+  --db-postgres-retryable-conflict-retry-max 10 \
+  --db-sqlite-lock-retry-max 11 \
+  --db-sqlite-lock-retry-delay-ms 12 \
   --build-profile debug \
   --samples 3 \
   --wrk-processes 4 \
@@ -83,6 +100,30 @@ if ! grep -q 'clusterRelayAcceptBatchMax=321' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayPumpBatchMax=654' <<<"$out"; then
   echo "lasm capacity probe dry-run missing relay pump batch output" >&2
+  exit 1
+fi
+if ! grep -q 'dbBase=/tmp/lasm-db-probe' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-base output" >&2
+  exit 1
+fi
+if ! grep -q 'dbAdapter=sqlite' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-adapter output" >&2
+  exit 1
+fi
+if ! grep -q 'dbPostgresTlsMode=require' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-postgres-tls-mode output" >&2
+  exit 1
+fi
+if ! grep -q 'dbMaxTxHandles=22' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-max-tx-handles output" >&2
+  exit 1
+fi
+if ! grep -q 'dbSqliteJournalMode=WAL' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-sqlite-journal-mode output" >&2
+  exit 1
+fi
+if ! grep -q 'dbSqliteLockRetryDelayMs=12' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing db-sqlite-lock-retry-delay-ms output" >&2
   exit 1
 fi
 if ! grep -q 'buildProfile=debug' <<<"$out"; then
@@ -175,6 +216,14 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --cluster-
 fi
 if ! grep -q "cluster-relay-pump-batch-max must be numeric" /tmp/lasm-capacity-probe-invalid-pump-batch.log; then
   echo "lasm capacity probe invalid relay pump batch error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --db-max-tx-handles nope >/tmp/lasm-capacity-probe-invalid-db-max-tx.log 2>&1; then
+  echo "lasm capacity probe accepted invalid db-max-tx-handles value" >&2
+  exit 1
+fi
+if ! grep -q "db-max-tx-handles must be numeric" /tmp/lasm-capacity-probe-invalid-db-max-tx.log; then
+  echo "lasm capacity probe invalid db-max-tx-handles error missing" >&2
   exit 1
 fi
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --samples 0 >/tmp/lasm-capacity-probe-invalid-samples.log 2>&1; then

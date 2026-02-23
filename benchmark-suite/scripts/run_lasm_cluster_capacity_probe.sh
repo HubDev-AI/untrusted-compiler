@@ -32,6 +32,23 @@ Options:
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
   --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
+  --db-base <path>                                 Optional LASM db base directory
+  --db-adapter <records-log|sqlite|postgres>       Optional LASM db adapter override
+  --db-postgres-dsn-file <path>                    Optional LASM postgres DSN file path
+  --db-postgres-tls-mode <auto|disable|require>    Optional LASM postgres TLS mode override
+  --db-max-tx-handles <n>                          Optional LASM db max tx handles override
+  --db-records-max <n>                             Optional LASM db records max override
+  --db-postgres-statement-cache-max <n>            Optional LASM postgres statement cache max override
+  --db-postgres-placeholder-cache-max <n>          Optional LASM postgres placeholder cache max override
+  --db-postgres-statement-timeout-ms <n>           Optional LASM postgres statement timeout override
+  --db-postgres-lock-timeout-ms <n>                Optional LASM postgres lock timeout override
+  --db-postgres-connect-timeout-ms <n>             Optional LASM postgres connect timeout override
+  --db-sqlite-busy-timeout-ms <n>                  Optional LASM sqlite busy timeout override
+  --db-sqlite-journal-mode <mode>                  Optional LASM sqlite journal mode override
+  --db-sqlite-synchronous <mode>                   Optional LASM sqlite synchronous override
+  --db-postgres-retryable-conflict-retry-max <n>   Optional LASM postgres retryable conflict retry max
+  --db-sqlite-lock-retry-max <n>                   Optional LASM sqlite lock retry max
+  --db-sqlite-lock-retry-delay-ms <n>              Optional LASM sqlite lock retry delay override
   --build-profile <debug|release>                  sec4 build profile used for probe run (default: release)
   --samples <n>                                    Number of wrk samples (best sample is reported, default: 1)
   --wrk-processes <n>                              Number of parallel wrk processes per sample (default: 1)
@@ -121,6 +138,23 @@ cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
+db_base="${LASM_CAPACITY_DB_BASE:-}"
+db_adapter="${LASM_CAPACITY_DB_ADAPTER:-}"
+db_postgres_dsn_file="${LASM_CAPACITY_DB_POSTGRES_DSN_FILE:-}"
+db_postgres_tls_mode="${LASM_CAPACITY_DB_POSTGRES_TLS_MODE:-}"
+db_max_tx_handles="${LASM_CAPACITY_DB_MAX_TX_HANDLES:-}"
+db_records_max="${LASM_CAPACITY_DB_RECORDS_MAX:-}"
+db_postgres_statement_cache_max="${LASM_CAPACITY_DB_POSTGRES_STATEMENT_CACHE_MAX:-}"
+db_postgres_placeholder_cache_max="${LASM_CAPACITY_DB_POSTGRES_PLACEHOLDER_CACHE_MAX:-}"
+db_postgres_statement_timeout_ms="${LASM_CAPACITY_DB_POSTGRES_STATEMENT_TIMEOUT_MS:-}"
+db_postgres_lock_timeout_ms="${LASM_CAPACITY_DB_POSTGRES_LOCK_TIMEOUT_MS:-}"
+db_postgres_connect_timeout_ms="${LASM_CAPACITY_DB_POSTGRES_CONNECT_TIMEOUT_MS:-}"
+db_sqlite_busy_timeout_ms="${LASM_CAPACITY_DB_SQLITE_BUSY_TIMEOUT_MS:-}"
+db_sqlite_journal_mode="${LASM_CAPACITY_DB_SQLITE_JOURNAL_MODE:-}"
+db_sqlite_synchronous="${LASM_CAPACITY_DB_SQLITE_SYNCHRONOUS:-}"
+db_postgres_retryable_conflict_retry_max="${LASM_CAPACITY_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX:-}"
+db_sqlite_lock_retry_max="${LASM_CAPACITY_DB_SQLITE_LOCK_RETRY_MAX:-}"
+db_sqlite_lock_retry_delay_ms="${LASM_CAPACITY_DB_SQLITE_LOCK_RETRY_DELAY_MS:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
 wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
@@ -224,6 +258,74 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
+    --db-base)
+      db_base="${2:-}"
+      shift 2
+      ;;
+    --db-adapter)
+      db_adapter="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-dsn-file)
+      db_postgres_dsn_file="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-tls-mode)
+      db_postgres_tls_mode="${2:-}"
+      shift 2
+      ;;
+    --db-max-tx-handles)
+      db_max_tx_handles="${2:-}"
+      shift 2
+      ;;
+    --db-records-max)
+      db_records_max="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-statement-cache-max)
+      db_postgres_statement_cache_max="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-placeholder-cache-max)
+      db_postgres_placeholder_cache_max="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-statement-timeout-ms)
+      db_postgres_statement_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-lock-timeout-ms)
+      db_postgres_lock_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-connect-timeout-ms)
+      db_postgres_connect_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --db-sqlite-busy-timeout-ms)
+      db_sqlite_busy_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --db-sqlite-journal-mode)
+      db_sqlite_journal_mode="${2:-}"
+      shift 2
+      ;;
+    --db-sqlite-synchronous)
+      db_sqlite_synchronous="${2:-}"
+      shift 2
+      ;;
+    --db-postgres-retryable-conflict-retry-max)
+      db_postgres_retryable_conflict_retry_max="${2:-}"
+      shift 2
+      ;;
+    --db-sqlite-lock-retry-max)
+      db_sqlite_lock_retry_max="${2:-}"
+      shift 2
+      ;;
+    --db-sqlite-lock-retry-delay-ms)
+      db_sqlite_lock_retry_delay_ms="${2:-}"
+      shift 2
+      ;;
     --build-profile)
       build_profile="${2:-}"
       shift 2
@@ -290,6 +392,31 @@ fi
 if [ -n "$cluster_relay_pump_batch_max" ] && ! is_number "$cluster_relay_pump_batch_max"; then
   echo "cluster-relay-pump-batch-max must be numeric, got: $cluster_relay_pump_batch_max" >&2
   exit 2
+fi
+for field in db_max_tx_handles db_records_max db_postgres_statement_cache_max db_postgres_placeholder_cache_max db_postgres_statement_timeout_ms db_postgres_lock_timeout_ms db_postgres_connect_timeout_ms db_sqlite_busy_timeout_ms db_postgres_retryable_conflict_retry_max db_sqlite_lock_retry_max db_sqlite_lock_retry_delay_ms; do
+  value="${!field}"
+  if [ -n "$value" ] && ! is_number "$value"; then
+    echo "${field//_/-} must be numeric, got: $value" >&2
+    exit 2
+  fi
+done
+if [ -n "$db_adapter" ]; then
+  case "$db_adapter" in
+    records-log|sqlite|postgres) ;;
+    *)
+      echo "db-adapter must be one of: records-log, sqlite, postgres (got: $db_adapter)" >&2
+      exit 2
+      ;;
+  esac
+fi
+if [ -n "$db_postgres_tls_mode" ]; then
+  case "$db_postgres_tls_mode" in
+    auto|disable|require) ;;
+    *)
+      echo "db-postgres-tls-mode must be one of: auto, disable, require (got: $db_postgres_tls_mode)" >&2
+      exit 2
+      ;;
+  esac
 fi
 if [ "$fixed_reuse_port_mode" != "true" ] && [ "$fixed_reuse_port_mode" != "false" ]; then
   echo "fixed-reuse-port-mode must be true or false, got: $fixed_reuse_port_mode" >&2
@@ -411,6 +538,23 @@ sec4 LASM cluster capacity probe plan:
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
+  dbBase=${db_base:-auto}
+  dbAdapter=${db_adapter:-auto}
+  dbPostgresDsnFile=${db_postgres_dsn_file:-auto}
+  dbPostgresTlsMode=${db_postgres_tls_mode:-auto}
+  dbMaxTxHandles=${db_max_tx_handles:-auto}
+  dbRecordsMax=${db_records_max:-auto}
+  dbPostgresStatementCacheMax=${db_postgres_statement_cache_max:-auto}
+  dbPostgresPlaceholderCacheMax=${db_postgres_placeholder_cache_max:-auto}
+  dbPostgresStatementTimeoutMs=${db_postgres_statement_timeout_ms:-auto}
+  dbPostgresLockTimeoutMs=${db_postgres_lock_timeout_ms:-auto}
+  dbPostgresConnectTimeoutMs=${db_postgres_connect_timeout_ms:-auto}
+  dbSqliteBusyTimeoutMs=${db_sqlite_busy_timeout_ms:-auto}
+  dbSqliteJournalMode=${db_sqlite_journal_mode:-auto}
+  dbSqliteSynchronous=${db_sqlite_synchronous:-auto}
+  dbPostgresRetryableConflictRetryMax=${db_postgres_retryable_conflict_retry_max:-auto}
+  dbSqliteLockRetryMax=${db_sqlite_lock_retry_max:-auto}
+  dbSqliteLockRetryDelayMs=${db_sqlite_lock_retry_delay_ms:-auto}
   buildProfile=$build_profile
   samples=$samples
   wrkProcesses=$wrk_processes
@@ -475,6 +619,57 @@ if [ -n "$cluster_relay_accept_batch_max" ]; then
 fi
 if [ -n "$cluster_relay_pump_batch_max" ]; then
   run_args+=(--cluster-relay-pump-batch-max "$cluster_relay_pump_batch_max")
+fi
+if [ -n "$db_base" ]; then
+  run_args+=(--db-base "$db_base")
+fi
+if [ -n "$db_adapter" ]; then
+  run_args+=(--db-adapter "$db_adapter")
+fi
+if [ -n "$db_postgres_dsn_file" ]; then
+  run_args+=(--db-postgres-dsn-file "$db_postgres_dsn_file")
+fi
+if [ -n "$db_postgres_tls_mode" ]; then
+  run_args+=(--db-postgres-tls-mode "$db_postgres_tls_mode")
+fi
+if [ -n "$db_max_tx_handles" ]; then
+  run_args+=(--db-max-tx-handles "$db_max_tx_handles")
+fi
+if [ -n "$db_records_max" ]; then
+  run_args+=(--db-records-max "$db_records_max")
+fi
+if [ -n "$db_postgres_statement_cache_max" ]; then
+  run_args+=(--db-postgres-statement-cache-max "$db_postgres_statement_cache_max")
+fi
+if [ -n "$db_postgres_placeholder_cache_max" ]; then
+  run_args+=(--db-postgres-placeholder-cache-max "$db_postgres_placeholder_cache_max")
+fi
+if [ -n "$db_postgres_statement_timeout_ms" ]; then
+  run_args+=(--db-postgres-statement-timeout-ms "$db_postgres_statement_timeout_ms")
+fi
+if [ -n "$db_postgres_lock_timeout_ms" ]; then
+  run_args+=(--db-postgres-lock-timeout-ms "$db_postgres_lock_timeout_ms")
+fi
+if [ -n "$db_postgres_connect_timeout_ms" ]; then
+  run_args+=(--db-postgres-connect-timeout-ms "$db_postgres_connect_timeout_ms")
+fi
+if [ -n "$db_sqlite_busy_timeout_ms" ]; then
+  run_args+=(--db-sqlite-busy-timeout-ms "$db_sqlite_busy_timeout_ms")
+fi
+if [ -n "$db_sqlite_journal_mode" ]; then
+  run_args+=(--db-sqlite-journal-mode "$db_sqlite_journal_mode")
+fi
+if [ -n "$db_sqlite_synchronous" ]; then
+  run_args+=(--db-sqlite-synchronous "$db_sqlite_synchronous")
+fi
+if [ -n "$db_postgres_retryable_conflict_retry_max" ]; then
+  run_args+=(--db-postgres-retryable-conflict-retry-max "$db_postgres_retryable_conflict_retry_max")
+fi
+if [ -n "$db_sqlite_lock_retry_max" ]; then
+  run_args+=(--db-sqlite-lock-retry-max "$db_sqlite_lock_retry_max")
+fi
+if [ -n "$db_sqlite_lock_retry_delay_ms" ]; then
+  run_args+=(--db-sqlite-lock-retry-delay-ms "$db_sqlite_lock_retry_delay_ms")
 fi
 
 server_pid=""
@@ -901,6 +1096,23 @@ jq -n \
   --argjson resolvedDbPostgresRetryableConflictRetryMax "$resolved_db_postgres_retryable_conflict_retry_max" \
   --argjson resolvedDbSqliteLockRetryMax "$resolved_db_sqlite_lock_retry_max" \
   --argjson resolvedDbSqliteLockRetryDelayMs "$resolved_db_sqlite_lock_retry_delay_ms" \
+  --arg dbBase "${db_base}" \
+  --arg dbAdapter "${db_adapter}" \
+  --arg dbPostgresDsnFile "${db_postgres_dsn_file}" \
+  --arg dbPostgresTlsMode "${db_postgres_tls_mode}" \
+  --argjson dbMaxTxHandles "${db_max_tx_handles:-null}" \
+  --argjson dbRecordsMax "${db_records_max:-null}" \
+  --argjson dbPostgresStatementCacheMax "${db_postgres_statement_cache_max:-null}" \
+  --argjson dbPostgresPlaceholderCacheMax "${db_postgres_placeholder_cache_max:-null}" \
+  --argjson dbPostgresStatementTimeoutMs "${db_postgres_statement_timeout_ms:-null}" \
+  --argjson dbPostgresLockTimeoutMs "${db_postgres_lock_timeout_ms:-null}" \
+  --argjson dbPostgresConnectTimeoutMs "${db_postgres_connect_timeout_ms:-null}" \
+  --argjson dbSqliteBusyTimeoutMs "${db_sqlite_busy_timeout_ms:-null}" \
+  --arg dbSqliteJournalMode "${db_sqlite_journal_mode}" \
+  --arg dbSqliteSynchronous "${db_sqlite_synchronous}" \
+  --argjson dbPostgresRetryableConflictRetryMax "${db_postgres_retryable_conflict_retry_max:-null}" \
+  --argjson dbSqliteLockRetryMax "${db_sqlite_lock_retry_max:-null}" \
+  --argjson dbSqliteLockRetryDelayMs "${db_sqlite_lock_retry_delay_ms:-null}" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
@@ -939,6 +1151,23 @@ jq -n \
       clusterAcceptWorkers: $acceptWorkers,
       clusterRelayAcceptBatchMax: $relayAcceptBatchMax,
       clusterRelayPumpBatchMax: $relayPumpBatchMax,
+      dbBase: (if $dbBase == "" then null else $dbBase end),
+      dbAdapter: (if $dbAdapter == "" then null else $dbAdapter end),
+      dbPostgresDsnFile: (if $dbPostgresDsnFile == "" then null else $dbPostgresDsnFile end),
+      dbPostgresTlsMode: (if $dbPostgresTlsMode == "" then null else $dbPostgresTlsMode end),
+      dbMaxTxHandles: $dbMaxTxHandles,
+      dbRecordsMax: $dbRecordsMax,
+      dbPostgresStatementCacheMax: $dbPostgresStatementCacheMax,
+      dbPostgresPlaceholderCacheMax: $dbPostgresPlaceholderCacheMax,
+      dbPostgresStatementTimeoutMs: $dbPostgresStatementTimeoutMs,
+      dbPostgresLockTimeoutMs: $dbPostgresLockTimeoutMs,
+      dbPostgresConnectTimeoutMs: $dbPostgresConnectTimeoutMs,
+      dbSqliteBusyTimeoutMs: $dbSqliteBusyTimeoutMs,
+      dbSqliteJournalMode: (if $dbSqliteJournalMode == "" then null else $dbSqliteJournalMode end),
+      dbSqliteSynchronous: (if $dbSqliteSynchronous == "" then null else $dbSqliteSynchronous end),
+      dbPostgresRetryableConflictRetryMax: $dbPostgresRetryableConflictRetryMax,
+      dbSqliteLockRetryMax: $dbSqliteLockRetryMax,
+      dbSqliteLockRetryDelayMs: $dbSqliteLockRetryDelayMs,
       clusterRelayWorkersResolved: $resolvedRelayWorkerCount,
       clusterAcceptWorkersResolved: $resolvedRelayAcceptWorkers,
       clusterRelayAcceptBatchMaxResolved: $resolvedRelayAcceptBatchMax,

@@ -22,6 +22,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --cluster-accept-workers 3 \
   --cluster-relay-accept-batch-max 123 \
   --cluster-relay-pump-batch-max 456 \
+  --db-adapter sqlite \
+  --db-sqlite-busy-timeout-ms 999 \
   --out results/summaries/custom-saturation-boost-matrix.json \
   --analysis-out results/summaries/custom-saturation-boost-analysis.json \
   --verify-recommended \
@@ -62,6 +64,14 @@ if ! grep -q 'clusterRelayAcceptBatchMax=123' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayPumpBatchMax=456' <<<"$out"; then
   echo "saturation boost matrix dry-run missing relay pump batch override output" >&2
+  exit 1
+fi
+if ! grep -q 'dbAdapter=sqlite' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing db adapter override output" >&2
+  exit 1
+fi
+if ! grep -q 'dbSqliteBusyTimeoutMs=999' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing db sqlite busy-timeout override output" >&2
   exit 1
 fi
 if ! grep -q 'buildProfile=debug' <<<"$out"; then
