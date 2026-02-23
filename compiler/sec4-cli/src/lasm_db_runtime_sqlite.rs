@@ -4,6 +4,7 @@ use rusqlite::{
     Connection, ToSql,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use crate::lasm_db_adapter_state::connect_lasm_dynamic_db_records_sqlite;
 use crate::lasm_db_runtime_postgres::{
@@ -170,8 +171,12 @@ fn lasm_dynamic_sqlite_runtime_connection_mut(
         .ok_or_else(|| "sqlite records store connection unavailable".to_string())
 }
 
-fn lasm_sqlite_runtime_error_is_no_retry(message: &str) -> bool {
-    message.contains("database is locked") || message.contains("bad parameter")
+fn is_lasm_sqlite_runtime_lock_error(message: &str) -> bool {
+    message.contains("database is locked")
+}
+
+fn is_lasm_sqlite_runtime_non_retryable_param_error(message: &str) -> bool {
+    message.contains("bad parameter")
 }
 
 fn run_lasm_sqlite_with_connection_retry<T, F>(
@@ -188,7 +193,29 @@ where
     };
     match first {
         Ok(value) => Ok(value),
-        Err(message) if lasm_sqlite_runtime_error_is_no_retry(message.as_str()) => Err(message),
+        Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
+            let mut latest_message = message;
+            for _ in 0..state.db_sqlite_lock_retry_max {
+                if state.db_sqlite_lock_retry_delay_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(state.db_sqlite_lock_retry_delay_ms));
+                }
+                let retry = {
+                    let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+                    run(connection)
+                };
+                match retry {
+                    Ok(value) => return Ok(value),
+                    Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
+                        latest_message = message;
+                    }
+                    Err(message) => return Err(message),
+                }
+            }
+            Err(latest_message)
+        }
+        Err(message) if is_lasm_sqlite_runtime_non_retryable_param_error(message.as_str()) => {
+            Err(message)
+        }
         Err(message) => {
             state.db_records_sqlite_connection = None;
             let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;

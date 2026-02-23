@@ -68,6 +68,8 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_postgres_connect_timeout_ms: u64,
     pub(crate) db_postgres_tls_mode: LasmDbPostgresTlsMode,
     pub(crate) db_sqlite_busy_timeout_ms: u64,
+    pub(crate) db_sqlite_lock_retry_max: usize,
+    pub(crate) db_sqlite_lock_retry_delay_ms: u64,
     pub(crate) db_sqlite_journal_mode: String,
     pub(crate) db_sqlite_synchronous: String,
     pub(crate) next_db_tx_handle: i64,
@@ -78,6 +80,8 @@ pub(crate) const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_re
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
 pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
 pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
+pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_MAX_DEFAULT: usize = 2;
+pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS_DEFAULT: u64 = 5;
 
 pub(crate) fn lasm_db_record_signature_key(db: i64, template: &str, params: &str) -> String {
     format!("{db}\u{1f}{template}\u{1f}{params}")
@@ -248,6 +252,14 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
             )
         });
+    let db_sqlite_lock_retry_max = resolve_lasm_env_non_negative_usize(
+        "SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_MAX",
+        LASM_DB_SQLITE_LOCK_RETRY_MAX_DEFAULT,
+    );
+    let db_sqlite_lock_retry_delay_ms = resolve_lasm_env_non_negative_u64(
+        "SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS",
+        LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS_DEFAULT,
+    );
     let db_sqlite_journal_mode = resolve_lasm_db_sqlite_journal_mode().to_string();
     let db_sqlite_synchronous = resolve_lasm_db_sqlite_synchronous().to_string();
     let db_postgres_tls_mode = resolve_lasm_db_postgres_tls_mode(explicit_db_postgres_tls_mode)?;
@@ -382,6 +394,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_postgres_connect_timeout_ms,
         db_postgres_tls_mode,
         db_sqlite_busy_timeout_ms,
+        db_sqlite_lock_retry_max,
+        db_sqlite_lock_retry_delay_ms,
         db_sqlite_journal_mode,
         db_sqlite_synchronous,
         next_db_tx_handle,
@@ -402,6 +416,20 @@ fn resolve_lasm_env_positive_usize(name: &str, default_value: usize) -> usize {
         .ok()
         .and_then(|raw| raw.trim().parse::<usize>().ok())
         .filter(|value| *value > 0)
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_env_non_negative_usize(name: &str, default_value: usize) -> usize {
+    env::var(name)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_env_non_negative_u64(name: &str, default_value: u64) -> u64 {
+    env::var(name)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
         .unwrap_or(default_value)
 }
 
