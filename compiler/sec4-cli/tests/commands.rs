@@ -15487,6 +15487,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"db\":null")
             && list_response.contains("\"tx\":null")
             && list_response.contains("\"templateContains\":null")
+            && list_response.contains("\"paramsContains\":null")
             && list_response.contains("\"createdFromMs\":null")
             && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"idFrom\":null")
@@ -15706,6 +15707,26 @@ fn main() effects { net } -> Int {
         "db records affectedRowsMin response should deterministically return write-impact window:\n{affected_rows_min_filter_response}"
     );
 
+    let params_contains_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?paramsContains=%5B1%5D HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        params_contains_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records paramsContains response should contain deterministic 200 status:\n{params_contains_filter_response}"
+    );
+    assert!(
+        params_contains_filter_response.contains("\"count\":1")
+            && params_contains_filter_response.contains("\"recordsTotal\":1")
+            && params_contains_filter_response.contains("\"recordsGlobalTotal\":3")
+            && params_contains_filter_response.contains("\"filters\":{")
+            && params_contains_filter_response.contains("\"paramsContains\":\"[1]\"")
+            && params_contains_filter_response.contains("\"op\":\"exec\"")
+            && !params_contains_filter_response.contains("\"op\":\"queryOne\""),
+        "db records paramsContains response should deterministically filter by params payload substring:\n{params_contains_filter_response}"
+    );
+
     let invalid_filter_response = run_lasm_oneshot_request(
         list_port,
         "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
@@ -15756,6 +15777,20 @@ fn main() effects { net } -> Int {
             && invalid_template_contains_filter_response
                 .contains("db records templateContains filter must be a non-empty string"),
         "db records invalid templateContains filter should return deterministic validation error:\n{invalid_template_contains_filter_response}"
+    );
+
+    let invalid_params_contains_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?paramsContains=%20 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_params_contains_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_params_contains_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_params_contains_filter_response
+                .contains("db records paramsContains filter must be a non-empty string"),
+        "db records invalid paramsContains filter should return deterministic validation error:\n{invalid_params_contains_filter_response}"
     );
 
     let invalid_created_from_ms_filter_response = run_lasm_oneshot_request(

@@ -1428,5 +1428,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1456-m39-lasm-db-records-order-filter.md`
 - `1457-m39-lasm-db-records-include-records-filter.md`
 - `1458-m39-lasm-db-records-affected-rows-range-filters.md`
+- `1459-m39-lasm-db-records-params-contains-filter.md`
 
 As milestones progress, chapters will be added and linked from this index.
