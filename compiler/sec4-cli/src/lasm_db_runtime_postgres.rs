@@ -106,17 +106,20 @@ fn normalize_lasm_postgres_named_param_key(key: &str) -> Option<&str> {
 
 fn parse_lasm_postgres_named_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> HashMap<String, LasmPostgresParam> {
+) -> Result<HashMap<String, LasmPostgresParam>, String> {
     let mut named = HashMap::with_capacity(entries.len());
     for (key, value) in entries {
         let normalized = normalize_lasm_postgres_named_param_key(key.as_str())
             .expect("named object keys should be validated before parsing");
-        named.insert(
-            normalized.to_string(),
-            parse_lasm_postgres_query_param_value(value.clone()),
-        );
+        let normalized = normalized.to_string();
+        let value = parse_lasm_postgres_query_param_value(value.clone());
+        if named.insert(normalized.clone(), value).is_some() {
+            return Err(format!(
+                "postgres params object contains duplicate normalized key `{normalized}`"
+            ));
+        }
     }
-    named
+    Ok(named)
 }
 
 enum LasmPostgresParamsObjectKeyStyle {
@@ -357,7 +360,7 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params(
                     parse_lasm_postgres_positional_object_params(&entries),
                 )),
                 LasmPostgresParamsObjectKeyStyle::Named => {
-                    let named = parse_lasm_postgres_named_object_params(&entries);
+                    let named = parse_lasm_postgres_named_object_params(&entries)?;
                     if let Some((rewritten_template, params)) =
                         rewrite_lasm_postgres_named_query_template(query_template, &named)?
                     {
@@ -1248,6 +1251,18 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("postgres query parameter `role` is not present in SQL statement"));
+    }
+
+    #[test]
+    fn named_object_params_reject_duplicate_normalized_keys() {
+        let error = match parse_lasm_postgres_query_template_and_params(
+            "SELECT :name::text",
+            "{\"name\":\"alice\",\":name\":\"bob\"}",
+        ) {
+            Ok(_) => panic!("duplicate normalized named keys should fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains("postgres params object contains duplicate normalized key `name`"));
     }
 
     #[test]

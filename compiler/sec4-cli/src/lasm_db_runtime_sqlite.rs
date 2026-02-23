@@ -65,14 +65,20 @@ fn parse_lasm_sqlite_positional_object_params(
 
 fn parse_lasm_sqlite_named_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Vec<(String, SqliteValue)> {
+) -> Result<Vec<(String, SqliteValue)>, String> {
     let mut named = BTreeMap::new();
     for (key, value) in entries {
         let key = parse_lasm_sqlite_named_param_key(key.as_str())
             .expect("named object keys should be validated before parsing");
-        named.insert(key, parse_lasm_sqlite_query_param_value(value.clone()));
+        let value = parse_lasm_sqlite_query_param_value(value.clone());
+        if named.insert(key.clone(), value).is_some() {
+            return Err(format!(
+                "sqlite params object contains duplicate normalized key `{}`",
+                key.trim_start_matches(':'),
+            ));
+        }
     }
-    named.into_iter().collect()
+    Ok(named.into_iter().collect())
 }
 
 fn normalize_lasm_sqlite_named_param_raw(key: &str) -> Option<String> {
@@ -165,7 +171,7 @@ pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> Result<LasmSqliteQu
                         ))
                     }
                     LasmSqliteParamsObjectKeyStyle::Named => Ok(LasmSqliteQueryParams::Named(
-                        parse_lasm_sqlite_named_object_params(&entries),
+                        parse_lasm_sqlite_named_object_params(&entries)?,
                     )),
                 }
             }
@@ -596,6 +602,13 @@ mod tests {
         let error = parse_lasm_sqlite_query_params("{\"1\":\"alice\",\"name\":\"bob\"}")
             .expect_err("mixed positional and named keys should fail");
         assert!(error.contains("sqlite params object keys must be all positional"));
+    }
+
+    #[test]
+    fn named_object_params_reject_duplicate_normalized_keys() {
+        let error = parse_lasm_sqlite_query_params("{\":name\":\"alice\",\"name\":\"bob\"}")
+            .expect_err("duplicate normalized named keys should fail");
+        assert!(error.contains("sqlite params object contains duplicate normalized key `name`"));
     }
 
     #[test]
