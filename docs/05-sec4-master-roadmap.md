@@ -1858,6 +1858,10 @@ Post-alpha track acceptance anchors:
       - relay worker loops now publish aggregate hot-path counts for active relay pumps and cached relay buffer-pool entries with delta-based atomic updates,
       - cluster status JSON now emits `relayPumpConnections` and `relayBufferPoolEntries` for runtime visibility into relay concurrency and reusable buffer occupancy.
       - documented in `docs/book/1464-m39-lasm-cluster-relay-pump-and-buffer-pool-occupancy-telemetry.md`.
+   - [x] Added live relay queue-depth telemetry in cluster status:
+      - status writer now samples relay queue sender depths each interval and publishes aggregate queue occupancy (`relayQueueDepth`) and shard max depth (`relayQueueMaxDepth`),
+      - this exposes real backpressure signal for relay queue tuning during cluster load runs without changing request dispatch semantics.
+      - documented in `docs/book/1465-m39-lasm-cluster-relay-queue-depth-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
