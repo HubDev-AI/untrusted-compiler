@@ -4,7 +4,7 @@ use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
     LasmRunRequest,
 };
-use std::sync::Mutex;
+use std::{collections::BTreeSet, sync::Mutex};
 
 const LASM_DB_RECORDS_LIMIT_MAX: usize = 1000;
 
@@ -89,6 +89,44 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             return;
         }
         Some(trimmed.to_string())
+    } else {
+        None
+    };
+    let records_ops_filter = if let Some(raw_ops) = request.query_params.get("ops") {
+        let mut values = BTreeSet::new();
+        for raw_entry in raw_ops.split(',') {
+            let trimmed = raw_entry.trim();
+            if trimmed.is_empty() || !matches!(trimmed, "exec" | "execTx" | "queryOne") {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records ops filter must be comma-separated values from exec, execTx, queryOne",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            values.insert(trimmed.to_string());
+        }
+        if values.is_empty() {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.RECORDS_FILTER_INVALID",
+                    "validation",
+                    "db records ops filter must be comma-separated values from exec, execTx, queryOne",
+                    400,
+                    trace_id,
+                ),
+            );
+            return;
+        }
+        Some(values.into_iter().collect::<Vec<_>>())
     } else {
         None
     };
@@ -480,6 +518,10 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                         .as_ref()
                         .map(|op| record.op == *op)
                         .unwrap_or(true)
+                        && records_ops_filter
+                            .as_ref()
+                            .map(|ops| ops.iter().any(|op| record.op == *op))
+                            .unwrap_or(true)
                         && records_db_filter.map(|db| record.db == db).unwrap_or(true)
                         && records_tx_filter.map(|tx| record.tx == tx).unwrap_or(true)
                         && records_template_contains_filter
@@ -668,6 +710,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             "adapter": adapter,
             "filters": {
                 "op": records_op_filter,
+                "ops": records_ops_filter,
                 "db": records_db_filter,
                 "tx": records_tx_filter,
                 "templateContains": records_template_contains_filter,

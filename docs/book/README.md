@@ -1452,5 +1452,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1480-m39-lasm-postgres-zero-placeholder-bind-compat.md`
 - `1481-m39-lasm-db-records-id-filter.md`
 - `1482-m39-lasm-db-records-window-materialization-optimization.md`
+- `1483-m39-lasm-db-records-ops-filter.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -15486,6 +15486,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"affectedRowsGlobalTotal\":")
             && list_response.contains("\"filters\":{")
             && list_response.contains("\"op\":null")
+            && list_response.contains("\"ops\":null")
             && list_response.contains("\"db\":null")
             && list_response.contains("\"tx\":null")
             && list_response.contains("\"templateContains\":null")
@@ -15563,6 +15564,7 @@ fn main() effects { net } -> Int {
             && op_filtered_list_response.contains("\"recordsGlobalTotal\":3")
             && op_filtered_list_response.contains("\"filters\":{")
             && op_filtered_list_response.contains("\"op\":\"execTx\"")
+            && op_filtered_list_response.contains("\"ops\":null")
             && op_filtered_list_response.contains("\"db\":null")
             && op_filtered_list_response.contains("\"tx\":null")
             && op_filtered_list_response.contains("\"templateContains\":null")
@@ -15572,6 +15574,27 @@ fn main() effects { net } -> Int {
             && op_filtered_list_response.contains("\"op\":\"execTx\"")
             && !op_filtered_list_response.contains("\"op\":\"exec\","),
         "db records op-filter response should return deterministic filtered record window:\n{op_filtered_list_response}"
+    );
+
+    let ops_filtered_list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?ops=exec,queryOne HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        ops_filtered_list_response.contains("HTTP/1.1 200 OK"),
+        "db records ops-filter response should contain deterministic 200 status:\n{ops_filtered_list_response}"
+    );
+    assert!(
+        ops_filtered_list_response.contains("\"count\":2")
+            && ops_filtered_list_response.contains("\"recordsTotal\":2")
+            && ops_filtered_list_response.contains("\"recordsGlobalTotal\":3")
+            && ops_filtered_list_response.contains("\"filters\":{")
+            && ops_filtered_list_response.contains("\"ops\":[\"exec\",\"queryOne\"]")
+            && ops_filtered_list_response.contains("\"op\":\"exec\"")
+            && ops_filtered_list_response.contains("\"op\":\"queryOne\"")
+            && !ops_filtered_list_response.contains("\"op\":\"execTx\""),
+        "db records ops-filter response should deterministically return comma-list operation slice:\n{ops_filtered_list_response}"
     );
 
     let db_filtered_list_response = run_lasm_oneshot_request(
@@ -15816,6 +15839,20 @@ fn main() effects { net } -> Int {
                 "db records op filter must be one of exec, execTx, queryOne"
             ),
         "db records invalid op filter should return deterministic validation error:\n{invalid_op_filter_response}"
+    );
+
+    let invalid_ops_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?ops=exec,unknown HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_ops_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_ops_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_ops_filter_response.contains(
+                "db records ops filter must be comma-separated values from exec, execTx, queryOne"
+            ),
+        "db records invalid ops filter should return deterministic validation error:\n{invalid_ops_filter_response}"
     );
 
     let invalid_tx_filter_response = run_lasm_oneshot_request(

@@ -1936,6 +1936,11 @@ Post-alpha track acceptance anchors:
       - `id` is now echoed in filter metadata alongside `idFrom`/`idTo`,
       - invalid id values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
       - documented in `docs/book/1481-m39-lasm-db-records-id-filter.md`.
+   - [x] Added multi-operation list filter for `/db/records`:
+      - list-records response now supports `ops=...` comma-separated operation filters (`exec`, `execTx`, `queryOne`) in addition to existing single `op=...`,
+      - parsed ops are emitted as deterministic ordered filter metadata array,
+      - invalid ops lists return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1483-m39-lasm-db-records-ops-filter.md`.
    - [x] Optimized `/db/records` materialization to avoid full filtered-record cloning:
       - filter/order/window selection now uses index windows over in-memory record store and clones only selected response window when `includeRecords=true`,
       - `includeRecords=false` now returns summary payload without cloning full record window while preserving deterministic `count` and aggregate totals.
