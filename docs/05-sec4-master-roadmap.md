@@ -1920,6 +1920,11 @@ Post-alpha track acceptance anchors:
       - `offset` is now echoed in response filter metadata,
       - invalid offset values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
       - documented in `docs/book/1474-m39-lasm-db-records-offset-filter.md`.
+   - [x] Added bounded `limit` guard for `/db/records` payload sizing:
+      - list-records `limit` now accepts only integer values in `[1..1000]`,
+      - invalid limit values return deterministic `400 DB.RECORDS_LIMIT_INVALID`,
+      - `limit` is now echoed in response filter metadata.
+      - documented in `docs/book/1475-m39-lasm-db-records-limit-max-guard.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
