@@ -1449,5 +1449,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`
 - `1478-m39-lasm-postgres-exec-retryable-conflict-retry.md`
 - `1479-m39-lasm-sqlite-pragma-state-cache.md`
+- `1480-m39-lasm-postgres-zero-placeholder-bind-compat.md`
 
 As milestones progress, chapters will be added and linked from this index.

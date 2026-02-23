@@ -1921,6 +1921,11 @@ Post-alpha track acceptance anchors:
       - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
+   - [x] Fixed Postgres zero-placeholder compatibility on runtime bind path:
+      - `db.exec` / `db.execTx` now enter prepared+bind path only when placeholders are present,
+      - `db.queryOne` now binds an empty parameter slice when placeholder count is zero,
+      - preserves documented compatibility contract for zero-placeholder SQL with legacy params payloads.
+      - documented in `docs/book/1480-m39-lasm-postgres-zero-placeholder-bind-compat.md`.
    - [x] Added `/db/records` offset filter for deterministic paging windows:
       - list-records response now accepts `offset` (`>= 0`) and applies it before limit-window materialization,
       - `offset` is now echoed in response filter metadata,

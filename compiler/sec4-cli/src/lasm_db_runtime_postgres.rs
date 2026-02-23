@@ -759,7 +759,7 @@ pub(crate) fn run_lasm_postgres_exec(
 ) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
     validate_lasm_postgres_parameter_arity(required_params, params.len())?;
-    let use_prepared = required_params > 0 || !params.is_empty();
+    let use_prepared = required_params > 0;
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
@@ -858,7 +858,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
 ) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
     validate_lasm_postgres_parameter_arity(required_params, params.len())?;
-    let use_prepared = required_params > 0 || !params.is_empty();
+    let use_prepared = required_params > 0;
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
@@ -945,6 +945,11 @@ pub(crate) fn run_lasm_postgres_query_one(
     let required_params =
         max_lasm_postgres_placeholder_index_cached(state, normalized_query.as_str());
     validate_lasm_postgres_parameter_arity(required_params, params.len())?;
+    let bound_params = if required_params > 0 {
+        params
+    } else {
+        &[] as &[LasmPostgresParam]
+    };
     let wrapped_query = format!(
         "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
          FROM ({}) AS _sec4_row LIMIT 1",
@@ -955,7 +960,7 @@ pub(crate) fn run_lasm_postgres_query_one(
     let execute_query = |client: &mut PostgresClient,
                          statement: &PostgresStatement|
      -> Result<Option<postgres::Row>, postgres::Error> {
-        let param_refs = lasm_postgres_query_param_refs(params);
+        let param_refs = lasm_postgres_query_param_refs(bound_params);
         client.query_opt(statement, param_refs.as_slice())
     };
     let row = {
