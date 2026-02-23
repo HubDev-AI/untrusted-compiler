@@ -166,8 +166,13 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
     if let Some(statement) = state
         .db_records_postgres_statement_cache
         .get(query_template)
+        .cloned()
     {
-        return Ok(statement.clone());
+        touch_lasm_bounded_cache_entry(
+            &mut state.db_records_postgres_statement_cache_order,
+            query_template,
+        );
+        return Ok(statement);
     }
     let statement = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
@@ -216,6 +221,16 @@ pub(crate) fn insert_lasm_bounded_cache_entry<V>(
     evicted
 }
 
+pub(crate) fn touch_lasm_bounded_cache_entry(order: &mut VecDeque<String>, key: &str) {
+    if order.back().map(|value| value.as_str()) == Some(key) {
+        return;
+    }
+    if let Some(index) = order.iter().position(|value| value == key) {
+        order.remove(index);
+    }
+    order.push_back(key.to_string());
+}
+
 pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
@@ -240,6 +255,7 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
 mod tests {
     use super::{
         classify_lasm_db_runtime_error, insert_lasm_bounded_cache_entry, normalize_lasm_db_params,
+        touch_lasm_bounded_cache_entry,
     };
     use std::collections::{HashMap, VecDeque};
 
@@ -279,6 +295,22 @@ mod tests {
         assert!(!cache.contains_key("a"));
         assert_eq!(cache.get("b"), Some(&2));
         assert_eq!(cache.get("c"), Some(&3));
+    }
+
+    #[test]
+    fn touch_cache_entry_refreshes_recency_for_next_eviction() {
+        let mut cache = HashMap::new();
+        let mut order = VecDeque::new();
+
+        insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "a".to_string(), 1_i32);
+        insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "b".to_string(), 2_i32);
+        touch_lasm_bounded_cache_entry(&mut order, "a");
+        insert_lasm_bounded_cache_entry(&mut cache, &mut order, 2, "c".to_string(), 3_i32);
+
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.get("a"), Some(&1));
+        assert_eq!(cache.get("c"), Some(&3));
+        assert!(!cache.contains_key("b"));
     }
 
     #[test]

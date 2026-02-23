@@ -1,6 +1,7 @@
 use crate::lasm_db_runtime_common::{
     insert_lasm_bounded_cache_entry, lasm_dynamic_postgres_client_mut,
     lasm_dynamic_postgres_prepared_statement, reconnect_lasm_dynamic_postgres_client,
+    touch_lasm_bounded_cache_entry,
 };
 use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
@@ -489,8 +490,16 @@ fn max_lasm_postgres_placeholder_index_cached(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> usize {
-    if let Some(value) = state.db_postgres_placeholder_max_cache.get(query_template) {
-        return *value;
+    if let Some(value) = state
+        .db_postgres_placeholder_max_cache
+        .get(query_template)
+        .copied()
+    {
+        touch_lasm_bounded_cache_entry(
+            &mut state.db_postgres_placeholder_max_cache_order,
+            query_template,
+        );
+        return value;
     }
     let value = max_lasm_postgres_placeholder_index(query_template);
     let evicted = insert_lasm_bounded_cache_entry(
