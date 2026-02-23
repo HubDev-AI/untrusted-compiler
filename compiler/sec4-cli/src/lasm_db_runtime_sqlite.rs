@@ -135,9 +135,9 @@ pub(crate) fn parse_lasm_sqlite_query_params(value: &str) -> LasmSqliteQueryPara
                 }
             }
             serde_json::Value::Null => LasmSqliteQueryParams::Positional(Vec::new()),
-            other => LasmSqliteQueryParams::Positional(vec![parse_lasm_sqlite_query_param_value(
-                other,
-            )]),
+            other => {
+                LasmSqliteQueryParams::Positional(vec![parse_lasm_sqlite_query_param_value(other)])
+            }
         };
     }
     LasmSqliteQueryParams::Positional(vec![SqliteValue::Text(trimmed.to_string())])
@@ -222,9 +222,7 @@ fn validate_lasm_sqlite_parameter_arity(
     ))
 }
 
-fn lasm_sqlite_named_param_refs(
-    params: &[(String, SqliteValue)],
-) -> Vec<(&str, &dyn ToSql)> {
+fn lasm_sqlite_named_param_refs(params: &[(String, SqliteValue)]) -> Vec<(&str, &dyn ToSql)> {
     params
         .iter()
         .map(|(name, value)| (name.as_str(), value as &dyn ToSql))
@@ -240,6 +238,13 @@ pub(crate) fn run_lasm_sqlite_exec(
         let tx = connection
             .transaction()
             .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
+        if sqlite_params.is_empty() && has_lasm_sql_non_trailing_statement_separator(query_template) {
+            tx.execute_batch(query_template)
+                .map_err(|err| format!("sqlite execution failed: {err}"))?;
+            tx.commit()
+                .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
+            return Ok(0);
+        }
         let mut statement = tx
             .prepare_cached(query_template)
             .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
