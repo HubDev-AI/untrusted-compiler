@@ -24,7 +24,58 @@ use crate::{
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 use std::collections::BTreeMap;
+use std::env;
 use std::sync::Mutex;
+
+const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_MAX_BYTES";
+const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
+const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN: usize = 256;
+const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX: usize = 4 * 1024 * 1024;
+
+#[inline(always)]
+fn resolve_lasm_db_sql_template_max_bytes() -> usize {
+    let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
+        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+    }
+    let Ok(parsed) = trimmed.parse::<usize>() else {
+        return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
+    };
+    parsed.clamp(
+        LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
+        LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
+    )
+}
+
+#[inline(always)]
+fn enforce_lasm_db_sql_template_max_bytes(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    template: &str,
+    trace_id: &str,
+) -> bool {
+    let max_bytes = resolve_lasm_db_sql_template_max_bytes();
+    let template_bytes = template.as_bytes().len();
+    if template_bytes <= max_bytes {
+        return true;
+    }
+    let code = match operation {
+        "exec" => "DB.EXEC_INVALID",
+        "execTx" => "DB.EXEC_TX_INVALID",
+        "queryOne" => "DB.QUERY_ONE_INVALID",
+        _ => "DB.SQL_TEMPLATE_INVALID",
+    };
+    let message = format!("sql.q query template exceeds configured max bytes ({max_bytes})");
+    set_lasm_json_response(
+        response,
+        400,
+        &lasm_error_envelope(code, "validation", message.as_str(), 400, trace_id),
+    );
+    false
+}
 
 fn persist_lasm_db_record_with_capacity_guard(
     state: &mut LasmDynamicResponseState,
@@ -66,6 +117,10 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_sql_template_max_bytes(response, "exec", template.as_str(), trace_id)
+            {
+                return true;
+            }
             if template.trim().is_empty() {
                 set_lasm_json_response(
                     response,
@@ -285,6 +340,14 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_sql_template_max_bytes(
+                response,
+                "execTx",
+                template.as_str(),
+                trace_id,
+            ) {
+                return true;
+            }
             if template.trim().is_empty() {
                 set_lasm_json_response(
                     response,
@@ -589,6 +652,14 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_sql_template_max_bytes(
+                response,
+                "queryOne",
+                template.as_str(),
+                trace_id,
+            ) {
+                return true;
+            }
             if template.trim().is_empty() {
                 set_lasm_json_response(
                     response,
