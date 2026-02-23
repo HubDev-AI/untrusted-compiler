@@ -732,18 +732,30 @@ fn run_lasm_postgres_prepared_exec_with_count(
     }
 }
 
+fn validate_lasm_postgres_parameter_arity(
+    required_params: usize,
+    provided_count: usize,
+) -> Result<(), String> {
+    if provided_count < required_params {
+        return Err(format!(
+            "postgres query requires at least {required_params} sql parameters but received {provided_count}"
+        ));
+    }
+    if provided_count > required_params {
+        return Err(format!(
+            "postgres query expects exactly {required_params} sql parameters but received {provided_count}"
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
-    if required_params > params.len() {
-        return Err(format!(
-            "postgres query requires at least {required_params} sql parameters but received {}",
-            params.len()
-        ));
-    }
+    validate_lasm_postgres_parameter_arity(required_params, params.len())?;
     let use_prepared = required_params > 0 || !params.is_empty();
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
@@ -822,12 +834,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
     params: &[LasmPostgresParam],
 ) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index_cached(state, query_template);
-    if required_params > params.len() {
-        return Err(format!(
-            "postgres query requires at least {required_params} sql parameters but received {}",
-            params.len()
-        ));
-    }
+    validate_lasm_postgres_parameter_arity(required_params, params.len())?;
     let use_prepared = required_params > 0 || !params.is_empty();
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
@@ -914,12 +921,7 @@ pub(crate) fn run_lasm_postgres_query_one(
     }
     let required_params =
         max_lasm_postgres_placeholder_index_cached(state, normalized_query.as_str());
-    if required_params > params.len() {
-        return Err(format!(
-            "postgres query requires at least {required_params} sql parameters but received {}",
-            params.len()
-        ));
-    }
+    validate_lasm_postgres_parameter_arity(required_params, params.len())?;
     let wrapped_query = format!(
         "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
          FROM ({}) AS _sec4_row LIMIT 1",
@@ -986,7 +988,7 @@ mod tests {
     use super::{
         is_lasm_postgres_retryable_tx_sqlstate, max_lasm_postgres_placeholder_index_cached,
         parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
-        LasmPostgresParam,
+        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1013,6 +1015,16 @@ mod tests {
         assert!(is_lasm_postgres_retryable_tx_sqlstate(Some("40P01")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(Some("23505")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(None));
+    }
+
+    #[test]
+    fn postgres_parameter_arity_rejects_extra_params() {
+        let error =
+            validate_lasm_postgres_parameter_arity(1, 2).expect_err("extra params should fail");
+        assert_eq!(
+            error,
+            "postgres query expects exactly 1 sql parameters but received 2"
+        );
     }
 
     #[test]
