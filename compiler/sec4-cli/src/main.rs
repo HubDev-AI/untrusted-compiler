@@ -9933,9 +9933,52 @@ fn apply_lasm_dynamic_response_materialization(
             } else {
                 None
             };
+            let records_op_filter = if let Some(raw_op) = request.query_params.get("op") {
+                let trimmed = raw_op.trim();
+                if trimmed.is_empty() {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records op filter must be a non-empty string",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+                Some(trimmed.to_string())
+            } else {
+                None
+            };
+            let records_db_filter = if let Some(raw_db) = request.query_params.get("db") {
+                let trimmed = raw_db.trim();
+                match trimmed.parse::<i64>() {
+                    Ok(value) if value >= 1 => Some(value),
+                    _ => {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.RECORDS_FILTER_INVALID",
+                                "validation",
+                                "db records db filter must be an integer >= 1",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
             let (
                 records,
                 records_total,
+                records_global_total,
                 records_capacity,
                 records_dropped_total,
                 affected_rows_total,
@@ -9955,26 +9998,38 @@ fn apply_lasm_dynamic_response_materialization(
                 sqlite_busy_timeout_ms,
             ) = match dynamic_state.lock() {
                 Ok(state) => {
-                    let total = state.db_records.len();
+                    let records_filtered = state
+                        .db_records
+                        .iter()
+                        .filter(|record| {
+                            records_op_filter
+                                .as_ref()
+                                .map(|op| record.op == *op)
+                                .unwrap_or(true)
+                                && records_db_filter.map(|db| record.db == db).unwrap_or(true)
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let total = records_filtered.len();
                     let records = if let Some(limit) = records_limit {
-                        state
-                            .db_records
+                        records_filtered
                             .iter()
                             .skip(total.saturating_sub(limit))
                             .cloned()
                             .collect::<Vec<_>>()
                     } else {
-                        state.db_records.clone()
+                        records_filtered
                     };
+                    let affected_rows_total = records
+                        .iter()
+                        .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
                     (
                         records,
                         total,
+                        state.db_records.len(),
                         state.db_records_max,
                         state.db_records_dropped_total,
-                        state
-                            .db_records
-                            .iter()
-                            .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows)),
+                        affected_rows_total,
                         lasm_db_records_adapter_label(state.db_records_adapter),
                         state.db_tx_handles.len(),
                         state.db_tx_max_handles,
@@ -10013,10 +10068,15 @@ fn apply_lasm_dynamic_response_materialization(
                     "ok": true,
                     "count": records.len(),
                     "recordsTotal": records_total,
+                    "recordsGlobalTotal": records_global_total,
                     "recordsCapacity": records_capacity,
                     "recordsDroppedTotal": records_dropped_total,
                     "affectedRowsTotal": affected_rows_total,
                     "adapter": adapter,
+                    "filters": {
+                        "op": records_op_filter,
+                        "db": records_db_filter,
+                    },
                     "txHandleCount": tx_handle_count,
                     "txHandleCapacity": tx_handle_capacity,
                     "dbCache": {
