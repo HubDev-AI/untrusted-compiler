@@ -482,6 +482,18 @@ fn prewarm_lasm_cluster_relay_buffer_pool(
     }
 }
 
+fn apply_lasm_cluster_relay_worker_hot_path_count_delta(
+    counter: &AtomicUsize,
+    previous: usize,
+    next: usize,
+) {
+    if next > previous {
+        counter.fetch_add(next - previous, Ordering::Relaxed);
+    } else if previous > next {
+        counter.fetch_sub(previous - next, Ordering::Relaxed);
+    }
+}
+
 pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_receiver: Receiver<TcpStream>,
     relay_active: Arc<AtomicUsize>,
@@ -497,6 +509,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_buffer_bytes: usize,
     relay_buffer_pool_max: usize,
     relay_buffer_pool_prewarm: usize,
+    relay_pump_connections_total: Arc<AtomicUsize>,
+    relay_buffer_pool_entries_total: Arc<AtomicUsize>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let mut relay_connections: Vec<LasmClusterRelayPump> =
@@ -508,6 +522,12 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             relay_buffer_pool_prewarm.min(relay_buffer_pool_max),
             relay_buffer_bytes,
         );
+        let mut last_published_relay_connections = 0usize;
+        let mut last_published_relay_buffer_pool_entries = relay_buffer_pool.len();
+        if last_published_relay_buffer_pool_entries > 0 {
+            relay_buffer_pool_entries_total
+                .fetch_add(last_published_relay_buffer_pool_entries, Ordering::Relaxed);
+        }
         let mut unhealthy_ports_until_by_index: Vec<Option<Instant>> = Vec::new();
         let mut connect_warning_next_allowed_by_index: Vec<Option<Instant>> = Vec::new();
         let mut unhealthy_port_count = 0_usize;
@@ -1001,6 +1021,24 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     &mut active_connection_decrements_local,
                 );
             }
+            let relay_connections_len = relay_connections.len();
+            if relay_connections_len != last_published_relay_connections {
+                apply_lasm_cluster_relay_worker_hot_path_count_delta(
+                    &relay_pump_connections_total,
+                    last_published_relay_connections,
+                    relay_connections_len,
+                );
+                last_published_relay_connections = relay_connections_len;
+            }
+            let relay_buffer_pool_entries = relay_buffer_pool.len();
+            if relay_buffer_pool_entries != last_published_relay_buffer_pool_entries {
+                apply_lasm_cluster_relay_worker_hot_path_count_delta(
+                    &relay_buffer_pool_entries_total,
+                    last_published_relay_buffer_pool_entries,
+                    relay_buffer_pool_entries,
+                );
+                last_published_relay_buffer_pool_entries = relay_buffer_pool_entries;
+            }
 
             if receiver_closed && relay_connections.is_empty() {
                 break;
@@ -1018,6 +1056,14 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                 std::thread::sleep(relay_idle_sleep_duration);
                 idle_spins = 0;
             }
+        }
+        if last_published_relay_connections > 0 {
+            relay_pump_connections_total
+                .fetch_sub(last_published_relay_connections, Ordering::Relaxed);
+        }
+        if last_published_relay_buffer_pool_entries > 0 {
+            relay_buffer_pool_entries_total
+                .fetch_sub(last_published_relay_buffer_pool_entries, Ordering::Relaxed);
         }
     })
 }

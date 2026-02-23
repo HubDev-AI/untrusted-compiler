@@ -1854,6 +1854,10 @@ Post-alpha track acceptance anchors:
       - cluster startup now resolves relay buffer knobs once (`relay_buffer_bytes`, `relay_buffer_pool_max`, `relay_buffer_pool_prewarm`) and passes them into relay workers,
       - cluster status JSON now emits these effective values (`relayBufferBytes`, `relayBufferPoolMax`, `relayBufferPoolPrewarm`) so operators can verify active relay memory tuning at runtime.
       - documented in `docs/book/1463-m39-lasm-cluster-status-relay-buffer-tuning-fields.md`.
+   - [x] Added live relay-pump and buffer-pool occupancy telemetry in cluster status:
+      - relay worker loops now publish aggregate hot-path counts for active relay pumps and cached relay buffer-pool entries with delta-based atomic updates,
+      - cluster status JSON now emits `relayPumpConnections` and `relayBufferPoolEntries` for runtime visibility into relay concurrency and reusable buffer occupancy.
+      - documented in `docs/book/1464-m39-lasm-cluster-relay-pump-and-buffer-pool-occupancy-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
