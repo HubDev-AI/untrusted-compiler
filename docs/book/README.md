@@ -1445,5 +1445,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1473-m39-lasm-postgres-exact-parameter-count-contract.md`
 - `1474-m39-lasm-db-records-offset-filter.md`
 - `1475-m39-lasm-db-records-limit-max-guard.md`
+- `1476-m39-lasm-db-records-pagination-metadata.md`
 
 As milestones progress, chapters will be added and linked from this index.

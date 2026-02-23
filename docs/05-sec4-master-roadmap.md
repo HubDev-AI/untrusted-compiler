@@ -1925,6 +1925,11 @@ Post-alpha track acceptance anchors:
       - invalid limit values return deterministic `400 DB.RECORDS_LIMIT_INVALID`,
       - `limit` is now echoed in response filter metadata.
       - documented in `docs/book/1475-m39-lasm-db-records-limit-max-guard.md`.
+   - [x] Added deterministic pagination metadata for `/db/records` windows:
+      - list-records response now emits `hasMore` and `nextOffset` alongside list payload,
+      - metadata is computed from current `order` + `offset` + `limit` window semantics without changing record filtering rules,
+      - enables deterministic follow-up paging requests without client-side heuristic math.
+      - documented in `docs/book/1476-m39-lasm-db-records-pagination-metadata.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
