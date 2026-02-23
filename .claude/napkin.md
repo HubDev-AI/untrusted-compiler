@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I again started a slice by launching `git checkout -b ...` in parallel with file reads while opening analysis/render scripts. | Keep a strict branch gate: run branch create/switch commands standalone first, then run parallel read/search commands only after branch state is final. |
 | 2026-02-23 | self | I assumed `db.queryOne` benchmark route could self-prime by calling `db.exec` in the same LASM handler, but dynamic route execution still returned `DB.QUERY_ONE_NOT_FOUND` until a prior matching `db.exec` request existed. | For LASM benchmark queryOne profiles, add an explicit warmup path that executes matching `db.exec` before readiness/probe traffic, and keep query templates/params identical between warmup and queryOne routes. |
 | 2026-02-23 | self | I launched `git checkout -b ...` in parallel with read commands again while starting the capacity-profile slice. | Keep branch creation/checkouts strictly sequential, and only run parallel read/search commands after branch state is settled. |
 | 2026-02-23 | self | I assumed the C benchmark fixture (`benchmark-suite/services/sec4`) could accept `db.*` routes like LASM; C build failed because its benchmark runtime shim does not export DB runtime symbols. | Keep DB benchmark traffic slices scoped to `benchmark-suite/services/sec4-lasm` until the C benchmark runtime adapter is explicitly extended with DB ABI functions. |

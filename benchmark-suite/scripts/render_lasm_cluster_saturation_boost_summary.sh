@@ -79,8 +79,10 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
 
   echo "## Probe Profile"
   echo
+  echo "- Profile: $(jq -r '.run.profile // "ping"' "${matrix_path}")"
   echo "- Project path: $(jq -r '.run.projectPath // "unknown"' "${matrix_path}")"
   echo "- Request path: $(jq -r '.run.requestPath // "unknown"' "${matrix_path}")"
+  echo "- Warmup path: $(jq -r '.run.warmupPath // "none"' "${matrix_path}")"
   echo "- Duration: $(jq -r '.run.duration // "unknown"' "${matrix_path}")"
   echo "- Threads: $(jq -r '.run.threads // "unknown"' "${matrix_path}")"
   echo "- Connections: $(jq -r '.run.connections // "unknown"' "${matrix_path}")"
@@ -180,7 +182,9 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
   if [ -n "${verify_path}" ]; then
     echo "## Recommended Step Verification"
     echo
+    echo "- Profile: $(jq -r '.run.profile // "unknown"' "${verify_path}")"
     echo "- Boost step: $(jq -r '.run.autoscaleSaturationBoostStep // "unknown"' "${verify_path}")"
+    echo "- Warmup path: $(jq -r '.run.warmupPath // "unknown"' "${verify_path}")"
     echo "- Pass: $(jq -r '.pass // "unknown"' "${verify_path}")"
     echo "- Requests target met: $(jq -r '.requestsTargetMet // "unknown"' "${verify_path}")"
     echo "- Requests: $(jq -r '.observed.requests // "unknown"' "${verify_path}")"
