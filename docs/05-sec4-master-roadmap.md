@@ -1900,6 +1900,11 @@ Post-alpha track acceptance anchors:
       - keeps reconnect-on-closed behavior unchanged and preserves existing prepared/unprepared execution flow,
       - DB runtime classifier now maps common Postgres serialization/deadlock text to deterministic `409` conflict envelopes.
       - documented in `docs/book/1470-m39-lasm-postgres-exectx-retryable-conflict-retry.md`.
+   - [x] Added retry-once handling for Postgres `db.queryOne` retryable conflicts:
+      - `db.queryOne` now performs one immediate retry when the initial execution fails with retryable SQLSTATE conflict (`40001` / `40P01`),
+      - preserves existing reconnect-on-closed and single-statement guard behavior,
+      - reuses the prepared query path to keep query materialization semantics unchanged.
+      - documented in `docs/book/1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
