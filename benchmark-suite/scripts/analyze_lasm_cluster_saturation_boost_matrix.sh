@@ -30,7 +30,22 @@ if ! jq -e '
       ((has("p99") | not) or (.p99 | type == "string")) and
       ((has("clusterRelayDispatchSaturationShortCircuitTotal") | not) or (.clusterRelayDispatchSaturationShortCircuitTotal == null) or (.clusterRelayDispatchSaturationShortCircuitTotal | type == "number")) and
       ((has("clusterRelayDispatchSaturationShortCircuitPerSec") | not) or (.clusterRelayDispatchSaturationShortCircuitPerSec == null) or (.clusterRelayDispatchSaturationShortCircuitPerSec | type == "number")) and
-      ((has("clusterRelayLiveSenderCountResolved") | not) or (.clusterRelayLiveSenderCountResolved == null) or (.clusterRelayLiveSenderCountResolved | type == "number"))
+      ((has("clusterRelayLiveSenderCountResolved") | not) or (.clusterRelayLiveSenderCountResolved == null) or (.clusterRelayLiveSenderCountResolved | type == "number")) and
+      ((has("clusterDbAdapterResolved") | not) or (.clusterDbAdapterResolved == null) or (.clusterDbAdapterResolved | type == "string")) and
+      ((has("clusterDbPostgresTlsModeResolved") | not) or (.clusterDbPostgresTlsModeResolved == null) or (.clusterDbPostgresTlsModeResolved | type == "string")) and
+      ((has("clusterDbMaxTxHandlesResolved") | not) or (.clusterDbMaxTxHandlesResolved == null) or (.clusterDbMaxTxHandlesResolved | type == "number")) and
+      ((has("clusterDbRecordsMaxResolved") | not) or (.clusterDbRecordsMaxResolved == null) or (.clusterDbRecordsMaxResolved | type == "number")) and
+      ((has("clusterDbPostgresStatementCacheMaxResolved") | not) or (.clusterDbPostgresStatementCacheMaxResolved == null) or (.clusterDbPostgresStatementCacheMaxResolved | type == "number")) and
+      ((has("clusterDbPostgresPlaceholderCacheMaxResolved") | not) or (.clusterDbPostgresPlaceholderCacheMaxResolved == null) or (.clusterDbPostgresPlaceholderCacheMaxResolved | type == "number")) and
+      ((has("clusterDbPostgresStatementTimeoutMsResolved") | not) or (.clusterDbPostgresStatementTimeoutMsResolved == null) or (.clusterDbPostgresStatementTimeoutMsResolved | type == "number")) and
+      ((has("clusterDbPostgresLockTimeoutMsResolved") | not) or (.clusterDbPostgresLockTimeoutMsResolved == null) or (.clusterDbPostgresLockTimeoutMsResolved | type == "number")) and
+      ((has("clusterDbPostgresConnectTimeoutMsResolved") | not) or (.clusterDbPostgresConnectTimeoutMsResolved == null) or (.clusterDbPostgresConnectTimeoutMsResolved | type == "number")) and
+      ((has("clusterDbSqliteBusyTimeoutMsResolved") | not) or (.clusterDbSqliteBusyTimeoutMsResolved == null) or (.clusterDbSqliteBusyTimeoutMsResolved | type == "number")) and
+      ((has("clusterDbSqliteJournalModeResolved") | not) or (.clusterDbSqliteJournalModeResolved == null) or (.clusterDbSqliteJournalModeResolved | type == "string")) and
+      ((has("clusterDbSqliteSynchronousResolved") | not) or (.clusterDbSqliteSynchronousResolved == null) or (.clusterDbSqliteSynchronousResolved | type == "string")) and
+      ((has("clusterDbPostgresRetryableConflictRetryMaxResolved") | not) or (.clusterDbPostgresRetryableConflictRetryMaxResolved == null) or (.clusterDbPostgresRetryableConflictRetryMaxResolved | type == "number")) and
+      ((has("clusterDbSqliteLockRetryMaxResolved") | not) or (.clusterDbSqliteLockRetryMaxResolved == null) or (.clusterDbSqliteLockRetryMaxResolved | type == "number")) and
+      ((has("clusterDbSqliteLockRetryDelayMsResolved") | not) or (.clusterDbSqliteLockRetryDelayMsResolved == null) or (.clusterDbSqliteLockRetryDelayMsResolved | type == "number"))
     )
 ' "${matrix_path}" >/dev/null; then
   echo "matrix runs contain invalid fields: ${matrix_path}" >&2
@@ -68,6 +83,21 @@ jq -n \
       clusterRelayDispatchSaturationShortCircuitTotal: (.clusterRelayDispatchSaturationShortCircuitTotal // null),
       clusterRelayDispatchSaturationShortCircuitPerSec: (.clusterRelayDispatchSaturationShortCircuitPerSec // null),
       clusterRelayLiveSenderCountResolved: (.clusterRelayLiveSenderCountResolved // null),
+      clusterDbAdapterResolved: (.clusterDbAdapterResolved // null),
+      clusterDbPostgresTlsModeResolved: (.clusterDbPostgresTlsModeResolved // null),
+      clusterDbMaxTxHandlesResolved: (.clusterDbMaxTxHandlesResolved // null),
+      clusterDbRecordsMaxResolved: (.clusterDbRecordsMaxResolved // null),
+      clusterDbPostgresStatementCacheMaxResolved: (.clusterDbPostgresStatementCacheMaxResolved // null),
+      clusterDbPostgresPlaceholderCacheMaxResolved: (.clusterDbPostgresPlaceholderCacheMaxResolved // null),
+      clusterDbPostgresStatementTimeoutMsResolved: (.clusterDbPostgresStatementTimeoutMsResolved // null),
+      clusterDbPostgresLockTimeoutMsResolved: (.clusterDbPostgresLockTimeoutMsResolved // null),
+      clusterDbPostgresConnectTimeoutMsResolved: (.clusterDbPostgresConnectTimeoutMsResolved // null),
+      clusterDbSqliteBusyTimeoutMsResolved: (.clusterDbSqliteBusyTimeoutMsResolved // null),
+      clusterDbSqliteJournalModeResolved: (.clusterDbSqliteJournalModeResolved // null),
+      clusterDbSqliteSynchronousResolved: (.clusterDbSqliteSynchronousResolved // null),
+      clusterDbPostgresRetryableConflictRetryMaxResolved: (.clusterDbPostgresRetryableConflictRetryMaxResolved // null),
+      clusterDbSqliteLockRetryMaxResolved: (.clusterDbSqliteLockRetryMaxResolved // null),
+      clusterDbSqliteLockRetryDelayMsResolved: (.clusterDbSqliteLockRetryDelayMsResolved // null),
       summaryFile: .summaryFile
     })) as $rows
   | ($rows
