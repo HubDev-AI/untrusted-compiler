@@ -545,6 +545,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_active: Arc<AtomicUsize>,
     relay_selection_counter: Arc<AtomicUsize>,
     relay_worker_ports: Arc<ArcSwap<Vec<u16>>>,
+    relay_worker_ports_generation: Arc<AtomicU64>,
     relay_saturation_events: Arc<AtomicUsize>,
     relay_saturation_events_total: Arc<AtomicU64>,
     relay_backend_connect_timeout: Duration,
@@ -602,6 +603,8 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
         let unhealthy_prune_interval =
             Duration::from_millis(LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS);
         let mut selected_worker_ports_snapshot = Arc::clone(&relay_worker_ports.load());
+        let mut selected_worker_ports_generation =
+            relay_worker_ports_generation.load(Ordering::Relaxed);
         let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
         let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> =
             Vec::with_capacity(selected_worker_port_count);
@@ -623,7 +626,18 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
             let mut accepted = false;
             let mut accepted_in_batch = 0_usize;
             let mut worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
-            let mut worker_ports_snapshot_loaded = false;
+            let observed_worker_ports_generation =
+                relay_worker_ports_generation.load(Ordering::Relaxed);
+            let mut worker_ports_snapshot_loaded =
+                observed_worker_ports_generation == selected_worker_ports_generation;
+            if !worker_ports_snapshot_loaded {
+                selected_worker_ports_generation = observed_worker_ports_generation;
+                worker_ports_snapshot = load_lasm_cluster_worker_ports_snapshot_if_changed(
+                    &relay_worker_ports,
+                    &selected_worker_ports_snapshot,
+                );
+                worker_ports_snapshot_loaded = true;
+            }
             if unhealthy_port_count > 0 {
                 let now = Instant::now();
                 let should_prune = match unhealthy_prune_next_at {
@@ -631,10 +645,14 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     None => true,
                 };
                 if should_prune {
-                    if let Some(snapshot) = load_lasm_cluster_worker_ports_snapshot_if_changed(
-                        &relay_worker_ports,
-                        &selected_worker_ports_snapshot,
-                    ) {
+                    if !worker_ports_snapshot_loaded {
+                        worker_ports_snapshot = load_lasm_cluster_worker_ports_snapshot_if_changed(
+                            &relay_worker_ports,
+                            &selected_worker_ports_snapshot,
+                        );
+                        worker_ports_snapshot_loaded = true;
+                    }
+                    if let Some(snapshot) = worker_ports_snapshot.clone() {
                         let previous_ports_snapshot =
                             std::mem::replace(&mut selected_worker_ports_snapshot, snapshot);
                         let previous_unhealthy_ports_until_by_index =
@@ -676,7 +694,6 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                     } else {
                         Some(now + unhealthy_prune_interval)
                     };
-                    worker_ports_snapshot_loaded = true;
                 }
             }
             loop {

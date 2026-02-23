@@ -1889,6 +1889,10 @@ Post-alpha track acceptance anchors:
       - relay batch-mode scan budget now uses the configured multiplier to tune how far workers scan past deferred-idle relays per tick,
       - cluster status JSON now emits `relayPumpScanMultiplier` so active scan tuning is visible in operator/benchmark snapshots.
       - documented in `docs/book/1489-m39-lasm-relay-pump-scan-multiplier-runtime-tuning.md`.
+   - [x] Added worker-port generation-gated snapshot loading across autoscale/relay/status loops:
+      - autoscale snapshot refresh helper now returns a change flag and bumps a shared worker-port generation only when topology changes,
+      - relay worker loop and status writer loop now check generation first and avoid no-op `ArcSwap` snapshot loads when worker ports are unchanged.
+      - documented in `docs/book/1490-m39-lasm-worker-port-generation-gated-snapshot-loads.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

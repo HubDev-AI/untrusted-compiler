@@ -7933,6 +7933,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             .map(|worker| worker.port)
             .collect::<Vec<_>>(),
     ));
+    let worker_ports_generation = Arc::new(AtomicU64::new(1));
     let shared_state = Arc::new(RwLock::new(state));
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
@@ -7985,6 +7986,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             Arc::clone(&active_connections),
             Arc::clone(&relay_selection_counter),
             Arc::clone(&worker_ports_snapshot),
+            Arc::clone(&worker_ports_generation),
             Arc::clone(&relay_saturation_events),
             Arc::clone(&relay_saturation_events_total),
             relay_backend_connect_timeout,
@@ -8021,6 +8023,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_saturation_events_total: Arc::clone(&relay_saturation_events_total),
         relay_senders: Arc::clone(&relay_senders),
         worker_ports_snapshot: Arc::clone(&worker_ports_snapshot),
+        worker_ports_generation: Arc::clone(&worker_ports_generation),
         relay_worker_count,
         relay_queue_capacity,
         relay_queue_shard_capacity,
@@ -8060,6 +8063,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         saturation_events: Arc::clone(&relay_saturation_events),
         stop_flag: Arc::clone(&stop_flag),
         worker_ports_snapshot: Arc::clone(&worker_ports_snapshot),
+        worker_ports_generation: Arc::clone(&worker_ports_generation),
         autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
         autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),
         autoscale_last_dynamic_boost_step: Arc::clone(&autoscale_last_dynamic_boost_step),

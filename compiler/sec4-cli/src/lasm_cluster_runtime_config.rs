@@ -136,7 +136,7 @@ pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
     last_published_ports: &mut Vec<u16>,
-) {
+) -> bool {
     if state.workers.len() == last_published_ports.len()
         && state
             .workers
@@ -144,7 +144,7 @@ pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
             .zip(last_published_ports.iter())
             .all(|(worker, port)| worker.port == *port)
     {
-        return;
+        return false;
     }
 
     last_published_ports.clear();
@@ -156,6 +156,7 @@ pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
         last_published_ports.sort_unstable();
     }
     snapshot.store(Arc::new(last_published_ports.clone()));
+    true
 }
 
 pub(crate) fn lasm_cluster_remaining_cooldown_ms(

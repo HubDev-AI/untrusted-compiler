@@ -21,6 +21,7 @@ pub(crate) struct LasmClusterAutoscaleLoopConfig {
     pub(crate) saturation_events: Arc<AtomicUsize>,
     pub(crate) stop_flag: Arc<AtomicBool>,
     pub(crate) worker_ports_snapshot: Arc<ArcSwap<Vec<u16>>>,
+    pub(crate) worker_ports_generation: Arc<AtomicU64>,
     pub(crate) autoscale_last_desired_instances: Arc<AtomicUsize>,
     pub(crate) autoscale_last_saturation_events: Arc<AtomicUsize>,
     pub(crate) autoscale_last_dynamic_boost_step: Arc<AtomicUsize>,
@@ -62,6 +63,7 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
         saturation_events,
         stop_flag,
         worker_ports_snapshot,
+        worker_ports_generation,
         autoscale_last_desired_instances,
         autoscale_last_saturation_events,
         autoscale_last_dynamic_boost_step,
@@ -293,11 +295,13 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     }
                 }
                 if workers_changed_before_scale_actions {
-                    refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                    if refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                         &state,
                         &worker_ports_snapshot,
                         &mut last_published_worker_ports,
-                    );
+                    ) {
+                        worker_ports_generation.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
             }
             if skip_scale_actions {
@@ -345,11 +349,13 @@ pub(crate) fn spawn_lasm_cluster_autoscale_loop(
                     state.reusable_ports.len(),
                 );
                 if workers_changed_after_initial_refresh {
-                    refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                    if refresh_lasm_cluster_worker_ports_snapshot_if_changed(
                         &state,
                         &worker_ports_snapshot,
                         &mut last_published_worker_ports,
-                    );
+                    ) {
+                        worker_ports_generation.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
             }
             workers_to_spawn_ports.clear();
