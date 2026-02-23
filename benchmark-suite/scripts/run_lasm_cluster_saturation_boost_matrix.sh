@@ -450,6 +450,12 @@ case "${profile}" in
     exit 2
     ;;
 esac
+if [ "${profile}" = "db-hot-postgres-query-one" ] \
+  && [ -z "${db_postgres_dsn_file}" ] \
+  && [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
+  echo "postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
