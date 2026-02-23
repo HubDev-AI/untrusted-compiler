@@ -1877,6 +1877,10 @@ Post-alpha track acceptance anchors:
       - sqlite `db.queryOne` now uses `connection.prepare_cached(...)` for repeated select-like templates,
       - this preserves intrinsic behavior while reducing repeated SQLite parse/prepare overhead on hot request paths.
       - documented in `docs/book/1402-m39-lasm-sqlite-prepare-cached-runtime.md`.
+   - [x] Enabled SQLite WAL/NORMAL pragmas in LASM sqlite adapter connections:
+      - sqlite runtime connection bootstrap now configures `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL` (with `foreign_keys = ON`) for deterministic embedded DB behavior tuned for write/read runtime workloads,
+      - applies to runtime sqlite connect path used by bootstrap and reconnect flows without changing language-level DB intrinsic semantics.
+      - documented in `docs/book/1466-m39-lasm-sqlite-pragmas-wal-normal.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
