@@ -133,6 +133,71 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         } else {
             None
         };
+    let records_created_from_ms_filter =
+        if let Some(raw_created_from_ms) = request.query_params.get("createdFromMs") {
+            let trimmed = raw_created_from_ms.trim();
+            match trimmed.parse::<u64>() {
+                Ok(value) => Some(value),
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records createdFromMs filter must be an integer >= 0",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+    let records_created_to_ms_filter =
+        if let Some(raw_created_to_ms) = request.query_params.get("createdToMs") {
+            let trimmed = raw_created_to_ms.trim();
+            match trimmed.parse::<u64>() {
+                Ok(value) => Some(value),
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records createdToMs filter must be an integer >= 0",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+    if let (Some(created_from_ms), Some(created_to_ms)) = (
+        records_created_from_ms_filter,
+        records_created_to_ms_filter,
+    ) {
+        if created_from_ms > created_to_ms {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.RECORDS_FILTER_INVALID",
+                    "validation",
+                    "db records createdFromMs filter must be <= createdToMs",
+                    400,
+                    trace_id,
+                ),
+            );
+            return;
+        }
+    }
     let (
         records,
         records_total,
@@ -177,6 +242,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                         && records_template_contains_filter
                             .as_ref()
                             .map(|needle| record.template.contains(needle))
+                            .unwrap_or(true)
+                        && records_created_from_ms_filter
+                            .map(|from_ms| record.created_at_ms >= from_ms)
+                            .unwrap_or(true)
+                        && records_created_to_ms_filter
+                            .map(|to_ms| record.created_at_ms <= to_ms)
                             .unwrap_or(true)
                 })
                 .cloned()
@@ -290,6 +361,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "db": records_db_filter,
                 "tx": records_tx_filter,
                 "templateContains": records_template_contains_filter,
+                "createdFromMs": records_created_from_ms_filter,
+                "createdToMs": records_created_to_ms_filter,
             },
             "opCounts": {
                 "exec": records_exec_count,
