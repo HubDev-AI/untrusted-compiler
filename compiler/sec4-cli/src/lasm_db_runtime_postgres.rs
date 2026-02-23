@@ -610,6 +610,22 @@ fn run_lasm_postgres_unprepared_exec_with_count(
     }
 }
 
+fn run_lasm_postgres_prepared_exec_with_count(
+    client: &mut impl GenericClient,
+    statement: &PostgresStatement,
+    params: &[LasmPostgresParam],
+) -> Result<u64, postgres::Error> {
+    let param_refs = lasm_postgres_query_param_refs(params);
+    match client.execute(statement, param_refs.as_slice()) {
+        Ok(count) => Ok(count),
+        Err(err) if is_lasm_postgres_execute_rows_error(&err) => {
+            let rows = client.query(statement, param_refs.as_slice())?;
+            Ok(rows.len() as u64)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 pub(crate) fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -635,12 +651,11 @@ pub(crate) fn run_lasm_postgres_exec(
         None
     };
     let initial = if use_prepared {
-        let param_refs = lasm_postgres_query_param_refs(params);
         let client = lasm_dynamic_postgres_client_mut(state)?;
         let statement = prepared_statement
             .as_ref()
             .expect("prepared statement should be available for prepared execution");
-        client.execute(statement, param_refs.as_slice())
+        run_lasm_postgres_prepared_exec_with_count(client, statement, params)
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
         run_lasm_postgres_unprepared_exec_with_count(client, query_template)
@@ -652,10 +667,8 @@ pub(crate) fn run_lasm_postgres_exec(
             if use_prepared {
                 let retry_statement =
                     lasm_dynamic_postgres_prepared_statement(state, query_template)?;
-                let param_refs = lasm_postgres_query_param_refs(params);
                 let client = lasm_dynamic_postgres_client_mut(state)?;
-                client
-                    .execute(&retry_statement, param_refs.as_slice())
+                run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
                     .map_err(|retry_err| {
                         format!("postgres execution failed after reconnect: {retry_err}")
                     })?
@@ -689,8 +702,7 @@ fn run_lasm_postgres_exec_tx_once(
 ) -> Result<u64, postgres::Error> {
     let mut tx = client.transaction()?;
     let affected_rows = if let Some(statement) = prepared_statement {
-        let param_refs = lasm_postgres_query_param_refs(params);
-        tx.execute(statement, param_refs.as_slice())?
+        run_lasm_postgres_prepared_exec_with_count(&mut tx, statement, params)?
     } else {
         run_lasm_postgres_unprepared_exec_with_count(&mut tx, query_template)?
     };
