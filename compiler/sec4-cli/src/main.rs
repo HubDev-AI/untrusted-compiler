@@ -9742,8 +9742,6 @@ fn apply_lasm_dynamic_response_materialization(
         return;
     }
 
-    apply_lasm_text_placeholder_materialization(response, request, path_params);
-    apply_lasm_header_placeholder_materialization(response, request, path_params);
     if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
         response,
         request,
@@ -9755,6 +9753,8 @@ fn apply_lasm_dynamic_response_materialization(
         clear_lasm_internal_response_markers(response);
         return;
     }
+    apply_lasm_text_placeholder_materialization(response, request, path_params);
+    apply_lasm_header_placeholder_materialization(response, request, path_params);
 
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;

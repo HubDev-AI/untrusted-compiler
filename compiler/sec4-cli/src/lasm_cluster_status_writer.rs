@@ -11,6 +11,12 @@ use crate::lasm_cluster_runtime_config::{
     resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
+use crate::lasm_db_config::resolve_lasm_dynamic_db_tx_max_handles;
+use crate::lasm_db_runtime_dispatch::{
+    lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
+    lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
+    lasm_db_sql_template_max_bytes_limit,
+};
 use crate::{LasmClusterConfig, RunDbAdapter, RunDbPostgresTlsMode};
 
 pub(crate) struct LasmClusterStatusWriterConfig {
@@ -62,6 +68,20 @@ fn lasm_cluster_status_db_postgres_tls_mode_label(
         RunDbPostgresTlsMode::Disable => "disable",
         RunDbPostgresTlsMode::Require => "require",
     })
+}
+
+fn lasm_cluster_status_effective_u64_limit(
+    explicit: Option<u64>,
+    resolved_default: usize,
+) -> Option<u64> {
+    explicit.or_else(|| u64::try_from(resolved_default).ok())
+}
+
+fn lasm_cluster_status_effective_db_tx_max_handles(explicit: Option<u64>) -> Option<u64> {
+    let explicit_usize = explicit.and_then(|value| usize::try_from(value).ok());
+    resolve_lasm_dynamic_db_tx_max_handles(explicit_usize)
+        .ok()
+        .and_then(|value| u64::try_from(value).ok())
 }
 
 pub(crate) fn spawn_lasm_cluster_status_writer(
@@ -130,6 +150,28 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
         let relay_fallback_connect_max_attempts =
             resolve_lasm_cluster_fallback_connect_max_attempts();
+        let effective_db_max_tx_handles =
+            lasm_cluster_status_effective_db_tx_max_handles(shared_config.db_max_tx_handles);
+        let effective_db_query_one_row_max_bytes = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_query_one_row_max_bytes,
+            lasm_db_query_one_row_max_bytes_limit(),
+        );
+        let effective_db_query_one_row_max_columns = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_query_one_row_max_columns,
+            lasm_db_query_one_row_max_columns_limit(),
+        );
+        let effective_db_sql_template_max_bytes = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_sql_template_max_bytes,
+            lasm_db_sql_template_max_bytes_limit(),
+        );
+        let effective_db_params_max_bytes = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_params_max_bytes,
+            lasm_db_params_max_bytes_limit(),
+        );
+        let effective_db_params_max_entries = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_params_max_entries,
+            lasm_db_params_max_entries_limit(),
+        );
         loop {
             let sample_now = Instant::now();
             let saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
@@ -215,13 +257,13 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                     shared_config.db_postgres_tls_mode,
                 )
                 .map(str::to_string),
-                db_max_tx_handles: shared_config.db_max_tx_handles,
+                db_max_tx_handles: effective_db_max_tx_handles,
                 db_records_max: shared_config.db_records_max,
-                db_query_one_row_max_bytes: shared_config.db_query_one_row_max_bytes,
-                db_query_one_row_max_columns: shared_config.db_query_one_row_max_columns,
-                db_sql_template_max_bytes: shared_config.db_sql_template_max_bytes,
-                db_params_max_bytes: shared_config.db_params_max_bytes,
-                db_params_max_entries: shared_config.db_params_max_entries,
+                db_query_one_row_max_bytes: effective_db_query_one_row_max_bytes,
+                db_query_one_row_max_columns: effective_db_query_one_row_max_columns,
+                db_sql_template_max_bytes: effective_db_sql_template_max_bytes,
+                db_params_max_bytes: effective_db_params_max_bytes,
+                db_params_max_entries: effective_db_params_max_entries,
                 db_postgres_statement_cache_max: shared_config.db_postgres_statement_cache_max,
                 db_postgres_placeholder_cache_max: shared_config.db_postgres_placeholder_cache_max,
                 db_postgres_statement_timeout_ms: shared_config.db_postgres_statement_timeout_ms,

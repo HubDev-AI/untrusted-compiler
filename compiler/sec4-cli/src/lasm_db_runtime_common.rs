@@ -59,6 +59,11 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || message.contains("violates not-null constraint")
         || message.contains("violates check constraint")
         || message.contains("invalid input syntax for")
+        || message.contains("syntax error at or near")
+        || message.contains("syntax error")
+        || message.contains("unrecognized token")
+        || message.contains("no such column")
+        || message.contains("column does not exist")
     {
         let code = match operation {
             "exec" => "DB.EXEC_INVALID",
@@ -332,6 +337,24 @@ mod tests {
         );
         assert_eq!(status, 400);
         assert_eq!(code, "DB.EXEC_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sql_syntax_errors_as_validation() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("exec", "syntax error at or near \"FROM\"");
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_missing_column_errors_as_validation() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("queryOne", "no such column: unknown_field");
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
         assert_eq!(kind, "validation");
     }
 
