@@ -436,6 +436,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     }
     let (
         records,
+        records_count,
         records_total,
         records_has_more,
         records_next_offset,
@@ -469,10 +470,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         sqlite_synchronous,
     ) = match dynamic_state.lock() {
         Ok(state) => {
-            let mut records_filtered = state
+            let mut filtered_indices = state
                 .db_records
                 .iter()
+                .enumerate()
                 .filter(|record| {
+                    let (_, record) = record;
                     records_op_filter
                         .as_ref()
                         .map(|op| record.op == *op)
@@ -509,17 +512,19 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                             .map(|affected_rows_max| record.affected_rows <= affected_rows_max)
                             .unwrap_or(true)
                 })
-                .cloned()
+                .map(|(index, _)| index)
                 .collect::<Vec<_>>();
             let (records_exec_count, records_exec_tx_count, records_query_one_count) =
-                records_filtered.iter().fold(
+                filtered_indices.iter().fold(
                     (0usize, 0usize, 0usize),
-                    |(exec_count, exec_tx_count, query_one_count), record| match record.op.as_str()
-                    {
-                        "exec" => (exec_count + 1, exec_tx_count, query_one_count),
-                        "execTx" => (exec_count, exec_tx_count + 1, query_one_count),
-                        "queryOne" => (exec_count, exec_tx_count, query_one_count + 1),
-                        _ => (exec_count, exec_tx_count, query_one_count),
+                    |(exec_count, exec_tx_count, query_one_count), record_index| {
+                        let record = &state.db_records[*record_index];
+                        match record.op.as_str() {
+                            "exec" => (exec_count + 1, exec_tx_count, query_one_count),
+                            "execTx" => (exec_count, exec_tx_count + 1, query_one_count),
+                            "queryOne" => (exec_count, exec_tx_count, query_one_count + 1),
+                            _ => (exec_count, exec_tx_count, query_one_count),
+                        }
                     },
                 );
             let (
@@ -535,67 +540,68 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                     _ => (exec_count, exec_tx_count, query_one_count),
                 },
             );
-            let affected_rows_filtered_total = records_filtered
+            let affected_rows_filtered_total = filtered_indices
                 .iter()
-                .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
+                .fold(0u64, |acc, record_index| {
+                    acc.saturating_add(state.db_records[*record_index].affected_rows)
+                });
             let affected_rows_global_total = state
                 .db_records
                 .iter()
                 .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
             if records_order_filter == "desc" {
-                records_filtered.reverse();
+                filtered_indices.reverse();
             }
-            let total = records_filtered.len();
+            let total = filtered_indices.len();
             let offset = records_offset.unwrap_or(0);
-            let records = if records_order_filter == "desc" {
+            let (window_start, window_end) = if records_order_filter == "desc" {
+                let start = offset.min(total);
                 if let Some(limit) = records_limit {
-                    records_filtered
-                        .into_iter()
-                        .skip(offset)
-                        .take(limit)
-                        .collect::<Vec<_>>()
+                    let end = start.saturating_add(limit).min(total);
+                    (start, end)
                 } else {
-                    records_filtered.into_iter().skip(offset).collect::<Vec<_>>()
+                    (start, total)
                 }
             } else if let Some(limit) = records_limit {
                 let end = total.saturating_sub(offset);
                 let start = end.saturating_sub(limit);
-                records_filtered
-                    .iter()
-                    .skip(start)
-                    .take(end.saturating_sub(start))
-                    .cloned()
-                    .collect::<Vec<_>>()
+                (start, end)
             } else if offset > 0 {
-                records_filtered
-                    .into_iter()
-                    .skip(offset)
+                (offset.min(total), total)
+            } else {
+                (0, total)
+            };
+            let window_len = window_end.saturating_sub(window_start);
+            let records = if include_records {
+                filtered_indices[window_start..window_end]
+                    .iter()
+                    .map(|record_index| state.db_records[*record_index].clone())
                     .collect::<Vec<_>>()
             } else {
-                records_filtered
+                Vec::new()
             };
-            let affected_rows_total = records
+            let affected_rows_total = filtered_indices[window_start..window_end]
                 .iter()
-                .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
+                .fold(0u64, |acc, record_index| {
+                    acc.saturating_add(state.db_records[*record_index].affected_rows)
+                });
             let records_has_more = if records_limit.is_some() {
                 if records_order_filter == "desc" {
-                    offset.saturating_add(records.len()) < total
+                    window_end < total
                 } else {
-                    total
-                        .saturating_sub(offset)
-                        .saturating_sub(records.len())
-                        > 0
+                    total.saturating_sub(offset).saturating_sub(window_len) > 0
                 }
             } else {
                 false
             };
             let records_next_offset = if records_has_more {
-                Some(offset.saturating_add(records.len()))
+                Some(offset.saturating_add(window_len))
             } else {
                 None
             };
             (
                 records,
+                window_len,
                 total,
                 records_has_more,
                 records_next_offset,
@@ -649,7 +655,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         200,
         &serde_json::json!({
             "ok": true,
-            "count": records.len(),
+            "count": records_count,
             "recordsTotal": records_total,
             "hasMore": records_has_more,
             "nextOffset": records_next_offset,

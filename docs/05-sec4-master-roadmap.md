@@ -1936,6 +1936,10 @@ Post-alpha track acceptance anchors:
       - `id` is now echoed in filter metadata alongside `idFrom`/`idTo`,
       - invalid id values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
       - documented in `docs/book/1481-m39-lasm-db-records-id-filter.md`.
+   - [x] Optimized `/db/records` materialization to avoid full filtered-record cloning:
+      - filter/order/window selection now uses index windows over in-memory record store and clones only selected response window when `includeRecords=true`,
+      - `includeRecords=false` now returns summary payload without cloning full record window while preserving deterministic `count` and aggregate totals.
+      - documented in `docs/book/1482-m39-lasm-db-records-window-materialization-optimization.md`.
    - [x] Added bounded `limit` guard for `/db/records` payload sizing:
       - list-records `limit` now accepts only integer values in `[1..1000]`,
       - invalid limit values return deterministic `400 DB.RECORDS_LIMIT_INVALID`,
