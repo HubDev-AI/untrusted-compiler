@@ -17356,6 +17356,79 @@ fn run_command_rejects_zero_db_records_max_override() {
 }
 
 #[test]
+fn run_command_rejects_db_query_one_row_max_bytes_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-query-one-row-max-bytes-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-query-one-row-max-bytes",
+        "4096",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-query-one-row-max-bytes is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr
+            .contains("run failed: --db-query-one-row-max-bytes is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-query-one-row-max-bytes guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_query_one_row_max_columns_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-query-one-row-max-columns");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-query-one-row-max-columns",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-query-one-row-max-columns override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-query-one-row-max-columns must be >= 1"),
+        "stderr should include deterministic db-query-one-row-max-columns validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_statement_cache_max_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-statement-cache-max-c-backend");
     let project_path = project_dir
@@ -28368,6 +28441,10 @@ fn main() effects { net } -> Int {
             "32",
             "--db-records-max",
             "128",
+            "--db-query-one-row-max-bytes",
+            "4096",
+            "--db-query-one-row-max-columns",
+            "64",
             "--db-sqlite-busy-timeout-ms",
             "2500",
             "--db-sqlite-journal-mode",
@@ -28557,6 +28634,20 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(128),
         "first status json should include dbRecordsMax runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbQueryOneRowMaxBytes")
+            .and_then(serde_json::Value::as_u64),
+        Some(4096),
+        "first status json should include dbQueryOneRowMaxBytes runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbQueryOneRowMaxColumns")
+            .and_then(serde_json::Value::as_u64),
+        Some(64),
+        "first status json should include dbQueryOneRowMaxColumns runtime tuning"
     );
     assert_eq!(
         first_status

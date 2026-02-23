@@ -38,6 +38,8 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_postgres_tls_mode: Option<String>,
     pub(crate) db_max_tx_handles: Option<u64>,
     pub(crate) db_records_max: Option<u64>,
+    pub(crate) db_query_one_row_max_bytes: Option<u64>,
+    pub(crate) db_query_one_row_max_columns: Option<u64>,
     pub(crate) db_postgres_statement_cache_max: Option<u64>,
     pub(crate) db_postgres_placeholder_cache_max: Option<u64>,
     pub(crate) db_postgres_statement_timeout_ms: Option<u64>,
@@ -102,6 +104,8 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_postgres_tls_mode == other.db_postgres_tls_mode
             && self.db_max_tx_handles == other.db_max_tx_handles
             && self.db_records_max == other.db_records_max
+            && self.db_query_one_row_max_bytes == other.db_query_one_row_max_bytes
+            && self.db_query_one_row_max_columns == other.db_query_one_row_max_columns
             && self.db_postgres_statement_cache_max == other.db_postgres_statement_cache_max
             && self.db_postgres_placeholder_cache_max == other.db_postgres_placeholder_cache_max
             && self.db_postgres_statement_timeout_ms == other.db_postgres_statement_timeout_ms
@@ -173,6 +177,8 @@ struct LasmClusterStatusPayload<'a> {
     db_postgres_tls_mode: Option<&'a str>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -277,6 +283,8 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_postgres_tls_mode: snapshot.db_postgres_tls_mode.as_deref(),
         db_max_tx_handles: snapshot.db_max_tx_handles,
         db_records_max: snapshot.db_records_max,
+        db_query_one_row_max_bytes: snapshot.db_query_one_row_max_bytes,
+        db_query_one_row_max_columns: snapshot.db_query_one_row_max_columns,
         db_postgres_statement_cache_max: snapshot.db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max: snapshot.db_postgres_placeholder_cache_max,
         db_postgres_statement_timeout_ms: snapshot.db_postgres_statement_timeout_ms,
