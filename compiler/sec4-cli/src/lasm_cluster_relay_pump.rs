@@ -1,7 +1,9 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 
-const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
+const LASM_CLUSTER_RELAY_BUFFER_BYTES_DEFAULT: usize = 32 * 1024;
+const LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN: usize = 1024;
+const LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX: usize = 1024 * 1024;
 
 pub(crate) enum LasmClusterRelayPumpStep {
     Progressed,
@@ -25,12 +27,21 @@ pub(crate) struct LasmClusterRelayPump {
 }
 
 impl LasmClusterRelayPump {
-    pub(crate) fn new(client: TcpStream, upstream: TcpStream) -> Result<Self, String> {
+    pub(crate) fn new(
+        client: TcpStream,
+        upstream: TcpStream,
+        relay_buffer_bytes: usize,
+    ) -> Result<Self, String> {
+        let buffer_bytes = relay_buffer_bytes.clamp(
+            LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
+            LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX,
+        );
         Self::new_with_buffers(
             client,
             upstream,
-            vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
-            vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+            vec![0_u8; buffer_bytes],
+            vec![0_u8; buffer_bytes],
+            buffer_bytes,
         )
     }
 
@@ -39,18 +50,23 @@ impl LasmClusterRelayPump {
         upstream: TcpStream,
         mut client_to_upstream: Vec<u8>,
         mut upstream_to_client: Vec<u8>,
+        relay_buffer_bytes: usize,
     ) -> Result<Self, String> {
+        let buffer_bytes = relay_buffer_bytes.clamp(
+            LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
+            LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX,
+        );
         client
             .set_nonblocking(true)
             .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
         upstream
             .set_nonblocking(true)
             .map_err(|err| format!("could not set upstream proxy stream nonblocking: {err}"))?;
-        if client_to_upstream.len() != LASM_CLUSTER_RELAY_BUFFER_BYTES {
-            client_to_upstream.resize(LASM_CLUSTER_RELAY_BUFFER_BYTES, 0_u8);
+        if client_to_upstream.len() != buffer_bytes {
+            client_to_upstream.resize(buffer_bytes, 0_u8);
         }
-        if upstream_to_client.len() != LASM_CLUSTER_RELAY_BUFFER_BYTES {
-            upstream_to_client.resize(LASM_CLUSTER_RELAY_BUFFER_BYTES, 0_u8);
+        if upstream_to_client.len() != buffer_bytes {
+            upstream_to_client.resize(buffer_bytes, 0_u8);
         }
         Ok(Self {
             client,
@@ -195,4 +211,8 @@ impl LasmClusterRelayPump {
     pub(crate) fn into_buffers(self) -> (Vec<u8>, Vec<u8>) {
         (self.client_to_upstream, self.upstream_to_client)
     }
+}
+
+pub(crate) fn default_lasm_cluster_relay_buffer_bytes() -> usize {
+    LASM_CLUSTER_RELAY_BUFFER_BYTES_DEFAULT
 }
