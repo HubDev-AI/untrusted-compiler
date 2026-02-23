@@ -31,6 +31,10 @@ const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_M
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN: usize = 256;
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX: usize = 4 * 1024 * 1024;
+const LASM_DB_PARAMS_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_BYTES";
+const LASM_DB_PARAMS_MAX_BYTES_DEFAULT: usize = 128 * 1024;
+const LASM_DB_PARAMS_MAX_BYTES_MIN: usize = 256;
+const LASM_DB_PARAMS_MAX_BYTES_MAX: usize = 8 * 1024 * 1024;
 
 #[inline(always)]
 fn resolve_lasm_db_sql_template_max_bytes() -> usize {
@@ -69,6 +73,48 @@ fn enforce_lasm_db_sql_template_max_bytes(
         _ => "DB.SQL_TEMPLATE_INVALID",
     };
     let message = format!("sql.q query template exceeds configured max bytes ({max_bytes})");
+    set_lasm_json_response(
+        response,
+        400,
+        &lasm_error_envelope(code, "validation", message.as_str(), 400, trace_id),
+    );
+    false
+}
+
+#[inline(always)]
+fn resolve_lasm_db_params_max_bytes() -> usize {
+    let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
+        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+    }
+    let Ok(parsed) = trimmed.parse::<usize>() else {
+        return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
+    };
+    parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
+}
+
+#[inline(always)]
+fn enforce_lasm_db_params_max_bytes(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    params: &str,
+    trace_id: &str,
+) -> bool {
+    let max_bytes = resolve_lasm_db_params_max_bytes();
+    let params_bytes = params.as_bytes().len();
+    if params_bytes <= max_bytes {
+        return true;
+    }
+    let code = match operation {
+        "exec" => "DB.EXEC_INVALID",
+        "execTx" => "DB.EXEC_TX_INVALID",
+        "queryOne" => "DB.QUERY_ONE_INVALID",
+        _ => "DB.OPERATION_INVALID",
+    };
+    let message = format!("sql.q params payload exceeds configured max bytes ({max_bytes})");
     set_lasm_json_response(
         response,
         400,
@@ -141,6 +187,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_params_max_bytes(response, "exec", params.as_str(), trace_id) {
+                return true;
+            }
             let db_raw = materialize_lasm_internal_header_value(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
                     .unwrap_or_else(|| "1".to_string()),
@@ -368,6 +417,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_params_max_bytes(response, "execTx", params.as_str(), trace_id) {
+                return true;
+            }
             let tx_db_source =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_DB_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
@@ -680,6 +732,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 request,
                 path_params,
             );
+            if !enforce_lasm_db_params_max_bytes(response, "queryOne", params.as_str(), trace_id) {
+                return true;
+            }
             let db_raw = materialize_lasm_internal_header_value(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
                     .unwrap_or_else(|| "1".to_string()),
