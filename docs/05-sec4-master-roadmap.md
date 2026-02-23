@@ -1910,6 +1910,11 @@ Post-alpha track acceptance anchors:
       - deterministic runtime validation now emits `sqlite query expects exactly N sql parameters but received M` for too-many positional params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1472-m39-lasm-sqlite-positional-parameter-count-contract.md`.
+   - [x] Tightened Postgres parameter-count contract to exact arity:
+      - Postgres runtime (`db.exec`, `db.execTx`, `db.queryOne`) now rejects extra SQL params instead of relying on driver/runtime mismatch errors,
+      - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
+      - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
+      - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,

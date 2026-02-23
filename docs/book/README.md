@@ -1442,5 +1442,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1470-m39-lasm-postgres-exectx-retryable-conflict-retry.md`
 - `1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`
 - `1472-m39-lasm-sqlite-positional-parameter-count-contract.md`
+- `1473-m39-lasm-postgres-exact-parameter-count-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.
