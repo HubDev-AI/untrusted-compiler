@@ -303,6 +303,71 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     } else {
         true
     };
+    let records_affected_rows_min_filter =
+        if let Some(raw_affected_rows_min) = request.query_params.get("affectedRowsMin") {
+            let trimmed = raw_affected_rows_min.trim();
+            match trimmed.parse::<u64>() {
+                Ok(value) => Some(value),
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records affectedRowsMin filter must be an integer >= 0",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+    let records_affected_rows_max_filter =
+        if let Some(raw_affected_rows_max) = request.query_params.get("affectedRowsMax") {
+            let trimmed = raw_affected_rows_max.trim();
+            match trimmed.parse::<u64>() {
+                Ok(value) => Some(value),
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records affectedRowsMax filter must be an integer >= 0",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+    if let (Some(affected_rows_min), Some(affected_rows_max)) = (
+        records_affected_rows_min_filter,
+        records_affected_rows_max_filter,
+    ) {
+        if affected_rows_min > affected_rows_max {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.RECORDS_FILTER_INVALID",
+                    "validation",
+                    "db records affectedRowsMin filter must be <= affectedRowsMax",
+                    400,
+                    trace_id,
+                ),
+            );
+            return;
+        }
+    }
     let (
         records,
         records_total,
@@ -359,6 +424,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                             .unwrap_or(true)
                         && records_id_to_filter
                             .map(|id_to| record.id <= id_to)
+                            .unwrap_or(true)
+                        && records_affected_rows_min_filter
+                            .map(|affected_rows_min| record.affected_rows >= affected_rows_min)
+                            .unwrap_or(true)
+                        && records_affected_rows_max_filter
+                            .map(|affected_rows_max| record.affected_rows <= affected_rows_max)
                             .unwrap_or(true)
                 })
                 .cloned()
@@ -487,6 +558,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "idTo": records_id_to_filter,
                 "order": records_order_filter,
                 "includeRecords": include_records,
+                "affectedRowsMin": records_affected_rows_min_filter,
+                "affectedRowsMax": records_affected_rows_max_filter,
             },
             "opCounts": {
                 "exec": records_exec_count,
