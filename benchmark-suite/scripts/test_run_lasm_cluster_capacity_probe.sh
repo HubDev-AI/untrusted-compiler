@@ -203,6 +203,31 @@ if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
   echo "lasm capacity probe db query-one profile dry-run missing default warmup path" >&2
   exit 1
 fi
+out_db_postgres_query_profile="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --profile db-hot-postgres-query-one \
+  --db-postgres-dsn-file /tmp/sec4-test-postgres.dsn \
+  --port 19096 \
+  2>&1)"
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_postgres_query_profile"; then
+  echo "lasm capacity probe db postgres query-one profile dry-run missing default request path" >&2
+  exit 1
+fi
+if ! grep -q 'dbAdapter=postgres' <<<"$out_db_postgres_query_profile"; then
+  echo "lasm capacity probe db postgres query-one profile dry-run missing default postgres adapter override" >&2
+  exit 1
+fi
+if env -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --profile db-hot-postgres-query-one \
+  --port 19097 >/tmp/lasm-capacity-probe-missing-postgres-dsn.log 2>&1; then
+  echo "lasm capacity probe accepted postgres profile without DSN" >&2
+  exit 1
+fi
+if ! grep -q 'postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN' /tmp/lasm-capacity-probe-missing-postgres-dsn.log; then
+  echo "lasm capacity probe missing postgres profile DSN diagnostic" >&2
+  exit 1
+fi
 
 out_fixed="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --dry-run \

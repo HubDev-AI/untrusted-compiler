@@ -9,7 +9,7 @@ Runs sec4 LASM cluster mode under load, samples peak RSS, and writes a
 capacity probe result JSON.
 
 Options:
-  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one>
+  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one>
                                                  Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
@@ -473,9 +473,9 @@ if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   exit 2
 fi
 case "$profile" in
-  ping|db-hot-write|db-hot-write-tx|db-hot-query-one) ;;
+  ping|db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one) ;;
   *)
-    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one (got: $profile)" >&2
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one, db-hot-postgres-query-one (got: $profile)" >&2
     exit 2
     ;;
 esac
@@ -514,7 +514,7 @@ if [ "$project_path_explicit" != "true" ]; then
     ping)
       project_path="examples/lasm-alpha-full"
       ;;
-    db-hot-write|db-hot-write-tx|db-hot-query-one)
+    db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one)
       project_path="benchmark-suite/services/sec4-lasm"
       ;;
   esac
@@ -533,16 +533,30 @@ if [ "$request_path_explicit" != "true" ]; then
     db-hot-query-one)
       request_path="/db/hot-query-one"
       ;;
+    db-hot-postgres-query-one)
+      request_path="/db/hot-query-one"
+      ;;
   esac
 fi
-if [ "$profile" = "db-hot-query-one" ] && [ -z "$warmup_path" ]; then
+if { [ "$profile" = "db-hot-query-one" ] || [ "$profile" = "db-hot-postgres-query-one" ]; } \
+  && [ -z "$warmup_path" ]; then
   warmup_path="/db/hot-write"
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_adapter" ]; then
-  db_adapter="sqlite"
+  if [ "$profile" = "db-hot-postgres-query-one" ]; then
+    db_adapter="postgres"
+  else
+    db_adapter="sqlite"
+  fi
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_base" ]; then
   db_base="${root_dir}/results/raw/sec4-lasm-cluster-db"
+fi
+if [ "$db_adapter" = "postgres" ] \
+  && [ -z "$db_postgres_dsn_file" ] \
+  && [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
+  echo "postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+  exit 2
 fi
 if [ "$build_profile" = "release" ]; then
   sec4_bin="${repo_root}/target/release/sec4"
