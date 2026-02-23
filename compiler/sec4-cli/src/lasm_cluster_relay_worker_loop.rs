@@ -15,32 +15,10 @@ use crate::lasm_cluster_backend_selection::{
 };
 use crate::lasm_cluster_relay_pump::{LasmClusterRelayPump, LasmClusterRelayPumpStep};
 use crate::lasm_cluster_runtime_config::{
-    resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
+    resolve_lasm_cluster_fallback_connect_max_attempts, resolve_lasm_cluster_idle_sleep_micros,
+    resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::{LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS, LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS};
-
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV: &str =
-    "SEC4_RT_LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS";
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT: usize = 4;
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN: usize = 1;
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX: usize = 256;
-
-fn resolve_lasm_cluster_fallback_connect_max_attempts() -> usize {
-    let Ok(raw) = std::env::var(LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV) else {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    }
-    let Ok(parsed) = trimmed.parse::<usize>() else {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    };
-    parsed.clamp(
-        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN,
-        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX,
-    )
-}
 
 fn initialize_lasm_cluster_relay_connection(
     client: TcpStream,

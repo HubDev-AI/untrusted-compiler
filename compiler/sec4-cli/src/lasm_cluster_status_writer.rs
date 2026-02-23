@@ -7,33 +7,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::lasm_cluster_runtime_config::{
-    resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
+    resolve_lasm_cluster_fallback_connect_max_attempts, resolve_lasm_cluster_idle_sleep_micros,
+    resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
 use crate::{LasmClusterConfig, RunDbAdapter, RunDbPostgresTlsMode};
-
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV: &str =
-    "SEC4_RT_LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS";
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT: usize = 4;
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN: usize = 1;
-const LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX: usize = 256;
-
-fn resolve_lasm_cluster_fallback_connect_max_attempts() -> usize {
-    let Ok(raw) = std::env::var(LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_ENV) else {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    };
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    }
-    let Ok(parsed) = trimmed.parse::<usize>() else {
-        return LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_DEFAULT;
-    };
-    parsed.clamp(
-        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MIN,
-        LASM_CLUSTER_FALLBACK_CONNECT_MAX_ATTEMPTS_MAX,
-    )
-}
 
 pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) status_path: Option<PathBuf>,
