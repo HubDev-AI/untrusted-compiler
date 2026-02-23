@@ -21,6 +21,8 @@ use std::time::Duration;
 pub(crate) const LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT: u64 = 2000;
 pub(crate) const LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT: &str = "WAL";
 pub(crate) const LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT: &str = "NORMAL";
+pub(crate) const LASM_DB_SQLITE_JOURNAL_MODE_ENV: &str = "SEC4_RT_LASM_DB_SQLITE_JOURNAL_MODE";
+pub(crate) const LASM_DB_SQLITE_SYNCHRONOUS_ENV: &str = "SEC4_RT_LASM_DB_SQLITE_SYNCHRONOUS";
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT: u64 = 5000;
 pub(crate) const LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT: u64 = 2000;
 pub(crate) const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
@@ -49,6 +51,68 @@ pub(crate) fn lasm_db_postgres_tls_mode_label(mode: LasmDbPostgresTlsMode) -> &'
         LasmDbPostgresTlsMode::Disable => "disable",
         LasmDbPostgresTlsMode::Require => "require",
     }
+}
+
+fn parse_lasm_db_sqlite_journal_mode(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_uppercase().as_str() {
+        "DELETE" => Some("DELETE"),
+        "TRUNCATE" => Some("TRUNCATE"),
+        "PERSIST" => Some("PERSIST"),
+        "MEMORY" => Some("MEMORY"),
+        "WAL" => Some("WAL"),
+        "OFF" => Some("OFF"),
+        _ => None,
+    }
+}
+
+fn parse_lasm_db_sqlite_synchronous(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_uppercase().as_str() {
+        "OFF" => Some("OFF"),
+        "NORMAL" => Some("NORMAL"),
+        "FULL" => Some("FULL"),
+        "EXTRA" => Some("EXTRA"),
+        _ => None,
+    }
+}
+
+fn resolve_lasm_db_sqlite_journal_mode() -> &'static str {
+    let Ok(raw) = std::env::var(LASM_DB_SQLITE_JOURNAL_MODE_ENV) else {
+        return LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT;
+    }
+    if let Some(mode) = parse_lasm_db_sqlite_journal_mode(trimmed) {
+        return mode;
+    }
+    eprintln!(
+        "warning: invalid {} value `{}`; defaulting to {}",
+        LASM_DB_SQLITE_JOURNAL_MODE_ENV,
+        trimmed,
+        LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT
+    );
+    LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT
+}
+
+fn resolve_lasm_db_sqlite_synchronous() -> &'static str {
+    let Ok(raw) = std::env::var(LASM_DB_SQLITE_SYNCHRONOUS_ENV) else {
+        return LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT;
+    }
+    if let Some(mode) = parse_lasm_db_sqlite_synchronous(trimmed) {
+        return mode;
+    }
+    eprintln!(
+        "warning: invalid {} value `{}`; defaulting to {}",
+        LASM_DB_SQLITE_SYNCHRONOUS_ENV,
+        trimmed,
+        LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
+    );
+    LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
 }
 
 fn lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms: u64) -> u64 {
@@ -278,7 +342,8 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
         .execute_batch(
             format!(
                 "PRAGMA foreign_keys = ON; PRAGMA journal_mode = {}; PRAGMA synchronous = {};",
-                LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT, LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
+                resolve_lasm_db_sqlite_journal_mode(),
+                resolve_lasm_db_sqlite_synchronous(),
             )
             .as_str(),
         )
@@ -328,6 +393,7 @@ mod tests {
         build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
         lasm_db_postgres_tls_mode_label, lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
+        parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
         LasmDbPostgresTlsMode,
     };
 
@@ -410,6 +476,26 @@ mod tests {
             Some(LasmDbPostgresTlsMode::Require)
         );
         assert_eq!(parse_lasm_db_postgres_tls_mode("invalid"), None);
+    }
+
+    #[test]
+    fn parse_sqlite_journal_mode_supports_known_values() {
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("wal"), Some("WAL"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("delete"), Some("DELETE"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("truncate"), Some("TRUNCATE"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("persist"), Some("PERSIST"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("memory"), Some("MEMORY"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("off"), Some("OFF"));
+        assert_eq!(parse_lasm_db_sqlite_journal_mode("bogus"), None);
+    }
+
+    #[test]
+    fn parse_sqlite_synchronous_supports_known_values() {
+        assert_eq!(parse_lasm_db_sqlite_synchronous("off"), Some("OFF"));
+        assert_eq!(parse_lasm_db_sqlite_synchronous("normal"), Some("NORMAL"));
+        assert_eq!(parse_lasm_db_sqlite_synchronous("full"), Some("FULL"));
+        assert_eq!(parse_lasm_db_sqlite_synchronous("extra"), Some("EXTRA"));
+        assert_eq!(parse_lasm_db_sqlite_synchronous("bogus"), None);
     }
 
     #[test]

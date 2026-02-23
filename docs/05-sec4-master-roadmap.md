@@ -1885,6 +1885,11 @@ Post-alpha track acceptance anchors:
       - sqlite runtime connection bootstrap now configures `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL` (with `foreign_keys = ON`) for deterministic embedded DB behavior tuned for write/read runtime workloads,
       - applies to runtime sqlite connect path used by bootstrap and reconnect flows without changing language-level DB intrinsic semantics.
       - documented in `docs/book/1466-m39-lasm-sqlite-pragmas-wal-normal.md`.
+   - [x] Added env-configurable SQLite pragma selection with deterministic fallback:
+      - sqlite runtime connection bootstrap now resolves `PRAGMA journal_mode` from `SEC4_RT_LASM_DB_SQLITE_JOURNAL_MODE` and `PRAGMA synchronous` from `SEC4_RT_LASM_DB_SQLITE_SYNCHRONOUS`,
+      - supported journal modes are `DELETE|TRUNCATE|PERSIST|MEMORY|WAL|OFF` and supported synchronous values are `OFF|NORMAL|FULL|EXTRA`,
+      - invalid/empty env values deterministically fall back to `WAL` / `NORMAL` with runtime warning output, preserving stable defaults.
+      - documented in `docs/book/1468-m39-lasm-sqlite-pragmas-env-config.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
