@@ -219,12 +219,17 @@ fn validate_lasm_sqlite_parameter_arity(
     parameter_count: usize,
     provided_count: usize,
 ) -> Result<(), String> {
-    if provided_count >= parameter_count {
-        return Ok(());
+    if provided_count < parameter_count {
+        return Err(format!(
+            "sqlite query requires at least {parameter_count} sql parameters but received {provided_count}"
+        ));
     }
-    Err(format!(
-        "sqlite query requires at least {parameter_count} sql parameters but received {provided_count}"
-    ))
+    if provided_count > parameter_count {
+        return Err(format!(
+            "sqlite query expects exactly {parameter_count} sql parameters but received {provided_count}"
+        ));
+    }
+    Ok(())
 }
 
 fn resolve_lasm_sqlite_named_param_bindings<'a>(
@@ -450,6 +455,7 @@ pub(crate) fn run_lasm_sqlite_query_one(
 mod tests {
     use super::{
         parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
+        validate_lasm_sqlite_parameter_arity,
         LasmSqliteQueryParams,
     };
     use rusqlite::Connection;
@@ -564,5 +570,12 @@ mod tests {
         let error = resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())
             .expect_err("extra named param should fail");
         assert!(error.contains("query parameter `role` is not present in SQL statement"));
+    }
+
+    #[test]
+    fn positional_arity_validation_rejects_extra_params() {
+        let error =
+            validate_lasm_sqlite_parameter_arity(1, 2).expect_err("extra params should fail");
+        assert!(error.contains("expects exactly 1 sql parameters but received 2"));
     }
 }
