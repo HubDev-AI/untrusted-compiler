@@ -30,6 +30,10 @@ if ! grep -q 'verifyRecommended=true' <<<"$out"; then
   echo "saturation boost bundle dry-run missing default verify mode marker" >&2
   exit 1
 fi
+if ! grep -q 'profile=ping' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing default profile marker" >&2
+  exit 1
+fi
 if ! grep -q 'sec4 LASM saturation boost matrix plan:' <<<"$out"; then
   echo "saturation boost bundle dry-run missing matrix plan passthrough" >&2
   exit 1
@@ -60,6 +64,28 @@ if ! grep -q 'wrkProcesses=4' <<<"$out"; then
 fi
 if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary.md ${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json" <<<"$out"; then
   echo "saturation boost bundle dry-run missing summary command plan with verify artifact" >&2
+  exit 1
+fi
+
+out_db_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --profile db-hot-query-one \
+  --boost-steps 2 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-query-one' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'projectPath=benchmark-suite/services/sec4-lasm' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default project path" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default warmup path" >&2
   exit 1
 fi
 
@@ -131,6 +157,14 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run -
 fi
 if ! grep -q 'build-profile must be one of: debug, release' /tmp/lasm-sat-boost-bundle-invalid-profile.log; then
   echo "saturation boost bundle missing invalid build profile diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --profile nope >/tmp/lasm-sat-boost-bundle-invalid-run-profile.log 2>&1; then
+  echo "saturation boost bundle accepted invalid profile value" >&2
+  exit 1
+fi
+if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one' /tmp/lasm-sat-boost-bundle-invalid-run-profile.log; then
+  echo "saturation boost bundle missing invalid profile diagnostic" >&2
   exit 1
 fi
 

@@ -11,8 +11,11 @@ Runs the full LASM saturation boost tuning bundle:
 
 Options:
   --boost-steps <csv>                              Boost-step values (default: 2,4,6)
+  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one>
+                                                 Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
+  --warmup-path <path>                             Optional warmup HTTP path passed to probe runs
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
   --duration <duration>                            wrk duration (default: 40s)
   --threads <n>                                    wrk threads (default: 8)
@@ -47,8 +50,18 @@ Options:
 USAGE
 }
 
-project_path="${LASM_CAPACITY_PROJECT_PATH:-examples/lasm-alpha-full}"
-request_path="${LASM_CAPACITY_REQUEST_PATH:-/health}"
+profile="${LASM_CAPACITY_PROFILE:-ping}"
+project_path="${LASM_CAPACITY_PROJECT_PATH:-}"
+project_path_explicit="false"
+if [ -n "${LASM_CAPACITY_PROJECT_PATH:-}" ]; then
+  project_path_explicit="true"
+fi
+request_path="${LASM_CAPACITY_REQUEST_PATH:-}"
+request_path_explicit="false"
+if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
+  request_path_explicit="true"
+fi
+warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -87,12 +100,22 @@ while [ "$#" -gt 0 ]; do
       boost_steps_csv="${2:-}"
       shift 2
       ;;
+    --profile)
+      profile="${2:-}"
+      shift 2
+      ;;
     --project-path)
       project_path="${2:-}"
+      project_path_explicit="true"
       shift 2
       ;;
     --request-path)
       request_path="${2:-}"
+      request_path_explicit="true"
+      shift 2
+      ;;
+    --warmup-path)
+      warmup_path="${2:-}"
       shift 2
       ;;
     --request-header)
@@ -254,9 +277,45 @@ if [ "${wrk_processes}" -lt 1 ]; then
   echo "wrk-processes must be >= 1, got: ${wrk_processes}" >&2
   exit 2
 fi
+case "${profile}" in
+  ping|db-hot-write|db-hot-write-tx|db-hot-query-one) ;;
+  *)
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one (got: ${profile})" >&2
+    exit 2
+    ;;
+esac
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
+if [ "${project_path_explicit}" != "true" ]; then
+  case "${profile}" in
+    ping)
+      project_path="examples/lasm-alpha-full"
+      ;;
+    db-hot-write|db-hot-write-tx|db-hot-query-one)
+      project_path="benchmark-suite/services/sec4-lasm"
+      ;;
+  esac
+fi
+if [ "${request_path_explicit}" != "true" ]; then
+  case "${profile}" in
+    ping)
+      request_path="/health"
+      ;;
+    db-hot-write)
+      request_path="/db/hot-write"
+      ;;
+    db-hot-write-tx)
+      request_path="/db/hot-write-tx"
+      ;;
+    db-hot-query-one)
+      request_path="/db/hot-query-one"
+      ;;
+  esac
+fi
+if [ "${profile}" = "db-hot-query-one" ] && [ -z "${warmup_path}" ]; then
+  warmup_path="/db/hot-write"
+fi
 matrix_script="${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh"
 summary_script="${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh"
 
@@ -289,8 +348,10 @@ mkdir -p "$(dirname "${matrix_out_path}")" "$(dirname "${analysis_out_path}")" "
 
 cat <<PLAN
 sec4 LASM saturation boost bundle plan:
+  profile=${profile}
   projectPath=${project_path}
   requestPath=${request_path}
+  warmupPath=${warmup_path:-none}
   duration=${duration}
   threads=${threads}
   connections=${connections}
@@ -317,8 +378,10 @@ PLAN
 matrix_cmd=(
   "${matrix_script}"
   --boost-steps "${boost_steps_csv}"
+  --profile "${profile}"
   --project-path "${project_path}"
   --request-path "${request_path}"
+  --warmup-path "${warmup_path}"
   --request-header "${request_header}"
   --duration "${duration}"
   --threads "${threads}"
