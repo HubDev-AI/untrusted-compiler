@@ -535,6 +535,33 @@ pub(crate) fn run_lasm_cluster_accept_loop(
                         };
                         relay_dispatch_cursor = next_dispatch_index;
 
+                        let should_short_circuit_saturated =
+                            (listener_all_senders_saturated_in_batch
+                                || listener_all_senders_saturated_recently)
+                                && relay_sender_live[stream_dispatch_start]
+                                    == LASM_CLUSTER_RELAY_SENDER_LIVE
+                                && relay_senders[stream_dispatch_start].is_full();
+                        if should_short_circuit_saturated {
+                            if let Err(message) =
+                                handle_lasm_cluster_accept_dispatch_error_with_counters(
+                                    LasmClusterRelayDispatchError::Saturated(client_stream),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    relay_dispatch_short_circuit_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_dispatch_counters,
+                                )
+                            {
+                                return Err(message);
+                            }
+                            listener_dispatch_counters
+                                .listener_dispatch_short_circuit_total_local += 1;
+                            listener_all_senders_saturated_recently = true;
+                            continue;
+                        }
+
                         let live_count_before_primary_dispatch = relay_live_sender_count;
                         let mut saw_live_sender = false;
                         if let Err(stream) = attempt_lasm_cluster_relay_send(

@@ -1862,6 +1862,10 @@ Post-alpha track acceptance anchors:
       - status writer now samples relay queue sender depths each interval and publishes aggregate queue occupancy (`relayQueueDepth`) and shard max depth (`relayQueueMaxDepth`),
       - this exposes real backpressure signal for relay queue tuning during cluster load runs without changing request dispatch semantics.
       - documented in `docs/book/1465-m39-lasm-cluster-relay-queue-depth-telemetry.md`.
+   - [x] Added pre-dispatch saturated short-circuit in accept-loop hot path:
+      - in saturated-recently mode, accept loop now short-circuits directly to deterministic `503` saturated handling when the preferred live relay sender is already `is_full()`, before primary `try_send`/fallback dispatch attempts,
+      - reduces avoidable dispatch attempt overhead during sustained queue pressure while preserving existing saturation/error semantics.
+      - documented in `docs/book/1467-m39-lasm-accept-loop-pre-dispatch-saturated-short-circuit.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
