@@ -37,14 +37,12 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
 
 fn parse_lasm_postgres_positional_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Option<Vec<LasmPostgresParam>> {
+) -> Vec<LasmPostgresParam> {
     let mut indexed = Vec::with_capacity(entries.len());
     let mut max_index = 0usize;
     for (key, value) in entries {
-        let index = parse_lasm_postgres_positional_param_index(key.as_str())?;
-        if index == 0 {
-            return None;
-        }
+        let index = parse_lasm_postgres_positional_param_index(key.as_str())
+            .expect("positional object keys should be validated before parsing");
         max_index = max_index.max(index);
         indexed.push((index, parse_lasm_postgres_query_param_value(value.clone())));
     }
@@ -55,7 +53,7 @@ fn parse_lasm_postgres_positional_object_params(
     for (index, value) in indexed {
         params[index - 1] = value;
     }
-    Some(params)
+    params
 }
 
 fn parse_lasm_postgres_positional_param_index(key: &str) -> Option<usize> {
@@ -108,16 +106,43 @@ fn normalize_lasm_postgres_named_param_key(key: &str) -> Option<&str> {
 
 fn parse_lasm_postgres_named_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Option<HashMap<String, LasmPostgresParam>> {
+) -> HashMap<String, LasmPostgresParam> {
     let mut named = HashMap::with_capacity(entries.len());
     for (key, value) in entries {
-        let normalized = normalize_lasm_postgres_named_param_key(key.as_str())?;
+        let normalized = normalize_lasm_postgres_named_param_key(key.as_str())
+            .expect("named object keys should be validated before parsing");
         named.insert(
             normalized.to_string(),
             parse_lasm_postgres_query_param_value(value.clone()),
         );
     }
-    Some(named)
+    named
+}
+
+enum LasmPostgresParamsObjectKeyStyle {
+    Positional,
+    Named,
+}
+
+fn classify_lasm_postgres_params_object_keys(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> Result<LasmPostgresParamsObjectKeyStyle, String> {
+    let mut positional_all = true;
+    let mut named_all = true;
+    for key in entries.keys() {
+        positional_all &= parse_lasm_postgres_positional_param_index(key.as_str()).is_some();
+        named_all &= normalize_lasm_postgres_named_param_key(key.as_str()).is_some();
+    }
+    if positional_all {
+        return Ok(LasmPostgresParamsObjectKeyStyle::Positional);
+    }
+    if named_all {
+        return Ok(LasmPostgresParamsObjectKeyStyle::Named);
+    }
+    Err(
+        "postgres params object keys must be all positional ($1/?1/1) or all named (:name/@name/$name/name)"
+            .to_string(),
+    )
 }
 
 fn rewrite_lasm_postgres_named_query_template(
@@ -300,24 +325,27 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params(
                     .map(parse_lasm_postgres_query_param_value)
                     .collect(),
             )),
-            serde_json::Value::Object(entries) => {
-                if let Some(params) = parse_lasm_postgres_positional_object_params(&entries) {
-                    return Ok((query_template.to_string(), params));
-                }
-                if let Some(named) = parse_lasm_postgres_named_object_params(&entries) {
+            serde_json::Value::Object(entries) => match classify_lasm_postgres_params_object_keys(
+                &entries,
+            )? {
+                LasmPostgresParamsObjectKeyStyle::Positional => Ok((
+                    query_template.to_string(),
+                    parse_lasm_postgres_positional_object_params(&entries),
+                )),
+                LasmPostgresParamsObjectKeyStyle::Named => {
+                    let named = parse_lasm_postgres_named_object_params(&entries);
                     if let Some((rewritten_template, params)) =
                         rewrite_lasm_postgres_named_query_template(query_template, &named)?
                     {
-                        return Ok((rewritten_template, params));
+                        Ok((rewritten_template, params))
+                    } else {
+                        Err(
+                            "postgres named parameterized execution requires SQL placeholders to be named (:name, @name, or $name)"
+                                .to_string(),
+                        )
                     }
                 }
-                Ok((
-                    query_template.to_string(),
-                    vec![parse_lasm_postgres_query_param_value(
-                        serde_json::Value::Object(entries),
-                    )],
-                ))
-            }
+            },
             serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
             other => Ok((
                 query_template.to_string(),
@@ -332,31 +360,33 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params(
 }
 
 #[cfg(test)]
-pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Vec<LasmPostgresParam> {
+pub(crate) fn parse_lasm_postgres_query_params(value: &str) -> Result<Vec<LasmPostgresParam>, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed == "0" {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
         return match parsed {
-            serde_json::Value::Array(entries) => entries
+            serde_json::Value::Array(entries) => Ok(entries
                 .into_iter()
                 .map(parse_lasm_postgres_query_param_value)
-                .collect(),
-            serde_json::Value::Object(entries) => {
-                if let Some(params) = parse_lasm_postgres_positional_object_params(&entries) {
-                    params
-                } else {
-                    vec![parse_lasm_postgres_query_param_value(
-                        serde_json::Value::Object(entries),
-                    )]
+                .collect()),
+            serde_json::Value::Object(entries) => match classify_lasm_postgres_params_object_keys(
+                &entries,
+            )? {
+                LasmPostgresParamsObjectKeyStyle::Positional => {
+                    Ok(parse_lasm_postgres_positional_object_params(&entries))
                 }
-            }
-            serde_json::Value::Null => Vec::new(),
-            other => vec![parse_lasm_postgres_query_param_value(other)],
+                LasmPostgresParamsObjectKeyStyle::Named => Err(
+                    "postgres named params object requires SQL template context for placeholder rewrite"
+                        .to_string(),
+                ),
+            },
+            serde_json::Value::Null => Ok(Vec::new()),
+            other => Ok(vec![parse_lasm_postgres_query_param_value(other)]),
         };
     }
-    vec![LasmPostgresParam::Text(trimmed.to_string())]
+    Ok(vec![LasmPostgresParam::Text(trimmed.to_string())])
 }
 
 fn lasm_postgres_query_param_refs(params: &[LasmPostgresParam]) -> Vec<&(dyn ToSql + Sync)> {
@@ -1143,7 +1173,8 @@ mod tests {
 
     #[test]
     fn positional_object_params_expand_with_null_fill() {
-        let params = parse_lasm_postgres_query_params("{\"1\":\"alice\",\"3\":true}");
+        let params = parse_lasm_postgres_query_params("{\"1\":\"alice\",\"3\":true}")
+            .expect("positional params should parse");
         assert_eq!(params.len(), 3);
         match &params[0] {
             LasmPostgresParam::Text(value) => assert_eq!(value, "alice"),
@@ -1160,18 +1191,33 @@ mod tests {
     }
 
     #[test]
-    fn non_numeric_object_params_fall_back_to_single_text_param() {
-        let params = parse_lasm_postgres_query_params("{\"user\":\"alice\"}");
-        assert_eq!(params.len(), 1);
-        match &params[0] {
-            LasmPostgresParam::Text(value) => assert_eq!(value, "{\"user\":\"alice\"}"),
-            _ => panic!("expected fallback text param"),
-        }
+    fn mixed_object_params_return_validation_error() {
+        let error = match parse_lasm_postgres_query_params("{\"1\":\"alice\",\"name\":\"bob\"}") {
+            Ok(_) => panic!("mixed positional and named keys should fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains("postgres params object keys must be all positional"));
+    }
+
+    #[test]
+    fn named_object_params_without_named_placeholders_return_validation_error() {
+        let error = match parse_lasm_postgres_query_template_and_params(
+            "SELECT $1::text",
+            "{\"name\":\"alice\"}",
+        )
+        {
+            Ok(_) => panic!("named params with positional SQL placeholders should fail"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains("postgres named parameterized execution requires SQL placeholders to be named")
+        );
     }
 
     #[test]
     fn positional_object_params_accept_placeholder_prefixed_keys() {
-        let params = parse_lasm_postgres_query_params("{\"$2\":\"alice\"}");
+        let params = parse_lasm_postgres_query_params("{\"$2\":\"alice\"}")
+            .expect("positional params should parse");
         assert_eq!(params.len(), 2);
         match &params[0] {
             LasmPostgresParam::Null(_) => {}
