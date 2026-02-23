@@ -10637,6 +10637,9 @@ fn apply_lasm_text_placeholder_materialization(
     if response.body.is_empty() {
         return;
     }
+    if !lasm_body_might_contain_placeholder_tokens(&response.body) {
+        return;
+    }
     let original = String::from_utf8_lossy(&response.body);
     if !contains_lasm_request_placeholder_tokens(original.as_ref()) {
         return;
@@ -10646,6 +10649,10 @@ fn apply_lasm_text_placeholder_materialization(
     if materialized != original {
         response.body = materialized.into_bytes();
     }
+}
+
+fn lasm_body_might_contain_placeholder_tokens(body: &[u8]) -> bool {
+    body.windows(2).any(|pair| pair == b"{{")
 }
 
 fn apply_lasm_header_placeholder_materialization(
