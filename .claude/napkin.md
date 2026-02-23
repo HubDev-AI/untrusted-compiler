@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I ran two Cargo test commands in one parallel tool call and reintroduced package/build lock contention. | Keep every Cargo command strictly sequential; use parallel tool calls only for read/search/syntax operations. |
 | 2026-02-23 | self | I accidentally triggered `web.run` while patching a local relay-pump file in a local-only implementation slice. | Keep local coding turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tool calls unless external research is explicitly required. |
 | 2026-02-23 | self | I started this continuation by running `git status`/file discovery before the mandatory standalone napkin read again. | Keep a hard first-command rule on every continuation: run only `cat .claude/napkin.md` first, then proceed to git/search commands. |
 | 2026-02-23 | self | After merging PR #739, I started the saturation-bundle profile slice on local `dev` before creating a new `codex/*` branch. | Enforce a hard post-merge gate: run `git branch --show-current` immediately, and if on `dev`, create the next `codex/*` branch before any edits. |

@@ -1870,6 +1870,10 @@ Post-alpha track acceptance anchors:
       - relay pump loops now bound per-direction nonblocking read/write bursts (`LASM_CLUSTER_RELAY_IO_BURST_MAX=4`) for client->upstream and upstream->client paths,
       - keeps per-connection tick work finite so one busy relay session cannot monopolize worker pump cycles under mixed traffic.
       - documented in `docs/book/1485-m39-lasm-relay-pump-io-burst-fairness-cap.md`.
+   - [x] Added runtime-tunable relay IO burst cap + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IO_BURST_MAX` (bounded `1..64`, default `4`) and threads the resolved value into relay pump initialization,
+      - cluster status JSON now emits `relayIoBurstMax` so active fairness tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

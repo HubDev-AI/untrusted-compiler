@@ -4,8 +4,9 @@ use std::net::{Shutdown, TcpStream};
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_DEFAULT: usize = 32 * 1024;
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN: usize = 1024;
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX: usize = 1024 * 1024;
-// Cap per-direction IO loops so one busy connection cannot monopolize a worker tick.
-const LASM_CLUSTER_RELAY_IO_BURST_MAX: usize = 4;
+const LASM_CLUSTER_RELAY_IO_BURST_MAX_DEFAULT: usize = 4;
+const LASM_CLUSTER_RELAY_IO_BURST_MAX_MIN: usize = 1;
+const LASM_CLUSTER_RELAY_IO_BURST_MAX_MAX: usize = 64;
 
 pub(crate) enum LasmClusterRelayPumpStep {
     Progressed,
@@ -26,6 +27,7 @@ pub(crate) struct LasmClusterRelayPump {
     upstream_read_closed: bool,
     client_write_closed: bool,
     upstream_write_closed: bool,
+    io_burst_max: usize,
 }
 
 impl LasmClusterRelayPump {
@@ -33,6 +35,7 @@ impl LasmClusterRelayPump {
         client: TcpStream,
         upstream: TcpStream,
         relay_buffer_bytes: usize,
+        relay_io_burst_max: usize,
     ) -> Result<Self, String> {
         let buffer_bytes = relay_buffer_bytes.clamp(
             LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
@@ -44,6 +47,7 @@ impl LasmClusterRelayPump {
             vec![0_u8; buffer_bytes],
             vec![0_u8; buffer_bytes],
             buffer_bytes,
+            relay_io_burst_max,
         )
     }
 
@@ -53,11 +57,15 @@ impl LasmClusterRelayPump {
         mut client_to_upstream: Vec<u8>,
         mut upstream_to_client: Vec<u8>,
         relay_buffer_bytes: usize,
+        relay_io_burst_max: usize,
     ) -> Result<Self, String> {
         let buffer_bytes = relay_buffer_bytes.clamp(
             LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN,
             LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX,
         );
+        let io_burst_max = relay_io_burst_max
+            .max(LASM_CLUSTER_RELAY_IO_BURST_MAX_MIN)
+            .min(LASM_CLUSTER_RELAY_IO_BURST_MAX_MAX);
         client
             .set_nonblocking(true)
             .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
@@ -83,6 +91,7 @@ impl LasmClusterRelayPump {
             upstream_read_closed: false,
             client_write_closed: false,
             upstream_write_closed: false,
+            io_burst_max,
         })
     }
 
@@ -92,7 +101,7 @@ impl LasmClusterRelayPump {
         let mut client_read_burst = 0usize;
         while !self.client_read_closed
             && self.c2u_end < self.client_to_upstream.len()
-            && client_read_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+            && client_read_burst < self.io_burst_max
         {
             match self
                 .client
@@ -116,9 +125,7 @@ impl LasmClusterRelayPump {
         }
 
         let mut upstream_write_burst = 0usize;
-        while self.c2u_start < self.c2u_end
-            && upstream_write_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
-        {
+        while self.c2u_start < self.c2u_end && upstream_write_burst < self.io_burst_max {
             match self
                 .upstream
                 .write(&self.client_to_upstream[self.c2u_start..self.c2u_end])
@@ -153,7 +160,7 @@ impl LasmClusterRelayPump {
         let mut upstream_read_burst = 0usize;
         while !self.upstream_read_closed
             && self.u2c_end < self.upstream_to_client.len()
-            && upstream_read_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+            && upstream_read_burst < self.io_burst_max
         {
             match self
                 .upstream
@@ -177,9 +184,7 @@ impl LasmClusterRelayPump {
         }
 
         let mut client_write_burst = 0usize;
-        while self.u2c_start < self.u2c_end
-            && client_write_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
-        {
+        while self.u2c_start < self.u2c_end && client_write_burst < self.io_burst_max {
             match self
                 .client
                 .write(&self.upstream_to_client[self.u2c_start..self.u2c_end])
@@ -235,4 +240,8 @@ impl LasmClusterRelayPump {
 
 pub(crate) fn default_lasm_cluster_relay_buffer_bytes() -> usize {
     LASM_CLUSTER_RELAY_BUFFER_BYTES_DEFAULT
+}
+
+pub(crate) fn default_lasm_cluster_relay_io_burst_max() -> usize {
+    LASM_CLUSTER_RELAY_IO_BURST_MAX_DEFAULT
 }
