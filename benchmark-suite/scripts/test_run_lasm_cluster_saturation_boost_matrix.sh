@@ -24,6 +24,11 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --cluster-relay-pump-batch-max 456 \
   --db-adapter sqlite \
   --db-sqlite-busy-timeout-ms 999 \
+  --db-query-one-row-max-bytes 1001 \
+  --db-query-one-row-max-columns 1002 \
+  --db-sql-template-max-bytes 1003 \
+  --db-params-max-bytes 1004 \
+  --db-params-max-entries 1005 \
   --out results/summaries/custom-saturation-boost-matrix.json \
   --analysis-out results/summaries/custom-saturation-boost-analysis.json \
   --verify-recommended \
@@ -76,6 +81,14 @@ if ! grep -q 'dbAdapter=sqlite' <<<"$out"; then
 fi
 if ! grep -q 'dbSqliteBusyTimeoutMs=999' <<<"$out"; then
   echo "saturation boost matrix dry-run missing db sqlite busy-timeout override output" >&2
+  exit 1
+fi
+if ! grep -q 'dbQueryOneRowMaxBytes=1001' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing db query-one row max-bytes override output" >&2
+  exit 1
+fi
+if ! grep -q 'dbParamsMaxEntries=1005' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing db params max-entries override output" >&2
   exit 1
 fi
 if ! grep -q 'buildProfile=debug' <<<"$out"; then
@@ -147,6 +160,20 @@ if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_query_profile"; then
 fi
 if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
   echo "saturation boost matrix dry-run missing db query profile default warmup path" >&2
+  exit 1
+fi
+out_db_postgres_query_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --profile db-hot-postgres-query-one \
+  --db-postgres-dsn-file /tmp/sec4-test-postgres.dsn \
+  --boost-steps 2 \
+  2>&1)"
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_postgres_query_profile"; then
+  echo "saturation boost matrix dry-run missing db postgres query profile default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_postgres_query_profile"; then
+  echo "saturation boost matrix dry-run missing db postgres query profile default warmup path" >&2
   exit 1
 fi
 
@@ -242,7 +269,7 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run -
   echo "saturation boost matrix accepted invalid profile value" >&2
   exit 1
 fi
-if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one' /tmp/lasm-sat-boost-matrix-invalid-run-profile.log; then
+if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one, db-hot-postgres-query-one' /tmp/lasm-sat-boost-matrix-invalid-run-profile.log; then
   echo "saturation boost matrix missing invalid profile diagnostic" >&2
   exit 1
 fi
