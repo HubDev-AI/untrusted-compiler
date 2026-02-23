@@ -504,9 +504,13 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         postgres_connect_timeout_ms,
         postgres_tls_mode,
         postgres_retryable_conflict_retry_max,
+        postgres_retryable_conflict_retry_attempts_total,
+        postgres_retryable_conflict_retry_success_total,
         sqlite_busy_timeout_ms,
         sqlite_lock_retry_max,
         sqlite_lock_retry_delay_ms,
+        sqlite_lock_retry_attempts_total,
+        sqlite_lock_retry_success_total,
         sqlite_journal_mode,
         sqlite_synchronous,
     ) = match dynamic_state.lock() {
@@ -676,9 +680,13 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 state.db_postgres_connect_timeout_ms,
                 lasm_db_postgres_tls_mode_label(state.db_postgres_tls_mode),
                 state.db_postgres_retryable_conflict_retry_max,
+                state.db_postgres_retryable_conflict_retry_attempts_total,
+                state.db_postgres_retryable_conflict_retry_success_total,
                 state.db_sqlite_busy_timeout_ms,
                 state.db_sqlite_lock_retry_max,
                 state.db_sqlite_lock_retry_delay_ms,
+                state.db_sqlite_lock_retry_attempts_total,
+                state.db_sqlite_lock_retry_success_total,
                 state.db_sqlite_journal_mode.clone(),
                 state.db_sqlite_synchronous.clone(),
             )
@@ -764,6 +772,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "sqliteLockRetryDelayMs": sqlite_lock_retry_delay_ms,
                 "sqliteJournalMode": sqlite_journal_mode,
                 "sqliteSynchronous": sqlite_synchronous,
+            },
+            "dbRetries": {
+                "postgresRetryableConflictAttemptsTotal": postgres_retryable_conflict_retry_attempts_total,
+                "postgresRetryableConflictSuccessTotal": postgres_retryable_conflict_retry_success_total,
+                "sqliteLockAttemptsTotal": sqlite_lock_retry_attempts_total,
+                "sqliteLockSuccessTotal": sqlite_lock_retry_success_total,
             },
             "records": if include_records {
                 records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>()

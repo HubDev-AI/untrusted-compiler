@@ -804,6 +804,9 @@ pub(crate) fn run_lasm_postgres_exec(
             let mut retry_error = err;
             let mut recovered = None;
             for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                state.db_postgres_retryable_conflict_retry_attempts_total = state
+                    .db_postgres_retryable_conflict_retry_attempts_total
+                    .saturating_add(1);
                 let retry_result = if use_prepared {
                     let retry_statement =
                         lasm_dynamic_postgres_prepared_statement(state, query_template)?;
@@ -815,6 +818,9 @@ pub(crate) fn run_lasm_postgres_exec(
                 };
                 match retry_result {
                     Ok(count) => {
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
                         recovered = Some(count);
                         break;
                     }
@@ -912,6 +918,9 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             let mut retry_error = err;
             let mut recovered = None;
             for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                state.db_postgres_retryable_conflict_retry_attempts_total = state
+                    .db_postgres_retryable_conflict_retry_attempts_total
+                    .saturating_add(1);
                 let retry_statement = if use_prepared {
                     Some(lasm_dynamic_postgres_prepared_statement(
                         state,
@@ -929,6 +938,9 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                 );
                 match retry_result {
                     Ok(count) => {
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
                         recovered = Some(count);
                         break;
                     }
@@ -1024,10 +1036,16 @@ pub(crate) fn run_lasm_postgres_query_one(
                 let mut retry_error = err;
                 let mut recovered = None;
                 for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                    state.db_postgres_retryable_conflict_retry_attempts_total = state
+                        .db_postgres_retryable_conflict_retry_attempts_total
+                        .saturating_add(1);
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     let retry_result = execute_query(client, &prepared_statement);
                     match retry_result {
                         Ok(row) => {
+                            state.db_postgres_retryable_conflict_retry_success_total = state
+                                .db_postgres_retryable_conflict_retry_success_total
+                                .saturating_add(1);
                             recovered = Some(row);
                             break;
                         }

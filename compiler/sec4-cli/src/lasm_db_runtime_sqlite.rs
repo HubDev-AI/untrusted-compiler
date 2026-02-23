@@ -196,6 +196,9 @@ where
         Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
             let mut latest_message = message;
             for _ in 0..state.db_sqlite_lock_retry_max {
+                state.db_sqlite_lock_retry_attempts_total = state
+                    .db_sqlite_lock_retry_attempts_total
+                    .saturating_add(1);
                 if state.db_sqlite_lock_retry_delay_ms > 0 {
                     std::thread::sleep(Duration::from_millis(state.db_sqlite_lock_retry_delay_ms));
                 }
@@ -204,7 +207,12 @@ where
                     run(connection)
                 };
                 match retry {
-                    Ok(value) => return Ok(value),
+                    Ok(value) => {
+                        state.db_sqlite_lock_retry_success_total = state
+                            .db_sqlite_lock_retry_success_total
+                            .saturating_add(1);
+                        return Ok(value);
+                    }
                     Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
                         latest_message = message;
                     }
