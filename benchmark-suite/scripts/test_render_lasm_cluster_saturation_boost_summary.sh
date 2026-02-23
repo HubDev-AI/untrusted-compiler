@@ -10,8 +10,10 @@ cat >"${matrix}" <<'JSON'
 {
   "impl": "sec4-lasm-cluster",
   "run": {
+    "profile": "db-hot-query-one",
     "projectPath": "examples/lasm-alpha-full",
     "requestPath": "/health",
+    "warmupPath": "/db/hot-write",
     "duration": "40s",
     "threads": 8,
     "connections": 256,
@@ -108,7 +110,9 @@ cat >"${verify}" <<'JSON'
   "pass": true,
   "requestsTargetMet": true,
   "run": {
+    "profile": "db-hot-query-one",
     "autoscaleSaturationBoostStep": 4,
+    "warmupPath": "/db/hot-write",
     "clusterRelayWorkersResolved": 2,
     "clusterAcceptWorkersResolved": 2,
     "clusterRelayAcceptBatchMaxResolved": 64,
@@ -149,6 +153,14 @@ if ! grep -q '^## Ranked Runs$' "${out}"; then
   echo "summary missing ranked runs section" >&2
   exit 1
 fi
+if ! grep -q '^- Profile: db-hot-query-one$' "${out}"; then
+  echo "summary missing probe profile mode line" >&2
+  exit 1
+fi
+if ! grep -q '^- Warmup path: /db/hot-write$' "${out}"; then
+  echo "summary missing probe warmup path line" >&2
+  exit 1
+fi
 if ! grep -q '^- Relay pump batch max: 256$' "${out}"; then
   echo "summary missing probe profile relay pump batch line" >&2
   exit 1
@@ -159,6 +171,10 @@ if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 | 2
 fi
 if ! grep -q '^## Recommended Step Verification$' "${out}"; then
   echo "summary missing verification section" >&2
+  exit 1
+fi
+if ! grep -q '^- Profile: db-hot-query-one$' "${out}"; then
+  echo "summary missing verification profile line" >&2
   exit 1
 fi
 if ! grep -q '^## Resolved DB Runtime (Recommended Step)$' "${out}"; then
