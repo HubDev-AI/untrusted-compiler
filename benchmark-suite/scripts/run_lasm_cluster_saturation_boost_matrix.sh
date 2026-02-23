@@ -436,6 +436,21 @@ for step in "${boost_steps[@]}"; do
       --argjson clusterRelayDispatchSaturationShortCircuitTotal "$(jq '.run.clusterRelayDispatchSaturationShortCircuitTotal // null' "${step_out}")" \
       --argjson clusterRelayDispatchSaturationShortCircuitPerSec "$(jq '.run.clusterRelayDispatchSaturationShortCircuitPerSec // null' "${step_out}")" \
       --argjson clusterRelayLiveSenderCountResolved "$(jq '.run.clusterRelayLiveSenderCountResolved // null' "${step_out}")" \
+      --arg clusterDbAdapterResolved "$(jq -r '.run.clusterDbAdapterResolved // ""' "${step_out}")" \
+      --arg clusterDbPostgresTlsModeResolved "$(jq -r '.run.clusterDbPostgresTlsModeResolved // ""' "${step_out}")" \
+      --argjson clusterDbMaxTxHandlesResolved "$(jq '.run.clusterDbMaxTxHandlesResolved // null' "${step_out}")" \
+      --argjson clusterDbRecordsMaxResolved "$(jq '.run.clusterDbRecordsMaxResolved // null' "${step_out}")" \
+      --argjson clusterDbPostgresStatementCacheMaxResolved "$(jq '.run.clusterDbPostgresStatementCacheMaxResolved // null' "${step_out}")" \
+      --argjson clusterDbPostgresPlaceholderCacheMaxResolved "$(jq '.run.clusterDbPostgresPlaceholderCacheMaxResolved // null' "${step_out}")" \
+      --argjson clusterDbPostgresStatementTimeoutMsResolved "$(jq '.run.clusterDbPostgresStatementTimeoutMsResolved // null' "${step_out}")" \
+      --argjson clusterDbPostgresLockTimeoutMsResolved "$(jq '.run.clusterDbPostgresLockTimeoutMsResolved // null' "${step_out}")" \
+      --argjson clusterDbPostgresConnectTimeoutMsResolved "$(jq '.run.clusterDbPostgresConnectTimeoutMsResolved // null' "${step_out}")" \
+      --argjson clusterDbSqliteBusyTimeoutMsResolved "$(jq '.run.clusterDbSqliteBusyTimeoutMsResolved // null' "${step_out}")" \
+      --arg clusterDbSqliteJournalModeResolved "$(jq -r '.run.clusterDbSqliteJournalModeResolved // ""' "${step_out}")" \
+      --arg clusterDbSqliteSynchronousResolved "$(jq -r '.run.clusterDbSqliteSynchronousResolved // ""' "${step_out}")" \
+      --argjson clusterDbPostgresRetryableConflictRetryMaxResolved "$(jq '.run.clusterDbPostgresRetryableConflictRetryMaxResolved // null' "${step_out}")" \
+      --argjson clusterDbSqliteLockRetryMaxResolved "$(jq '.run.clusterDbSqliteLockRetryMaxResolved // null' "${step_out}")" \
+      --argjson clusterDbSqliteLockRetryDelayMsResolved "$(jq '.run.clusterDbSqliteLockRetryDelayMsResolved // null' "${step_out}")" \
       --argjson wrkProcesses "$(jq '.run.wrkProcesses // null' "${step_out}")" \
       --argjson wrkTotalConnections "$(jq '.run.wrkTotalConnections // null' "${step_out}")" \
       '{
@@ -456,7 +471,22 @@ for step in "${boost_steps[@]}"; do
         clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved,
         clusterRelayDispatchSaturationShortCircuitTotal: $clusterRelayDispatchSaturationShortCircuitTotal,
         clusterRelayDispatchSaturationShortCircuitPerSec: $clusterRelayDispatchSaturationShortCircuitPerSec,
-        clusterRelayLiveSenderCountResolved: $clusterRelayLiveSenderCountResolved
+        clusterRelayLiveSenderCountResolved: $clusterRelayLiveSenderCountResolved,
+        clusterDbAdapterResolved: (if $clusterDbAdapterResolved == "" then null else $clusterDbAdapterResolved end),
+        clusterDbPostgresTlsModeResolved: (if $clusterDbPostgresTlsModeResolved == "" then null else $clusterDbPostgresTlsModeResolved end),
+        clusterDbMaxTxHandlesResolved: $clusterDbMaxTxHandlesResolved,
+        clusterDbRecordsMaxResolved: $clusterDbRecordsMaxResolved,
+        clusterDbPostgresStatementCacheMaxResolved: $clusterDbPostgresStatementCacheMaxResolved,
+        clusterDbPostgresPlaceholderCacheMaxResolved: $clusterDbPostgresPlaceholderCacheMaxResolved,
+        clusterDbPostgresStatementTimeoutMsResolved: $clusterDbPostgresStatementTimeoutMsResolved,
+        clusterDbPostgresLockTimeoutMsResolved: $clusterDbPostgresLockTimeoutMsResolved,
+        clusterDbPostgresConnectTimeoutMsResolved: $clusterDbPostgresConnectTimeoutMsResolved,
+        clusterDbSqliteBusyTimeoutMsResolved: $clusterDbSqliteBusyTimeoutMsResolved,
+        clusterDbSqliteJournalModeResolved: (if $clusterDbSqliteJournalModeResolved == "" then null else $clusterDbSqliteJournalModeResolved end),
+        clusterDbSqliteSynchronousResolved: (if $clusterDbSqliteSynchronousResolved == "" then null else $clusterDbSqliteSynchronousResolved end),
+        clusterDbPostgresRetryableConflictRetryMaxResolved: $clusterDbPostgresRetryableConflictRetryMaxResolved,
+        clusterDbSqliteLockRetryMaxResolved: $clusterDbSqliteLockRetryMaxResolved,
+        clusterDbSqliteLockRetryDelayMsResolved: $clusterDbSqliteLockRetryDelayMsResolved
       }'
     )"
     runs_json="$(jq --argjson item "${run_item}" '. + [$item]' <<<"${runs_json}")"
