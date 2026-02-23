@@ -159,6 +159,7 @@ fn rewrite_lasm_postgres_named_query_template(
     let mut named_placeholder_indices: HashMap<String, usize> = HashMap::new();
     let mut ordered_params = Vec::new();
     let mut saw_named_placeholder = false;
+    let mut saw_positional_placeholder = false;
 
     while index < bytes.len() {
         if in_line_comment {
@@ -258,6 +259,7 @@ fn rewrite_lasm_postgres_named_query_template(
             }
         }
         if marker == b'$' && index + 1 < bytes.len() && bytes[index + 1].is_ascii_digit() {
+            saw_positional_placeholder = true;
             rewritten.push(marker);
             index += 1;
             continue;
@@ -302,6 +304,12 @@ fn rewrite_lasm_postgres_named_query_template(
 
     if !saw_named_placeholder {
         return Ok(None);
+    }
+    if saw_positional_placeholder {
+        return Err(
+            "postgres named parameterized execution does not support mixing named and positional SQL placeholders"
+                .to_string(),
+        );
     }
     let mut unused_params: Vec<&str> = named_params
         .keys()
@@ -1240,6 +1248,20 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("postgres query parameter `role` is not present in SQL statement"));
+    }
+
+    #[test]
+    fn named_object_params_reject_mixed_named_and_positional_sql_placeholders() {
+        let error = match parse_lasm_postgres_query_template_and_params(
+            "SELECT $1::text, :name::text",
+            "{\"name\":\"alice\"}",
+        ) {
+            Ok(_) => panic!("mixing named and positional placeholders should fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains(
+            "postgres named parameterized execution does not support mixing named and positional SQL placeholders"
+        ));
     }
 
     #[test]
