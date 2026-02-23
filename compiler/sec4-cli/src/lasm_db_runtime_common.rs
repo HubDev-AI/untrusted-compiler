@@ -37,6 +37,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
         return (409, code, "conflict");
     }
     if message.contains("requires at least")
+        || message.contains("expects exactly")
         || message.contains("requires SELECT-style SQL statement")
         || message.contains("requires row-returning SQL statement")
         || message.contains("requires non-empty SQL statement")
@@ -309,6 +310,17 @@ mod tests {
         let (status, code, kind) = classify_lasm_db_runtime_error(
             "exec",
             "sqlite query requires named parameter `role` in params object",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_exact_arity_errors_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "sqlite query expects exactly 1 sql parameters but received 2",
         );
         assert_eq!(status, 400);
         assert_eq!(code, "DB.EXEC_INVALID");

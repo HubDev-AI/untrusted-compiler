@@ -1905,6 +1905,11 @@ Post-alpha track acceptance anchors:
       - preserves existing reconnect-on-closed and single-statement guard behavior,
       - reuses the prepared query path to keep query materialization semantics unchanged.
       - documented in `docs/book/1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`.
+   - [x] Tightened SQLite positional parameter-count contract:
+      - sqlite positional execution now rejects extra parameter payload entries instead of silently ignoring them when SQL template expects fewer placeholders,
+      - deterministic runtime validation now emits `sqlite query expects exactly N sql parameters but received M` for too-many positional params,
+      - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
+      - documented in `docs/book/1472-m39-lasm-sqlite-positional-parameter-count-contract.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
