@@ -4,6 +4,8 @@ use std::net::{Shutdown, TcpStream};
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_DEFAULT: usize = 32 * 1024;
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_MIN: usize = 1024;
 const LASM_CLUSTER_RELAY_BUFFER_BYTES_MAX: usize = 1024 * 1024;
+// Cap per-direction IO loops so one busy connection cannot monopolize a worker tick.
+const LASM_CLUSTER_RELAY_IO_BURST_MAX: usize = 4;
 
 pub(crate) enum LasmClusterRelayPumpStep {
     Progressed,
@@ -87,7 +89,11 @@ impl LasmClusterRelayPump {
     pub(crate) fn pump_once(&mut self) -> Result<LasmClusterRelayPumpStep, String> {
         let mut progressed = false;
 
-        while !self.client_read_closed && self.c2u_end < self.client_to_upstream.len() {
+        let mut client_read_burst = 0usize;
+        while !self.client_read_closed
+            && self.c2u_end < self.client_to_upstream.len()
+            && client_read_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+        {
             match self
                 .client
                 .read(&mut self.client_to_upstream[self.c2u_end..])
@@ -100,6 +106,7 @@ impl LasmClusterRelayPump {
                 Ok(bytes_read) => {
                     self.c2u_end += bytes_read;
                     progressed = true;
+                    client_read_burst += 1;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
@@ -108,7 +115,10 @@ impl LasmClusterRelayPump {
             }
         }
 
-        while self.c2u_start < self.c2u_end {
+        let mut upstream_write_burst = 0usize;
+        while self.c2u_start < self.c2u_end
+            && upstream_write_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+        {
             match self
                 .upstream
                 .write(&self.client_to_upstream[self.c2u_start..self.c2u_end])
@@ -122,6 +132,7 @@ impl LasmClusterRelayPump {
                 Ok(bytes_written) => {
                     self.c2u_start += bytes_written;
                     progressed = true;
+                    upstream_write_burst += 1;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
@@ -139,7 +150,11 @@ impl LasmClusterRelayPump {
             }
         }
 
-        while !self.upstream_read_closed && self.u2c_end < self.upstream_to_client.len() {
+        let mut upstream_read_burst = 0usize;
+        while !self.upstream_read_closed
+            && self.u2c_end < self.upstream_to_client.len()
+            && upstream_read_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+        {
             match self
                 .upstream
                 .read(&mut self.upstream_to_client[self.u2c_end..])
@@ -152,6 +167,7 @@ impl LasmClusterRelayPump {
                 Ok(bytes_read) => {
                     self.u2c_end += bytes_read;
                     progressed = true;
+                    upstream_read_burst += 1;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
@@ -160,7 +176,10 @@ impl LasmClusterRelayPump {
             }
         }
 
-        while self.u2c_start < self.u2c_end {
+        let mut client_write_burst = 0usize;
+        while self.u2c_start < self.u2c_end
+            && client_write_burst < LASM_CLUSTER_RELAY_IO_BURST_MAX
+        {
             match self
                 .client
                 .write(&self.upstream_to_client[self.u2c_start..self.u2c_end])
@@ -174,6 +193,7 @@ impl LasmClusterRelayPump {
                 Ok(bytes_written) => {
                     self.u2c_start += bytes_written;
                     progressed = true;
+                    client_write_burst += 1;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
