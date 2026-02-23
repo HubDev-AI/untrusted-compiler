@@ -1846,6 +1846,10 @@ Post-alpha track acceptance anchors:
       - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES` (clamped `1 KiB..1 MiB`) and threads it into relay pump allocation/reuse paths,
       - relay pumps now resize pooled buffers to the resolved byte budget, allowing hot-path throughput/memory tuning without code changes.
       - documented in `docs/book/1461-m39-lasm-cluster-relay-buffer-size-tuning.md`.
+   - [x] Added runtime-tunable relay buffer-pool sizing and startup prewarm for LASM cluster proxy workers:
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_MAX` (derived default from accept-batch, bounded `16..65536`) instead of fixed `accept_batch*4` sizing,
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_PREWARM` (bounded `0..pool_max`) and optionally preallocates reusable relay pump buffers at startup to reduce first-burst allocation churn.
+      - documented in `docs/book/1462-m39-lasm-cluster-relay-buffer-pool-tuning-and-prewarm.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

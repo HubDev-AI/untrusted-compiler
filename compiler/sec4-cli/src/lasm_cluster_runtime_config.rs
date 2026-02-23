@@ -67,6 +67,35 @@ pub(crate) fn resolve_lasm_cluster_relay_buffer_bytes() -> usize {
     usize::try_from(value).unwrap_or(default_value)
 }
 
+pub(crate) fn resolve_lasm_cluster_relay_buffer_pool_max(relay_accept_batch_max: usize) -> usize {
+    let default_value = relay_accept_batch_max
+        .saturating_mul(4)
+        .max(64)
+        .clamp(16, 65_536);
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_MAX",
+        default_value as u64,
+        16,
+        65_536,
+    );
+    usize::try_from(value).unwrap_or(default_value)
+}
+
+pub(crate) fn resolve_lasm_cluster_relay_buffer_pool_prewarm(
+    relay_buffer_pool_max: usize,
+) -> usize {
+    let default_value = 0usize;
+    let value = resolve_lasm_cluster_env_u64(
+        "SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_PREWARM",
+        default_value as u64,
+        0,
+        relay_buffer_pool_max.min(65_536) as u64,
+    );
+    usize::try_from(value)
+        .unwrap_or(default_value)
+        .min(relay_buffer_pool_max)
+}
+
 pub(crate) fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
