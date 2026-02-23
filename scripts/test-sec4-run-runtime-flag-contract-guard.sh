@@ -151,14 +151,14 @@ fn cmd_run(
 }
 RS
 
-"${contract_script}" --cli "${pass_cli}" >/dev/null
+"${contract_script}" --cli "${pass_cli}" --cluster-cli "${pass_cli}" >/dev/null
 
 guard_cli="${tmp_dir}/main-guard-message.rs"
 cp "${pass_cli}" "${guard_cli}"
 missing_guard_label='run db-adapter lasm-only guard'
 perl -0pi -e 's/run failed: --db-adapter is only supported with --backend lasm/run failed: --db-base is only supported with --backend lasm/' "${guard_cli}"
 
-if "${contract_script}" --cli "${guard_cli}" >"${tmp_dir}/guard-message.log" 2>&1; then
+if "${contract_script}" --cli "${guard_cli}" --cluster-cli "${guard_cli}" >"${tmp_dir}/guard-message.log" 2>&1; then
   echo "expected run runtime-flag contract failure when db-adapter lasm-only guard drifts" >&2
   exit 1
 fi
@@ -173,7 +173,7 @@ cp "${pass_cli}" "${saturation_guard_cli}"
 missing_saturation_guard_label='run autoscale saturation-boost-step lasm-only guard'
 perl -0pi -e 's/run failed: --autoscale-saturation-boost-step is only supported with --backend lasm/run failed: --autoscale-scale-up-step is only supported with --backend lasm/' "${saturation_guard_cli}"
 
-if "${contract_script}" --cli "${saturation_guard_cli}" >"${tmp_dir}/saturation-guard.log" 2>&1; then
+if "${contract_script}" --cli "${saturation_guard_cli}" --cluster-cli "${saturation_guard_cli}" >"${tmp_dir}/saturation-guard.log" 2>&1; then
   echo "expected run runtime-flag contract failure when autoscale saturation-boost-step lasm-only guard drifts" >&2
   exit 1
 fi
@@ -188,7 +188,7 @@ cp "${pass_cli}" "${cluster_cli}"
 missing_cluster_label='run db-adapter cluster bridge'
 perl -0pi -e 's/push_optional_db_adapter_run_arg\(&mut cmd, config\.db_adapter\);/push_optional_db_adapter_run_arg\(&mut cmd, None);/' "${cluster_cli}"
 
-if "${contract_script}" --cli "${cluster_cli}" >"${tmp_dir}/cluster-bridge.log" 2>&1; then
+if "${contract_script}" --cli "${cluster_cli}" --cluster-cli "${cluster_cli}" >"${tmp_dir}/cluster-bridge.log" 2>&1; then
   echo "expected run runtime-flag contract failure when db-adapter cluster bridge drifts" >&2
   exit 1
 fi
@@ -202,7 +202,7 @@ timeout_cli="${tmp_dir}/main-timeout.rs"
 cp "${pass_cli}" "${timeout_cli}"
 perl -0pi -e 's/SEC4_RT_HTTP_SERVE_TIMEOUT_MS/SEC4_RT_HTTP_TIMEOUT_MS/' "${timeout_cli}"
 
-if "${contract_script}" --cli "${timeout_cli}" >/dev/null 2>&1; then
+if "${contract_script}" --cli "${timeout_cli}" --cluster-cli "${timeout_cli}" >/dev/null 2>&1; then
   echo "expected run runtime-flag contract failure when timeout env bridge drifts" >&2
   exit 1
 fi

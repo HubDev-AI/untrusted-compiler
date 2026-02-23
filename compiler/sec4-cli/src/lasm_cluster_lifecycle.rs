@@ -109,6 +109,21 @@ fn spawn_lasm_cluster_worker(
         "--db-sqlite-busy-timeout-ms",
         config.db_sqlite_busy_timeout_ms,
     );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-retryable-conflict-retry-max",
+        config.db_postgres_retryable_conflict_retry_max,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-sqlite-lock-retry-max",
+        config.db_sqlite_lock_retry_max,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-sqlite-lock-retry-delay-ms",
+        config.db_sqlite_lock_retry_delay_ms,
+    );
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
     }

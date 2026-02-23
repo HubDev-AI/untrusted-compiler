@@ -15680,8 +15680,7 @@ fn main() effects { net } -> Int {
 
     let id_filter_response = run_lasm_oneshot_request(
         list_port,
-        "GET /db/records?id=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-            .to_string(),
+        "GET /db/records?id=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         id_filter_response.contains("HTTP/1.1 200 OK"),
@@ -15941,8 +15940,7 @@ fn main() effects { net } -> Int {
 
     let invalid_id_filter_response = run_lasm_oneshot_request(
         list_port,
-        "GET /db/records?id=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-            .to_string(),
+        "GET /db/records?id=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         invalid_id_filter_response.contains("HTTP/1.1 400 Bad Request")
@@ -17546,6 +17544,120 @@ fn run_command_rejects_db_sqlite_busy_timeout_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_retryable_conflict_retry_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-retryable-retries-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-retryable-conflict-retry-max",
+        "3",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-retryable-conflict-retry-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-retryable-conflict-retry-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-retryable-conflict-retry-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_sqlite_lock_retry_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-lock-retry-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sqlite-lock-retry-max",
+        "4",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-lock-retry-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-sqlite-lock-retry-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-sqlite-lock-retry-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_sqlite_lock_retry_delay_ms_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-lock-retry-delay-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sqlite-lock-retry-delay-ms",
+        "25",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-lock-retry-delay-ms is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-sqlite-lock-retry-delay-ms is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-sqlite-lock-retry-delay-ms guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_db_sqlite_busy_timeout_override() {
     let project_dir = temp_dir("sec4-run-command-zero-db-sqlite-busy-timeout");
     let project_path = project_dir
@@ -17613,7 +17725,7 @@ fn run_command_rejects_db_sqlite_busy_timeout_with_postgres_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: --db-sqlite-busy-timeout-ms requires --db-adapter sqlite when adapter is set explicitly"
+            "run failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
         ),
         "stderr should include deterministic sqlite timeout adapter guidance:\n{stderr}"
     );
