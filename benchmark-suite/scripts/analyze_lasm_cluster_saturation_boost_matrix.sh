@@ -43,6 +43,11 @@ if ! jq -e '
       ((has("clusterDbSqliteBusyTimeoutMsResolved") | not) or (.clusterDbSqliteBusyTimeoutMsResolved == null) or (.clusterDbSqliteBusyTimeoutMsResolved | type == "number")) and
       ((has("clusterDbSqliteJournalModeResolved") | not) or (.clusterDbSqliteJournalModeResolved == null) or (.clusterDbSqliteJournalModeResolved | type == "string")) and
       ((has("clusterDbSqliteSynchronousResolved") | not) or (.clusterDbSqliteSynchronousResolved == null) or (.clusterDbSqliteSynchronousResolved | type == "string")) and
+      ((has("clusterDbQueryOneRowMaxBytesResolved") | not) or (.clusterDbQueryOneRowMaxBytesResolved == null) or (.clusterDbQueryOneRowMaxBytesResolved | type == "number")) and
+      ((has("clusterDbQueryOneRowMaxColumnsResolved") | not) or (.clusterDbQueryOneRowMaxColumnsResolved == null) or (.clusterDbQueryOneRowMaxColumnsResolved | type == "number")) and
+      ((has("clusterDbSqlTemplateMaxBytesResolved") | not) or (.clusterDbSqlTemplateMaxBytesResolved == null) or (.clusterDbSqlTemplateMaxBytesResolved | type == "number")) and
+      ((has("clusterDbParamsMaxBytesResolved") | not) or (.clusterDbParamsMaxBytesResolved == null) or (.clusterDbParamsMaxBytesResolved | type == "number")) and
+      ((has("clusterDbParamsMaxEntriesResolved") | not) or (.clusterDbParamsMaxEntriesResolved == null) or (.clusterDbParamsMaxEntriesResolved | type == "number")) and
       ((has("clusterDbPostgresRetryableConflictRetryMaxResolved") | not) or (.clusterDbPostgresRetryableConflictRetryMaxResolved == null) or (.clusterDbPostgresRetryableConflictRetryMaxResolved | type == "number")) and
       ((has("clusterDbSqliteLockRetryMaxResolved") | not) or (.clusterDbSqliteLockRetryMaxResolved == null) or (.clusterDbSqliteLockRetryMaxResolved | type == "number")) and
       ((has("clusterDbSqliteLockRetryDelayMsResolved") | not) or (.clusterDbSqliteLockRetryDelayMsResolved == null) or (.clusterDbSqliteLockRetryDelayMsResolved | type == "number"))
@@ -95,6 +100,11 @@ jq -n \
       clusterDbSqliteBusyTimeoutMsResolved: (.clusterDbSqliteBusyTimeoutMsResolved // null),
       clusterDbSqliteJournalModeResolved: (.clusterDbSqliteJournalModeResolved // null),
       clusterDbSqliteSynchronousResolved: (.clusterDbSqliteSynchronousResolved // null),
+      clusterDbQueryOneRowMaxBytesResolved: (.clusterDbQueryOneRowMaxBytesResolved // null),
+      clusterDbQueryOneRowMaxColumnsResolved: (.clusterDbQueryOneRowMaxColumnsResolved // null),
+      clusterDbSqlTemplateMaxBytesResolved: (.clusterDbSqlTemplateMaxBytesResolved // null),
+      clusterDbParamsMaxBytesResolved: (.clusterDbParamsMaxBytesResolved // null),
+      clusterDbParamsMaxEntriesResolved: (.clusterDbParamsMaxEntriesResolved // null),
       clusterDbPostgresRetryableConflictRetryMaxResolved: (.clusterDbPostgresRetryableConflictRetryMaxResolved // null),
       clusterDbSqliteLockRetryMaxResolved: (.clusterDbSqliteLockRetryMaxResolved // null),
       clusterDbSqliteLockRetryDelayMsResolved: (.clusterDbSqliteLockRetryDelayMsResolved // null),

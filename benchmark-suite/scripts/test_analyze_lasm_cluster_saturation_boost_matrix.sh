@@ -20,6 +20,7 @@ cat >"${matrix_pass}" <<'JSON'
       "requests": 1200000,
       "requestsPerSec": 60000,
       "peakRssKb": 12000,
+      "clusterDbQueryOneRowMaxBytesResolved": 2048,
       "summaryFile": "probe-2.json"
     },
     {
@@ -28,6 +29,7 @@ cat >"${matrix_pass}" <<'JSON'
       "requests": 1260000,
       "requestsPerSec": 63000,
       "peakRssKb": 12500,
+      "clusterDbQueryOneRowMaxBytesResolved": 4096,
       "summaryFile": "probe-4.json"
     },
     {
@@ -55,6 +57,10 @@ if ! jq -e '.summary.recommendedBoostStep == 4' "${analysis_pass}" >/dev/null; t
 fi
 if ! jq -e '.rankedRuns | map(.saturationBoostStep) == [4, 2, 6]' "${analysis_pass}" >/dev/null; then
   echo "analysis ranking order mismatch for pass-first mode" >&2
+  exit 1
+fi
+if ! jq -e '.recommended.clusterDbQueryOneRowMaxBytesResolved == 4096' "${analysis_pass}" >/dev/null; then
+  echo "analysis should preserve resolved db guard fields in ranked output" >&2
   exit 1
 fi
 
