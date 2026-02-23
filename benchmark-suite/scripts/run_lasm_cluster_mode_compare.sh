@@ -43,6 +43,7 @@ Options:
   --db-sql-template-max-bytes <n>                  Optional LASM db SQL template max-bytes override forwarded to both probes
   --db-params-max-bytes <n>                        Optional LASM db params max-bytes override forwarded to both probes
   --db-params-max-entries <n>                      Optional LASM db params max-entries override forwarded to both probes
+  --db-postgres-dsn-file <path>                    Optional LASM postgres DSN file path forwarded to both probes
   --build-profile <debug|release>                  sec4 build profile forwarded to both probe runs (default: release)
   --samples <n>                                    Number of wrk samples per probe run (default: 1)
   --wrk-processes <n>                              Number of parallel wrk processes per probe run (default: 1)
@@ -110,6 +111,7 @@ db_query_one_row_max_columns="${LASM_CAPACITY_DB_QUERY_ONE_ROW_MAX_COLUMNS:-}"
 db_sql_template_max_bytes="${LASM_CAPACITY_DB_SQL_TEMPLATE_MAX_BYTES:-}"
 db_params_max_bytes="${LASM_CAPACITY_DB_PARAMS_MAX_BYTES:-}"
 db_params_max_entries="${LASM_CAPACITY_DB_PARAMS_MAX_ENTRIES:-}"
+db_postgres_dsn_file="${LASM_CAPACITY_DB_POSTGRES_DSN_FILE:-}"
 build_profile="${LASM_CAPACITY_BUILD_PROFILE:-release}"
 samples="${LASM_CAPACITY_SAMPLES:-1}"
 wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-1}"
@@ -239,6 +241,10 @@ while [ "$#" -gt 0 ]; do
       db_params_max_entries="${2:-}"
       shift 2
       ;;
+    --db-postgres-dsn-file)
+      db_postgres_dsn_file="${2:-}"
+      shift 2
+      ;;
     --build-profile)
       build_profile="${2:-}"
       shift 2
@@ -328,6 +334,12 @@ case "$profile" in
     exit 2
     ;;
 esac
+if [ "$profile" = "db-hot-postgres-query-one" ] \
+  && [ -z "$db_postgres_dsn_file" ] \
+  && [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
+  echo "postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+  exit 2
+fi
 case "$build_profile" in
   debug|release) ;;
   *)
@@ -424,6 +436,7 @@ sec4 LASM cluster mode compare plan:
   dbSqlTemplateMaxBytes=${db_sql_template_max_bytes:-auto}
   dbParamsMaxBytes=${db_params_max_bytes:-auto}
   dbParamsMaxEntries=${db_params_max_entries:-auto}
+  dbPostgresDsnFile=${db_postgres_dsn_file:-auto}
   buildProfile=${build_profile}
   samples=${samples}
   wrkProcesses=${wrk_processes}
@@ -473,6 +486,9 @@ if [ -n "${db_params_max_bytes}" ]; then
 fi
 if [ -n "${db_params_max_entries}" ]; then
   common_args+=(--db-params-max-entries "${db_params_max_entries}")
+fi
+if [ -n "${db_postgres_dsn_file}" ]; then
+  common_args+=(--db-postgres-dsn-file "${db_postgres_dsn_file}")
 fi
 
 proxy_cmd=(

@@ -110,6 +110,35 @@ if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
   echo "mode compare db query-one dry-run missing default warmup path" >&2
   exit 1
 fi
+out_db_postgres_query_profile="$("${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
+  --dry-run \
+  --profile db-hot-postgres-query-one \
+  --db-postgres-dsn-file /tmp/sec4-test-postgres.dsn \
+  --port 19096 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-postgres-query-one' <<<"$out_db_postgres_query_profile"; then
+  echo "mode compare db postgres query-one dry-run missing profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_postgres_query_profile"; then
+  echo "mode compare db postgres query-one dry-run missing default request path" >&2
+  exit 1
+fi
+if ! grep -q 'dbPostgresDsnFile=/tmp/sec4-test-postgres.dsn' <<<"$out_db_postgres_query_profile"; then
+  echo "mode compare db postgres query-one dry-run missing dsn passthrough marker" >&2
+  exit 1
+fi
+if env -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
+  --dry-run \
+  --profile db-hot-postgres-query-one \
+  --port 19097 >/tmp/lasm-mode-compare-missing-postgres-dsn.log 2>&1; then
+  echo "mode compare accepted db-hot-postgres-query-one profile without DSN" >&2
+  exit 1
+fi
+if ! grep -q "postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" /tmp/lasm-mode-compare-missing-postgres-dsn.log; then
+  echo "mode compare missing postgres profile DSN diagnostic" >&2
+  exit 1
+fi
 
 if "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" --dry-run --request-header invalid >/tmp/lasm-mode-compare-invalid-header.log 2>&1; then
   echo "mode compare accepted invalid request header" >&2
