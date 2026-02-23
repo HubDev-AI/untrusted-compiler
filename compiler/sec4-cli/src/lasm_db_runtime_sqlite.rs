@@ -330,7 +330,10 @@ pub(crate) fn run_lasm_sqlite_query_one(
         return Err("sqlite queryOne requires non-empty SQL statement".to_string());
     }
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
-        return Err("sqlite queryOne requires SELECT-style SQL statement".to_string());
+        return Err(
+            "sqlite queryOne requires row-returning SQL statement (SELECT/WITH/VALUES/TABLE or DML ... RETURNING)"
+                .to_string(),
+        );
     }
     run_lasm_sqlite_with_connection_retry(state, "sqlite queryOne", |connection| {
         let mut statement = connection

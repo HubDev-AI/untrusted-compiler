@@ -2010,6 +2010,10 @@ Post-alpha track acceptance anchors:
       - `/db/records` now supports `paramsContains=<non-empty string>` with deterministic validation,
       - params filter composes with existing op/db/tx/template/id/time/order/affected-rows filters for payload-centric record slicing.
       - documented in `docs/book/1459-m39-lasm-db-records-params-contains-filter.md`.
+   - [x] Expanded LASM `db.queryOne` to accept `... RETURNING` statement shapes:
+      - sqlite/postgres `queryOne` runtime now accepts row-returning DML statements (`INSERT|UPDATE|DELETE|MERGE ... RETURNING`) in addition to `SELECT|WITH|VALUES|TABLE`,
+      - invalid non-row-returning shapes now use deterministic validation envelope mapping (`DB.QUERY_ONE_INVALID`) through shared runtime classifier.
+      - documented in `docs/book/1460-m39-lasm-db-query-one-returning-shape-support.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

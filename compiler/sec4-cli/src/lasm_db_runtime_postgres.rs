@@ -571,11 +571,109 @@ fn first_lasm_postgres_keyword(query_template: &str) -> Option<String> {
     Some(query_template[start..index].to_ascii_uppercase())
 }
 
+fn has_lasm_postgres_keyword(query_template: &str, keyword: &str) -> bool {
+    let bytes = query_template.as_bytes();
+    let keyword_upper = keyword.to_ascii_uppercase();
+    let mut index = 0usize;
+    let mut in_single_quote = false;
+    let mut in_line_comment = false;
+    let mut block_comment_depth = 0usize;
+    let mut active_dollar_quote: Option<String> = None;
+
+    while index < bytes.len() {
+        if in_line_comment {
+            if bytes[index] == b'\n' {
+                in_line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth > 0 {
+            if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+                block_comment_depth += 1;
+                index += 2;
+                continue;
+            }
+            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
+                block_comment_depth = block_comment_depth.saturating_sub(1);
+                index += 2;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+        if let Some(delimiter) = active_dollar_quote.as_ref() {
+            if query_template[index..].starts_with(delimiter.as_str()) {
+                index += delimiter.len();
+                active_dollar_quote = None;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+        if bytes[index] == b'\'' {
+            if in_single_quote {
+                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                    index += 2;
+                    continue;
+                }
+                in_single_quote = false;
+                index += 1;
+                continue;
+            }
+            in_single_quote = true;
+            index += 1;
+            continue;
+        }
+        if in_single_quote {
+            index += 1;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'-' && bytes[index + 1] == b'-' {
+            in_line_comment = true;
+            index += 2;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+            block_comment_depth = 1;
+            index += 2;
+            continue;
+        }
+        if bytes[index] == b'$' {
+            if let Some(delimiter) =
+                parse_lasm_postgres_dollar_quote_delimiter(query_template, index)
+            {
+                active_dollar_quote = Some(delimiter.to_string());
+                index += delimiter.len();
+                continue;
+            }
+        }
+        if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+            let start = index;
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
+            {
+                index += 1;
+            }
+            if query_template[start..index].to_ascii_uppercase() == keyword_upper {
+                return true;
+            }
+            continue;
+        }
+        index += 1;
+    }
+    false
+}
+
 pub(crate) fn is_lasm_postgres_query_one_select_like(query_template: &str) -> bool {
-    matches!(
-        first_lasm_postgres_keyword(query_template).as_deref(),
-        Some("SELECT" | "WITH" | "VALUES" | "TABLE")
-    )
+    match first_lasm_postgres_keyword(query_template).as_deref() {
+        Some("SELECT" | "WITH" | "VALUES" | "TABLE") => true,
+        Some("INSERT" | "UPDATE" | "DELETE" | "MERGE") => {
+            has_lasm_postgres_keyword(query_template, "RETURNING")
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn normalize_lasm_postgres_query_for_subquery(query_template: &str) -> String {
@@ -781,7 +879,10 @@ pub(crate) fn run_lasm_postgres_query_one(
         return Err("postgres queryOne requires non-empty SQL statement".to_string());
     }
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
-        return Err("postgres queryOne requires SELECT-style SQL statement".to_string());
+        return Err(
+            "postgres queryOne requires row-returning SQL statement (SELECT/WITH/VALUES/TABLE or DML ... RETURNING)"
+                .to_string(),
+        );
     }
     if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
