@@ -36,12 +36,17 @@ const LASM_DB_PARAMS_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_BYTES";
 const LASM_DB_PARAMS_MAX_BYTES_DEFAULT: usize = 128 * 1024;
 const LASM_DB_PARAMS_MAX_BYTES_MIN: usize = 256;
 const LASM_DB_PARAMS_MAX_BYTES_MAX: usize = 8 * 1024 * 1024;
+const LASM_DB_PARAMS_MAX_ENTRIES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_ENTRIES";
+const LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT: usize = 2048;
+const LASM_DB_PARAMS_MAX_ENTRIES_MIN: usize = 1;
+const LASM_DB_PARAMS_MAX_ENTRIES_MAX: usize = 65_536;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_BYTES";
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX: usize = 16 * 1024 * 1024;
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 
 #[inline(always)]
@@ -127,6 +132,75 @@ fn enforce_lasm_db_params_max_bytes(
         _ => "DB.OPERATION_INVALID",
     };
     let message = format!("sql.q params payload exceeds configured max bytes ({max_bytes})");
+    set_lasm_json_response(
+        response,
+        400,
+        &lasm_error_envelope(code, "validation", message.as_str(), 400, trace_id),
+    );
+    false
+}
+
+#[inline(always)]
+fn resolve_lasm_db_params_max_entries() -> usize {
+    *LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_ENTRIES_ENV) else {
+            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
+            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
+        )
+    })
+}
+
+#[inline(always)]
+fn lasm_db_params_entry_count(
+    parsed: Option<&serde_json::Value>,
+    normalized_params: &str,
+) -> usize {
+    match parsed {
+        Some(serde_json::Value::Array(values)) => values.len(),
+        Some(serde_json::Value::Object(values)) => values.len(),
+        Some(serde_json::Value::Null) => 0,
+        Some(_) => 1,
+        None => {
+            if normalized_params == "0" {
+                0
+            } else {
+                1
+            }
+        }
+    }
+}
+
+#[inline(always)]
+fn enforce_lasm_db_params_max_entries(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    parsed: Option<&serde_json::Value>,
+    normalized_params: &str,
+    trace_id: &str,
+) -> bool {
+    let max_entries = resolve_lasm_db_params_max_entries();
+    let entries = lasm_db_params_entry_count(parsed, normalized_params);
+    if entries <= max_entries {
+        return true;
+    }
+    let code = match operation {
+        "exec" => "DB.EXEC_INVALID",
+        "execTx" => "DB.EXEC_TX_INVALID",
+        "queryOne" => "DB.QUERY_ONE_INVALID",
+        _ => "DB.OPERATION_INVALID",
+    };
+    let message =
+        format!("sql.q params entry count exceeds configured max entries ({max_entries})");
     set_lasm_json_response(
         response,
         400,
@@ -290,6 +364,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             }
             let template = template.trim().to_string();
             let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
+            if !enforce_lasm_db_params_max_entries(
+                response,
+                "exec",
+                parsed_params.as_ref(),
+                params.as_str(),
+                trace_id,
+            ) {
+                return true;
+            }
             let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
                 Some(match parsed_params.as_ref() {
                     Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
@@ -500,6 +583,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
             let template = template.trim().to_string();
             let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
+            if !enforce_lasm_db_params_max_entries(
+                response,
+                "execTx",
+                parsed_params.as_ref(),
+                params.as_str(),
+                trace_id,
+            ) {
+                return true;
+            }
             enum ExecTxSource {
                 AllocateFromDb(i64),
                 ExistingTx(i64),
@@ -876,6 +968,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
+            if !enforce_lasm_db_params_max_entries(
+                response,
+                "queryOne",
+                parsed_params.as_ref(),
+                params.as_str(),
+                trace_id,
+            ) {
+                return true;
+            }
             let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
                 Some(match parsed_params.as_ref() {
                     Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
