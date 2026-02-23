@@ -15480,6 +15480,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"recordsCapacity\":")
             && list_response.contains("\"recordsDroppedTotal\":")
             && list_response.contains("\"affectedRowsTotal\":")
+            && list_response.contains("\"affectedRowsFilteredTotal\":")
+            && list_response.contains("\"affectedRowsGlobalTotal\":")
             && list_response.contains("\"filters\":{")
             && list_response.contains("\"op\":null")
             && list_response.contains("\"db\":null")

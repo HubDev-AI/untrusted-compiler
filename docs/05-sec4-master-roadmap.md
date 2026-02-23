@@ -1980,6 +1980,10 @@ Post-alpha track acceptance anchors:
       - response now includes `opCounts` (filtered set) and `opCountsGlobal` (full retained history) for `exec`/`execTx`/`queryOne`,
       - invalid `op`, `db`, `tx`, and `templateContains` filters now return deterministic `DB.RECORDS_FILTER_INVALID` envelopes.
       - documented in `docs/book/1451-m39-lasm-db-records-filter-and-op-count-expansion.md`.
+   - [x] Added filtered/global affected-row totals to `DbListRecordsResponse`:
+      - `/db/records` summary now includes `affectedRowsFilteredTotal` (all records after filters, before limit window) and `affectedRowsGlobalTotal` (all retained records),
+      - existing `affectedRowsTotal` field is preserved as response-window total for backward compatibility.
+      - documented in `docs/book/1452-m39-lasm-db-records-affected-rows-filtered-global.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
