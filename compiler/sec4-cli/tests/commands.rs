@@ -15491,6 +15491,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"idFrom\":null")
             && list_response.contains("\"idTo\":null")
+            && list_response.contains("\"order\":\"asc\"")
             && list_response.contains("\"opCounts\":{")
             && list_response.contains("\"exec\":1")
             && list_response.contains("\"execTx\":1")
@@ -15637,6 +15638,32 @@ fn main() effects { net } -> Int {
         "db records idFrom filter response should deterministically return trailing id range:\n{id_from_filter_response}"
     );
 
+    let desc_order_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?order=desc HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        desc_order_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records desc-order response should contain deterministic 200 status:\n{desc_order_filter_response}"
+    );
+    let desc_id3_pos = desc_order_filter_response.find("\"id\":3");
+    let desc_id2_pos = desc_order_filter_response.find("\"id\":2");
+    let desc_id1_pos = desc_order_filter_response.find("\"id\":1");
+    assert!(
+        desc_order_filter_response.contains("\"count\":3")
+            && desc_order_filter_response.contains("\"recordsTotal\":3")
+            && desc_order_filter_response.contains("\"recordsGlobalTotal\":3")
+            && desc_order_filter_response.contains("\"filters\":{")
+            && desc_order_filter_response.contains("\"order\":\"desc\"")
+            && desc_id3_pos.is_some()
+            && desc_id2_pos.is_some()
+            && desc_id1_pos.is_some()
+            && desc_id3_pos.unwrap_or(usize::MAX) < desc_id2_pos.unwrap_or(0)
+            && desc_id2_pos.unwrap_or(usize::MAX) < desc_id1_pos.unwrap_or(0),
+        "db records desc-order response should deterministically return latest-first record ordering:\n{desc_order_filter_response}"
+    );
+
     let invalid_filter_response = run_lasm_oneshot_request(
         list_port,
         "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
@@ -15741,6 +15768,19 @@ fn main() effects { net } -> Int {
                 .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
             && invalid_id_range_filter_response.contains("db records idFrom filter must be <= idTo"),
         "db records invalid id range filter should return deterministic validation error:\n{invalid_id_range_filter_response}"
+    );
+
+    let invalid_order_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?order=sideways HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_order_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_order_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_order_filter_response
+                .contains("db records order filter must be one of asc or desc"),
+        "db records invalid order filter should return deterministic validation error:\n{invalid_order_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

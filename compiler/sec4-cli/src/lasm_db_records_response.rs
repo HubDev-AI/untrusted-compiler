@@ -258,6 +258,27 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             return;
         }
     }
+    let records_order_filter = if let Some(raw_order) = request.query_params.get("order") {
+        let normalized = raw_order.trim().to_ascii_lowercase();
+        if normalized == "asc" || normalized == "desc" {
+            normalized
+        } else {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.RECORDS_FILTER_INVALID",
+                    "validation",
+                    "db records order filter must be one of asc or desc",
+                    400,
+                    trace_id,
+                ),
+            );
+            return;
+        }
+    } else {
+        "asc".to_string()
+    };
     let (
         records,
         records_total,
@@ -289,7 +310,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         sqlite_busy_timeout_ms,
     ) = match dynamic_state.lock() {
         Ok(state) => {
-            let records_filtered = state
+            let mut records_filtered = state
                 .db_records
                 .iter()
                 .filter(|record| {
@@ -349,8 +370,17 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 .db_records
                 .iter()
                 .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
+            if records_order_filter == "desc" {
+                records_filtered.reverse();
+            }
             let total = records_filtered.len();
-            let records = if let Some(limit) = records_limit {
+            let records = if records_order_filter == "desc" {
+                if let Some(limit) = records_limit {
+                    records_filtered.into_iter().take(limit).collect::<Vec<_>>()
+                } else {
+                    records_filtered
+                }
+            } else if let Some(limit) = records_limit {
                 records_filtered
                     .iter()
                     .skip(total.saturating_sub(limit))
@@ -431,6 +461,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "createdToMs": records_created_to_ms_filter,
                 "idFrom": records_id_from_filter,
                 "idTo": records_id_to_filter,
+                "order": records_order_filter,
             },
             "opCounts": {
                 "exec": records_exec_count,

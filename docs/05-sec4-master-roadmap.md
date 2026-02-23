@@ -1993,6 +1993,11 @@ Post-alpha track acceptance anchors:
       - `/db/records` now supports `idFrom` and `idTo` filters with deterministic integer/range validation,
       - id-range filters compose with existing op/db/tx/template/timestamp filters for deterministic record-window selection.
       - documented in `docs/book/1455-m39-lasm-db-records-id-range-filters.md`.
+   - [x] Added deterministic records ordering control to `DbListRecordsResponse`:
+      - `/db/records` now supports `order=asc|desc` with deterministic validation,
+      - `desc` mode now returns latest-first windows (with existing `limit` behavior preserved as descending take-window),
+      - `filters.order` now surfaces the effective order mode in responses.
+      - documented in `docs/book/1456-m39-lasm-db-records-order-filter.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
