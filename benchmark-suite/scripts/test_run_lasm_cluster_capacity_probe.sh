@@ -186,7 +186,7 @@ if ! grep -q 'requestPath=/db/hot-write' <<<"$out_db_profile"; then
   echo "lasm capacity probe db profile dry-run missing default db request path" >&2
   exit 1
 fi
-if ! grep -q 'dbAdapter=records-log' <<<"$out_db_profile"; then
+if ! grep -q 'dbAdapter=sqlite' <<<"$out_db_profile"; then
   echo "lasm capacity probe db profile dry-run missing default db adapter override" >&2
   exit 1
 fi

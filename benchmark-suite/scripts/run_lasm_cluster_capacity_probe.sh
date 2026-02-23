@@ -539,7 +539,7 @@ if [ "$profile" = "db-hot-query-one" ] && [ -z "$warmup_path" ]; then
   warmup_path="/db/hot-write"
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_adapter" ]; then
-  db_adapter="records-log"
+  db_adapter="sqlite"
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_base" ]; then
   db_base="${root_dir}/results/raw/sec4-lasm-cluster-db"
