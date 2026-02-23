@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | After merging PR #739, I started the saturation-bundle profile slice on local `dev` before creating a new `codex/*` branch. | Enforce a hard post-merge gate: run `git branch --show-current` immediately, and if on `dev`, create the next `codex/*` branch before any edits. |
+| 2026-02-23 | self | I accidentally triggered `web.run` again during a local-only benchmark scripting pass. | Keep local implementation turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tool calls unless external research is explicitly required. |
 | 2026-02-23 | self | After switching benchmark queryOne routes to `schema.row(1)`, C benchmark build failed because the shim header/source were missing `sec4_rt_schema_row`. | When introducing literal schema helpers in benchmark `.ut` files, immediately add matching ABI symbols to `benchmark_runtime.h/.c` before running `build.sh`. |
 | 2026-02-23 | self | In a zsh validation loop I used `path` as an iteration variable, which overwrote shell `PATH` and made commands like `curl`/`cat` appear missing. | Never use `path` as a shell variable name in zsh scripts/one-liners; use `req_path` or similar non-special names. |
 | 2026-02-23 | self | I started the DB-runtime gap slice by branching in parallel with file reads again. | Keep branch creation/switch operations standalone and run parallel read commands only after branch state is finalized. |
