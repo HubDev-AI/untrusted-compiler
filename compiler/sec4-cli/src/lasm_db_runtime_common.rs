@@ -101,16 +101,24 @@ pub(crate) fn is_lasm_valid_db_cap_handle(db: i64) -> bool {
 }
 
 pub(crate) fn normalize_lasm_db_params(value: &str) -> String {
+    let (normalized, _) = normalize_lasm_db_params_and_value(value);
+    normalized
+}
+
+pub(crate) fn normalize_lasm_db_params_and_value(
+    value: &str,
+) -> (String, Option<serde_json::Value>) {
     let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return "0".to_string();
+    if trimmed.is_empty() || trimmed == "0" {
+        return ("0".to_string(), None);
     }
     let parsed = match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(parsed) => parsed,
-        Err(_) => return trimmed.to_string(),
+        Err(_) => return (trimmed.to_string(), None),
     };
     let canonical = canonicalize_lasm_db_params_value(parsed);
-    serde_json::to_string(&canonical).unwrap_or_else(|_| trimmed.to_string())
+    let normalized = serde_json::to_string(&canonical).unwrap_or_else(|_| trimmed.to_string());
+    (normalized, Some(canonical))
 }
 
 fn canonicalize_lasm_db_params_value(value: serde_json::Value) -> serde_json::Value {
