@@ -314,6 +314,8 @@ pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmD
 pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
     path: &Path,
     busy_timeout_ms: u64,
+    sqlite_journal_mode: &str,
+    sqlite_synchronous: &str,
 ) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -342,8 +344,8 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
         .execute_batch(
             format!(
                 "PRAGMA foreign_keys = ON; PRAGMA journal_mode = {}; PRAGMA synchronous = {};",
-                resolve_lasm_db_sqlite_journal_mode(),
-                resolve_lasm_db_sqlite_synchronous(),
+                sqlite_journal_mode,
+                sqlite_synchronous,
             )
             .as_str(),
         )
@@ -795,6 +797,8 @@ pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
         let connection = connect_lasm_dynamic_db_records_sqlite(
             path.as_path(),
             state.db_sqlite_busy_timeout_ms.max(1),
+            state.db_sqlite_journal_mode.as_str(),
+            state.db_sqlite_synchronous.as_str(),
         )?;
         state.db_records_sqlite_connection = Some(connection);
     }
