@@ -10,9 +10,11 @@ Runs a matrix of LASM cluster capacity probes across multiple
 
 Options:
   --boost-steps <csv>                              Boost-step values (default: 2,4,6)
-  --profile <ping|db-hot-write|db-hot-write-tx>   Probe profile (default: ping)
+  --profile <ping|db-hot-write|db-hot-write-tx|db-hot-query-one>
+                                                 Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
+  --warmup-path <path>                             Optional warmup HTTP path passed to probe runs
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
   --duration <duration>                            wrk duration (default: 40s)
   --threads <n>                                    wrk threads (default: 8)
@@ -75,6 +77,7 @@ request_path_explicit="false"
 if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
   request_path_explicit="true"
 fi
+warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -146,6 +149,10 @@ while [ "$#" -gt 0 ]; do
     --request-path)
       request_path="${2:-}"
       request_path_explicit="true"
+      shift 2
+      ;;
+    --warmup-path)
+      warmup_path="${2:-}"
       shift 2
       ;;
     --request-header)
@@ -407,9 +414,9 @@ if [ "${wrk_processes}" -lt 1 ]; then
   exit 2
 fi
 case "${profile}" in
-  ping|db-hot-write|db-hot-write-tx) ;;
+  ping|db-hot-write|db-hot-write-tx|db-hot-query-one) ;;
   *)
-    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx (got: ${profile})" >&2
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one (got: ${profile})" >&2
     exit 2
     ;;
 esac
@@ -421,7 +428,7 @@ if [ "${project_path_explicit}" != "true" ]; then
     ping)
       project_path="examples/lasm-alpha-full"
       ;;
-    db-hot-write|db-hot-write-tx)
+    db-hot-write|db-hot-write-tx|db-hot-query-one)
       project_path="benchmark-suite/services/sec4-lasm"
       ;;
   esac
@@ -437,7 +444,13 @@ if [ "${request_path_explicit}" != "true" ]; then
     db-hot-write-tx)
       request_path="/db/hot-write-tx"
       ;;
+    db-hot-query-one)
+      request_path="/db/hot-query-one?row_schema=1"
+      ;;
   esac
+fi
+if [ "${profile}" = "db-hot-query-one" ] && [ -z "${warmup_path}" ]; then
+  warmup_path="/db/hot-write"
 fi
 probe_script="${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh"
 analyze_script="${root_dir}/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh"
@@ -489,6 +502,7 @@ sec4 LASM saturation boost matrix plan:
   boostSteps=${boost_steps_joined}
   projectPath=${project_path}
   requestPath=${request_path}
+  warmupPath=${warmup_path:-none}
   duration=${duration}
   threads=${threads}
   connections=${connections}
@@ -536,6 +550,7 @@ for step in "${boost_steps[@]}"; do
     --profile "${profile}"
     --project-path "${project_path}"
     --request-path "${request_path}"
+    --warmup-path "${warmup_path}"
     --request-header "${request_header}"
     --duration "${duration}"
     --threads "${threads}"
@@ -730,6 +745,7 @@ jq -n \
   --arg profile "${profile}" \
   --arg projectPath "${project_path}" \
   --arg requestPath "${request_path}" \
+  --arg warmupPath "${warmup_path}" \
   --arg requestHeader "${request_header}" \
   --arg duration "${duration}" \
   --arg buildProfile "${build_profile}" \
@@ -770,6 +786,7 @@ jq -n \
       profile: $profile,
       projectPath: $projectPath,
       requestPath: $requestPath,
+      warmupPath: (if $warmupPath == "" then null else $warmupPath end),
       requestHeader: $requestHeader,
       duration: $duration,
       buildProfile: $buildProfile,

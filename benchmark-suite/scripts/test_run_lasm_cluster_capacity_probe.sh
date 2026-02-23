@@ -190,6 +190,19 @@ if ! grep -q 'dbAdapter=records-log' <<<"$out_db_profile"; then
   echo "lasm capacity probe db profile dry-run missing default db adapter override" >&2
   exit 1
 fi
+out_db_query_profile="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --profile db-hot-query-one \
+  --port 19095 \
+  2>&1)"
+if ! grep -q 'requestPath=/db/hot-query-one?row_schema=1' <<<"$out_db_query_profile"; then
+  echo "lasm capacity probe db query-one profile dry-run missing default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_query_profile"; then
+  echo "lasm capacity probe db query-one profile dry-run missing default warmup path" >&2
+  exit 1
+fi
 
 out_fixed="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --dry-run \
@@ -288,7 +301,7 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --profile 
   echo "lasm capacity probe accepted invalid profile value" >&2
   exit 1
 fi
-if ! grep -q "profile must be one of: ping, db-hot-write, db-hot-write-tx" /tmp/lasm-capacity-probe-invalid-run-profile.log; then
+if ! grep -q "profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one" /tmp/lasm-capacity-probe-invalid-run-profile.log; then
   echo "lasm capacity probe invalid profile error missing" >&2
   exit 1
 fi
