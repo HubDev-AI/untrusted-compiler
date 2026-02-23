@@ -34,6 +34,28 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     } else {
         None
     };
+    let records_offset = if let Some(raw_offset) = request.query_params.get("offset") {
+        let trimmed = raw_offset.trim();
+        match trimmed.parse::<usize>() {
+            Ok(value) => Some(value),
+            _ => {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records offset filter must be an integer >= 0",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
     let records_op_filter = if let Some(raw_op) = request.query_params.get("op") {
         let trimmed = raw_op.trim();
         if trimmed.is_empty() {
@@ -200,10 +222,9 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         } else {
             None
         };
-    if let (Some(created_from_ms), Some(created_to_ms)) = (
-        records_created_from_ms_filter,
-        records_created_to_ms_filter,
-    ) {
+    if let (Some(created_from_ms), Some(created_to_ms)) =
+        (records_created_from_ms_filter, records_created_to_ms_filter)
+    {
         if created_from_ms > created_to_ms {
             set_lasm_json_response(
                 response,
@@ -300,30 +321,30 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     } else {
         "asc".to_string()
     };
-    let include_records = if let Some(raw_include_records) = request.query_params.get("includeRecords")
-    {
-        let normalized = raw_include_records.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "true" | "1" => true,
-            "false" | "0" => false,
-            _ => {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.RECORDS_FILTER_INVALID",
-                        "validation",
-                        "db records includeRecords filter must be one of true, false, 1, 0",
+    let include_records =
+        if let Some(raw_include_records) = request.query_params.get("includeRecords") {
+            let normalized = raw_include_records.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "true" | "1" => true,
+                "false" | "0" => false,
+                _ => {
+                    set_lasm_json_response(
+                        response,
                         400,
-                        trace_id,
-                    ),
-                );
-                return;
+                        &lasm_error_envelope(
+                            "DB.RECORDS_FILTER_INVALID",
+                            "validation",
+                            "db records includeRecords filter must be one of true, false, 1, 0",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
             }
-        }
-    } else {
-        true
-    };
+        } else {
+            true
+        };
     let records_affected_rows_min_filter =
         if let Some(raw_affected_rows_min) = request.query_params.get("affectedRowsMin") {
             let trimmed = raw_affected_rows_min.trim();
@@ -494,17 +515,30 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 records_filtered.reverse();
             }
             let total = records_filtered.len();
+            let offset = records_offset.unwrap_or(0);
             let records = if records_order_filter == "desc" {
                 if let Some(limit) = records_limit {
-                    records_filtered.into_iter().take(limit).collect::<Vec<_>>()
-                } else {
                     records_filtered
+                        .into_iter()
+                        .skip(offset)
+                        .take(limit)
+                        .collect::<Vec<_>>()
+                } else {
+                    records_filtered.into_iter().skip(offset).collect::<Vec<_>>()
                 }
             } else if let Some(limit) = records_limit {
+                let end = total.saturating_sub(offset);
+                let start = end.saturating_sub(limit);
                 records_filtered
                     .iter()
-                    .skip(total.saturating_sub(limit))
+                    .skip(start)
+                    .take(end.saturating_sub(start))
                     .cloned()
+                    .collect::<Vec<_>>()
+            } else if offset > 0 {
+                records_filtered
+                    .into_iter()
+                    .skip(offset)
                     .collect::<Vec<_>>()
             } else {
                 records_filtered
@@ -582,6 +616,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "createdToMs": records_created_to_ms_filter,
                 "idFrom": records_id_from_filter,
                 "idTo": records_id_to_filter,
+                "offset": records_offset,
                 "order": records_order_filter,
                 "includeRecords": include_records,
                 "affectedRowsMin": records_affected_rows_min_filter,

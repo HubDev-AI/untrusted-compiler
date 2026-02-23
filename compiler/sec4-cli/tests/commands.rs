@@ -15492,6 +15492,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"createdToMs\":null")
             && list_response.contains("\"idFrom\":null")
             && list_response.contains("\"idTo\":null")
+            && list_response.contains("\"offset\":null")
             && list_response.contains("\"order\":\"asc\"")
             && list_response.contains("\"includeRecords\":true")
             && list_response.contains("\"affectedRowsMin\":null")
@@ -15666,6 +15667,25 @@ fn main() effects { net } -> Int {
             && desc_id3_pos.unwrap_or(usize::MAX) < desc_id2_pos.unwrap_or(0)
             && desc_id2_pos.unwrap_or(usize::MAX) < desc_id1_pos.unwrap_or(0),
         "db records desc-order response should deterministically return latest-first record ordering:\n{desc_order_filter_response}"
+    );
+
+    let desc_offset_limit_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?order=desc&offset=1&limit=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        desc_offset_limit_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records desc-order offset+limit response should contain deterministic 200 status:\n{desc_offset_limit_filter_response}"
+    );
+    assert!(
+        desc_offset_limit_filter_response.contains("\"count\":1")
+            && desc_offset_limit_filter_response.contains("\"recordsTotal\":3")
+            && desc_offset_limit_filter_response.contains("\"offset\":1")
+            && desc_offset_limit_filter_response.contains("\"order\":\"desc\"")
+            && desc_offset_limit_filter_response.contains("\"op\":\"execTx\"")
+            && !desc_offset_limit_filter_response.contains("\"op\":\"queryOne\""),
+        "db records desc-order offset+limit response should deterministically return the second latest record:\n{desc_offset_limit_filter_response}"
     );
 
     let summary_only_filter_response = run_lasm_oneshot_request(
@@ -15858,6 +15878,18 @@ fn main() effects { net } -> Int {
             && invalid_order_filter_response
                 .contains("db records order filter must be one of asc or desc"),
         "db records invalid order filter should return deterministic validation error:\n{invalid_order_filter_response}"
+    );
+
+    let invalid_offset_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?offset=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_offset_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_offset_filter_response
+                .contains("db records offset filter must be an integer >= 0"),
+        "db records invalid offset filter should return deterministic validation error:\n{invalid_offset_filter_response}"
     );
 
     let invalid_include_records_filter_response = run_lasm_oneshot_request(

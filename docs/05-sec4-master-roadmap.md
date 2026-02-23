@@ -1915,6 +1915,11 @@ Post-alpha track acceptance anchors:
       - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
+   - [x] Added `/db/records` offset filter for deterministic paging windows:
+      - list-records response now accepts `offset` (`>= 0`) and applies it before limit-window materialization,
+      - `offset` is now echoed in response filter metadata,
+      - invalid offset values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1474-m39-lasm-db-records-offset-filter.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
