@@ -2002,6 +2002,10 @@ Post-alpha track acceptance anchors:
       - `/db/records` now supports `includeRecords=<true|false|1|0>` for deterministic summary-only payload control,
       - when disabled, response keeps counts/telemetry/filters while returning `records: []`.
       - documented in `docs/book/1457-m39-lasm-db-records-include-records-filter.md`.
+   - [x] Added affected-row range filters to `DbListRecordsResponse`:
+      - `/db/records` now supports `affectedRowsMin` and `affectedRowsMax` filters with deterministic integer/range validation,
+      - affected-row filters compose with existing op/db/tx/template/id/time/order filters for write-impact window selection.
+      - documented in `docs/book/1458-m39-lasm-db-records-affected-rows-range-filters.md`.
    - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
       - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
       - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.

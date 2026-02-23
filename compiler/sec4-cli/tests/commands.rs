@@ -15493,6 +15493,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"idTo\":null")
             && list_response.contains("\"order\":\"asc\"")
             && list_response.contains("\"includeRecords\":true")
+            && list_response.contains("\"affectedRowsMin\":null")
+            && list_response.contains("\"affectedRowsMax\":null")
             && list_response.contains("\"opCounts\":{")
             && list_response.contains("\"exec\":1")
             && list_response.contains("\"execTx\":1")
@@ -15684,6 +15686,26 @@ fn main() effects { net } -> Int {
         "db records includeRecords=false response should deterministically emit summary-only records payload:\n{summary_only_filter_response}"
     );
 
+    let affected_rows_min_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?affectedRowsMin=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        affected_rows_min_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records affectedRowsMin response should contain deterministic 200 status:\n{affected_rows_min_filter_response}"
+    );
+    assert!(
+        affected_rows_min_filter_response.contains("\"count\":1")
+            && affected_rows_min_filter_response.contains("\"recordsTotal\":1")
+            && affected_rows_min_filter_response.contains("\"recordsGlobalTotal\":3")
+            && affected_rows_min_filter_response.contains("\"filters\":{")
+            && affected_rows_min_filter_response.contains("\"affectedRowsMin\":1")
+            && affected_rows_min_filter_response.contains("\"op\":\"queryOne\"")
+            && !affected_rows_min_filter_response.contains("\"op\":\"execTx\""),
+        "db records affectedRowsMin response should deterministically return write-impact window:\n{affected_rows_min_filter_response}"
+    );
+
     let invalid_filter_response = run_lasm_oneshot_request(
         list_port,
         "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
@@ -15815,6 +15837,35 @@ fn main() effects { net } -> Int {
             && invalid_include_records_filter_response
                 .contains("db records includeRecords filter must be one of true, false, 1, 0"),
         "db records invalid includeRecords filter should return deterministic validation error:\n{invalid_include_records_filter_response}"
+    );
+
+    let invalid_affected_rows_max_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?affectedRowsMax=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_affected_rows_max_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_affected_rows_max_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_affected_rows_max_filter_response
+                .contains("db records affectedRowsMax filter must be an integer >= 0"),
+        "db records invalid affectedRowsMax filter should return deterministic validation error:\n{invalid_affected_rows_max_filter_response}"
+    );
+
+    let invalid_affected_rows_range_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?affectedRowsMin=2&affectedRowsMax=1 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_affected_rows_range_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_affected_rows_range_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_affected_rows_range_filter_response.contains(
+                "db records affectedRowsMin filter must be <= affectedRowsMax"
+            ),
+        "db records invalid affectedRows range filter should return deterministic validation error:\n{invalid_affected_rows_range_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
