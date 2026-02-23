@@ -54,11 +54,21 @@ static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
+static LASM_DB_PARAMS_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
+static LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 
 #[inline(always)]
 fn resolve_lasm_db_sql_template_max_bytes() -> usize {
+    let override_value = LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
+    if override_value != 0 {
+        return override_value.clamp(
+            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
+            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
+        );
+    }
     *LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
             return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
@@ -75,6 +85,14 @@ fn resolve_lasm_db_sql_template_max_bytes() -> usize {
             LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
         )
     })
+}
+
+pub(crate) fn lasm_db_sql_template_max_bytes_limit() -> usize {
+    resolve_lasm_db_sql_template_max_bytes()
+}
+
+pub(crate) fn set_lasm_db_sql_template_max_bytes_override(value: Option<usize>) {
+    LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
 }
 
 #[inline(always)]
@@ -106,6 +124,10 @@ fn enforce_lasm_db_sql_template_max_bytes(
 
 #[inline(always)]
 fn resolve_lasm_db_params_max_bytes() -> usize {
+    let override_value = LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
+    if override_value != 0 {
+        return override_value.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX);
+    }
     *LASM_DB_PARAMS_MAX_BYTES_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
             return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
@@ -119,6 +141,14 @@ fn resolve_lasm_db_params_max_bytes() -> usize {
         };
         parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
     })
+}
+
+pub(crate) fn lasm_db_params_max_bytes_limit() -> usize {
+    resolve_lasm_db_params_max_bytes()
+}
+
+pub(crate) fn set_lasm_db_params_max_bytes_override(value: Option<usize>) {
+    LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
 }
 
 #[inline(always)]
@@ -150,6 +180,13 @@ fn enforce_lasm_db_params_max_bytes(
 
 #[inline(always)]
 fn resolve_lasm_db_params_max_entries() -> usize {
+    let override_value = LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.load(Ordering::Relaxed);
+    if override_value != 0 {
+        return override_value.clamp(
+            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
+            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
+        );
+    }
     *LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_ENTRIES_ENV) else {
             return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
@@ -166,6 +203,14 @@ fn resolve_lasm_db_params_max_entries() -> usize {
             LASM_DB_PARAMS_MAX_ENTRIES_MAX,
         )
     })
+}
+
+pub(crate) fn lasm_db_params_max_entries_limit() -> usize {
+    resolve_lasm_db_params_max_entries()
+}
+
+pub(crate) fn set_lasm_db_params_max_entries_override(value: Option<usize>) {
+    LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
 }
 
 #[inline(always)]

@@ -16377,6 +16377,9 @@ fn main() effects { net } -> Int {
         list_response.contains("\"count\":5")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"sqlite\"")
+            && list_response.contains("\"sqlTemplateMaxBytes\":65536")
+            && list_response.contains("\"paramsMaxBytes\":131072")
+            && list_response.contains("\"paramsMaxEntries\":2048")
             && list_response.contains("\"queryOneRowMaxBytes\":")
             && list_response.contains("\"queryOneRowMaxColumns\":1024")
             && list_response.contains("\"txHandleCount\":")
@@ -17423,6 +17426,78 @@ fn run_command_rejects_zero_db_query_one_row_max_columns_override() {
     assert!(
         stderr.contains("run failed: --db-query-one-row-max-columns must be >= 1"),
         "stderr should include deterministic db-query-one-row-max-columns validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_sql_template_max_bytes_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sql-template-max-bytes-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sql-template-max-bytes",
+        "8192",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sql-template-max-bytes is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sql-template-max-bytes is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-sql-template-max-bytes guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_params_max_entries_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-params-max-entries");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-params-max-entries",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-params-max-entries override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-params-max-entries must be >= 1"),
+        "stderr should include deterministic db-params-max-entries validation message:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
@@ -28445,6 +28520,12 @@ fn main() effects { net } -> Int {
             "4096",
             "--db-query-one-row-max-columns",
             "64",
+            "--db-sql-template-max-bytes",
+            "8192",
+            "--db-params-max-bytes",
+            "16384",
+            "--db-params-max-entries",
+            "99",
             "--db-sqlite-busy-timeout-ms",
             "2500",
             "--db-sqlite-journal-mode",
@@ -28648,6 +28729,27 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(64),
         "first status json should include dbQueryOneRowMaxColumns runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqlTemplateMaxBytes")
+            .and_then(serde_json::Value::as_u64),
+        Some(8192),
+        "first status json should include dbSqlTemplateMaxBytes runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbParamsMaxBytes")
+            .and_then(serde_json::Value::as_u64),
+        Some(16384),
+        "first status json should include dbParamsMaxBytes runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbParamsMaxEntries")
+            .and_then(serde_json::Value::as_u64),
+        Some(99),
+        "first status json should include dbParamsMaxEntries runtime tuning"
     );
     assert_eq!(
         first_status

@@ -40,6 +40,9 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_records_max: Option<u64>,
     pub(crate) db_query_one_row_max_bytes: Option<u64>,
     pub(crate) db_query_one_row_max_columns: Option<u64>,
+    pub(crate) db_sql_template_max_bytes: Option<u64>,
+    pub(crate) db_params_max_bytes: Option<u64>,
+    pub(crate) db_params_max_entries: Option<u64>,
     pub(crate) db_postgres_statement_cache_max: Option<u64>,
     pub(crate) db_postgres_placeholder_cache_max: Option<u64>,
     pub(crate) db_postgres_statement_timeout_ms: Option<u64>,
@@ -106,6 +109,9 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_records_max == other.db_records_max
             && self.db_query_one_row_max_bytes == other.db_query_one_row_max_bytes
             && self.db_query_one_row_max_columns == other.db_query_one_row_max_columns
+            && self.db_sql_template_max_bytes == other.db_sql_template_max_bytes
+            && self.db_params_max_bytes == other.db_params_max_bytes
+            && self.db_params_max_entries == other.db_params_max_entries
             && self.db_postgres_statement_cache_max == other.db_postgres_statement_cache_max
             && self.db_postgres_placeholder_cache_max == other.db_postgres_placeholder_cache_max
             && self.db_postgres_statement_timeout_ms == other.db_postgres_statement_timeout_ms
@@ -179,6 +185,9 @@ struct LasmClusterStatusPayload<'a> {
     db_records_max: Option<u64>,
     db_query_one_row_max_bytes: Option<u64>,
     db_query_one_row_max_columns: Option<u64>,
+    db_sql_template_max_bytes: Option<u64>,
+    db_params_max_bytes: Option<u64>,
+    db_params_max_entries: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -285,6 +294,9 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_records_max: snapshot.db_records_max,
         db_query_one_row_max_bytes: snapshot.db_query_one_row_max_bytes,
         db_query_one_row_max_columns: snapshot.db_query_one_row_max_columns,
+        db_sql_template_max_bytes: snapshot.db_sql_template_max_bytes,
+        db_params_max_bytes: snapshot.db_params_max_bytes,
+        db_params_max_entries: snapshot.db_params_max_entries,
         db_postgres_statement_cache_max: snapshot.db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max: snapshot.db_postgres_placeholder_cache_max,
         db_postgres_statement_timeout_ms: snapshot.db_postgres_statement_timeout_ms,

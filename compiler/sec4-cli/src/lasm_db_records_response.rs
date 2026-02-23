@@ -1,7 +1,9 @@
 use crate::lasm_db_adapter_state::lasm_db_postgres_tls_mode_label;
 use crate::lasm_db_config::lasm_db_records_adapter_label;
 use crate::lasm_db_runtime_dispatch::{
+    lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
     lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
+    lasm_db_sql_template_max_bytes_limit,
 };
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
@@ -709,6 +711,9 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     };
     let query_one_row_max_bytes = lasm_db_query_one_row_max_bytes_limit();
     let query_one_row_max_columns = lasm_db_query_one_row_max_columns_limit();
+    let sql_template_max_bytes = lasm_db_sql_template_max_bytes_limit();
+    let params_max_bytes = lasm_db_params_max_bytes_limit();
+    let params_max_entries = lasm_db_params_max_entries_limit();
     set_lasm_json_response(
         response,
         200,
@@ -783,6 +788,9 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "sqliteLockSuccessTotal": sqlite_lock_retry_success_total,
             },
             "dbRuntimeLimits": {
+                "sqlTemplateMaxBytes": sql_template_max_bytes,
+                "paramsMaxBytes": params_max_bytes,
+                "paramsMaxEntries": params_max_entries,
                 "queryOneRowMaxBytes": query_one_row_max_bytes,
                 "queryOneRowMaxColumns": query_one_row_max_columns,
             },

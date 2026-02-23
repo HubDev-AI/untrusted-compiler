@@ -97,6 +97,21 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_u64_run_arg(
         &mut cmd,
+        "--db-sql-template-max-bytes",
+        config.db_sql_template_max_bytes,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-params-max-bytes",
+        config.db_params_max_bytes,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-params-max-entries",
+        config.db_params_max_entries,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
         "--db-postgres-statement-cache-max",
         config.db_postgres_statement_cache_max,
     );
