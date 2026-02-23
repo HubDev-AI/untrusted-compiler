@@ -234,6 +234,10 @@ fn resolve_lasm_db_query_one_row_max_bytes() -> usize {
     })
 }
 
+pub(crate) fn lasm_db_query_one_row_max_bytes_limit() -> usize {
+    resolve_lasm_db_query_one_row_max_bytes()
+}
+
 #[inline(always)]
 fn enforce_lasm_db_query_one_row_max_bytes(
     response: &mut sec4_core::HttpResponse,
@@ -277,6 +281,10 @@ fn resolve_lasm_db_query_one_row_max_columns() -> usize {
             LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
         )
     })
+}
+
+pub(crate) fn lasm_db_query_one_row_max_columns_limit() -> usize {
+    resolve_lasm_db_query_one_row_max_columns()
 }
 
 #[inline(always)]
