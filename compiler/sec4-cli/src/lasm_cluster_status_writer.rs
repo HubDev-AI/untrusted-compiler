@@ -29,6 +29,7 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) relay_idle_backoff_max: usize,
     pub(crate) relay_buffer_pool_max: usize,
     pub(crate) relay_buffer_pool_prewarm: usize,
+    pub(crate) relay_pump_scan_multiplier: usize,
     pub(crate) relay_accept_worker_count: usize,
     pub(crate) relay_dispatch_fallback_total: Arc<AtomicU64>,
     pub(crate) relay_dispatch_saturation_short_circuit_total: Arc<AtomicU64>,
@@ -81,6 +82,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
         relay_idle_backoff_max,
         relay_buffer_pool_max,
         relay_buffer_pool_prewarm,
+        relay_pump_scan_multiplier,
         relay_accept_worker_count,
         relay_dispatch_fallback_total,
         relay_dispatch_saturation_short_circuit_total,
@@ -187,6 +189,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_saturation_events_per_sec: saturation_per_sec,
                 relay_accept_batch_max: shared_config.cluster_relay_accept_batch_max,
                 relay_pump_batch_max: shared_config.cluster_relay_pump_batch_max,
+                relay_pump_scan_multiplier,
                 relay_selection_reservation_min_chunk: shared_config
                     .cluster_selection_reservation_min_chunk,
                 relay_idle_spin_threshold,

@@ -28212,6 +28212,7 @@ fn main() effects { net } -> Int {
         .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES", "16384")
         .env("SEC4_RT_LASM_CLUSTER_RELAY_IO_BURST_MAX", "11")
         .env("SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX", "5")
+        .env("SEC4_RT_LASM_CLUSTER_RELAY_PUMP_SCAN_MULTIPLIER", "7")
         .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_MAX", "96")
         .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_PREWARM", "12")
         .stdout(Stdio::null())
@@ -28327,6 +28328,13 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(11),
         "first status json should include relayIoBurstMax env override"
+    );
+    assert_eq!(
+        first_status
+            .get("relayPumpScanMultiplier")
+            .and_then(serde_json::Value::as_u64),
+        Some(7),
+        "first status json should include relayPumpScanMultiplier env override"
     );
     assert_eq!(
         first_status

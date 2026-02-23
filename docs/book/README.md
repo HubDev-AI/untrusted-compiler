@@ -1458,5 +1458,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`
 - `1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`
 - `1488-m39-lasm-relay-backoff-skip-budget-aware-pump-scanning.md`
+- `1489-m39-lasm-relay-pump-scan-multiplier-runtime-tuning.md`
 
 As milestones progress, chapters will be added and linked from this index.
