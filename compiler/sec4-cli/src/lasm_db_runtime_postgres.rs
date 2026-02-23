@@ -801,23 +801,39 @@ pub(crate) fn run_lasm_postgres_exec(
             }
         }
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-            if use_prepared {
-                let retry_statement =
-                    lasm_dynamic_postgres_prepared_statement(state, query_template)?;
-                let client = lasm_dynamic_postgres_client_mut(state)?;
-                run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
-                    .map_err(|retry_err| {
-                        format!(
-                            "postgres execution failed after retryable conflict retry: {retry_err}"
-                        )
-                    })?
+            let mut retry_error = err;
+            let mut recovered = None;
+            for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                let retry_result = if use_prepared {
+                    let retry_statement =
+                        lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
+                } else {
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    run_lasm_postgres_unprepared_exec_with_count(client, query_template)
+                };
+                match retry_result {
+                    Ok(count) => {
+                        recovered = Some(count);
+                        break;
+                    }
+                    Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+                        retry_error = err;
+                    }
+                    Err(err) => {
+                        return Err(format!(
+                            "postgres execution failed after retryable conflict retry: {err}"
+                        ));
+                    }
+                }
+            }
+            if let Some(count) = recovered {
+                count
             } else {
-                let client = lasm_dynamic_postgres_client_mut(state)?;
-                run_lasm_postgres_unprepared_exec_with_count(client, query_template).map_err(
-                    |retry_err| {
-                        format!("postgres execution failed after retryable conflict retry: {retry_err}")
-                    },
-                )?
+                return Err(format!(
+                    "postgres execution failed after retryable conflict retries: {retry_error}"
+                ));
             }
         }
         Err(err)
@@ -893,21 +909,46 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                 })?
         }
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-            let retry_statement = if use_prepared {
-                Some(lasm_dynamic_postgres_prepared_statement(
-                    state,
+            let mut retry_error = err;
+            let mut recovered = None;
+            for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                let retry_statement = if use_prepared {
+                    Some(lasm_dynamic_postgres_prepared_statement(
+                        state,
+                        query_template,
+                    )?)
+                } else {
+                    None
+                };
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                let retry_result = run_lasm_postgres_exec_tx_once(
+                    client,
                     query_template,
-                )?)
+                    params,
+                    retry_statement.as_ref(),
+                );
+                match retry_result {
+                    Ok(count) => {
+                        recovered = Some(count);
+                        break;
+                    }
+                    Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+                        retry_error = err;
+                    }
+                    Err(err) => {
+                        return Err(format!(
+                            "postgres transaction execution failed after retryable conflict retry: {err}"
+                        ));
+                    }
+                }
+            }
+            if let Some(count) = recovered {
+                count
             } else {
-                None
-            };
-            let client = lasm_dynamic_postgres_client_mut(state)?;
-            run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
-                .map_err(|retry_err| {
-                    format!(
-                        "postgres transaction execution failed after retryable conflict retry: {retry_err}"
-                    )
-                })?
+                return Err(format!(
+                    "postgres transaction execution failed after retryable conflict retries: {retry_error}"
+                ));
+            }
         }
         Err(err)
             if use_prepared
@@ -980,12 +1021,33 @@ pub(crate) fn run_lasm_postgres_query_one(
                 })?
             }
             Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                let client = lasm_dynamic_postgres_client_mut(state)?;
-                execute_query(client, &prepared_statement).map_err(|retry_err| {
-                    format!(
-                        "postgres queryOne execution failed after retryable conflict retry: {retry_err}"
-                    )
-                })?
+                let mut retry_error = err;
+                let mut recovered = None;
+                for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    let retry_result = execute_query(client, &prepared_statement);
+                    match retry_result {
+                        Ok(row) => {
+                            recovered = Some(row);
+                            break;
+                        }
+                        Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
+                            retry_error = err;
+                        }
+                        Err(err) => {
+                            return Err(format!(
+                                "postgres queryOne execution failed after retryable conflict retry: {err}"
+                            ));
+                        }
+                    }
+                }
+                if let Some(row) = recovered {
+                    row
+                } else {
+                    return Err(format!(
+                        "postgres queryOne execution failed after retryable conflict retries: {retry_error}"
+                    ));
+                }
             }
             Err(err)
                 if err

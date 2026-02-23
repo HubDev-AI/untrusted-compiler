@@ -67,6 +67,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_postgres_lock_timeout_ms: u64,
     pub(crate) db_postgres_connect_timeout_ms: u64,
     pub(crate) db_postgres_tls_mode: LasmDbPostgresTlsMode,
+    pub(crate) db_postgres_retryable_conflict_retry_max: usize,
     pub(crate) db_sqlite_busy_timeout_ms: u64,
     pub(crate) db_sqlite_lock_retry_max: usize,
     pub(crate) db_sqlite_lock_retry_delay_ms: u64,
@@ -80,6 +81,7 @@ pub(crate) const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_re
 pub(crate) const LASM_DB_POSTGRES_STATEMENT_CACHE_MAX_DEFAULT: usize = 512;
 pub(crate) const LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX_DEFAULT: usize = 1024;
 pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
+pub(crate) const LASM_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX_DEFAULT: usize = 1;
 pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_MAX_DEFAULT: usize = 2;
 pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS_DEFAULT: u64 = 5;
 
@@ -244,6 +246,10 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
             )
         });
+    let db_postgres_retryable_conflict_retry_max = resolve_lasm_env_non_negative_usize(
+        "SEC4_RT_LASM_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX",
+        LASM_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX_DEFAULT,
+    );
     let db_sqlite_busy_timeout_ms = explicit_db_sqlite_busy_timeout_ms
         .filter(|value| *value > 0)
         .unwrap_or_else(|| {
@@ -393,6 +399,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
         db_postgres_tls_mode,
+        db_postgres_retryable_conflict_retry_max,
         db_sqlite_busy_timeout_ms,
         db_sqlite_lock_retry_max,
         db_sqlite_lock_retry_delay_ms,
