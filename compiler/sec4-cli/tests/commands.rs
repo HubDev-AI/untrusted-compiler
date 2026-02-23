@@ -17575,7 +17575,8 @@ fn run_command_rejects_db_sqlite_journal_mode_with_c_backend() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("run failed: --db-sqlite-journal-mode is only supported with --backend lasm"),
+        stderr
+            .contains("run failed: --db-sqlite-journal-mode is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only db-sqlite-journal-mode guidance:\n{stderr}"
     );
 
@@ -17649,7 +17650,8 @@ fn run_command_rejects_db_sqlite_synchronous_with_c_backend() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("run failed: --db-sqlite-synchronous is only supported with --backend lasm"),
+        stderr
+            .contains("run failed: --db-sqlite-synchronous is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only db-sqlite-synchronous guidance:\n{stderr}"
     );
 
@@ -17685,7 +17687,9 @@ fn run_command_rejects_invalid_db_sqlite_synchronous() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("run failed: --db-sqlite-synchronous must be one of off, normal, full, extra"),
+        stderr.contains(
+            "run failed: --db-sqlite-synchronous must be one of off, normal, full, extra"
+        ),
         "stderr should include deterministic sqlite synchronous validation guidance:\n{stderr}"
     );
 
@@ -28186,6 +28190,22 @@ fn main() effects { net } -> Int {
             &status_json_value,
             "--serve-timeout-ms",
             "20000",
+            "--db-adapter",
+            "sqlite",
+            "--db-max-tx-handles",
+            "32",
+            "--db-records-max",
+            "128",
+            "--db-sqlite-busy-timeout-ms",
+            "2500",
+            "--db-sqlite-journal-mode",
+            "wal",
+            "--db-sqlite-synchronous",
+            "normal",
+            "--db-sqlite-lock-retry-max",
+            "7",
+            "--db-sqlite-lock-retry-delay-ms",
+            "9",
         ])
         .env("SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD", "41")
         .env("SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS", "333")
@@ -28312,6 +28332,62 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(12),
         "first status json should include relayBufferPoolPrewarm env override"
+    );
+    assert_eq!(
+        first_status
+            .get("dbAdapter")
+            .and_then(serde_json::Value::as_str),
+        Some("sqlite"),
+        "first status json should include dbAdapter runtime selection"
+    );
+    assert_eq!(
+        first_status
+            .get("dbMaxTxHandles")
+            .and_then(serde_json::Value::as_u64),
+        Some(32),
+        "first status json should include dbMaxTxHandles runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbRecordsMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(128),
+        "first status json should include dbRecordsMax runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqliteBusyTimeoutMs")
+            .and_then(serde_json::Value::as_u64),
+        Some(2500),
+        "first status json should include dbSqliteBusyTimeoutMs runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqliteJournalMode")
+            .and_then(serde_json::Value::as_str),
+        Some("WAL"),
+        "first status json should include dbSqliteJournalMode runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqliteSynchronous")
+            .and_then(serde_json::Value::as_str),
+        Some("NORMAL"),
+        "first status json should include dbSqliteSynchronous runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqliteLockRetryMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(7),
+        "first status json should include dbSqliteLockRetryMax runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbSqliteLockRetryDelayMs")
+            .and_then(serde_json::Value::as_u64),
+        Some(9),
+        "first status json should include dbSqliteLockRetryDelayMs runtime tuning"
     );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")

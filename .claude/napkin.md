@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I started this continuation with git/search commands before the mandatory standalone `.claude/napkin.md` read. | Keep a strict first-command gate on every continuation: run `cat .claude/napkin.md` alone before any git/status/search commands. |
 | 2026-02-23 | self | I repeated the same mistake and committed a new accept-loop slice directly on local `dev` before creating `codex/*`. | Keep a hard pre-commit guard (`git branch --show-current`) and never commit on `dev`; if it happens, immediately branch from the commit and continue PR flow from that branch. |
 | 2026-02-23 | self | `gh pr merge` repeatedly failed local fast-forward because local `dev` was diverged from `origin/dev` after earlier direct local commits. | Keep `dev` exact-tracking: if drift appears, preserve old branch as backup and recreate local `dev` from `origin/dev` before next PR merges. |
 | 2026-02-23 | self | After merging PR #704 I forgot the post-merge branch gate and committed the next telemetry slice directly on local `dev`. | After every merge, run `git branch --show-current` and create the next `codex/*` branch before editing or committing any new slice. |

@@ -10,7 +10,7 @@ use crate::lasm_cluster_runtime_config::{
     resolve_lasm_cluster_idle_sleep_micros, resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
-use crate::LasmClusterConfig;
+use crate::{LasmClusterConfig, RunDbAdapter, RunDbPostgresTlsMode};
 
 pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) status_path: Option<PathBuf>,
@@ -39,6 +39,24 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) autoscale_last_dynamic_boost_step: Arc<AtomicUsize>,
     pub(crate) autoscale_scale_up_cooldown_remaining_ms: Arc<AtomicU64>,
     pub(crate) autoscale_scale_down_cooldown_remaining_ms: Arc<AtomicU64>,
+}
+
+fn lasm_cluster_status_db_adapter_label(adapter: Option<RunDbAdapter>) -> Option<&'static str> {
+    adapter.map(|value| match value {
+        RunDbAdapter::RecordsLog => "records-log",
+        RunDbAdapter::Sqlite => "sqlite",
+        RunDbAdapter::Postgres => "postgres",
+    })
+}
+
+fn lasm_cluster_status_db_postgres_tls_mode_label(
+    mode: Option<RunDbPostgresTlsMode>,
+) -> Option<&'static str> {
+    mode.map(|value| match value {
+        RunDbPostgresTlsMode::Auto => "auto",
+        RunDbPostgresTlsMode::Disable => "disable",
+        RunDbPostgresTlsMode::Require => "require",
+    })
 }
 
 pub(crate) fn spawn_lasm_cluster_status_writer(
@@ -171,6 +189,26 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_backend_connect_timeout_ms: shared_config.cluster_backend_connect_timeout_ms,
                 relay_backend_connect_cooldown_ms: shared_config
                     .cluster_backend_connect_cooldown_ms,
+                db_adapter: lasm_cluster_status_db_adapter_label(shared_config.db_adapter)
+                    .map(str::to_string),
+                db_postgres_tls_mode: lasm_cluster_status_db_postgres_tls_mode_label(
+                    shared_config.db_postgres_tls_mode,
+                )
+                .map(str::to_string),
+                db_max_tx_handles: shared_config.db_max_tx_handles,
+                db_records_max: shared_config.db_records_max,
+                db_postgres_statement_cache_max: shared_config.db_postgres_statement_cache_max,
+                db_postgres_placeholder_cache_max: shared_config.db_postgres_placeholder_cache_max,
+                db_postgres_statement_timeout_ms: shared_config.db_postgres_statement_timeout_ms,
+                db_postgres_lock_timeout_ms: shared_config.db_postgres_lock_timeout_ms,
+                db_postgres_connect_timeout_ms: shared_config.db_postgres_connect_timeout_ms,
+                db_sqlite_busy_timeout_ms: shared_config.db_sqlite_busy_timeout_ms,
+                db_sqlite_journal_mode: shared_config.db_sqlite_journal_mode.clone(),
+                db_sqlite_synchronous: shared_config.db_sqlite_synchronous.clone(),
+                db_postgres_retryable_conflict_retry_max: shared_config
+                    .db_postgres_retryable_conflict_retry_max,
+                db_sqlite_lock_retry_max: shared_config.db_sqlite_lock_retry_max,
+                db_sqlite_lock_retry_delay_ms: shared_config.db_sqlite_lock_retry_delay_ms,
                 relay_dispatch_fallback_total: dispatch_fallback_total,
                 relay_dispatch_fallback_per_sec: dispatch_fallback_per_sec,
                 relay_dispatch_saturation_short_circuit_total:
