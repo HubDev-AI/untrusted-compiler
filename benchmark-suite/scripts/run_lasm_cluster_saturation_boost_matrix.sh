@@ -445,7 +445,7 @@ if [ "${request_path_explicit}" != "true" ]; then
       request_path="/db/hot-write-tx"
       ;;
     db-hot-query-one)
-      request_path="/db/hot-query-one?row_schema=1"
+      request_path="/db/hot-query-one"
       ;;
   esac
 fi

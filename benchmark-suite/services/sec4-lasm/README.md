@@ -9,7 +9,7 @@ It implements:
 - `GET /users/:id`
 - `GET /db/hot-write`
 - `GET /db/hot-write-tx`
-- `GET /db/hot-query-one?row_schema=<int64>`
+- `GET /db/hot-query-one`
 - `GET /db/records`
 
 ## Run

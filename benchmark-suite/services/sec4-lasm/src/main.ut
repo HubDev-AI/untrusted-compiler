@@ -24,11 +24,7 @@ fn dbHotQueryOne() effects { net, db.read, db.write } -> Int {
   let db = DbCap();
   let query = sql.q("select benchmark_query_one limit 1", "bench-hot-query");
   db.exec(db, query);
-  db.queryOne(
-    db,
-    query,
-    schema.row(validate.int64(req.query("row_schema")))
-  );
+  db.queryOne(db, query, schema.row(1));
   res.json(200, "DbQueryOneResponse", 0);
   0
 }

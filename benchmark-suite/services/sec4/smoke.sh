@@ -102,6 +102,17 @@ if ! jq -e '.ok == true and .op == "execTx"' /tmp/sec4-smoke-db-exec-tx.json >/d
   exit 1
 fi
 
+db_query_one_status="$(curl -sS -o /tmp/sec4-smoke-db-query-one.json -w '%{http_code}' \
+  "http://127.0.0.1:${port}/db/hot-query-one")"
+if [ "$db_query_one_status" != "200" ]; then
+  echo "sec4 smoke /db/hot-query-one expected 200, got $db_query_one_status" >&2
+  exit 1
+fi
+if ! jq -e '.ok == true and .record.op == "exec"' /tmp/sec4-smoke-db-query-one.json >/dev/null; then
+  echo "sec4 smoke /db/hot-query-one expected {ok:true,record.op:\"exec\"}" >&2
+  exit 1
+fi
+
 db_records_status="$(curl -sS -o /tmp/sec4-smoke-db-records.json -w '%{http_code}' \
   "http://127.0.0.1:${port}/db/records")"
 if [ "$db_records_status" != "200" ]; then

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | After switching benchmark queryOne routes to `schema.row(1)`, C benchmark build failed because the shim header/source were missing `sec4_rt_schema_row`. | When introducing literal schema helpers in benchmark `.ut` files, immediately add matching ABI symbols to `benchmark_runtime.h/.c` before running `build.sh`. |
 | 2026-02-23 | self | In a zsh validation loop I used `path` as an iteration variable, which overwrote shell `PATH` and made commands like `curl`/`cat` appear missing. | Never use `path` as a shell variable name in zsh scripts/one-liners; use `req_path` or similar non-special names. |
 | 2026-02-23 | self | I started the DB-runtime gap slice by branching in parallel with file reads again. | Keep branch creation/switch operations standalone and run parallel read commands only after branch state is finalized. |
 | 2026-02-23 | self | I again started a slice by launching `git checkout -b ...` in parallel with file reads while opening analysis/render scripts. | Keep a strict branch gate: run branch create/switch commands standalone first, then run parallel read/search commands only after branch state is final. |

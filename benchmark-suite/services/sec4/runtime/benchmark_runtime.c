@@ -85,6 +85,7 @@ typedef struct {
   char parsed_user_id[USER_ID_MAX];
   int64_t last_db_record_handle;
   int64_t last_db_query_one_source_handle;
+  int64_t last_db_query_one_row_schema;
 } RequestContext;
 
 static Route g_routes[MAX_ROUTES];
@@ -709,6 +710,7 @@ int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
   }
   g_ctx.last_db_record_handle = record->handle;
   g_ctx.last_db_query_one_source_handle = 0;
+  g_ctx.last_db_query_one_row_schema = 0;
   return record->handle;
 }
 
@@ -752,6 +754,7 @@ int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query) {
   }
   g_ctx.last_db_record_handle = record->handle;
   g_ctx.last_db_query_one_source_handle = 0;
+  g_ctx.last_db_query_one_row_schema = 0;
   return record->handle;
 }
 
@@ -778,8 +781,12 @@ int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema) {
   }
   g_ctx.last_db_record_handle = query_record->handle;
   g_ctx.last_db_query_one_source_handle = source->handle;
-  (void)row_schema;
+  g_ctx.last_db_query_one_row_schema = row_schema;
   return query_record->handle;
+}
+
+int64_t sec4_rt_schema_row(int64_t value) {
+  return value;
 }
 
 int64_t sec4_rt_res_text(int64_t status, const char *text) {
@@ -821,6 +828,7 @@ int64_t sec4_rt_res_ok(int64_t status, const char *schema_name, int64_t value) {
 }
 
 int64_t sec4_rt_res_json(int64_t status, const char *schema_name, int64_t value) {
+  (void)value;
   if (g_ctx.failed) {
     return 0;
   }
@@ -876,7 +884,7 @@ int64_t sec4_rt_res_json(int64_t status, const char *schema_name, int64_t value)
         sizeof(g_ctx.response_body),
         "{\"ok\":true,\"recordId\":%lld,\"rowSchema\":%lld,\"record\":{\"id\":%lld,\"db\":%lld,\"tx\":%lld,\"op\":\"%s\",\"template\":\"%s\",\"params\":\"%s\"}}",
         (long long)record->handle,
-        (long long)value,
+        (long long)g_ctx.last_db_query_one_row_schema,
         (long long)source->handle,
         (long long)source->db,
         (long long)source->tx,

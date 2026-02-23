@@ -8,6 +8,7 @@ Untrusted<T> benchmark service implementing:
 - `GET /users/:id`
 - `GET /db/hot-write`
 - `GET /db/hot-write-tx`
+- `GET /db/hot-query-one`
 - `GET /db/records`
 
 ## Run
@@ -27,4 +28,4 @@ benchmark-suite/services/sec4/smoke.sh
 
 - This service compiles Untrusted<T> source to generated C and links a benchmark-specific runtime adapter.
 - The adapter provides contract-oriented HTTP/JSON behavior suitable for benchmark harness comparability.
-- The runtime adapter now supports benchmark DB intrinsics (`db.exec`, `db.execTx`) and records endpoints for side-by-side C vs LASM probe runs.
+- The runtime adapter now supports benchmark DB intrinsics (`db.exec`, `db.execTx`, `db.queryOne`) and records endpoints for side-by-side C vs LASM probe runs.
