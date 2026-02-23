@@ -75,6 +75,14 @@ fn parse_lasm_db_sqlite_synchronous(value: &str) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn normalize_lasm_db_sqlite_journal_mode(value: &str) -> Option<&'static str> {
+    parse_lasm_db_sqlite_journal_mode(value)
+}
+
+pub(crate) fn normalize_lasm_db_sqlite_synchronous(value: &str) -> Option<&'static str> {
+    parse_lasm_db_sqlite_synchronous(value)
+}
+
 pub(crate) fn resolve_lasm_db_sqlite_journal_mode() -> &'static str {
     let Ok(raw) = std::env::var(LASM_DB_SQLITE_JOURNAL_MODE_ENV) else {
         return LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT;

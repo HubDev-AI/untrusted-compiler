@@ -2,10 +2,11 @@ use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
     ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
     load_lasm_dynamic_db_records_from_sqlite, parse_lasm_db_postgres_tls_mode,
-    resolve_lasm_db_sqlite_journal_mode, resolve_lasm_db_sqlite_synchronous, LasmDbPostgresTlsMode,
-    LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT,
-    LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_TLS_MODE_ENV,
-    LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
+    normalize_lasm_db_sqlite_journal_mode, normalize_lasm_db_sqlite_synchronous,
+    resolve_lasm_db_sqlite_journal_mode, resolve_lasm_db_sqlite_synchronous,
+    LasmDbPostgresTlsMode, LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
+    LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT,
+    LASM_DB_POSTGRES_TLS_MODE_ENV, LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
 };
 use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
@@ -220,6 +221,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_postgres_retryable_conflict_retry_max: Option<usize>,
     explicit_db_sqlite_lock_retry_max: Option<usize>,
     explicit_db_sqlite_lock_retry_delay_ms: Option<u64>,
+    explicit_db_sqlite_journal_mode: Option<&str>,
+    explicit_db_sqlite_synchronous: Option<&str>,
     explicit_db_tx_max_handles: Option<usize>,
     explicit_db_records_max: Option<usize>,
     explicit_db_postgres_statement_cache_max: Option<usize>,
@@ -277,8 +280,20 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS_DEFAULT,
             )
         });
-    let db_sqlite_journal_mode = resolve_lasm_db_sqlite_journal_mode().to_string();
-    let db_sqlite_synchronous = resolve_lasm_db_sqlite_synchronous().to_string();
+    let db_sqlite_journal_mode = if let Some(mode) = explicit_db_sqlite_journal_mode {
+        normalize_lasm_db_sqlite_journal_mode(mode)
+            .ok_or_else(|| format!("invalid --db-sqlite-journal-mode value `{mode}`"))?
+            .to_string()
+    } else {
+        resolve_lasm_db_sqlite_journal_mode().to_string()
+    };
+    let db_sqlite_synchronous = if let Some(mode) = explicit_db_sqlite_synchronous {
+        normalize_lasm_db_sqlite_synchronous(mode)
+            .ok_or_else(|| format!("invalid --db-sqlite-synchronous value `{mode}`"))?
+            .to_string()
+    } else {
+        resolve_lasm_db_sqlite_synchronous().to_string()
+    };
     let db_postgres_tls_mode = resolve_lasm_db_postgres_tls_mode(explicit_db_postgres_tls_mode)?;
     let db_postgres_statement_cache_max = explicit_db_postgres_statement_cache_max
         .filter(|value| *value > 0)

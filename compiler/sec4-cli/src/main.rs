@@ -75,6 +75,9 @@ use lasm_cluster_runtime_config::{
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
+use lasm_db_adapter_state::{
+    normalize_lasm_db_sqlite_journal_mode, normalize_lasm_db_sqlite_synchronous,
+};
 use lasm_db_cli::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_tls_mode_run_arg,
     run_db_adapter_to_lasm_db_records_adapter,
@@ -179,6 +182,10 @@ enum Commands {
         db_postgres_connect_timeout_ms: Option<u64>,
         #[arg(long)]
         db_sqlite_busy_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_sqlite_journal_mode: Option<String>,
+        #[arg(long)]
+        db_sqlite_synchronous: Option<String>,
         #[arg(long)]
         db_postgres_retryable_conflict_retry_max: Option<u64>,
         #[arg(long)]
@@ -591,6 +598,8 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode,
+            db_sqlite_synchronous,
             db_postgres_retryable_conflict_retry_max,
             db_sqlite_lock_retry_max,
             db_sqlite_lock_retry_delay_ms,
@@ -639,6 +648,8 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode,
+            db_sqlite_synchronous,
             db_postgres_retryable_conflict_retry_max,
             db_sqlite_lock_retry_max,
             db_sqlite_lock_retry_delay_ms,
@@ -6906,6 +6917,8 @@ fn cmd_run(
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_sqlite_journal_mode: Option<String>,
+    db_sqlite_synchronous: Option<String>,
     db_postgres_retryable_conflict_retry_max: Option<u64>,
     db_sqlite_lock_retry_max: Option<u64>,
     db_sqlite_lock_retry_delay_ms: Option<u64>,
@@ -7104,6 +7117,14 @@ fn cmd_run(
         eprintln!("run failed: --db-sqlite-busy-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_sqlite_journal_mode.is_some() {
+        eprintln!("run failed: --db-sqlite-journal-mode is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_sqlite_synchronous.is_some() {
+        eprintln!("run failed: --db-sqlite-synchronous is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && db_postgres_retryable_conflict_retry_max.is_some() {
         eprintln!(
             "run failed: --db-postgres-retryable-conflict-retry-max is only supported with --backend lasm"
@@ -7156,6 +7177,42 @@ fn cmd_run(
         eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
         return Err(2);
     }
+    let explicit_db_sqlite_journal_mode = if let Some(mode) = db_sqlite_journal_mode {
+        let trimmed = mode.trim();
+        if trimmed.is_empty() {
+            eprintln!("run failed: --db-sqlite-journal-mode must not be empty");
+            return Err(2);
+        }
+        match normalize_lasm_db_sqlite_journal_mode(trimmed) {
+            Some(normalized) => Some(normalized.to_string()),
+            None => {
+                eprintln!(
+                    "run failed: --db-sqlite-journal-mode must be one of wal, delete, truncate, persist, memory, off"
+                );
+                return Err(2);
+            }
+        }
+    } else {
+        None
+    };
+    let explicit_db_sqlite_synchronous = if let Some(mode) = db_sqlite_synchronous {
+        let trimmed = mode.trim();
+        if trimmed.is_empty() {
+            eprintln!("run failed: --db-sqlite-synchronous must not be empty");
+            return Err(2);
+        }
+        match normalize_lasm_db_sqlite_synchronous(trimmed) {
+            Some(normalized) => Some(normalized.to_string()),
+            None => {
+                eprintln!(
+                    "run failed: --db-sqlite-synchronous must be one of off, normal, full, extra"
+                );
+                return Err(2);
+            }
+        }
+    } else {
+        None
+    };
     let postgres_runtime_overrides = db_postgres_dsn.is_some()
         || db_postgres_dsn_file.is_some()
         || db_postgres_tls_mode.is_some()
@@ -7166,6 +7223,8 @@ fn cmd_run(
         || db_postgres_connect_timeout_ms.is_some()
         || db_postgres_retryable_conflict_retry_max.is_some();
     let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
+        || explicit_db_sqlite_journal_mode.is_some()
+        || explicit_db_sqlite_synchronous.is_some()
         || db_sqlite_lock_retry_max.is_some()
         || db_sqlite_lock_retry_delay_ms.is_some();
     if backend == RunBackend::Lasm && postgres_runtime_overrides && sqlite_runtime_overrides {
@@ -7400,6 +7459,8 @@ fn cmd_run(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            explicit_db_sqlite_journal_mode,
+            explicit_db_sqlite_synchronous,
             db_postgres_retryable_conflict_retry_max,
             db_sqlite_lock_retry_max,
             db_sqlite_lock_retry_delay_ms,
@@ -7760,6 +7821,8 @@ struct LasmClusterConfig {
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_sqlite_journal_mode: Option<String>,
+    db_sqlite_synchronous: Option<String>,
     db_postgres_retryable_conflict_retry_max: Option<u64>,
     db_sqlite_lock_retry_max: Option<u64>,
     db_sqlite_lock_retry_delay_ms: Option<u64>,
@@ -8068,6 +8131,8 @@ fn cmd_run_lasm_backend(
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_sqlite_busy_timeout_ms: Option<u64>,
+    db_sqlite_journal_mode: Option<String>,
+    db_sqlite_synchronous: Option<String>,
     db_postgres_retryable_conflict_retry_max: Option<u64>,
     db_sqlite_lock_retry_max: Option<u64>,
     db_sqlite_lock_retry_delay_ms: Option<u64>,
@@ -8375,6 +8440,8 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode: db_sqlite_journal_mode.clone(),
+            db_sqlite_synchronous: db_sqlite_synchronous.clone(),
             db_postgres_retryable_conflict_retry_max,
             db_sqlite_lock_retry_max,
             db_sqlite_lock_retry_delay_ms,
@@ -8430,6 +8497,8 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode: db_sqlite_journal_mode.clone(),
+            db_sqlite_synchronous: db_sqlite_synchronous.clone(),
             db_postgres_retryable_conflict_retry_max,
             db_sqlite_lock_retry_max,
             db_sqlite_lock_retry_delay_ms,
@@ -8504,6 +8573,8 @@ fn cmd_run_lasm_backend(
                     2
                 })?,
             db_sqlite_lock_retry_delay_ms,
+            db_sqlite_journal_mode.as_deref(),
+            db_sqlite_synchronous.as_deref(),
             db_max_tx_handles
                 .map(|value| usize::try_from(value))
                 .transpose()
