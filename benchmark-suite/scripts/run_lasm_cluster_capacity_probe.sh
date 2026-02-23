@@ -9,6 +9,7 @@ Runs sec4 LASM cluster mode under load, samples peak RSS, and writes a
 capacity probe result JSON.
 
 Options:
+  --profile <ping|db-hot-write|db-hot-write-tx>   Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
@@ -116,8 +117,17 @@ format_latency_ms() {
   awk -v x="$value_ms" 'BEGIN { printf "%.3fms", x + 0 }'
 }
 
-project_path="${LASM_CAPACITY_PROJECT_PATH:-examples/lasm-alpha-full}"
-request_path="${LASM_CAPACITY_REQUEST_PATH:-/health}"
+profile="${LASM_CAPACITY_PROFILE:-ping}"
+project_path="${LASM_CAPACITY_PROJECT_PATH:-}"
+project_path_explicit="false"
+if [ -n "${LASM_CAPACITY_PROJECT_PATH:-}" ]; then
+  project_path_explicit="true"
+fi
+request_path="${LASM_CAPACITY_REQUEST_PATH:-}"
+request_path_explicit="false"
+if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
+  request_path_explicit="true"
+fi
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -166,12 +176,18 @@ keep_cluster_status_json="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --profile)
+      profile="${2:-}"
+      shift 2
+      ;;
     --project-path)
       project_path="${2:-}"
+      project_path_explicit="true"
       shift 2
       ;;
     --request-path)
       request_path="${2:-}"
+      request_path_explicit="true"
       shift 2
       ;;
     --request-header)
@@ -449,6 +465,13 @@ if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   echo "request-header must include ':' (example: Authorization: Bearer token123)" >&2
   exit 2
 fi
+case "$profile" in
+  ping|db-hot-write|db-hot-write-tx) ;;
+  *)
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx (got: $profile)" >&2
+    exit 2
+    ;;
+esac
 if [ "$fixed_reuse_port_mode" = "true" ]; then
   autoscale_max_instances="$instances"
   if [ -n "$cluster_relay_workers" ]; then
@@ -479,6 +502,35 @@ fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
+if [ "$project_path_explicit" != "true" ]; then
+  case "$profile" in
+    ping)
+      project_path="examples/lasm-alpha-full"
+      ;;
+    db-hot-write|db-hot-write-tx)
+      project_path="benchmark-suite/services/sec4-lasm"
+      ;;
+  esac
+fi
+if [ "$request_path_explicit" != "true" ]; then
+  case "$profile" in
+    ping)
+      request_path="/health"
+      ;;
+    db-hot-write)
+      request_path="/db/hot-write"
+      ;;
+    db-hot-write-tx)
+      request_path="/db/hot-write-tx"
+      ;;
+  esac
+fi
+if [ "$profile" != "ping" ] && [ -z "$db_adapter" ]; then
+  db_adapter="records-log"
+fi
+if [ "$profile" != "ping" ] && [ -z "$db_base" ]; then
+  db_base="${root_dir}/results/raw/sec4-lasm-cluster-db"
+fi
 if [ "$build_profile" = "release" ]; then
   sec4_bin="${repo_root}/target/release/sec4"
   cargo_build_profile_arg=(--release)
@@ -515,6 +567,7 @@ mkdir -p "$(dirname "$out_path")" "$(dirname "$raw_file")"
 
 cat <<PLAN
 sec4 LASM cluster capacity probe plan:
+  profile=$profile
   projectPath=$project_abs
   baseUrl=$base_url
   requestPath=$request_path
@@ -1036,6 +1089,7 @@ fi
 
 jq -n \
   --arg impl "sec4-lasm-cluster" \
+  --arg profile "$profile" \
   --arg projectPath "$project_abs" \
   --arg baseUrl "$base_url" \
   --arg requestPath "$request_path" \
@@ -1120,6 +1174,7 @@ jq -n \
   --arg relayPumpBatchMax "${cluster_relay_pump_batch_max:-auto}" \
   '{
     impl: $impl,
+    profile: $profile,
     projectPath: $projectPath,
     baseUrl: $baseUrl,
     requestPath: $requestPath,
@@ -1128,6 +1183,7 @@ jq -n \
     runExitCode: $runExitCode,
     requestsTargetMet: $requestsTargetMet,
     run: {
+      profile: $profile,
       duration: $duration,
       buildProfile: $buildProfile,
       threads: $threads,

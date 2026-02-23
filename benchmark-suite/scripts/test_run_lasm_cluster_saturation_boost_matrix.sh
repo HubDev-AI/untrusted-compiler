@@ -38,6 +38,10 @@ if ! grep -q 'boostSteps=2,4,7' <<<"$out"; then
   echo "saturation boost matrix dry-run missing boost steps listing" >&2
   exit 1
 fi
+if ! grep -q 'profile=ping' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing default profile marker" >&2
+  exit 1
+fi
 if ! grep -q '=== saturationBoostStep=2 ===' <<<"$out"; then
   echo "saturation boost matrix dry-run missing step 2 section header" >&2
   exit 1
@@ -112,6 +116,24 @@ if ! grep -q 'verifyRecommendedAfterAnalysis=true' <<<"$out"; then
 fi
 if ! grep -q "verifyCmd=${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh ... --autoscale-saturation-boost-step <recommended> --build-profile debug --samples 3 --wrk-processes 4 --out ${root_dir}/results/summaries/custom-saturation-boost-verify.json --skip-build" <<<"$out"; then
   echo "saturation boost matrix dry-run missing verify command plan" >&2
+  exit 1
+fi
+
+out_db_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --profile db-hot-write-tx \
+  --boost-steps 2 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-write-tx' <<<"$out_db_profile"; then
+  echo "saturation boost matrix dry-run missing db profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'projectPath=benchmark-suite/services/sec4-lasm' <<<"$out_db_profile"; then
+  echo "saturation boost matrix dry-run missing db profile default project path" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-write-tx' <<<"$out_db_profile"; then
+  echo "saturation boost matrix dry-run missing db profile default request path" >&2
   exit 1
 fi
 
@@ -201,6 +223,14 @@ if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run -
 fi
 if ! grep -q 'build-profile must be one of: debug, release' /tmp/lasm-sat-boost-matrix-invalid-profile.log; then
   echo "saturation boost matrix missing invalid build profile diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --profile nope >/tmp/lasm-sat-boost-matrix-invalid-run-profile.log 2>&1; then
+  echo "saturation boost matrix accepted invalid profile value" >&2
+  exit 1
+fi
+if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx' /tmp/lasm-sat-boost-matrix-invalid-run-profile.log; then
+  echo "saturation boost matrix missing invalid profile diagnostic" >&2
   exit 1
 fi
 

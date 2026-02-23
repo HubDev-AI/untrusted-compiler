@@ -58,6 +58,10 @@ if ! grep -q 'requestPath=/health' <<<"$out"; then
   echo "lasm capacity probe dry-run missing requestPath output" >&2
   exit 1
 fi
+if ! grep -q 'profile=ping' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing default profile output" >&2
+  exit 1
+fi
 if ! grep -q 'targetRequests=4567' <<<"$out"; then
   echo "lasm capacity probe dry-run missing targetRequests output" >&2
   exit 1
@@ -165,6 +169,28 @@ if ! grep -q "keepClusterStatusJson=true" <<<"$out_keep_status"; then
   exit 1
 fi
 
+out_db_profile="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --profile db-hot-write \
+  --port 19094 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-write' <<<"$out_db_profile"; then
+  echo "lasm capacity probe db profile dry-run missing profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'projectPath=.*/benchmark-suite/services/sec4-lasm' <<<"$out_db_profile"; then
+  echo "lasm capacity probe db profile dry-run missing default db project path" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-write' <<<"$out_db_profile"; then
+  echo "lasm capacity probe db profile dry-run missing default db request path" >&2
+  exit 1
+fi
+if ! grep -q 'dbAdapter=records-log' <<<"$out_db_profile"; then
+  echo "lasm capacity probe db profile dry-run missing default db adapter override" >&2
+  exit 1
+fi
+
 out_fixed="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --dry-run \
   --fixed-reuse-port-mode \
@@ -256,6 +282,14 @@ if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --build-pr
 fi
 if ! grep -q "build-profile must be one of: debug, release" /tmp/lasm-capacity-probe-invalid-profile.log; then
   echo "lasm capacity probe invalid build profile error missing" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --profile nope >/tmp/lasm-capacity-probe-invalid-run-profile.log 2>&1; then
+  echo "lasm capacity probe accepted invalid profile value" >&2
+  exit 1
+fi
+if ! grep -q "profile must be one of: ping, db-hot-write, db-hot-write-tx" /tmp/lasm-capacity-probe-invalid-run-profile.log; then
+  echo "lasm capacity probe invalid profile error missing" >&2
   exit 1
 fi
 

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-23 | self | I launched `git checkout -b ...` in parallel with read commands again while starting the capacity-profile slice. | Keep branch creation/checkouts strictly sequential, and only run parallel read/search commands after branch state is settled. |
 | 2026-02-23 | self | I assumed the C benchmark fixture (`benchmark-suite/services/sec4`) could accept `db.*` routes like LASM; C build failed because its benchmark runtime shim does not export DB runtime symbols. | Keep DB benchmark traffic slices scoped to `benchmark-suite/services/sec4-lasm` until the C benchmark runtime adapter is explicitly extended with DB ABI functions. |
 | 2026-02-23 | self | I started this continuation with git/search commands before the mandatory standalone `.claude/napkin.md` read. | Keep a strict first-command gate on every continuation: run `cat .claude/napkin.md` alone before any git/status/search commands. |
 | 2026-02-23 | self | I repeated the same mistake and committed a new accept-loop slice directly on local `dev` before creating `codex/*`. | Keep a hard pre-commit guard (`git branch --show-current`) and never commit on `dev`; if it happens, immediately branch from the commit and continue PR flow from that branch. |

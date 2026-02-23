@@ -10,6 +10,7 @@ Runs a matrix of LASM cluster capacity probes across multiple
 
 Options:
   --boost-steps <csv>                              Boost-step values (default: 2,4,6)
+  --profile <ping|db-hot-write|db-hot-write-tx>   Probe profile (default: ping)
   --project-path <path>                            Project path passed to sec4 run (default: examples/lasm-alpha-full)
   --request-path <path>                            Probe HTTP path (default: /health)
   --request-header <value>                         Header passed to readiness + wrk (default: Authorization: Bearer token123)
@@ -63,8 +64,17 @@ Options:
 USAGE
 }
 
-project_path="${LASM_CAPACITY_PROJECT_PATH:-examples/lasm-alpha-full}"
-request_path="${LASM_CAPACITY_REQUEST_PATH:-/health}"
+profile="${LASM_CAPACITY_PROFILE:-ping}"
+project_path="${LASM_CAPACITY_PROJECT_PATH:-}"
+project_path_explicit="false"
+if [ -n "${LASM_CAPACITY_PROJECT_PATH:-}" ]; then
+  project_path_explicit="true"
+fi
+request_path="${LASM_CAPACITY_REQUEST_PATH:-}"
+request_path_explicit="false"
+if [ -n "${LASM_CAPACITY_REQUEST_PATH:-}" ]; then
+  request_path_explicit="true"
+fi
 request_header="${LASM_CAPACITY_REQUEST_HEADER:-Authorization: Bearer token123}"
 duration="${LASM_CAPACITY_DURATION:-40s}"
 threads="${LASM_CAPACITY_THREADS:-8}"
@@ -124,12 +134,18 @@ while [ "$#" -gt 0 ]; do
       boost_steps_csv="${1#--boost-steps=}"
       shift
       ;;
+    --profile)
+      profile="${2:-}"
+      shift 2
+      ;;
     --project-path)
       project_path="${2:-}"
+      project_path_explicit="true"
       shift 2
       ;;
     --request-path)
       request_path="${2:-}"
+      request_path_explicit="true"
       shift 2
       ;;
     --request-header)
@@ -390,9 +406,39 @@ if [ "${wrk_processes}" -lt 1 ]; then
   echo "wrk-processes must be >= 1, got: ${wrk_processes}" >&2
   exit 2
 fi
+case "${profile}" in
+  ping|db-hot-write|db-hot-write-tx) ;;
+  *)
+    echo "profile must be one of: ping, db-hot-write, db-hot-write-tx (got: ${profile})" >&2
+    exit 2
+    ;;
+esac
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
+if [ "${project_path_explicit}" != "true" ]; then
+  case "${profile}" in
+    ping)
+      project_path="examples/lasm-alpha-full"
+      ;;
+    db-hot-write|db-hot-write-tx)
+      project_path="benchmark-suite/services/sec4-lasm"
+      ;;
+  esac
+fi
+if [ "${request_path_explicit}" != "true" ]; then
+  case "${profile}" in
+    ping)
+      request_path="/health"
+      ;;
+    db-hot-write)
+      request_path="/db/hot-write"
+      ;;
+    db-hot-write-tx)
+      request_path="/db/hot-write-tx"
+      ;;
+  esac
+fi
 probe_script="${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh"
 analyze_script="${root_dir}/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh"
 
@@ -439,6 +485,7 @@ boost_steps_joined="$(IFS=,; echo "${boost_steps[*]}")"
 
 cat <<PLAN
 sec4 LASM saturation boost matrix plan:
+  profile=${profile}
   boostSteps=${boost_steps_joined}
   projectPath=${project_path}
   requestPath=${request_path}
@@ -486,6 +533,7 @@ for step in "${boost_steps[@]}"; do
   step_out="${out_dir}/sec4-lasm-cluster-capacity-probe-sat-boost-${step}.json"
   cmd=(
     "${probe_script}"
+    --profile "${profile}"
     --project-path "${project_path}"
     --request-path "${request_path}"
     --request-header "${request_header}"
@@ -679,6 +727,7 @@ wrk_total_connections="$(awk -v c="${connections}" -v p="${wrk_processes}" 'BEGI
 
 jq -n \
   --arg impl "sec4-lasm-cluster" \
+  --arg profile "${profile}" \
   --arg projectPath "${project_path}" \
   --arg requestPath "${request_path}" \
   --arg requestHeader "${request_header}" \
@@ -718,6 +767,7 @@ jq -n \
   '{
     impl: $impl,
     run: {
+      profile: $profile,
       projectPath: $projectPath,
       requestPath: $requestPath,
       requestHeader: $requestHeader,
