@@ -1424,5 +1424,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1452-m39-lasm-db-records-affected-rows-filtered-global.md`
 - `1453-m39-lasm-db-records-response-module-extraction.md`
 - `1454-m39-lasm-db-records-created-time-range-filters.md`
+- `1455-m39-lasm-db-records-id-range-filters.md`
 
 As milestones progress, chapters will be added and linked from this index.

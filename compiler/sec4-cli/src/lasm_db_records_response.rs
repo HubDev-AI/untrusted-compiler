@@ -198,6 +198,66 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             return;
         }
     }
+    let records_id_from_filter = if let Some(raw_id_from) = request.query_params.get("idFrom") {
+        let trimmed = raw_id_from.trim();
+        match trimmed.parse::<u64>() {
+            Ok(value) if value >= 1 => Some(value),
+            _ => {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records idFrom filter must be an integer >= 1",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let records_id_to_filter = if let Some(raw_id_to) = request.query_params.get("idTo") {
+        let trimmed = raw_id_to.trim();
+        match trimmed.parse::<u64>() {
+            Ok(value) if value >= 1 => Some(value),
+            _ => {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.RECORDS_FILTER_INVALID",
+                        "validation",
+                        "db records idTo filter must be an integer >= 1",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    if let (Some(id_from), Some(id_to)) = (records_id_from_filter, records_id_to_filter) {
+        if id_from > id_to {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.RECORDS_FILTER_INVALID",
+                    "validation",
+                    "db records idFrom filter must be <= idTo",
+                    400,
+                    trace_id,
+                ),
+            );
+            return;
+        }
+    }
     let (
         records,
         records_total,
@@ -248,6 +308,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                             .unwrap_or(true)
                         && records_created_to_ms_filter
                             .map(|to_ms| record.created_at_ms <= to_ms)
+                            .unwrap_or(true)
+                        && records_id_from_filter
+                            .map(|id_from| record.id >= id_from)
+                            .unwrap_or(true)
+                        && records_id_to_filter
+                            .map(|id_to| record.id <= id_to)
                             .unwrap_or(true)
                 })
                 .cloned()
@@ -363,6 +429,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "templateContains": records_template_contains_filter,
                 "createdFromMs": records_created_from_ms_filter,
                 "createdToMs": records_created_to_ms_filter,
+                "idFrom": records_id_from_filter,
+                "idTo": records_id_to_filter,
             },
             "opCounts": {
                 "exec": records_exec_count,

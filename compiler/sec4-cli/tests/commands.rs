@@ -15489,6 +15489,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"templateContains\":null")
             && list_response.contains("\"createdFromMs\":null")
             && list_response.contains("\"createdToMs\":null")
+            && list_response.contains("\"idFrom\":null")
+            && list_response.contains("\"idTo\":null")
             && list_response.contains("\"opCounts\":{")
             && list_response.contains("\"exec\":1")
             && list_response.contains("\"execTx\":1")
@@ -15614,6 +15616,27 @@ fn main() effects { net } -> Int {
         "db records createdToMs filter response should deterministically return empty time-window set:\n{created_to_zero_filter_response}"
     );
 
+    let id_from_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?idFrom=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        id_from_filter_response.contains("HTTP/1.1 200 OK"),
+        "db records idFrom filter response should contain deterministic 200 status:\n{id_from_filter_response}"
+    );
+    assert!(
+        id_from_filter_response.contains("\"count\":2")
+            && id_from_filter_response.contains("\"recordsTotal\":2")
+            && id_from_filter_response.contains("\"recordsGlobalTotal\":3")
+            && id_from_filter_response.contains("\"filters\":{")
+            && id_from_filter_response.contains("\"idFrom\":2")
+            && id_from_filter_response.contains("\"op\":\"execTx\"")
+            && id_from_filter_response.contains("\"op\":\"queryOne\"")
+            && !id_from_filter_response.contains("\"id\":1,"),
+        "db records idFrom filter response should deterministically return trailing id range:\n{id_from_filter_response}"
+    );
+
     let invalid_filter_response = run_lasm_oneshot_request(
         list_port,
         "GET /db/records?db=bad HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
@@ -15692,6 +15715,32 @@ fn main() effects { net } -> Int {
             && invalid_created_range_filter_response
                 .contains("db records createdFromMs filter must be <= createdToMs"),
         "db records invalid created-range filter should return deterministic validation error:\n{invalid_created_range_filter_response}"
+    );
+
+    let invalid_id_from_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?idFrom=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_id_from_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_id_from_filter_response.contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_id_from_filter_response
+                .contains("db records idFrom filter must be an integer >= 1"),
+        "db records invalid idFrom filter should return deterministic validation error:\n{invalid_id_from_filter_response}"
+    );
+
+    let invalid_id_range_filter_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records?idFrom=3&idTo=2 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            .to_string(),
+    );
+    assert!(
+        invalid_id_range_filter_response.contains("HTTP/1.1 400 Bad Request")
+            && invalid_id_range_filter_response
+                .contains("\"code\":\"DB.RECORDS_FILTER_INVALID\"")
+            && invalid_id_range_filter_response.contains("db records idFrom filter must be <= idTo"),
+        "db records invalid id range filter should return deterministic validation error:\n{invalid_id_range_filter_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
