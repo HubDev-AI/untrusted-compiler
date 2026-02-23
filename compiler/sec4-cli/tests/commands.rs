@@ -16377,6 +16377,8 @@ fn main() effects { net } -> Int {
         list_response.contains("\"count\":5")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"sqlite\"")
+            && list_response.contains("\"queryOneRowMaxBytes\":")
+            && list_response.contains("\"queryOneRowMaxColumns\":1024")
             && list_response.contains("\"txHandleCount\":")
             && list_response.contains("\"txHandleCapacity\":")
             && list_response.contains("\"op\":\"exec\"")

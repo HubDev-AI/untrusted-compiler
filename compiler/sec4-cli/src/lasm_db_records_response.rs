@@ -1,5 +1,8 @@
 use crate::lasm_db_adapter_state::lasm_db_postgres_tls_mode_label;
 use crate::lasm_db_config::lasm_db_records_adapter_label;
+use crate::lasm_db_runtime_dispatch::{
+    lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
+};
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
     LasmRunRequest,
@@ -548,9 +551,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                         && records_id_from_filter
                             .map(|id_from| record.id >= id_from)
                             .unwrap_or(true)
-                        && records_id_filter
-                            .map(|id| record.id == id)
-                            .unwrap_or(true)
+                        && records_id_filter.map(|id| record.id == id).unwrap_or(true)
                         && records_id_to_filter
                             .map(|id_to| record.id <= id_to)
                             .unwrap_or(true)
@@ -589,9 +590,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                     _ => (exec_count, exec_tx_count, query_one_count),
                 },
             );
-            let affected_rows_filtered_total = filtered_indices
-                .iter()
-                .fold(0u64, |acc, record_index| {
+            let affected_rows_filtered_total =
+                filtered_indices.iter().fold(0u64, |acc, record_index| {
                     acc.saturating_add(state.db_records[*record_index].affected_rows)
                 });
             let affected_rows_global_total = state
@@ -629,11 +629,12 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             } else {
                 Vec::new()
             };
-            let affected_rows_total = filtered_indices[window_start..window_end]
-                .iter()
-                .fold(0u64, |acc, record_index| {
+            let affected_rows_total = filtered_indices[window_start..window_end].iter().fold(
+                0u64,
+                |acc, record_index| {
                     acc.saturating_add(state.db_records[*record_index].affected_rows)
-                });
+                },
+            );
             let records_has_more = if records_limit.is_some() {
                 if records_order_filter == "desc" {
                     window_end < total
@@ -706,6 +707,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             return;
         }
     };
+    let query_one_row_max_bytes = lasm_db_query_one_row_max_bytes_limit();
+    let query_one_row_max_columns = lasm_db_query_one_row_max_columns_limit();
     set_lasm_json_response(
         response,
         200,
@@ -778,6 +781,10 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresRetryableConflictSuccessTotal": postgres_retryable_conflict_retry_success_total,
                 "sqliteLockAttemptsTotal": sqlite_lock_retry_attempts_total,
                 "sqliteLockSuccessTotal": sqlite_lock_retry_success_total,
+            },
+            "dbRuntimeLimits": {
+                "queryOneRowMaxBytes": query_one_row_max_bytes,
+                "queryOneRowMaxColumns": query_one_row_max_columns,
             },
             "records": if include_records {
                 records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>()
