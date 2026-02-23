@@ -217,6 +217,8 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 .map(str::to_string),
                 db_max_tx_handles: shared_config.db_max_tx_handles,
                 db_records_max: shared_config.db_records_max,
+                db_query_one_row_max_bytes: shared_config.db_query_one_row_max_bytes,
+                db_query_one_row_max_columns: shared_config.db_query_one_row_max_columns,
                 db_postgres_statement_cache_max: shared_config.db_postgres_statement_cache_max,
                 db_postgres_placeholder_cache_max: shared_config.db_postgres_placeholder_cache_max,
                 db_postgres_statement_timeout_ms: shared_config.db_postgres_statement_timeout_ms,

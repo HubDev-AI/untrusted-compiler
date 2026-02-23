@@ -87,6 +87,16 @@ fn spawn_lasm_cluster_worker(
     push_optional_u64_run_arg(&mut cmd, "--db-records-max", config.db_records_max);
     push_optional_u64_run_arg(
         &mut cmd,
+        "--db-query-one-row-max-bytes",
+        config.db_query_one_row_max_bytes,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-query-one-row-max-columns",
+        config.db_query_one_row_max_columns,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
         "--db-postgres-statement-cache-max",
         config.db_postgres_statement_cache_max,
     );

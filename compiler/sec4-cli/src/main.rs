@@ -173,6 +173,10 @@ enum Commands {
         #[arg(long)]
         db_records_max: Option<u64>,
         #[arg(long)]
+        db_query_one_row_max_bytes: Option<u64>,
+        #[arg(long)]
+        db_query_one_row_max_columns: Option<u64>,
+        #[arg(long)]
         db_postgres_statement_cache_max: Option<u64>,
         #[arg(long)]
         db_postgres_placeholder_cache_max: Option<u64>,
@@ -594,6 +598,8 @@ fn main() {
             db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -644,6 +650,8 @@ fn main() {
             db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -6913,6 +6921,8 @@ fn cmd_run(
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -7085,6 +7095,16 @@ fn cmd_run(
         eprintln!("run failed: --db-records-max is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_query_one_row_max_bytes.is_some() {
+        eprintln!("run failed: --db-query-one-row-max-bytes is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_query_one_row_max_columns.is_some() {
+        eprintln!(
+            "run failed: --db-query-one-row-max-columns is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && db_postgres_statement_cache_max.is_some() {
         eprintln!(
             "run failed: --db-postgres-statement-cache-max is only supported with --backend lasm"
@@ -7151,6 +7171,14 @@ fn cmd_run(
         eprintln!("run failed: --db-records-max must be >= 1");
         return Err(2);
     }
+    if db_query_one_row_max_bytes == Some(0) {
+        eprintln!("run failed: --db-query-one-row-max-bytes must be >= 1");
+        return Err(2);
+    }
+    if db_query_one_row_max_columns == Some(0) {
+        eprintln!("run failed: --db-query-one-row-max-columns must be >= 1");
+        return Err(2);
+    }
     if db_postgres_statement_cache_max == Some(0) {
         eprintln!("run failed: --db-postgres-statement-cache-max must be >= 1");
         return Err(2);
@@ -7177,6 +7205,20 @@ fn cmd_run(
     }
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
         eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
+        return Err(2);
+    }
+    if db_query_one_row_max_bytes
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        eprintln!("run failed: --db-query-one-row-max-bytes exceeds platform limits");
+        return Err(2);
+    }
+    if db_query_one_row_max_columns
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        eprintln!("run failed: --db-query-one-row-max-columns exceeds platform limits");
         return Err(2);
     }
     let explicit_db_sqlite_journal_mode = if let Some(mode) = db_sqlite_journal_mode {
@@ -7455,6 +7497,8 @@ fn cmd_run(
             db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -7817,6 +7861,8 @@ struct LasmClusterConfig {
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -8140,6 +8186,8 @@ fn cmd_run_lasm_backend(
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -8170,6 +8218,27 @@ fn cmd_run_lasm_backend(
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
+    let db_query_one_row_max_bytes_override = db_query_one_row_max_bytes
+        .map(|value| usize::try_from(value))
+        .transpose()
+        .map_err(|_| {
+            eprintln!("run failed: --db-query-one-row-max-bytes exceeds platform limits");
+            2
+        })?;
+    let db_query_one_row_max_columns_override = db_query_one_row_max_columns
+        .map(|value| usize::try_from(value))
+        .transpose()
+        .map_err(|_| {
+            eprintln!("run failed: --db-query-one-row-max-columns exceeds platform limits");
+            2
+        })?;
+    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
+        db_query_one_row_max_bytes_override,
+    );
+    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_columns_override(
+        db_query_one_row_max_columns_override,
+    );
+
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
         Err(diagnostics) => {
@@ -8449,6 +8518,8 @@ fn cmd_run_lasm_backend(
             db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -8506,6 +8577,8 @@ fn cmd_run_lasm_backend(
             db_postgres_tls_mode,
             db_max_tx_handles,
             db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
