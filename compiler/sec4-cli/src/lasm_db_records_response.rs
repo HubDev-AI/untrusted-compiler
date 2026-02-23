@@ -1,4 +1,7 @@
-use crate::lasm_db_adapter_state::lasm_db_postgres_tls_mode_label;
+use crate::lasm_db_adapter_state::{
+    lasm_db_postgres_tls_mode_label, resolve_lasm_db_sqlite_journal_mode,
+    resolve_lasm_db_sqlite_synchronous,
+};
 use crate::lasm_db_config::lasm_db_records_adapter_label;
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
@@ -443,6 +446,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         postgres_connect_timeout_ms,
         postgres_tls_mode,
         sqlite_busy_timeout_ms,
+        sqlite_journal_mode,
+        sqlite_synchronous,
     ) = match dynamic_state.lock() {
         Ok(state) => {
             let mut records_filtered = state
@@ -598,6 +603,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 state.db_postgres_connect_timeout_ms,
                 lasm_db_postgres_tls_mode_label(state.db_postgres_tls_mode),
                 state.db_sqlite_busy_timeout_ms,
+                resolve_lasm_db_sqlite_journal_mode(),
+                resolve_lasm_db_sqlite_synchronous(),
             )
         }
         Err(_) => {
@@ -674,6 +681,8 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresConnect": postgres_connect_timeout_ms,
                 "postgresTlsMode": postgres_tls_mode,
                 "sqliteBusy": sqlite_busy_timeout_ms,
+                "sqliteJournalMode": sqlite_journal_mode,
+                "sqliteSynchronous": sqlite_synchronous,
             },
             "records": if include_records {
                 records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>()

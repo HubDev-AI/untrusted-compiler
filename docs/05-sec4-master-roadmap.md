@@ -1930,6 +1930,10 @@ Post-alpha track acceptance anchors:
       - metadata is computed from current `order` + `offset` + `limit` window semantics without changing record filtering rules,
       - enables deterministic follow-up paging requests without client-side heuristic math.
       - documented in `docs/book/1476-m39-lasm-db-records-pagination-metadata.md`.
+   - [x] Exposed effective SQLite pragma runtime settings in `/db/records` telemetry:
+      - DB records response `dbTimeoutsMs` now includes `sqliteJournalMode` and `sqliteSynchronous` fields from effective runtime pragma resolution,
+      - keeps existing DB response shape and adds operator visibility for sqlite runtime tuning values.
+      - documented in `docs/book/1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`.
    - [x] Added Postgres placeholder-index cache for LASM DB runtime:
       - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
       - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
