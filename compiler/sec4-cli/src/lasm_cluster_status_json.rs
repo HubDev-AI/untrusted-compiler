@@ -13,6 +13,9 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_worker_count: usize,
     pub(crate) relay_queue_capacity: usize,
     pub(crate) relay_queue_shard_capacity: usize,
+    pub(crate) relay_buffer_bytes: usize,
+    pub(crate) relay_buffer_pool_max: usize,
+    pub(crate) relay_buffer_pool_prewarm: usize,
     pub(crate) worker_ports: Arc<Vec<u16>>,
     pub(crate) active_connections: usize,
     pub(crate) active_connections_per_worker: f64,
@@ -49,6 +52,9 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_worker_count == other.relay_worker_count
             && self.relay_queue_capacity == other.relay_queue_capacity
             && self.relay_queue_shard_capacity == other.relay_queue_shard_capacity
+            && self.relay_buffer_bytes == other.relay_buffer_bytes
+            && self.relay_buffer_pool_max == other.relay_buffer_pool_max
+            && self.relay_buffer_pool_prewarm == other.relay_buffer_pool_prewarm
             && (Arc::ptr_eq(&self.worker_ports, &other.worker_ports)
                 || self.worker_ports.as_slice() == other.worker_ports.as_slice())
             && self.active_connections == other.active_connections
@@ -95,6 +101,9 @@ struct LasmClusterStatusPayload<'a> {
     relay_worker_count: usize,
     relay_queue_capacity: usize,
     relay_queue_shard_capacity: usize,
+    relay_buffer_bytes: usize,
+    relay_buffer_pool_max: usize,
+    relay_buffer_pool_prewarm: usize,
     worker_ports: &'a [u16],
     active_connections: usize,
     active_connections_per_worker: f64,
@@ -173,6 +182,9 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_worker_count: snapshot.relay_worker_count,
         relay_queue_capacity: snapshot.relay_queue_capacity,
         relay_queue_shard_capacity: snapshot.relay_queue_shard_capacity,
+        relay_buffer_bytes: snapshot.relay_buffer_bytes,
+        relay_buffer_pool_max: snapshot.relay_buffer_pool_max,
+        relay_buffer_pool_prewarm: snapshot.relay_buffer_pool_prewarm,
         worker_ports: snapshot.worker_ports.as_slice(),
         active_connections: snapshot.active_connections,
         active_connections_per_worker: snapshot.active_connections_per_worker,

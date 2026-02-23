@@ -27799,6 +27799,9 @@ fn main() effects { net } -> Int {
         ])
         .env("SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD", "41")
         .env("SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS", "333")
+        .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES", "16384")
+        .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_MAX", "96")
+        .env("SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_PREWARM", "12")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -27870,6 +27873,27 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(333),
         "first status json should include relayIdleSleepMicros env override"
+    );
+    assert_eq!(
+        first_status
+            .get("relayBufferBytes")
+            .and_then(serde_json::Value::as_u64),
+        Some(16_384),
+        "first status json should include relayBufferBytes env override"
+    );
+    assert_eq!(
+        first_status
+            .get("relayBufferPoolMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(96),
+        "first status json should include relayBufferPoolMax env override"
+    );
+    assert_eq!(
+        first_status
+            .get("relayBufferPoolPrewarm")
+            .and_then(serde_json::Value::as_u64),
+        Some(12),
+        "first status json should include relayBufferPoolPrewarm env override"
     );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")
