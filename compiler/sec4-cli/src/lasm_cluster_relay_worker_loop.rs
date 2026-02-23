@@ -24,6 +24,7 @@ fn initialize_lasm_cluster_relay_connection(
     upstream: TcpStream,
     relay_buffer_bytes: usize,
     relay_io_burst_max: usize,
+    relay_idle_backoff_max: usize,
     relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     pump_warning_next_allowed: &mut Option<Instant>,
@@ -41,9 +42,16 @@ fn initialize_lasm_cluster_relay_connection(
                 upstream_to_client,
                 relay_buffer_bytes,
                 relay_io_burst_max,
+                relay_idle_backoff_max,
             )
         } else {
-            LasmClusterRelayPump::new(client, upstream, relay_buffer_bytes, relay_io_burst_max)
+            LasmClusterRelayPump::new(
+                client,
+                upstream,
+                relay_buffer_bytes,
+                relay_io_burst_max,
+                relay_idle_backoff_max,
+            )
         };
     match relay_result {
         Ok(relay) => relay_connections.push(relay),
@@ -358,6 +366,7 @@ fn try_lasm_cluster_relay_fallback_connect(
     fallback_client: &mut Option<TcpStream>,
     relay_buffer_bytes: usize,
     relay_io_burst_max: usize,
+    relay_idle_backoff_max: usize,
     relay_buffer_pool: &mut Vec<(Vec<u8>, Vec<u8>)>,
     relay_connections: &mut Vec<LasmClusterRelayPump>,
     pump_warning_next_allowed: &mut Option<Instant>,
@@ -381,6 +390,7 @@ fn try_lasm_cluster_relay_fallback_connect(
                 upstream,
                 relay_buffer_bytes,
                 relay_io_burst_max,
+                relay_idle_backoff_max,
                 relay_buffer_pool,
                 relay_connections,
                 pump_warning_next_allowed,
@@ -512,6 +522,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
     relay_selection_reservation_min_chunk: usize,
     relay_buffer_bytes: usize,
     relay_io_burst_max: usize,
+    relay_idle_backoff_max: usize,
     relay_buffer_pool_max: usize,
     relay_buffer_pool_prewarm: usize,
     relay_pump_connections_total: Arc<AtomicUsize>,
@@ -806,6 +817,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                             upstream,
                             relay_buffer_bytes,
                             relay_io_burst_max,
+                            relay_idle_backoff_max,
                             &mut relay_buffer_pool,
                             &mut relay_connections,
                             &mut pump_warning_next_allowed,
@@ -868,6 +880,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                         &mut fallback_client,
                                         relay_buffer_bytes,
                                         relay_io_burst_max,
+                                        relay_idle_backoff_max,
                                         &mut relay_buffer_pool,
                                         &mut relay_connections,
                                         &mut pump_warning_next_allowed,
@@ -901,6 +914,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                 &mut fallback_client,
                                                 relay_buffer_bytes,
                                                 relay_io_burst_max,
+                                                relay_idle_backoff_max,
                                                 &mut relay_buffer_pool,
                                                 &mut relay_connections,
                                                 &mut pump_warning_next_allowed,
@@ -962,6 +976,7 @@ pub(crate) fn spawn_lasm_cluster_relay_worker_loop(
                                                 &mut fallback_client,
                                                 relay_buffer_bytes,
                                                 relay_io_burst_max,
+                                                relay_idle_backoff_max,
                                                 &mut relay_buffer_pool,
                                                 &mut relay_connections,
                                                 &mut pump_warning_next_allowed,

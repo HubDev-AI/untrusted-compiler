@@ -1874,6 +1874,11 @@ Post-alpha track acceptance anchors:
       - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IO_BURST_MAX` (bounded `1..64`, default `4`) and threads the resolved value into relay pump initialization,
       - cluster status JSON now emits `relayIoBurstMax` so active fairness tuning is visible in operator/benchmark snapshots.
       - documented in `docs/book/1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`.
+   - [x] Added runtime-tunable relay idle-backoff cap + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` (bounded `0..32`, default `1`) and threads the resolved value into relay pump initialization,
+      - relay pump now applies bounded per-connection idle deferral after fully idle ticks and resets backoff immediately on any real IO progress,
+      - cluster status JSON now emits `relayIdleBackoffMax` so active idle-scheduling tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

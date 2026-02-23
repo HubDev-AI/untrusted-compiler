@@ -15,6 +15,7 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_queue_shard_capacity: usize,
     pub(crate) relay_buffer_bytes: usize,
     pub(crate) relay_io_burst_max: usize,
+    pub(crate) relay_idle_backoff_max: usize,
     pub(crate) relay_buffer_pool_max: usize,
     pub(crate) relay_buffer_pool_prewarm: usize,
     pub(crate) worker_ports: Arc<Vec<u16>>,
@@ -74,6 +75,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_queue_shard_capacity == other.relay_queue_shard_capacity
             && self.relay_buffer_bytes == other.relay_buffer_bytes
             && self.relay_io_burst_max == other.relay_io_burst_max
+            && self.relay_idle_backoff_max == other.relay_idle_backoff_max
             && self.relay_buffer_pool_max == other.relay_buffer_pool_max
             && self.relay_buffer_pool_prewarm == other.relay_buffer_pool_prewarm
             && (Arc::ptr_eq(&self.worker_ports, &other.worker_ports)
@@ -144,6 +146,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_queue_shard_capacity: usize,
     relay_buffer_bytes: usize,
     relay_io_burst_max: usize,
+    relay_idle_backoff_max: usize,
     relay_buffer_pool_max: usize,
     relay_buffer_pool_prewarm: usize,
     worker_ports: &'a [u16],
@@ -245,6 +248,7 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_queue_shard_capacity: snapshot.relay_queue_shard_capacity,
         relay_buffer_bytes: snapshot.relay_buffer_bytes,
         relay_io_burst_max: snapshot.relay_io_burst_max,
+        relay_idle_backoff_max: snapshot.relay_idle_backoff_max,
         relay_buffer_pool_max: snapshot.relay_buffer_pool_max,
         relay_buffer_pool_prewarm: snapshot.relay_buffer_pool_prewarm,
         worker_ports: snapshot.worker_ports.as_slice(),
