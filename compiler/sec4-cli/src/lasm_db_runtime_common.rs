@@ -5,6 +5,66 @@ use crate::LasmDynamicResponseState;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
+fn lasm_db_operation_timeout_code(operation: &str) -> &'static str {
+    match operation {
+        "exec" => "DB.EXEC_TIMEOUT",
+        "execTx" => "DB.EXEC_TX_TIMEOUT",
+        "queryOne" => "DB.QUERY_ONE_TIMEOUT",
+        _ => "DB.OPERATION_TIMEOUT",
+    }
+}
+
+fn lasm_db_operation_lock_conflict_code(operation: &str) -> &'static str {
+    match operation {
+        "exec" => "DB.EXEC_LOCK_TIMEOUT",
+        "execTx" => "DB.EXEC_TX_LOCK_TIMEOUT",
+        "queryOne" => "DB.QUERY_ONE_LOCK_TIMEOUT",
+        _ => "DB.OPERATION_LOCK_TIMEOUT",
+    }
+}
+
+fn lasm_db_operation_validation_code(operation: &str) -> &'static str {
+    match operation {
+        "exec" => "DB.EXEC_INVALID",
+        "execTx" => "DB.EXEC_TX_INVALID",
+        "queryOne" => "DB.QUERY_ONE_INVALID",
+        _ => "DB.OPERATION_INVALID",
+    }
+}
+
+fn lasm_db_operation_conflict_code(operation: &str) -> &'static str {
+    match operation {
+        "exec" => "DB.EXEC_CONFLICT",
+        "execTx" => "DB.EXEC_TX_CONFLICT",
+        "queryOne" => "DB.QUERY_ONE_CONFLICT",
+        _ => "DB.OPERATION_CONFLICT",
+    }
+}
+
+fn lasm_db_operation_unavailable_code(operation: &str) -> &'static str {
+    match operation {
+        "exec" => "DB.EXEC_UNAVAILABLE",
+        "execTx" => "DB.EXEC_TX_UNAVAILABLE",
+        "queryOne" => "DB.QUERY_ONE_UNAVAILABLE",
+        _ => "DB.OPERATION_UNAVAILABLE",
+    }
+}
+
+fn extract_lasm_db_runtime_sqlstate(normalized_message: &str) -> Option<&str> {
+    let marker = "sqlstate=";
+    let start = normalized_message.find(marker)? + marker.len();
+    let tail = &normalized_message[start..];
+    let end = tail
+        .find(|ch: char| !ch.is_ascii_alphanumeric())
+        .unwrap_or(tail.len());
+    let code = &tail[..end];
+    if code.len() == 5 && code.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        Some(code)
+    } else {
+        None
+    }
+}
+
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
     message: &str,
@@ -20,31 +80,58 @@ pub(crate) fn classify_lasm_db_runtime_error(
     {
         return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
     }
+    if let Some(sqlstate) = extract_lasm_db_runtime_sqlstate(normalized.as_str()) {
+        match sqlstate {
+            "57014" => return (504, lasm_db_operation_timeout_code(operation), "timeout"),
+            "55p03" | "40001" | "40p01" => {
+                return (
+                    409,
+                    lasm_db_operation_lock_conflict_code(operation),
+                    "conflict",
+                );
+            }
+            "23505" => return (409, lasm_db_operation_conflict_code(operation), "conflict"),
+            "23502" | "23514" | "42601" | "42703" => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            _ if sqlstate.starts_with("22") => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            "53300" | "57p01" | "57p02" | "57p03" => {
+                return (
+                    503,
+                    lasm_db_operation_unavailable_code(operation),
+                    "missing_dependency",
+                );
+            }
+            _ => {}
+        }
+    }
     if normalized.contains("canceling statement due to statement timeout")
         || normalized.contains("connect timeout")
         || normalized.contains("connection timed out")
         || normalized.contains("timeout expired")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_TIMEOUT",
-            "execTx" => "DB.EXEC_TX_TIMEOUT",
-            "queryOne" => "DB.QUERY_ONE_TIMEOUT",
-            _ => "DB.OPERATION_TIMEOUT",
-        };
-        return (504, code, "timeout");
+        return (504, lasm_db_operation_timeout_code(operation), "timeout");
     }
     if normalized.contains("canceling statement due to lock timeout")
         || normalized.contains("database is locked")
         || normalized.contains("could not serialize access due to")
         || normalized.contains("deadlock detected")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_LOCK_TIMEOUT",
-            "execTx" => "DB.EXEC_TX_LOCK_TIMEOUT",
-            "queryOne" => "DB.QUERY_ONE_LOCK_TIMEOUT",
-            _ => "DB.OPERATION_LOCK_TIMEOUT",
-        };
-        return (409, code, "conflict");
+        return (
+            409,
+            lasm_db_operation_lock_conflict_code(operation),
+            "conflict",
+        );
     }
     if normalized.contains("requires at least")
         || normalized.contains("expects exactly")
@@ -56,13 +143,11 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("requires sql placeholders to be named")
         || normalized.contains("is not present in sql statement")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_INVALID",
-            "execTx" => "DB.EXEC_TX_INVALID",
-            "queryOne" => "DB.QUERY_ONE_INVALID",
-            _ => "DB.OPERATION_INVALID",
-        };
-        return (400, code, "validation");
+        return (
+            400,
+            lasm_db_operation_validation_code(operation),
+            "validation",
+        );
     }
     if normalized.contains("not null constraint failed")
         || normalized.contains("check constraint failed")
@@ -75,13 +160,11 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("no such column")
         || normalized.contains("column does not exist")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_INVALID",
-            "execTx" => "DB.EXEC_TX_INVALID",
-            "queryOne" => "DB.QUERY_ONE_INVALID",
-            _ => "DB.OPERATION_INVALID",
-        };
-        return (400, code, "validation");
+        return (
+            400,
+            lasm_db_operation_validation_code(operation),
+            "validation",
+        );
     }
     if normalized.contains("connection refused")
         || normalized.contains("could not connect to server")
@@ -91,24 +174,16 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("remaining connection slots are reserved")
         || normalized.contains("broken pipe")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_UNAVAILABLE",
-            "execTx" => "DB.EXEC_TX_UNAVAILABLE",
-            "queryOne" => "DB.QUERY_ONE_UNAVAILABLE",
-            _ => "DB.OPERATION_UNAVAILABLE",
-        };
-        return (503, code, "missing_dependency");
+        return (
+            503,
+            lasm_db_operation_unavailable_code(operation),
+            "missing_dependency",
+        );
     }
     if normalized.contains("unique constraint failed")
         || normalized.contains("duplicate key value violates unique constraint")
     {
-        let code = match operation {
-            "exec" => "DB.EXEC_CONFLICT",
-            "execTx" => "DB.EXEC_TX_CONFLICT",
-            "queryOne" => "DB.QUERY_ONE_CONFLICT",
-            _ => "DB.OPERATION_CONFLICT",
-        };
-        return (409, code, "conflict");
+        return (409, lasm_db_operation_conflict_code(operation), "conflict");
     }
     let code = match operation {
         "exec" => "DB.EXEC_FAILED",
@@ -222,9 +297,12 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
     }
     let statement = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client
-            .prepare(query_template)
-            .map_err(|err| format!("postgres prepare failed: {err}"))?
+        client.prepare(query_template).map_err(|err| {
+            if let Some(sqlstate) = err.code().map(|code| code.code()) {
+                return format!("postgres prepare failed: {err}; sqlstate={sqlstate}");
+            }
+            format!("postgres prepare failed: {err}")
+        })?
     };
     let evicted = insert_lasm_bounded_cache_entry(
         &mut state.db_records_postgres_statement_cache,
@@ -441,6 +519,61 @@ mod tests {
             classify_lasm_db_runtime_error("queryOne", "NOT NULL CONSTRAINT FAILED: users.email");
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_timeout_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres execution failed: query canceled; sqlstate=57014",
+        );
+        assert_eq!(status, 504);
+        assert_eq!(code, "DB.EXEC_TIMEOUT");
+        assert_eq!(kind, "timeout");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_conflict_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: deadlock detected; sqlstate=40P01",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_TX_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_validation_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: invalid input syntax for type integer; sqlstate=22P02",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_unavailable_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: too many connections for role; sqlstate=53300",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_prepare_validation_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres prepare failed: syntax error at or near \"FROM\"; sqlstate=42601",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
         assert_eq!(kind, "validation");
     }
 
