@@ -133,6 +133,30 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "validation",
                 );
             }
+            _ if sqlstate.starts_with("23") => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            _ if sqlstate.starts_with("42") => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            _ if sqlstate.starts_with("28") || sqlstate == "3d000" => {
+                return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
+            }
+            _ if sqlstate.starts_with("08") => {
+                return (
+                    503,
+                    lasm_db_operation_unavailable_code(operation),
+                    "missing_dependency",
+                );
+            }
             "53300" | "57p01" | "57p02" | "57p03" => {
                 return (
                     503,
@@ -633,6 +657,39 @@ mod tests {
         assert_eq!(status, 503);
         assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
         assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_connection_exception_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres execution failed: connection failure; sqlstate=08006",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.EXEC_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_auth_error_as_adapter_config_invalid() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: password authentication failed; sqlstate=28P01",
+        );
+        assert_eq!(status, 500);
+        assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
+        assert_eq!(kind, "internal");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_access_rule_error_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: relation does not exist; sqlstate=42P01",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
     }
 
     #[test]
