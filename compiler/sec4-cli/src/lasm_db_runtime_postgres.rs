@@ -815,16 +815,17 @@ fn format_lasm_postgres_runtime_error(context: &str, err: &postgres::Error) -> S
     format!("{context}: {err}")
 }
 
-fn extract_lasm_postgres_runtime_sqlstate(message: &str) -> Option<&str> {
+fn extract_lasm_postgres_runtime_sqlstate(message: &str) -> Option<String> {
+    let normalized = message.to_ascii_lowercase();
     let marker = "sqlstate=";
-    let start = message.find(marker)? + marker.len();
-    let tail = &message[start..];
+    let start = normalized.find(marker)? + marker.len();
+    let tail = &normalized[start..];
     let end = tail
         .find(|ch: char| !ch.is_ascii_alphanumeric())
         .unwrap_or(tail.len());
     let code = &tail[..end];
     if code.len() == 5 && code.chars().all(|ch| ch.is_ascii_alphanumeric()) {
-        Some(code)
+        Some(code.to_string())
     } else {
         None
     }
@@ -832,7 +833,7 @@ fn extract_lasm_postgres_runtime_sqlstate(message: &str) -> Option<&str> {
 
 fn is_lasm_postgres_reconnectable_prepare_error(message: &str) -> bool {
     if let Some(sqlstate) = extract_lasm_postgres_runtime_sqlstate(message) {
-        return is_lasm_postgres_reconnectable_sqlstate(Some(sqlstate));
+        return is_lasm_postgres_reconnectable_sqlstate(Some(sqlstate.as_str()));
     }
     let normalized = message.to_ascii_lowercase();
     normalized.contains("connection closed")
@@ -1641,6 +1642,9 @@ mod tests {
     fn reconnectable_prepare_error_detection_matches_runtime_sqlstate_marker() {
         assert!(is_lasm_postgres_reconnectable_prepare_error(
             "postgres prepare failed: admin shutdown; sqlstate=57p01"
+        ));
+        assert!(is_lasm_postgres_reconnectable_prepare_error(
+            "postgres prepare failed: admin shutdown; SQLSTATE=57P01"
         ));
         assert!(is_lasm_postgres_reconnectable_prepare_error(
             "postgres prepare failed: connection failure; sqlstate=08006"
