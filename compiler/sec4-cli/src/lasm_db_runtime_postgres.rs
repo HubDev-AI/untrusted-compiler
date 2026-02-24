@@ -767,8 +767,11 @@ fn is_lasm_postgres_retryable_tx_error(err: &postgres::Error) -> bool {
 }
 
 fn is_lasm_postgres_reconnectable_sqlstate(code: Option<&str>) -> bool {
-    matches!(code, Some("57P01") | Some("57P02") | Some("57P03"))
-        || matches!(code, Some(value) if value.starts_with("08"))
+    let Some(value) = code else {
+        return false;
+    };
+    let normalized = value.to_ascii_uppercase();
+    matches!(normalized.as_str(), "57P01" | "57P02" | "57P03") || normalized.starts_with("08")
 }
 
 fn is_lasm_postgres_reconnectable_error(err: &postgres::Error) -> bool {
@@ -810,6 +813,48 @@ fn format_lasm_postgres_runtime_error(context: &str, err: &postgres::Error) -> S
         return format!("{context}: {err}; sqlstate={sqlstate}");
     }
     format!("{context}: {err}")
+}
+
+fn extract_lasm_postgres_runtime_sqlstate(message: &str) -> Option<&str> {
+    let marker = "sqlstate=";
+    let start = message.find(marker)? + marker.len();
+    let tail = &message[start..];
+    let end = tail
+        .find(|ch: char| !ch.is_ascii_alphanumeric())
+        .unwrap_or(tail.len());
+    let code = &tail[..end];
+    if code.len() == 5 && code.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        Some(code)
+    } else {
+        None
+    }
+}
+
+fn is_lasm_postgres_reconnectable_prepare_error(message: &str) -> bool {
+    if let Some(sqlstate) = extract_lasm_postgres_runtime_sqlstate(message) {
+        return is_lasm_postgres_reconnectable_sqlstate(Some(sqlstate));
+    }
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("connection closed")
+        || normalized.contains("connection reset by peer")
+        || normalized.contains("could not connect to server")
+        || normalized.contains("broken pipe")
+}
+
+fn prepare_lasm_postgres_statement_with_reconnect(
+    state: &mut LasmDynamicResponseState,
+    query_template: &str,
+) -> Result<PostgresStatement, String> {
+    match lasm_dynamic_postgres_prepared_statement(state, query_template) {
+        Ok(statement) => Ok(statement),
+        Err(message) if is_lasm_postgres_reconnectable_prepare_error(message.as_str()) => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            lasm_dynamic_postgres_prepared_statement(state, query_template).map_err(
+                |retry_message| format!("{message}; retry after reconnect failed: {retry_message}"),
+            )
+        }
+        Err(message) => Err(message),
+    }
 }
 
 fn lasm_postgres_retry_backoff_ms(attempt_index: usize) -> u64 {
@@ -882,7 +927,7 @@ pub(crate) fn run_lasm_postgres_exec(
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
     let prepared_statement = if use_prepared {
-        Some(lasm_dynamic_postgres_prepared_statement(
+        Some(prepare_lasm_postgres_statement_with_reconnect(
             state,
             query_template,
         )?)
@@ -905,7 +950,7 @@ pub(crate) fn run_lasm_postgres_exec(
             reconnect_lasm_dynamic_postgres_client(state)?;
             if use_prepared {
                 let retry_statement =
-                    lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                    prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
                     .map_err(|retry_err| {
@@ -928,7 +973,8 @@ pub(crate) fn run_lasm_postgres_exec(
         }
         Err(err) if use_prepared && is_lasm_postgres_stale_prepared_statement_error(&err) => {
             evict_lasm_postgres_prepared_statement(state, query_template);
-            let retry_statement = lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+            let retry_statement =
+                prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
             let client = lasm_dynamic_postgres_client_mut(state)?;
             run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params).map_err(
                 |retry_err| {
@@ -952,7 +998,7 @@ pub(crate) fn run_lasm_postgres_exec(
                 }
                 let retry_result = if use_prepared {
                     let retry_statement =
-                        lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                        prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
                 } else {
@@ -996,7 +1042,7 @@ pub(crate) fn run_lasm_postgres_exec(
                     .saturating_add(1);
                 let final_retry = if use_prepared {
                     let retry_statement =
-                        lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                        prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
                 } else {
@@ -1016,7 +1062,7 @@ pub(crate) fn run_lasm_postgres_exec(
                     {
                         evict_lasm_postgres_prepared_statement(state, query_template);
                         let refresh_statement =
-                            lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                            prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
                         let client = lasm_dynamic_postgres_client_mut(state)?;
                         let refresh = run_lasm_postgres_prepared_exec_with_count(
                             client,
@@ -1038,7 +1084,7 @@ pub(crate) fn run_lasm_postgres_exec(
                         reconnect_lasm_dynamic_postgres_client(state)?;
                         let reconnect_retry = if use_prepared {
                             let retry_statement =
-                                lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                                prepare_lasm_postgres_statement_with_reconnect(state, query_template)?;
                             let client = lasm_dynamic_postgres_client_mut(state)?;
                             run_lasm_postgres_prepared_exec_with_count(
                                 client,
@@ -1117,7 +1163,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
     let prepared_statement = if use_prepared {
-        Some(lasm_dynamic_postgres_prepared_statement(
+        Some(prepare_lasm_postgres_statement_with_reconnect(
             state,
             query_template,
         )?)
@@ -1133,7 +1179,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
         Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             let retry_statement = if use_prepared {
-                Some(lasm_dynamic_postgres_prepared_statement(
+                Some(prepare_lasm_postgres_statement_with_reconnect(
                     state,
                     query_template,
                 )?)
@@ -1151,7 +1197,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
         }
         Err(err) if use_prepared && is_lasm_postgres_stale_prepared_statement_error(&err) => {
             evict_lasm_postgres_prepared_statement(state, query_template);
-            let retry_statement = Some(lasm_dynamic_postgres_prepared_statement(
+            let retry_statement = Some(prepare_lasm_postgres_statement_with_reconnect(
                 state,
                 query_template,
             )?);
@@ -1176,7 +1222,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     std::thread::sleep(Duration::from_millis(backoff_ms));
                 }
                 let retry_statement = if use_prepared {
-                    Some(lasm_dynamic_postgres_prepared_statement(
+                    Some(prepare_lasm_postgres_statement_with_reconnect(
                         state,
                         query_template,
                     )?)
@@ -1226,7 +1272,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     .db_postgres_retryable_conflict_retry_attempts_total
                     .saturating_add(1);
                 let retry_statement = if use_prepared {
-                    Some(lasm_dynamic_postgres_prepared_statement(
+                    Some(prepare_lasm_postgres_statement_with_reconnect(
                         state,
                         query_template,
                     )?)
@@ -1253,7 +1299,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     {
                         evict_lasm_postgres_prepared_statement(state, query_template);
                         let refresh_statement = if use_prepared {
-                            Some(lasm_dynamic_postgres_prepared_statement(
+                            Some(prepare_lasm_postgres_statement_with_reconnect(
                                 state,
                                 query_template,
                             )?)
@@ -1281,7 +1327,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
                         reconnect_lasm_dynamic_postgres_client(state)?;
                         let retry_statement = if use_prepared {
-                            Some(lasm_dynamic_postgres_prepared_statement(
+                            Some(prepare_lasm_postgres_statement_with_reconnect(
                                 state,
                                 query_template,
                             )?)
@@ -1367,7 +1413,7 @@ pub(crate) fn run_lasm_postgres_query_one(
         normalized_query
     );
     let prepared_statement =
-        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+        prepare_lasm_postgres_statement_with_reconnect(state, wrapped_query.as_str())?;
     let execute_query = |client: &mut PostgresClient,
                          statement: &PostgresStatement|
      -> Result<Option<postgres::Row>, postgres::Error> {
@@ -1384,7 +1430,7 @@ pub(crate) fn run_lasm_postgres_query_one(
             Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
                 reconnect_lasm_dynamic_postgres_client(state)?;
                 let retry_statement =
-                    lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+                    prepare_lasm_postgres_statement_with_reconnect(state, wrapped_query.as_str())?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 execute_query(client, &retry_statement).map_err(|retry_err| {
                     format_lasm_postgres_runtime_error(
@@ -1396,7 +1442,7 @@ pub(crate) fn run_lasm_postgres_query_one(
             Err(err) if is_lasm_postgres_stale_prepared_statement_error(&err) => {
                 evict_lasm_postgres_prepared_statement(state, wrapped_query.as_str());
                 let retry_statement =
-                    lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+                    prepare_lasm_postgres_statement_with_reconnect(state, wrapped_query.as_str())?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 execute_query(client, &retry_statement).map_err(|retry_err| {
                     format_lasm_postgres_runtime_error(
@@ -1416,8 +1462,10 @@ pub(crate) fn run_lasm_postgres_query_one(
                     if backoff_ms > 0 {
                         std::thread::sleep(Duration::from_millis(backoff_ms));
                     }
-                    let retry_statement =
-                        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+                    let retry_statement = prepare_lasm_postgres_statement_with_reconnect(
+                        state,
+                        wrapped_query.as_str(),
+                    )?;
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     let retry_result = execute_query(client, &retry_statement);
                     match retry_result {
@@ -1452,8 +1500,10 @@ pub(crate) fn run_lasm_postgres_query_one(
                     state.db_postgres_retryable_conflict_retry_attempts_total = state
                         .db_postgres_retryable_conflict_retry_attempts_total
                         .saturating_add(1);
-                    let retry_statement =
-                        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+                    let retry_statement = prepare_lasm_postgres_statement_with_reconnect(
+                        state,
+                        wrapped_query.as_str(),
+                    )?;
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     let final_retry = execute_query(client, &retry_statement);
                     match final_retry {
@@ -1465,7 +1515,7 @@ pub(crate) fn run_lasm_postgres_query_one(
                         }
                         Err(err) if is_lasm_postgres_stale_prepared_statement_error(&err) => {
                             evict_lasm_postgres_prepared_statement(state, wrapped_query.as_str());
-                            let refresh_statement = lasm_dynamic_postgres_prepared_statement(
+                            let refresh_statement = prepare_lasm_postgres_statement_with_reconnect(
                                 state,
                                 wrapped_query.as_str(),
                             )?;
@@ -1485,7 +1535,7 @@ pub(crate) fn run_lasm_postgres_query_one(
                         }
                         Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
                             reconnect_lasm_dynamic_postgres_client(state)?;
-                            let retry_statement = lasm_dynamic_postgres_prepared_statement(
+                            let retry_statement = prepare_lasm_postgres_statement_with_reconnect(
                                 state,
                                 wrapped_query.as_str(),
                             )?;
@@ -1544,11 +1594,11 @@ pub(crate) fn run_lasm_postgres_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lasm_postgres_reconnectable_sqlstate, is_lasm_postgres_retryable_tx_sqlstate,
-        is_lasm_postgres_stale_prepared_statement_sqlstate, lasm_postgres_retry_backoff_ms,
-        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
-        parse_lasm_postgres_query_template_and_params, validate_lasm_postgres_parameter_arity,
-        LasmPostgresParam,
+        is_lasm_postgres_reconnectable_prepare_error, is_lasm_postgres_reconnectable_sqlstate,
+        is_lasm_postgres_retryable_tx_sqlstate, is_lasm_postgres_stale_prepared_statement_sqlstate,
+        lasm_postgres_retry_backoff_ms, max_lasm_postgres_placeholder_index_cached,
+        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
+        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1582,8 +1632,22 @@ mod tests {
         assert!(is_lasm_postgres_reconnectable_sqlstate(Some("08006")));
         assert!(is_lasm_postgres_reconnectable_sqlstate(Some("08001")));
         assert!(is_lasm_postgres_reconnectable_sqlstate(Some("57P01")));
+        assert!(is_lasm_postgres_reconnectable_sqlstate(Some("57p03")));
         assert!(!is_lasm_postgres_reconnectable_sqlstate(Some("40001")));
         assert!(!is_lasm_postgres_reconnectable_sqlstate(None));
+    }
+
+    #[test]
+    fn reconnectable_prepare_error_detection_matches_runtime_sqlstate_marker() {
+        assert!(is_lasm_postgres_reconnectable_prepare_error(
+            "postgres prepare failed: admin shutdown; sqlstate=57p01"
+        ));
+        assert!(is_lasm_postgres_reconnectable_prepare_error(
+            "postgres prepare failed: connection failure; sqlstate=08006"
+        ));
+        assert!(!is_lasm_postgres_reconnectable_prepare_error(
+            "postgres prepare failed: syntax error at or near \"FROM\"; sqlstate=42601"
+        ));
     }
 
     #[test]
