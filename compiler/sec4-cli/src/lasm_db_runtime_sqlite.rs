@@ -329,11 +329,45 @@ where
         Err(message) => {
             state.db_records_sqlite_connection = None;
             let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
-            run(connection).map_err(|retry_error| {
-                format!(
+            let reconnect_retry = run(connection);
+            match reconnect_retry {
+                Ok(value) => Ok(value),
+                Err(retry_error) if is_lasm_sqlite_runtime_lock_error(retry_error.as_str()) => {
+                    let mut latest_message = retry_error;
+                    for attempt_index in 0..state.db_sqlite_lock_retry_max {
+                        state.db_sqlite_lock_retry_attempts_total =
+                            state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
+                        let delay_ms = lasm_sqlite_lock_retry_backoff_ms(
+                            state.db_sqlite_lock_retry_delay_ms,
+                            attempt_index,
+                        );
+                        if delay_ms > 0 {
+                            std::thread::sleep(Duration::from_millis(delay_ms));
+                        }
+                        let retry = {
+                            let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+                            run(connection)
+                        };
+                        match retry {
+                            Ok(value) => {
+                                state.db_sqlite_lock_retry_success_total =
+                                    state.db_sqlite_lock_retry_success_total.saturating_add(1);
+                                return Ok(value);
+                            }
+                            Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
+                                latest_message = message;
+                            }
+                            Err(message) => return Err(message),
+                        }
+                    }
+                    Err(format!(
+                        "{error_prefix} failed: {message}; retry after reconnect lock retries failed: {latest_message}"
+                    ))
+                }
+                Err(retry_error) => Err(format!(
                     "{error_prefix} failed: {message}; retry after reconnect failed: {retry_error}"
-                )
-            })
+                )),
+            }
         }
     }
 }
