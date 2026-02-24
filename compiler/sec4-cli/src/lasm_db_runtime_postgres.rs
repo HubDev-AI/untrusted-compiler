@@ -854,25 +854,38 @@ fn prepare_lasm_postgres_statement_with_reconnect(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> Result<PostgresStatement, String> {
-    match lasm_dynamic_postgres_prepared_statement(state, query_template) {
-        Ok(statement) => Ok(statement),
-        Err(message) if is_lasm_postgres_stale_prepare_error(message.as_str()) => {
-            evict_lasm_postgres_prepared_statement(state, query_template);
-            lasm_dynamic_postgres_prepared_statement(state, query_template).map_err(
-                |retry_message| {
-                    format!(
-                        "{message}; retry after stale prepared statement refresh failed: {retry_message}"
-                    )
-                },
-            )
+    let mut stale_refresh_attempted = false;
+    let mut reconnect_attempted = false;
+    let mut previous_message: Option<String> = None;
+
+    loop {
+        match lasm_dynamic_postgres_prepared_statement(state, query_template) {
+            Ok(statement) => return Ok(statement),
+            Err(message)
+                if is_lasm_postgres_stale_prepare_error(message.as_str())
+                    && !stale_refresh_attempted =>
+            {
+                stale_refresh_attempted = true;
+                previous_message = Some(message);
+                evict_lasm_postgres_prepared_statement(state, query_template);
+            }
+            Err(message)
+                if is_lasm_postgres_reconnectable_prepare_error(message.as_str())
+                    && !reconnect_attempted =>
+            {
+                reconnect_attempted = true;
+                previous_message = Some(message);
+                reconnect_lasm_dynamic_postgres_client(state)?;
+            }
+            Err(message) => {
+                if let Some(previous) = previous_message {
+                    return Err(format!(
+                        "{previous}; prepare recovery retries failed: {message}"
+                    ));
+                }
+                return Err(message);
+            }
         }
-        Err(message) if is_lasm_postgres_reconnectable_prepare_error(message.as_str()) => {
-            reconnect_lasm_dynamic_postgres_client(state)?;
-            lasm_dynamic_postgres_prepared_statement(state, query_template).map_err(
-                |retry_message| format!("{message}; retry after reconnect failed: {retry_message}"),
-            )
-        }
-        Err(message) => Err(message),
     }
 }
 
