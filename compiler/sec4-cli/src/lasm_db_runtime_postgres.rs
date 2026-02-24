@@ -842,12 +842,30 @@ fn is_lasm_postgres_reconnectable_prepare_error(message: &str) -> bool {
         || normalized.contains("broken pipe")
 }
 
+fn is_lasm_postgres_stale_prepare_error(message: &str) -> bool {
+    if let Some(sqlstate) = extract_lasm_postgres_runtime_sqlstate(message) {
+        return is_lasm_postgres_stale_prepared_statement_sqlstate(Some(sqlstate.as_str()));
+    }
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("prepared statement") && normalized.contains("does not exist")
+}
+
 fn prepare_lasm_postgres_statement_with_reconnect(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> Result<PostgresStatement, String> {
     match lasm_dynamic_postgres_prepared_statement(state, query_template) {
         Ok(statement) => Ok(statement),
+        Err(message) if is_lasm_postgres_stale_prepare_error(message.as_str()) => {
+            evict_lasm_postgres_prepared_statement(state, query_template);
+            lasm_dynamic_postgres_prepared_statement(state, query_template).map_err(
+                |retry_message| {
+                    format!(
+                        "{message}; retry after stale prepared statement refresh failed: {retry_message}"
+                    )
+                },
+            )
+        }
         Err(message) if is_lasm_postgres_reconnectable_prepare_error(message.as_str()) => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             lasm_dynamic_postgres_prepared_statement(state, query_template).map_err(
@@ -1596,10 +1614,11 @@ pub(crate) fn run_lasm_postgres_query_one(
 mod tests {
     use super::{
         is_lasm_postgres_reconnectable_prepare_error, is_lasm_postgres_reconnectable_sqlstate,
-        is_lasm_postgres_retryable_tx_sqlstate, is_lasm_postgres_stale_prepared_statement_sqlstate,
-        lasm_postgres_retry_backoff_ms, max_lasm_postgres_placeholder_index_cached,
-        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
-        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
+        is_lasm_postgres_retryable_tx_sqlstate, is_lasm_postgres_stale_prepare_error,
+        is_lasm_postgres_stale_prepared_statement_sqlstate, lasm_postgres_retry_backoff_ms,
+        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
+        parse_lasm_postgres_query_template_and_params, validate_lasm_postgres_parameter_arity,
+        LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1651,6 +1670,19 @@ mod tests {
         ));
         assert!(!is_lasm_postgres_reconnectable_prepare_error(
             "postgres prepare failed: syntax error at or near \"FROM\"; sqlstate=42601"
+        ));
+    }
+
+    #[test]
+    fn stale_prepare_error_detection_matches_runtime_sqlstate_marker() {
+        assert!(is_lasm_postgres_stale_prepare_error(
+            "postgres prepare failed: prepared statement does not exist; sqlstate=26000"
+        ));
+        assert!(is_lasm_postgres_stale_prepare_error(
+            "postgres prepare failed: prepared statement \"s1\" does not exist"
+        ));
+        assert!(!is_lasm_postgres_stale_prepare_error(
+            "postgres prepare failed: admin shutdown; sqlstate=57P01"
         ));
     }
 
