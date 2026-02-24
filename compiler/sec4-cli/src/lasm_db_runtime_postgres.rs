@@ -940,7 +940,7 @@ pub(crate) fn run_lasm_postgres_exec(
             )?
         }
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-            let mut retry_error = err;
+            let _ = err;
             let mut recovered = None;
             for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                 state.db_postgres_retryable_conflict_retry_attempts_total = state
@@ -968,7 +968,7 @@ pub(crate) fn run_lasm_postgres_exec(
                         break;
                     }
                     Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                        retry_error = err;
+                        let _ = err;
                     }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
@@ -981,10 +981,33 @@ pub(crate) fn run_lasm_postgres_exec(
             if let Some(count) = recovered {
                 count
             } else {
-                return Err(format_lasm_postgres_runtime_error(
-                    "postgres execution failed after retryable conflict retries",
-                    &retry_error,
-                ));
+                reconnect_lasm_dynamic_postgres_client(state)?;
+                state.db_postgres_retryable_conflict_retry_attempts_total = state
+                    .db_postgres_retryable_conflict_retry_attempts_total
+                    .saturating_add(1);
+                let final_retry = if use_prepared {
+                    let retry_statement =
+                        lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
+                } else {
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    run_lasm_postgres_unprepared_exec_with_count(client, query_template)
+                };
+                match final_retry {
+                    Ok(count) => {
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        count
+                    }
+                    Err(err) => {
+                        return Err(format_lasm_postgres_runtime_error(
+                            "postgres execution failed after retryable conflict retries and reconnect",
+                            &err,
+                        ));
+                    }
+                }
             }
         }
         Err(err)
@@ -1083,7 +1106,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                 })?
         }
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-            let mut retry_error = err;
+            let _ = err;
             let mut recovered = None;
             for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                 state.db_postgres_retryable_conflict_retry_attempts_total = state
@@ -1117,7 +1140,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                         break;
                     }
                     Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                        retry_error = err;
+                        let _ = err;
                     }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
@@ -1130,10 +1153,39 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             if let Some(count) = recovered {
                 count
             } else {
-                return Err(format_lasm_postgres_runtime_error(
-                    "postgres transaction execution failed after retryable conflict retries",
-                    &retry_error,
-                ));
+                reconnect_lasm_dynamic_postgres_client(state)?;
+                state.db_postgres_retryable_conflict_retry_attempts_total = state
+                    .db_postgres_retryable_conflict_retry_attempts_total
+                    .saturating_add(1);
+                let retry_statement = if use_prepared {
+                    Some(lasm_dynamic_postgres_prepared_statement(
+                        state,
+                        query_template,
+                    )?)
+                } else {
+                    None
+                };
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                let final_retry = run_lasm_postgres_exec_tx_once(
+                    client,
+                    query_template,
+                    params,
+                    retry_statement.as_ref(),
+                );
+                match final_retry {
+                    Ok(count) => {
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        count
+                    }
+                    Err(err) => {
+                        return Err(format_lasm_postgres_runtime_error(
+                            "postgres transaction execution failed after retryable conflict retries and reconnect",
+                            &err,
+                        ));
+                    }
+                }
             }
         }
         Err(err)
@@ -1227,7 +1279,7 @@ pub(crate) fn run_lasm_postgres_query_one(
                 })?
             }
             Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                let mut retry_error = err;
+                let _ = err;
                 let mut recovered = None;
                 for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                     state.db_postgres_retryable_conflict_retry_attempts_total = state
@@ -1250,7 +1302,7 @@ pub(crate) fn run_lasm_postgres_query_one(
                             break;
                         }
                         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                            retry_error = err;
+                            let _ = err;
                         }
                         Err(err) => {
                             return Err(format_lasm_postgres_runtime_error(
@@ -1263,10 +1315,28 @@ pub(crate) fn run_lasm_postgres_query_one(
                 if let Some(row) = recovered {
                     row
                 } else {
-                    return Err(format_lasm_postgres_runtime_error(
-                        "postgres queryOne execution failed after retryable conflict retries",
-                        &retry_error,
-                    ));
+                    reconnect_lasm_dynamic_postgres_client(state)?;
+                    state.db_postgres_retryable_conflict_retry_attempts_total = state
+                        .db_postgres_retryable_conflict_retry_attempts_total
+                        .saturating_add(1);
+                    let retry_statement =
+                        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
+                    let client = lasm_dynamic_postgres_client_mut(state)?;
+                    let final_retry = execute_query(client, &retry_statement);
+                    match final_retry {
+                        Ok(row) => {
+                            state.db_postgres_retryable_conflict_retry_success_total = state
+                                .db_postgres_retryable_conflict_retry_success_total
+                                .saturating_add(1);
+                            row
+                        }
+                        Err(err) => {
+                            return Err(format_lasm_postgres_runtime_error(
+                                "postgres queryOne execution failed after retryable conflict retries and reconnect",
+                                &err,
+                            ));
+                        }
+                    }
                 }
             }
             Err(err)
