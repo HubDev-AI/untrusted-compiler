@@ -111,7 +111,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
     if let Some(sqlstate) = extract_lasm_db_runtime_sqlstate(normalized.as_str()) {
         match sqlstate {
             "57014" => return (504, lasm_db_operation_timeout_code(operation), "timeout"),
-            "55p03" | "40001" | "40p01" => {
+            "55p03" | "40001" | "40p01" | "25p02" => {
                 return (
                     409,
                     lasm_db_operation_lock_conflict_code(operation),
@@ -249,6 +249,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("database is locked")
         || normalized.contains("could not serialize access due to")
         || normalized.contains("deadlock detected")
+        || normalized.contains("current transaction is aborted")
     {
         return (
             409,
@@ -664,6 +665,28 @@ mod tests {
         );
         assert_eq!(status, 409);
         assert_eq!(code, "DB.EXEC_TX_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_in_failed_transaction_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: current transaction is aborted; sqlstate=25P02",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_TX_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_transaction_aborted_message_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: current transaction is aborted, commands ignored until end of transaction block",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
         assert_eq!(kind, "conflict");
     }
 
