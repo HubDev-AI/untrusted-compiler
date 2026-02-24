@@ -80,6 +80,19 @@ fn extract_lasm_db_runtime_sqlite_code(normalized_message: &str) -> Option<&str>
     }
 }
 
+fn extract_lasm_db_runtime_sqlite_extended_code(normalized_message: &str) -> Option<i32> {
+    let marker = "sqlite_extended_code=";
+    let start = normalized_message.find(marker)? + marker.len();
+    let tail = &normalized_message[start..];
+    let end = tail
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(tail.len());
+    if end == 0 {
+        return None;
+    }
+    tail[..end].parse::<i32>().ok()
+}
+
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
     message: &str,
@@ -131,6 +144,8 @@ pub(crate) fn classify_lasm_db_runtime_error(
         }
     }
     if let Some(sqlite_code) = extract_lasm_db_runtime_sqlite_code(normalized.as_str()) {
+        let sqlite_extended_code =
+            extract_lasm_db_runtime_sqlite_extended_code(normalized.as_str());
         match sqlite_code {
             "databasebusy" | "databaselocked" => {
                 return (
@@ -139,7 +154,17 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "conflict",
                 );
             }
-            "constraintviolation" | "toobig" | "typemismatch" | "parameteroutofrange" => {
+            "constraintviolation" => {
+                if matches!(sqlite_extended_code, Some(1555 | 2067)) {
+                    return (409, lasm_db_operation_conflict_code(operation), "conflict");
+                }
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            "toobig" | "typemismatch" | "parameteroutofrange" => {
                 return (
                     400,
                     lasm_db_operation_validation_code(operation),
@@ -641,6 +666,28 @@ mod tests {
         assert_eq!(status, 500);
         assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
         assert_eq!(kind, "internal");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_unique_constraint_error_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "sqlite execution failed: UNIQUE constraint failed: users.email; sqlite_code=ConstraintViolation; sqlite_extended_code=2067",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_CONFLICT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_not_null_constraint_error_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "sqlite queryOne execution failed: NOT NULL constraint failed: users.email; sqlite_code=ConstraintViolation; sqlite_extended_code=1299",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
     }
 
     #[test]
