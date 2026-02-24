@@ -157,7 +157,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "missing_dependency",
                 );
             }
-            "53300" | "57p01" | "57p02" | "57p03" => {
+            _ if sqlstate.starts_with("53") || sqlstate.starts_with("57") => {
                 return (
                     503,
                     lasm_db_operation_unavailable_code(operation),
@@ -697,6 +697,17 @@ mod tests {
         );
         assert_eq!(status, 503);
         assert_eq!(code, "DB.EXEC_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_resource_class_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: disk full; sqlstate=53100",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
         assert_eq!(kind, "missing_dependency");
     }
 
