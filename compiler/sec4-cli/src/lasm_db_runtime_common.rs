@@ -9,17 +9,22 @@ pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
     message: &str,
 ) -> (u16, &'static str, &'static str) {
-    if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN")
-        || message.contains("sqlite records store path unavailable")
-        || message.contains("sqlite records store connection unavailable")
-        || message.contains("could not connect LASM dynamic postgres records store")
-        || message.contains("native TLS connector bootstrap failed")
-        || message.contains("could not create LASM dynamic sqlite records store directory")
-        || message.contains("could not open LASM dynamic sqlite records store")
+    let normalized = message.to_ascii_lowercase();
+    if normalized.contains("requires sec4_rt_lasm_db_postgres_dsn")
+        || normalized.contains("sqlite records store path unavailable")
+        || normalized.contains("sqlite records store connection unavailable")
+        || normalized.contains("could not connect lasm dynamic postgres records store")
+        || normalized.contains("native tls connector bootstrap failed")
+        || normalized.contains("could not create lasm dynamic sqlite records store directory")
+        || normalized.contains("could not open lasm dynamic sqlite records store")
     {
         return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
     }
-    if message.contains("canceling statement due to statement timeout") {
+    if normalized.contains("canceling statement due to statement timeout")
+        || normalized.contains("connect timeout")
+        || normalized.contains("connection timed out")
+        || normalized.contains("timeout expired")
+    {
         let code = match operation {
             "exec" => "DB.EXEC_TIMEOUT",
             "execTx" => "DB.EXEC_TX_TIMEOUT",
@@ -28,10 +33,10 @@ pub(crate) fn classify_lasm_db_runtime_error(
         };
         return (504, code, "timeout");
     }
-    if message.contains("canceling statement due to lock timeout")
-        || message.contains("database is locked")
-        || message.contains("could not serialize access due to")
-        || message.contains("deadlock detected")
+    if normalized.contains("canceling statement due to lock timeout")
+        || normalized.contains("database is locked")
+        || normalized.contains("could not serialize access due to")
+        || normalized.contains("deadlock detected")
     {
         let code = match operation {
             "exec" => "DB.EXEC_LOCK_TIMEOUT",
@@ -41,15 +46,15 @@ pub(crate) fn classify_lasm_db_runtime_error(
         };
         return (409, code, "conflict");
     }
-    if message.contains("requires at least")
-        || message.contains("expects exactly")
-        || message.contains("requires SELECT-style SQL statement")
-        || message.contains("requires row-returning SQL statement")
-        || message.contains("requires non-empty SQL statement")
-        || message.contains("requires a single SQL statement")
-        || message.contains("requires named parameter")
-        || message.contains("requires SQL placeholders to be named")
-        || message.contains("is not present in SQL statement")
+    if normalized.contains("requires at least")
+        || normalized.contains("expects exactly")
+        || normalized.contains("requires select-style sql statement")
+        || normalized.contains("requires row-returning sql statement")
+        || normalized.contains("requires non-empty sql statement")
+        || normalized.contains("requires a single sql statement")
+        || normalized.contains("requires named parameter")
+        || normalized.contains("requires sql placeholders to be named")
+        || normalized.contains("is not present in sql statement")
     {
         let code = match operation {
             "exec" => "DB.EXEC_INVALID",
@@ -59,16 +64,16 @@ pub(crate) fn classify_lasm_db_runtime_error(
         };
         return (400, code, "validation");
     }
-    if message.contains("NOT NULL constraint failed")
-        || message.contains("CHECK constraint failed")
-        || message.contains("violates not-null constraint")
-        || message.contains("violates check constraint")
-        || message.contains("invalid input syntax for")
-        || message.contains("syntax error at or near")
-        || message.contains("syntax error")
-        || message.contains("unrecognized token")
-        || message.contains("no such column")
-        || message.contains("column does not exist")
+    if normalized.contains("not null constraint failed")
+        || normalized.contains("check constraint failed")
+        || normalized.contains("violates not-null constraint")
+        || normalized.contains("violates check constraint")
+        || normalized.contains("invalid input syntax for")
+        || normalized.contains("syntax error at or near")
+        || normalized.contains("syntax error")
+        || normalized.contains("unrecognized token")
+        || normalized.contains("no such column")
+        || normalized.contains("column does not exist")
     {
         let code = match operation {
             "exec" => "DB.EXEC_INVALID",
@@ -78,8 +83,24 @@ pub(crate) fn classify_lasm_db_runtime_error(
         };
         return (400, code, "validation");
     }
-    if message.contains("UNIQUE constraint failed")
-        || message.contains("duplicate key value violates unique constraint")
+    if normalized.contains("connection refused")
+        || normalized.contains("could not connect to server")
+        || normalized.contains("server closed the connection unexpectedly")
+        || normalized.contains("connection reset by peer")
+        || normalized.contains("too many connections")
+        || normalized.contains("remaining connection slots are reserved")
+        || normalized.contains("broken pipe")
+    {
+        let code = match operation {
+            "exec" => "DB.EXEC_UNAVAILABLE",
+            "execTx" => "DB.EXEC_TX_UNAVAILABLE",
+            "queryOne" => "DB.QUERY_ONE_UNAVAILABLE",
+            _ => "DB.OPERATION_UNAVAILABLE",
+        };
+        return (503, code, "missing_dependency");
+    }
+    if normalized.contains("unique constraint failed")
+        || normalized.contains("duplicate key value violates unique constraint")
     {
         let code = match operation {
             "exec" => "DB.EXEC_CONFLICT",
@@ -381,6 +402,46 @@ mod tests {
         assert_eq!(status, 500);
         assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
         assert_eq!(kind, "internal");
+    }
+
+    #[test]
+    fn classify_db_runtime_connect_timeout_error() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("exec", "postgres execution failed: connect timeout");
+        assert_eq!(status, 504);
+        assert_eq!(code, "DB.EXEC_TIMEOUT");
+        assert_eq!(kind, "timeout");
+    }
+
+    #[test]
+    fn classify_db_runtime_connect_refused_error_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: could not connect to server: Connection refused",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.EXEC_TX_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_too_many_connections_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "FATAL: remaining connection slots are reserved for non-replication superuser connections",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_case_insensitive_constraint_errors_as_validation() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("queryOne", "NOT NULL CONSTRAINT FAILED: users.email");
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
     }
 
     #[test]
