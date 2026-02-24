@@ -164,7 +164,11 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "missing_dependency",
                 );
             }
-            _ if sqlstate.starts_with("53") || sqlstate.starts_with("57") => {
+            _ if sqlstate.starts_with("53")
+                || sqlstate.starts_with("54")
+                || sqlstate.starts_with("57")
+                || sqlstate.starts_with("58") =>
+            {
                 return (
                     503,
                     lasm_db_operation_unavailable_code(operation),
@@ -761,6 +765,28 @@ mod tests {
         );
         assert_eq!(status, 503);
         assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_program_limit_class_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres execution failed: program limit exceeded; sqlstate=54000",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.EXEC_UNAVAILABLE");
+        assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_system_error_class_as_unavailable() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: io error; sqlstate=58030",
+        );
+        assert_eq!(status, 503);
+        assert_eq!(code, "DB.EXEC_TX_UNAVAILABLE");
         assert_eq!(kind, "missing_dependency");
     }
 
