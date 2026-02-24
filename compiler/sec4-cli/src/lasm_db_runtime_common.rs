@@ -161,6 +161,13 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "validation",
                 );
             }
+            _ if sqlstate.starts_with("3f") => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
             _ if sqlstate.starts_with("28") || sqlstate == "3d000" => {
                 return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
             }
@@ -827,6 +834,17 @@ mod tests {
         );
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_schema_name_error_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "postgres transaction execution failed: schema does not exist; sqlstate=3F000",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_TX_INVALID");
         assert_eq!(kind, "validation");
     }
 
