@@ -7,6 +7,7 @@ use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseSt
 use postgres::types::ToSql;
 use postgres::{Client as PostgresClient, GenericClient, Statement as PostgresStatement};
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) enum LasmPostgresParam {
@@ -772,6 +773,10 @@ fn format_lasm_postgres_runtime_error(context: &str, err: &postgres::Error) -> S
     format!("{context}: {err}")
 }
 
+fn lasm_postgres_retry_backoff_ms(attempt_index: usize) -> u64 {
+    (attempt_index as u64).saturating_add(1).saturating_mul(2)
+}
+
 fn run_lasm_postgres_unprepared_exec_with_count(
     client: &mut impl GenericClient,
     query_template: &str,
@@ -885,10 +890,14 @@ pub(crate) fn run_lasm_postgres_exec(
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
             let mut retry_error = err;
             let mut recovered = None;
-            for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+            for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                 state.db_postgres_retryable_conflict_retry_attempts_total = state
                     .db_postgres_retryable_conflict_retry_attempts_total
                     .saturating_add(1);
+                let backoff_ms = lasm_postgres_retry_backoff_ms(attempt_index);
+                if backoff_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
                 let retry_result = if use_prepared {
                     let retry_statement =
                         lasm_dynamic_postgres_prepared_statement(state, query_template)?;
@@ -1009,10 +1018,14 @@ pub(crate) fn run_lasm_postgres_exec_tx(
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
             let mut retry_error = err;
             let mut recovered = None;
-            for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+            for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                 state.db_postgres_retryable_conflict_retry_attempts_total = state
                     .db_postgres_retryable_conflict_retry_attempts_total
                     .saturating_add(1);
+                let backoff_ms = lasm_postgres_retry_backoff_ms(attempt_index);
+                if backoff_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
                 let retry_statement = if use_prepared {
                     Some(lasm_dynamic_postgres_prepared_statement(
                         state,
@@ -1137,10 +1150,14 @@ pub(crate) fn run_lasm_postgres_query_one(
             Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
                 let mut retry_error = err;
                 let mut recovered = None;
-                for _ in 0..state.db_postgres_retryable_conflict_retry_max {
+                for attempt_index in 0..state.db_postgres_retryable_conflict_retry_max {
                     state.db_postgres_retryable_conflict_retry_attempts_total = state
                         .db_postgres_retryable_conflict_retry_attempts_total
                         .saturating_add(1);
+                    let backoff_ms = lasm_postgres_retry_backoff_ms(attempt_index);
+                    if backoff_ms > 0 {
+                        std::thread::sleep(Duration::from_millis(backoff_ms));
+                    }
                     let client = lasm_dynamic_postgres_client_mut(state)?;
                     let retry_result = execute_query(client, &prepared_statement);
                     match retry_result {
@@ -1203,9 +1220,10 @@ pub(crate) fn run_lasm_postgres_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lasm_postgres_retryable_tx_sqlstate, max_lasm_postgres_placeholder_index_cached,
-        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
-        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
+        is_lasm_postgres_retryable_tx_sqlstate, lasm_postgres_retry_backoff_ms,
+        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
+        parse_lasm_postgres_query_template_and_params, validate_lasm_postgres_parameter_arity,
+        LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1232,6 +1250,13 @@ mod tests {
         assert!(is_lasm_postgres_retryable_tx_sqlstate(Some("40P01")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(Some("23505")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(None));
+    }
+
+    #[test]
+    fn postgres_retry_backoff_increases_linearly() {
+        assert_eq!(lasm_postgres_retry_backoff_ms(0), 2);
+        assert_eq!(lasm_postgres_retry_backoff_ms(1), 4);
+        assert_eq!(lasm_postgres_retry_backoff_ms(2), 6);
     }
 
     #[test]
