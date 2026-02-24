@@ -11,6 +11,11 @@ pub(crate) fn classify_lasm_db_runtime_error(
 ) -> (u16, &'static str, &'static str) {
     if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN")
         || message.contains("sqlite records store path unavailable")
+        || message.contains("sqlite records store connection unavailable")
+        || message.contains("could not connect LASM dynamic postgres records store")
+        || message.contains("native TLS connector bootstrap failed")
+        || message.contains("could not create LASM dynamic sqlite records store directory")
+        || message.contains("could not open LASM dynamic sqlite records store")
     {
         return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
     }
@@ -356,6 +361,26 @@ mod tests {
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
         assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_connection_unavailable_as_adapter_config_invalid() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("exec", "sqlite records store connection unavailable");
+        assert_eq!(status, 500);
+        assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
+        assert_eq!(kind, "internal");
+    }
+
+    #[test]
+    fn classify_db_runtime_postgres_connect_errors_as_adapter_config_invalid() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "could not connect LASM dynamic postgres records store: Connection refused",
+        );
+        assert_eq!(status, 500);
+        assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
+        assert_eq!(kind, "internal");
     }
 
     #[test]
