@@ -216,7 +216,15 @@ fn lasm_dynamic_sqlite_runtime_connection_mut(
 }
 
 fn is_lasm_sqlite_runtime_lock_error(message: &str) -> bool {
-    message.contains("database is locked")
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("database is locked")
+        || normalized.contains("database table is locked")
+        || normalized.contains("database schema is locked")
+        || normalized.contains("database is busy")
+        || normalized.contains("sqlite_code=databasebusy")
+        || normalized.contains("sqlite_code=databaselocked")
+        || normalized.contains("sqlite_extended_code=5")
+        || normalized.contains("sqlite_extended_code=6")
 }
 
 fn is_lasm_sqlite_runtime_non_retryable_param_error(message: &str) -> bool {
@@ -653,9 +661,9 @@ pub(crate) fn run_lasm_sqlite_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        lasm_sqlite_lock_retry_backoff_ms, parse_lasm_sqlite_query_params,
-        resolve_lasm_sqlite_named_param_bindings, validate_lasm_sqlite_parameter_arity,
-        LasmSqliteQueryParams,
+        is_lasm_sqlite_runtime_lock_error, lasm_sqlite_lock_retry_backoff_ms,
+        parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
+        validate_lasm_sqlite_parameter_arity, LasmSqliteQueryParams,
     };
     use rusqlite::types::Value as SqliteValue;
     use rusqlite::Connection;
@@ -742,6 +750,27 @@ mod tests {
         assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 0), 5);
         assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 1), 10);
         assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 2), 15);
+    }
+
+    #[test]
+    fn sqlite_lock_error_detection_handles_busy_and_lock_variants() {
+        assert!(is_lasm_sqlite_runtime_lock_error("database is locked"));
+        assert!(is_lasm_sqlite_runtime_lock_error(
+            "sqlite query failed: busy; sqlite_code=DatabaseBusy; sqlite_extended_code=5"
+        ));
+        assert!(is_lasm_sqlite_runtime_lock_error(
+            "database schema is locked: main"
+        ));
+    }
+
+    #[test]
+    fn sqlite_lock_error_detection_ignores_non_lock_failures() {
+        assert!(!is_lasm_sqlite_runtime_lock_error(
+            "sqlite execution failed: no such table: users"
+        ));
+        assert!(!is_lasm_sqlite_runtime_lock_error(
+            "sqlite execution failed: bad parameter or other api misuse"
+        ));
     }
 
     #[test]
