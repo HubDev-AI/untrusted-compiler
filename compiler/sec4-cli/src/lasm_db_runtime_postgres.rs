@@ -1158,8 +1158,10 @@ pub(crate) fn run_lasm_postgres_query_one(
                     if backoff_ms > 0 {
                         std::thread::sleep(Duration::from_millis(backoff_ms));
                     }
+                    let retry_statement =
+                        lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
                     let client = lasm_dynamic_postgres_client_mut(state)?;
-                    let retry_result = execute_query(client, &prepared_statement);
+                    let retry_result = execute_query(client, &retry_statement);
                     match retry_result {
                         Ok(row) => {
                             state.db_postgres_retryable_conflict_retry_success_total = state
