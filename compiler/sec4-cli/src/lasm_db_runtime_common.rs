@@ -297,9 +297,12 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
     }
     let statement = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client
-            .prepare(query_template)
-            .map_err(|err| format!("postgres prepare failed: {err}"))?
+        client.prepare(query_template).map_err(|err| {
+            if let Some(sqlstate) = err.code().map(|code| code.code()) {
+                return format!("postgres prepare failed: {err}; sqlstate={sqlstate}");
+            }
+            format!("postgres prepare failed: {err}")
+        })?
     };
     let evicted = insert_lasm_bounded_cache_entry(
         &mut state.db_records_postgres_statement_cache,
@@ -561,6 +564,17 @@ mod tests {
         assert_eq!(status, 503);
         assert_eq!(code, "DB.QUERY_ONE_UNAVAILABLE");
         assert_eq!(kind, "missing_dependency");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_prepare_validation_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres prepare failed: syntax error at or near \"FROM\"; sqlstate=42601",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
+        assert_eq!(kind, "validation");
     }
 
     #[test]
