@@ -970,6 +970,15 @@ pub(crate) fn run_lasm_postgres_exec(
                     Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
                         let _ = err;
                     }
+                    Err(err)
+                        if use_prepared
+                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
+                    {
+                        evict_lasm_postgres_prepared_statement(state, query_template);
+                    }
+                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                        reconnect_lasm_dynamic_postgres_client(state)?;
+                    }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
                             "postgres execution failed after retryable conflict retry",
@@ -1000,6 +1009,56 @@ pub(crate) fn run_lasm_postgres_exec(
                             .db_postgres_retryable_conflict_retry_success_total
                             .saturating_add(1);
                         count
+                    }
+                    Err(err)
+                        if use_prepared
+                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
+                    {
+                        evict_lasm_postgres_prepared_statement(state, query_template);
+                        let refresh_statement =
+                            lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                        let client = lasm_dynamic_postgres_client_mut(state)?;
+                        let refresh = run_lasm_postgres_prepared_exec_with_count(
+                            client,
+                            &refresh_statement,
+                            params,
+                        )
+                        .map_err(|refresh_err| {
+                            format_lasm_postgres_runtime_error(
+                                "postgres execution failed after retryable conflict retries reconnect stale prepared statement refresh",
+                                &refresh_err,
+                            )
+                        })?;
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        refresh
+                    }
+                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                        reconnect_lasm_dynamic_postgres_client(state)?;
+                        let reconnect_retry = if use_prepared {
+                            let retry_statement =
+                                lasm_dynamic_postgres_prepared_statement(state, query_template)?;
+                            let client = lasm_dynamic_postgres_client_mut(state)?;
+                            run_lasm_postgres_prepared_exec_with_count(
+                                client,
+                                &retry_statement,
+                                params,
+                            )
+                        } else {
+                            let client = lasm_dynamic_postgres_client_mut(state)?;
+                            run_lasm_postgres_unprepared_exec_with_count(client, query_template)
+                        }
+                        .map_err(|retry_err| {
+                            format_lasm_postgres_runtime_error(
+                                "postgres execution failed after retryable conflict retries reconnect replay",
+                                &retry_err,
+                            )
+                        })?;
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        reconnect_retry
                     }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
@@ -1142,6 +1201,15 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                     Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
                         let _ = err;
                     }
+                    Err(err)
+                        if use_prepared
+                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
+                    {
+                        evict_lasm_postgres_prepared_statement(state, query_template);
+                    }
+                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                        reconnect_lasm_dynamic_postgres_client(state)?;
+                    }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
                             "postgres transaction execution failed after retryable conflict retry",
@@ -1178,6 +1246,65 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                             .db_postgres_retryable_conflict_retry_success_total
                             .saturating_add(1);
                         count
+                    }
+                    Err(err)
+                        if use_prepared
+                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
+                    {
+                        evict_lasm_postgres_prepared_statement(state, query_template);
+                        let refresh_statement = if use_prepared {
+                            Some(lasm_dynamic_postgres_prepared_statement(
+                                state,
+                                query_template,
+                            )?)
+                        } else {
+                            None
+                        };
+                        let client = lasm_dynamic_postgres_client_mut(state)?;
+                        let refresh = run_lasm_postgres_exec_tx_once(
+                            client,
+                            query_template,
+                            params,
+                            refresh_statement.as_ref(),
+                        )
+                        .map_err(|refresh_err| {
+                            format_lasm_postgres_runtime_error(
+                                "postgres transaction execution failed after retryable conflict retries reconnect stale prepared statement refresh",
+                                &refresh_err,
+                            )
+                        })?;
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        refresh
+                    }
+                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                        reconnect_lasm_dynamic_postgres_client(state)?;
+                        let retry_statement = if use_prepared {
+                            Some(lasm_dynamic_postgres_prepared_statement(
+                                state,
+                                query_template,
+                            )?)
+                        } else {
+                            None
+                        };
+                        let client = lasm_dynamic_postgres_client_mut(state)?;
+                        let reconnect_retry = run_lasm_postgres_exec_tx_once(
+                            client,
+                            query_template,
+                            params,
+                            retry_statement.as_ref(),
+                        )
+                        .map_err(|retry_err| {
+                            format_lasm_postgres_runtime_error(
+                                "postgres transaction execution failed after retryable conflict retries reconnect replay",
+                                &retry_err,
+                            )
+                        })?;
+                        state.db_postgres_retryable_conflict_retry_success_total = state
+                            .db_postgres_retryable_conflict_retry_success_total
+                            .saturating_add(1);
+                        reconnect_retry
                     }
                     Err(err) => {
                         return Err(format_lasm_postgres_runtime_error(
@@ -1304,6 +1431,12 @@ pub(crate) fn run_lasm_postgres_query_one(
                         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
                             let _ = err;
                         }
+                        Err(err) if is_lasm_postgres_stale_prepared_statement_error(&err) => {
+                            evict_lasm_postgres_prepared_statement(state, wrapped_query.as_str());
+                        }
+                        Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                            reconnect_lasm_dynamic_postgres_client(state)?;
+                        }
                         Err(err) => {
                             return Err(format_lasm_postgres_runtime_error(
                                 "postgres queryOne execution failed after retryable conflict retry",
@@ -1329,6 +1462,46 @@ pub(crate) fn run_lasm_postgres_query_one(
                                 .db_postgres_retryable_conflict_retry_success_total
                                 .saturating_add(1);
                             row
+                        }
+                        Err(err) if is_lasm_postgres_stale_prepared_statement_error(&err) => {
+                            evict_lasm_postgres_prepared_statement(state, wrapped_query.as_str());
+                            let refresh_statement = lasm_dynamic_postgres_prepared_statement(
+                                state,
+                                wrapped_query.as_str(),
+                            )?;
+                            let client = lasm_dynamic_postgres_client_mut(state)?;
+                            let refresh = execute_query(client, &refresh_statement).map_err(
+                                |refresh_err| {
+                                    format_lasm_postgres_runtime_error(
+                                        "postgres queryOne execution failed after retryable conflict retries reconnect stale prepared statement refresh",
+                                        &refresh_err,
+                                    )
+                                },
+                            )?;
+                            state.db_postgres_retryable_conflict_retry_success_total = state
+                                .db_postgres_retryable_conflict_retry_success_total
+                                .saturating_add(1);
+                            refresh
+                        }
+                        Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
+                            reconnect_lasm_dynamic_postgres_client(state)?;
+                            let retry_statement = lasm_dynamic_postgres_prepared_statement(
+                                state,
+                                wrapped_query.as_str(),
+                            )?;
+                            let client = lasm_dynamic_postgres_client_mut(state)?;
+                            let reconnect_retry = execute_query(client, &retry_statement).map_err(
+                                |retry_err| {
+                                    format_lasm_postgres_runtime_error(
+                                        "postgres queryOne execution failed after retryable conflict retries reconnect replay",
+                                        &retry_err,
+                                    )
+                                },
+                            )?;
+                            state.db_postgres_retryable_conflict_retry_success_total = state
+                                .db_postgres_retryable_conflict_retry_success_total
+                                .saturating_add(1);
+                            reconnect_retry
                         }
                         Err(err) => {
                             return Err(format_lasm_postgres_runtime_error(
