@@ -118,6 +118,13 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "conflict",
                 );
             }
+            _ if sqlstate.starts_with("55") => {
+                return (
+                    409,
+                    lasm_db_operation_lock_conflict_code(operation),
+                    "conflict",
+                );
+            }
             "23505" => return (409, lasm_db_operation_conflict_code(operation), "conflict"),
             "23502" | "23514" | "42601" | "42703" => {
                 return (
@@ -677,6 +684,17 @@ mod tests {
         );
         assert_eq!(status, 409);
         assert_eq!(code, "DB.EXEC_TX_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_object_state_class_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: object in use; sqlstate=55006",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
         assert_eq!(kind, "conflict");
     }
 
