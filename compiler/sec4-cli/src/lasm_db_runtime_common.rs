@@ -208,6 +208,36 @@ pub(crate) fn classify_lasm_db_runtime_error(
             _ => {}
         }
     }
+    if let Some(sqlite_extended_code) =
+        extract_lasm_db_runtime_sqlite_extended_code(normalized.as_str())
+    {
+        match sqlite_extended_code {
+            5 | 6 => {
+                return (
+                    409,
+                    lasm_db_operation_lock_conflict_code(operation),
+                    "conflict",
+                )
+            }
+            1555 | 2067 => return (409, lasm_db_operation_conflict_code(operation), "conflict"),
+            1299 | 275 | 3091 | 3094 => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            8 | 14 | 26 => return (500, "DB.ADAPTER_CONFIG_INVALID", "internal"),
+            7 | 10 | 13 => {
+                return (
+                    503,
+                    lasm_db_operation_unavailable_code(operation),
+                    "missing_dependency",
+                );
+            }
+            _ => {}
+        }
+    }
     if normalized.contains("canceling statement due to statement timeout")
         || normalized.contains("connect timeout")
         || normalized.contains("connection timed out")
@@ -745,6 +775,17 @@ mod tests {
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
         assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_extended_code_conflict_without_sqlite_code_marker() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "execTx",
+            "sqlite execution failed: UNIQUE constraint failed: users.email; sqlite_extended_code=2067",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_TX_CONFLICT");
+        assert_eq!(kind, "conflict");
     }
 
     #[test]
