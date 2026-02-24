@@ -766,6 +766,15 @@ fn is_lasm_postgres_retryable_tx_error(err: &postgres::Error) -> bool {
     is_lasm_postgres_retryable_tx_sqlstate(err.code().map(|code| code.code()))
 }
 
+fn is_lasm_postgres_reconnectable_sqlstate(code: Option<&str>) -> bool {
+    matches!(code, Some("57P01") | Some("57P02") | Some("57P03"))
+        || matches!(code, Some(value) if value.starts_with("08"))
+}
+
+fn is_lasm_postgres_reconnectable_error(err: &postgres::Error) -> bool {
+    err.is_closed() || is_lasm_postgres_reconnectable_sqlstate(err.code().map(|code| code.code()))
+}
+
 fn format_lasm_postgres_runtime_error(context: &str, err: &postgres::Error) -> String {
     if let Some(sqlstate) = err.code().map(|code| code.code()) {
         return format!("{context}: {err}; sqlstate={sqlstate}");
@@ -862,7 +871,7 @@ pub(crate) fn run_lasm_postgres_exec(
     };
     let affected_rows = match initial {
         Ok(count) => count,
-        Err(err) if err.is_closed() => {
+        Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             if use_prepared {
                 let retry_statement =
@@ -996,7 +1005,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
     };
     let affected_rows = match initial {
         Ok(count) => count,
-        Err(err) if err.is_closed() => {
+        Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             let retry_statement = if use_prepared {
                 Some(lasm_dynamic_postgres_prepared_statement(
@@ -1135,7 +1144,7 @@ pub(crate) fn run_lasm_postgres_query_one(
         };
         match initial {
             Ok(row) => row,
-            Err(err) if err.is_closed() => {
+            Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
                 reconnect_lasm_dynamic_postgres_client(state)?;
                 let retry_statement =
                     lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
@@ -1222,10 +1231,10 @@ pub(crate) fn run_lasm_postgres_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lasm_postgres_retryable_tx_sqlstate, lasm_postgres_retry_backoff_ms,
-        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
-        parse_lasm_postgres_query_template_and_params, validate_lasm_postgres_parameter_arity,
-        LasmPostgresParam,
+        is_lasm_postgres_reconnectable_sqlstate, is_lasm_postgres_retryable_tx_sqlstate,
+        lasm_postgres_retry_backoff_ms, max_lasm_postgres_placeholder_index_cached,
+        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
+        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1252,6 +1261,15 @@ mod tests {
         assert!(is_lasm_postgres_retryable_tx_sqlstate(Some("40P01")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(Some("23505")));
         assert!(!is_lasm_postgres_retryable_tx_sqlstate(None));
+    }
+
+    #[test]
+    fn reconnectable_sqlstate_detection_matches_connection_classes() {
+        assert!(is_lasm_postgres_reconnectable_sqlstate(Some("08006")));
+        assert!(is_lasm_postgres_reconnectable_sqlstate(Some("08001")));
+        assert!(is_lasm_postgres_reconnectable_sqlstate(Some("57P01")));
+        assert!(!is_lasm_postgres_reconnectable_sqlstate(Some("40001")));
+        assert!(!is_lasm_postgres_reconnectable_sqlstate(None));
     }
 
     #[test]
