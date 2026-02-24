@@ -126,6 +126,13 @@ pub(crate) fn classify_lasm_db_runtime_error(
                     "validation",
                 );
             }
+            "0a000" => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
             _ if sqlstate.starts_with("22") => {
                 return (
                     400,
@@ -283,6 +290,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("unrecognized token")
         || normalized.contains("no such column")
         || normalized.contains("column does not exist")
+        || normalized.contains("feature not supported")
     {
         return (
             400,
@@ -695,6 +703,28 @@ mod tests {
         let (status, code, kind) = classify_lasm_db_runtime_error(
             "queryOne",
             "postgres queryOne execution failed: invalid input syntax for type integer; sqlstate=22P02",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.QUERY_ONE_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlstate_feature_not_supported_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres execution failed: feature not supported; sqlstate=0A000",
+        );
+        assert_eq!(status, 400);
+        assert_eq!(code, "DB.EXEC_INVALID");
+        assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_feature_not_supported_message_as_validation() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed: feature not supported",
         );
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
