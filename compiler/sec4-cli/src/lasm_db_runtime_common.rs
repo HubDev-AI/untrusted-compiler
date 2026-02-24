@@ -65,6 +65,21 @@ fn extract_lasm_db_runtime_sqlstate(normalized_message: &str) -> Option<&str> {
     }
 }
 
+fn extract_lasm_db_runtime_sqlite_code(normalized_message: &str) -> Option<&str> {
+    let marker = "sqlite_code=";
+    let start = normalized_message.find(marker)? + marker.len();
+    let tail = &normalized_message[start..];
+    let end = tail
+        .find(|ch: char| !ch.is_ascii_alphanumeric())
+        .unwrap_or(tail.len());
+    let code = &tail[..end];
+    if code.is_empty() {
+        None
+    } else {
+        Some(code)
+    }
+}
+
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
     message: &str,
@@ -106,6 +121,35 @@ pub(crate) fn classify_lasm_db_runtime_error(
                 );
             }
             "53300" | "57p01" | "57p02" | "57p03" => {
+                return (
+                    503,
+                    lasm_db_operation_unavailable_code(operation),
+                    "missing_dependency",
+                );
+            }
+            _ => {}
+        }
+    }
+    if let Some(sqlite_code) = extract_lasm_db_runtime_sqlite_code(normalized.as_str()) {
+        match sqlite_code {
+            "databasebusy" | "databaselocked" => {
+                return (
+                    409,
+                    lasm_db_operation_lock_conflict_code(operation),
+                    "conflict",
+                );
+            }
+            "constraintviolation" | "toobig" | "typemismatch" | "parameteroutofrange" => {
+                return (
+                    400,
+                    lasm_db_operation_validation_code(operation),
+                    "validation",
+                );
+            }
+            "permissiondenied" | "readonly" | "cannotopen" | "notadatabase" => {
+                return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
+            }
+            "systemiofailure" | "diskfull" | "outofmemory" | "schemachanged" => {
                 return (
                     503,
                     lasm_db_operation_unavailable_code(operation),
@@ -575,6 +619,28 @@ mod tests {
         assert_eq!(status, 400);
         assert_eq!(code, "DB.EXEC_INVALID");
         assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_code_lock_conflict_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "sqlite queryOne execution failed: database is locked; sqlite_code=DatabaseLocked; sqlite_extended_code=5",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_sqlite_code_adapter_config_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "sqlite execution prepare failed: attempt to write a readonly database; sqlite_code=ReadOnly; sqlite_extended_code=8",
+        );
+        assert_eq!(status, 500);
+        assert_eq!(code, "DB.ADAPTER_CONFIG_INVALID");
+        assert_eq!(kind, "internal");
     }
 
     #[test]
