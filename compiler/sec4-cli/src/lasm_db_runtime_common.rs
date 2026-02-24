@@ -284,7 +284,7 @@ pub(crate) fn classify_lasm_db_runtime_error(
         "queryOne" => "DB.QUERY_ONE_FAILED",
         _ => "DB.OPERATION_FAILED",
     };
-    (500, code, "missing_dependency")
+    (500, code, "internal")
 }
 
 pub(crate) fn parse_lasm_positive_i64(value: &str) -> Option<i64> {
@@ -745,6 +745,15 @@ mod tests {
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
         assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_unknown_failure_defaults_to_internal_kind() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("exec", "unexpected adapter failure details");
+        assert_eq!(status, 500);
+        assert_eq!(code, "DB.EXEC_FAILED");
+        assert_eq!(kind, "internal");
     }
 
     #[test]
