@@ -774,8 +774,20 @@ fn is_lasm_postgres_reconnectable_sqlstate(code: Option<&str>) -> bool {
     matches!(normalized.as_str(), "57P01" | "57P02" | "57P03") || normalized.starts_with("08")
 }
 
+fn is_lasm_postgres_reconnectable_error_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("connection closed")
+        || normalized.contains("connection reset by peer")
+        || normalized.contains("server closed the connection unexpectedly")
+        || normalized.contains("broken pipe")
+        || normalized.contains("terminating connection due to administrator command")
+        || normalized.contains("could not connect to server")
+}
+
 fn is_lasm_postgres_reconnectable_error(err: &postgres::Error) -> bool {
-    err.is_closed() || is_lasm_postgres_reconnectable_sqlstate(err.code().map(|code| code.code()))
+    err.is_closed()
+        || is_lasm_postgres_reconnectable_sqlstate(err.code().map(|code| code.code()))
+        || is_lasm_postgres_reconnectable_error_message(err.to_string().as_str())
 }
 
 fn is_lasm_postgres_stale_prepared_statement_sqlstate(code: Option<&str>) -> bool {
@@ -835,11 +847,7 @@ fn is_lasm_postgres_reconnectable_prepare_error(message: &str) -> bool {
     if let Some(sqlstate) = extract_lasm_postgres_runtime_sqlstate(message) {
         return is_lasm_postgres_reconnectable_sqlstate(Some(sqlstate.as_str()));
     }
-    let normalized = message.to_ascii_lowercase();
-    normalized.contains("connection closed")
-        || normalized.contains("connection reset by peer")
-        || normalized.contains("could not connect to server")
-        || normalized.contains("broken pipe")
+    is_lasm_postgres_reconnectable_error_message(message)
 }
 
 fn is_lasm_postgres_stale_prepare_error(message: &str) -> bool {
@@ -1626,12 +1634,12 @@ pub(crate) fn run_lasm_postgres_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lasm_postgres_reconnectable_prepare_error, is_lasm_postgres_reconnectable_sqlstate,
-        is_lasm_postgres_retryable_tx_sqlstate, is_lasm_postgres_stale_prepare_error,
-        is_lasm_postgres_stale_prepared_statement_sqlstate, lasm_postgres_retry_backoff_ms,
-        max_lasm_postgres_placeholder_index_cached, parse_lasm_postgres_query_params,
-        parse_lasm_postgres_query_template_and_params, validate_lasm_postgres_parameter_arity,
-        LasmPostgresParam,
+        is_lasm_postgres_reconnectable_error_message, is_lasm_postgres_reconnectable_prepare_error,
+        is_lasm_postgres_reconnectable_sqlstate, is_lasm_postgres_retryable_tx_sqlstate,
+        is_lasm_postgres_stale_prepare_error, is_lasm_postgres_stale_prepared_statement_sqlstate,
+        lasm_postgres_retry_backoff_ms, max_lasm_postgres_placeholder_index_cached,
+        parse_lasm_postgres_query_params, parse_lasm_postgres_query_template_and_params,
+        validate_lasm_postgres_parameter_arity, LasmPostgresParam,
     };
     use crate::LasmDynamicResponseState;
 
@@ -1683,6 +1691,23 @@ mod tests {
         ));
         assert!(!is_lasm_postgres_reconnectable_prepare_error(
             "postgres prepare failed: syntax error at or near \"FROM\"; sqlstate=42601"
+        ));
+    }
+
+    #[test]
+    fn reconnectable_error_message_detection_matches_connection_drop_patterns() {
+        assert!(is_lasm_postgres_reconnectable_error_message(
+            "server closed the connection unexpectedly"
+        ));
+        assert!(is_lasm_postgres_reconnectable_error_message(
+            "connection reset by peer"
+        ));
+        assert!(is_lasm_postgres_reconnectable_error_message("broken pipe"));
+        assert!(is_lasm_postgres_reconnectable_error_message(
+            "terminating connection due to administrator command"
+        ));
+        assert!(!is_lasm_postgres_reconnectable_error_message(
+            "syntax error at or near \"FROM\""
         ));
     }
 
