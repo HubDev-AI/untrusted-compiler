@@ -765,6 +765,13 @@ fn is_lasm_postgres_retryable_tx_error(err: &postgres::Error) -> bool {
     is_lasm_postgres_retryable_tx_sqlstate(err.code().map(|code| code.code()))
 }
 
+fn format_lasm_postgres_runtime_error(context: &str, err: &postgres::Error) -> String {
+    if let Some(sqlstate) = err.code().map(|code| code.code()) {
+        return format!("{context}: {err}; sqlstate={sqlstate}");
+    }
+    format!("{context}: {err}")
+}
+
 fn run_lasm_postgres_unprepared_exec_with_count(
     client: &mut impl GenericClient,
     query_template: &str,
@@ -858,12 +865,20 @@ pub(crate) fn run_lasm_postgres_exec(
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 run_lasm_postgres_prepared_exec_with_count(client, &retry_statement, params)
                     .map_err(|retry_err| {
-                        format!("postgres execution failed after reconnect: {retry_err}")
+                        format_lasm_postgres_runtime_error(
+                            "postgres execution failed after reconnect",
+                            &retry_err,
+                        )
                     })?
             } else {
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 run_lasm_postgres_unprepared_exec_with_count(client, query_template).map_err(
-                    |retry_err| format!("postgres execution failed after reconnect: {retry_err}"),
+                    |retry_err| {
+                        format_lasm_postgres_runtime_error(
+                            "postgres execution failed after reconnect",
+                            &retry_err,
+                        )
+                    },
                 )?
             }
         }
@@ -895,8 +910,9 @@ pub(crate) fn run_lasm_postgres_exec(
                         retry_error = err;
                     }
                     Err(err) => {
-                        return Err(format!(
-                            "postgres execution failed after retryable conflict retry: {err}"
+                        return Err(format_lasm_postgres_runtime_error(
+                            "postgres execution failed after retryable conflict retry",
+                            &err,
                         ));
                     }
                 }
@@ -904,8 +920,9 @@ pub(crate) fn run_lasm_postgres_exec(
             if let Some(count) = recovered {
                 count
             } else {
-                return Err(format!(
-                    "postgres execution failed after retryable conflict retries: {retry_error}"
+                return Err(format_lasm_postgres_runtime_error(
+                    "postgres execution failed after retryable conflict retries",
+                    &retry_error,
                 ));
             }
         }
@@ -919,7 +936,12 @@ pub(crate) fn run_lasm_postgres_exec(
                 "postgres parameterized execution requires a single SQL statement".to_string(),
             )
         }
-        Err(err) => return Err(format!("postgres execution failed: {err}")),
+        Err(err) => {
+            return Err(format_lasm_postgres_runtime_error(
+                "postgres execution failed",
+                &err,
+            ))
+        }
     };
     Ok(affected_rows)
 }
@@ -978,7 +1000,10 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             let client = lasm_dynamic_postgres_client_mut(state)?;
             run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
                 .map_err(|retry_err| {
-                    format!("postgres transaction execution failed after reconnect: {retry_err}")
+                    format_lasm_postgres_runtime_error(
+                        "postgres transaction execution failed after reconnect",
+                        &retry_err,
+                    )
                 })?
         }
         Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
@@ -1015,8 +1040,9 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                         retry_error = err;
                     }
                     Err(err) => {
-                        return Err(format!(
-                            "postgres transaction execution failed after retryable conflict retry: {err}"
+                        return Err(format_lasm_postgres_runtime_error(
+                            "postgres transaction execution failed after retryable conflict retry",
+                            &err,
                         ));
                     }
                 }
@@ -1024,8 +1050,9 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             if let Some(count) = recovered {
                 count
             } else {
-                return Err(format!(
-                    "postgres transaction execution failed after retryable conflict retries: {retry_error}"
+                return Err(format_lasm_postgres_runtime_error(
+                    "postgres transaction execution failed after retryable conflict retries",
+                    &retry_error,
                 ));
             }
         }
@@ -1039,7 +1066,12 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                 "postgres parameterized execution requires a single SQL statement".to_string(),
             )
         }
-        Err(err) => return Err(format!("postgres transaction execution failed: {err}")),
+        Err(err) => {
+            return Err(format_lasm_postgres_runtime_error(
+                "postgres transaction execution failed",
+                &err,
+            ))
+        }
     };
     Ok(affected_rows)
 }
@@ -1096,7 +1128,10 @@ pub(crate) fn run_lasm_postgres_query_one(
                     lasm_dynamic_postgres_prepared_statement(state, wrapped_query.as_str())?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 execute_query(client, &retry_statement).map_err(|retry_err| {
-                    format!("postgres queryOne execution failed after reconnect: {retry_err}")
+                    format_lasm_postgres_runtime_error(
+                        "postgres queryOne execution failed after reconnect",
+                        &retry_err,
+                    )
                 })?
             }
             Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
@@ -1120,8 +1155,9 @@ pub(crate) fn run_lasm_postgres_query_one(
                             retry_error = err;
                         }
                         Err(err) => {
-                            return Err(format!(
-                                "postgres queryOne execution failed after retryable conflict retry: {err}"
+                            return Err(format_lasm_postgres_runtime_error(
+                                "postgres queryOne execution failed after retryable conflict retry",
+                                &err,
                             ));
                         }
                     }
@@ -1129,8 +1165,9 @@ pub(crate) fn run_lasm_postgres_query_one(
                 if let Some(row) = recovered {
                     row
                 } else {
-                    return Err(format!(
-                        "postgres queryOne execution failed after retryable conflict retries: {retry_error}"
+                    return Err(format_lasm_postgres_runtime_error(
+                        "postgres queryOne execution failed after retryable conflict retries",
+                        &retry_error,
                     ));
                 }
             }
@@ -1143,7 +1180,12 @@ pub(crate) fn run_lasm_postgres_query_one(
                     "postgres parameterized execution requires a single SQL statement".to_string(),
                 )
             }
-            Err(err) => return Err(format!("postgres queryOne execution failed: {err}")),
+            Err(err) => {
+                return Err(format_lasm_postgres_runtime_error(
+                    "postgres queryOne execution failed",
+                    &err,
+                ))
+            }
         }
     };
     let Some(row) = row else {
