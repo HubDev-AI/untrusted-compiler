@@ -228,7 +228,13 @@ fn is_lasm_sqlite_runtime_lock_error(message: &str) -> bool {
 }
 
 fn is_lasm_sqlite_runtime_non_retryable_param_error(message: &str) -> bool {
-    message.contains("bad parameter")
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("bad parameter")
+        || normalized.contains("wrong number of parameters")
+        || normalized.contains("bind or column index out of range")
+        || normalized.contains("parameter count mismatch")
+        || normalized.contains("sqlite_code=range")
+        || normalized.contains("sqlite_code=misuse")
 }
 
 fn lasm_sqlite_lock_retry_backoff_ms(base_delay_ms: u64, attempt_index: usize) -> u64 {
@@ -661,9 +667,10 @@ pub(crate) fn run_lasm_sqlite_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lasm_sqlite_runtime_lock_error, lasm_sqlite_lock_retry_backoff_ms,
-        parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
-        validate_lasm_sqlite_parameter_arity, LasmSqliteQueryParams,
+        is_lasm_sqlite_runtime_lock_error, is_lasm_sqlite_runtime_non_retryable_param_error,
+        lasm_sqlite_lock_retry_backoff_ms, parse_lasm_sqlite_query_params,
+        resolve_lasm_sqlite_named_param_bindings, validate_lasm_sqlite_parameter_arity,
+        LasmSqliteQueryParams,
     };
     use rusqlite::types::Value as SqliteValue;
     use rusqlite::Connection;
@@ -770,6 +777,29 @@ mod tests {
         ));
         assert!(!is_lasm_sqlite_runtime_lock_error(
             "sqlite execution failed: bad parameter or other api misuse"
+        ));
+    }
+
+    #[test]
+    fn sqlite_non_retryable_param_error_detection_matches_bind_variants() {
+        assert!(is_lasm_sqlite_runtime_non_retryable_param_error(
+            "bad parameter or other api misuse"
+        ));
+        assert!(is_lasm_sqlite_runtime_non_retryable_param_error(
+            "bind or column index out of range"
+        ));
+        assert!(is_lasm_sqlite_runtime_non_retryable_param_error(
+            "sqlite execution failed; sqlite_code=Range; sqlite_extended_code=25"
+        ));
+    }
+
+    #[test]
+    fn sqlite_non_retryable_param_error_detection_ignores_transient_lock_errors() {
+        assert!(!is_lasm_sqlite_runtime_non_retryable_param_error(
+            "database is locked"
+        ));
+        assert!(!is_lasm_sqlite_runtime_non_retryable_param_error(
+            "sqlite execution failed; sqlite_code=DatabaseBusy; sqlite_extended_code=5"
         ));
     }
 
