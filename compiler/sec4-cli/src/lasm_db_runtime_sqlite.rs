@@ -223,6 +223,10 @@ fn is_lasm_sqlite_runtime_non_retryable_param_error(message: &str) -> bool {
     message.contains("bad parameter")
 }
 
+fn lasm_sqlite_lock_retry_backoff_ms(base_delay_ms: u64, attempt_index: usize) -> u64 {
+    base_delay_ms.saturating_mul((attempt_index as u64).saturating_add(1))
+}
+
 fn format_lasm_sqlite_runtime_error(context: &str, err: &rusqlite::Error) -> String {
     match err {
         rusqlite::Error::SqliteFailure(inner, _) => format!(
@@ -252,9 +256,10 @@ where
             for attempt_index in 0..state.db_sqlite_lock_retry_max {
                 state.db_sqlite_lock_retry_attempts_total =
                     state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
-                let delay_ms = state
-                    .db_sqlite_lock_retry_delay_ms
-                    .saturating_mul((attempt_index as u64).saturating_add(1));
+                let delay_ms = lasm_sqlite_lock_retry_backoff_ms(
+                    state.db_sqlite_lock_retry_delay_ms,
+                    attempt_index,
+                );
                 if delay_ms > 0 {
                     std::thread::sleep(Duration::from_millis(delay_ms));
                 }
@@ -274,7 +279,24 @@ where
                     Err(message) => return Err(message),
                 }
             }
-            Err(latest_message)
+            state.db_records_sqlite_connection = None;
+            let reconnect_retry = {
+                let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+                run(connection)
+            };
+            match reconnect_retry {
+                Ok(value) => {
+                    state.db_sqlite_lock_retry_success_total =
+                        state.db_sqlite_lock_retry_success_total.saturating_add(1);
+                    Ok(value)
+                }
+                Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => Err(
+                    format!(
+                        "{error_prefix} failed: {latest_message}; retry after reconnect failed: {message}"
+                    ),
+                ),
+                Err(message) => Err(message),
+            }
         }
         Err(message) if is_lasm_sqlite_runtime_non_retryable_param_error(message.as_str()) => {
             Err(message)
@@ -572,8 +594,9 @@ pub(crate) fn run_lasm_sqlite_query_one(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_lasm_sqlite_query_params, resolve_lasm_sqlite_named_param_bindings,
-        validate_lasm_sqlite_parameter_arity, LasmSqliteQueryParams,
+        lasm_sqlite_lock_retry_backoff_ms, parse_lasm_sqlite_query_params,
+        resolve_lasm_sqlite_named_param_bindings, validate_lasm_sqlite_parameter_arity,
+        LasmSqliteQueryParams,
     };
     use rusqlite::types::Value as SqliteValue;
     use rusqlite::Connection;
@@ -652,6 +675,14 @@ mod tests {
         let error = parse_lasm_sqlite_query_params("{\":name\":\"alice\",\"name\":\"bob\"}")
             .expect_err("duplicate normalized named keys should fail");
         assert!(error.contains("sqlite params object contains duplicate normalized key `name`"));
+    }
+
+    #[test]
+    fn sqlite_lock_retry_backoff_scales_linearly() {
+        assert_eq!(lasm_sqlite_lock_retry_backoff_ms(0, 0), 0);
+        assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 0), 5);
+        assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 1), 10);
+        assert_eq!(lasm_sqlite_lock_retry_backoff_ms(5, 2), 15);
     }
 
     #[test]
