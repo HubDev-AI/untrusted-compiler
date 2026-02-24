@@ -249,11 +249,14 @@ where
         Ok(value) => Ok(value),
         Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
             let mut latest_message = message;
-            for _ in 0..state.db_sqlite_lock_retry_max {
+            for attempt_index in 0..state.db_sqlite_lock_retry_max {
                 state.db_sqlite_lock_retry_attempts_total =
                     state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
-                if state.db_sqlite_lock_retry_delay_ms > 0 {
-                    std::thread::sleep(Duration::from_millis(state.db_sqlite_lock_retry_delay_ms));
+                let delay_ms = state
+                    .db_sqlite_lock_retry_delay_ms
+                    .saturating_mul((attempt_index as u64).saturating_add(1));
+                if delay_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(delay_ms));
                 }
                 let retry = {
                     let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
