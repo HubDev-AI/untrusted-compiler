@@ -252,7 +252,7 @@ where
     match first {
         Ok(value) => Ok(value),
         Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
-            let mut latest_message = message;
+            let _ = message;
             for attempt_index in 0..state.db_sqlite_lock_retry_max {
                 state.db_sqlite_lock_retry_attempts_total =
                     state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
@@ -273,9 +273,7 @@ where
                             state.db_sqlite_lock_retry_success_total.saturating_add(1);
                         return Ok(value);
                     }
-                    Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
-                        latest_message = message;
-                    }
+                    Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {}
                     Err(message) => return Err(message),
                 }
             }
@@ -290,11 +288,38 @@ where
                         state.db_sqlite_lock_retry_success_total.saturating_add(1);
                     Ok(value)
                 }
-                Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => Err(
-                    format!(
-                        "{error_prefix} failed: {latest_message}; retry after reconnect failed: {message}"
-                    ),
-                ),
+                Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
+                    let mut reconnect_latest_message = message;
+                    for attempt_index in 0..state.db_sqlite_lock_retry_max {
+                        state.db_sqlite_lock_retry_attempts_total =
+                            state.db_sqlite_lock_retry_attempts_total.saturating_add(1);
+                        let delay_ms = lasm_sqlite_lock_retry_backoff_ms(
+                            state.db_sqlite_lock_retry_delay_ms,
+                            attempt_index,
+                        );
+                        if delay_ms > 0 {
+                            std::thread::sleep(Duration::from_millis(delay_ms));
+                        }
+                        let retry = {
+                            let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+                            run(connection)
+                        };
+                        match retry {
+                            Ok(value) => {
+                                state.db_sqlite_lock_retry_success_total =
+                                    state.db_sqlite_lock_retry_success_total.saturating_add(1);
+                                return Ok(value);
+                            }
+                            Err(message) if is_lasm_sqlite_runtime_lock_error(message.as_str()) => {
+                                reconnect_latest_message = message;
+                            }
+                            Err(message) => return Err(message),
+                        }
+                    }
+                    Err(format!(
+                        "{error_prefix} failed after reconnect lock retries: {reconnect_latest_message}"
+                    ))
+                }
                 Err(message) => Err(message),
             }
         }
