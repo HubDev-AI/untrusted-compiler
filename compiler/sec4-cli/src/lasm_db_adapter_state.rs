@@ -136,6 +136,33 @@ fn has_lasm_postgres_connect_timeout(dsn: &str) -> bool {
     compact.contains("connect_timeout=")
 }
 
+fn redact_lasm_postgres_dsn_password(dsn: &str) -> String {
+    let trimmed = dsn.trim();
+    for scheme in ["postgres://", "postgresql://"] {
+        if let Some(rest) = trimmed.strip_prefix(scheme) {
+            let Some(at_index) = rest.find('@') else {
+                continue;
+            };
+            let auth = &rest[..at_index];
+            let Some(colon_index) = auth.find(':') else {
+                continue;
+            };
+            let user = &auth[..colon_index];
+            let tail = &rest[at_index + 1..];
+            return format!("{scheme}{user}:***@{tail}");
+        }
+    }
+    trimmed.to_string()
+}
+
+fn redact_lasm_postgres_connect_error_message(message: String, connect_dsn: &str) -> String {
+    let redacted_dsn = redact_lasm_postgres_dsn_password(connect_dsn);
+    if redacted_dsn == connect_dsn {
+        return message;
+    }
+    message.replace(connect_dsn, redacted_dsn.as_str())
+}
+
 fn split_lasm_postgres_dsn_fragment(dsn: &str) -> (&str, Option<&str>) {
     if let Some((base, fragment)) = dsn.split_once('#') {
         (base, Some(fragment))
@@ -189,24 +216,34 @@ fn connect_lasm_dynamic_db_records_postgres_client(
     tls_mode: LasmDbPostgresTlsMode,
 ) -> Result<PostgresClient, String> {
     match tls_mode {
-        LasmDbPostgresTlsMode::Disable => PostgresClient::connect(connect_dsn, NoTls)
-            .map_err(|err| {
-                format!("could not connect LASM dynamic postgres records store: {err} ({err:?})")
-            }),
+        LasmDbPostgresTlsMode::Disable => {
+            PostgresClient::connect(connect_dsn, NoTls).map_err(|err| {
+                let detail = redact_lasm_postgres_connect_error_message(
+                    format!("{err} ({err:?})"),
+                    connect_dsn,
+                );
+                format!("could not connect LASM dynamic postgres records store: {detail}")
+            })
+        }
         LasmDbPostgresTlsMode::Require => {
             let tls_connector = build_lasm_native_tls_connector().map_err(|tls_err| {
                 format!("could not connect LASM dynamic postgres records store: {tls_err}")
             })?;
             PostgresClient::connect(connect_dsn, tls_connector).map_err(|err| {
-                format!(
-                    "could not connect LASM dynamic postgres records store: {err} ({err:?})"
-                )
+                let detail = redact_lasm_postgres_connect_error_message(
+                    format!("{err} ({err:?})"),
+                    connect_dsn,
+                );
+                format!("could not connect LASM dynamic postgres records store: {detail}")
             })
         }
         LasmDbPostgresTlsMode::Auto => match PostgresClient::connect(connect_dsn, NoTls) {
             Ok(client) => Ok(client),
             Err(no_tls_err) => {
-                let no_tls_message = format!("{no_tls_err} ({no_tls_err:?})");
+                let no_tls_message = redact_lasm_postgres_connect_error_message(
+                    format!("{no_tls_err} ({no_tls_err:?})"),
+                    connect_dsn,
+                );
                 if !is_lasm_postgres_tls_required_error(no_tls_message.as_str()) {
                     return Err(format!(
                         "could not connect LASM dynamic postgres records store: {no_tls_message}"
@@ -218,8 +255,12 @@ fn connect_lasm_dynamic_db_records_postgres_client(
                     )
                 })?;
                 PostgresClient::connect(connect_dsn, tls_connector).map_err(|tls_err| {
+                    let tls_detail = redact_lasm_postgres_connect_error_message(
+                        format!("{tls_err} ({tls_err:?})"),
+                        connect_dsn,
+                    );
                     format!(
-                        "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err} ({tls_err:?})"
+                        "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_detail}"
                     )
                 })
             }
@@ -433,6 +474,7 @@ mod tests {
         lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
         parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
+        redact_lasm_postgres_connect_error_message, redact_lasm_postgres_dsn_password,
         split_lasm_postgres_dsn_fragment, LasmDbPostgresTlsMode,
     };
 
@@ -551,6 +593,31 @@ mod tests {
         assert_eq!(
             split_lasm_postgres_dsn_fragment("postgres://u:p@localhost/db"),
             ("postgres://u:p@localhost/db", None)
+        );
+    }
+
+    #[test]
+    fn redact_postgres_dsn_password_masks_url_credentials() {
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable"
+            ),
+            "postgres://sec4:***@127.0.0.1:5432/sec4_local?sslmode=disable"
+        );
+        assert_eq!(
+            redact_lasm_postgres_dsn_password("host=localhost dbname=sec4"),
+            "host=localhost dbname=sec4"
+        );
+    }
+
+    #[test]
+    fn redact_postgres_connect_error_message_replaces_embedded_dsn() {
+        let dsn = "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable";
+        let raw_message = format!("connection refused for dsn {dsn}");
+        let redacted = redact_lasm_postgres_connect_error_message(raw_message, dsn);
+        assert_eq!(
+            redacted,
+            "connection refused for dsn postgres://sec4:***@127.0.0.1:5432/sec4_local?sslmode=disable"
         );
     }
 
