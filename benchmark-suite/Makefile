@@ -17,6 +17,7 @@ BENCH_LASM_DB_ADAPTER ?=
 BENCH_LASM_DB_POSTGRES_DSN_FILE ?=
 LASM_DB_MATRIX_IMPLS ?= sec4-lasm
 LASM_DB_MATRIX_ENDPOINTS ?= db-hot-write,db-hot-write-tx,db-hot-query-one,db-records
+BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES ?= false
 BENCH_LOCAL_POSTGRES_KEEP_UP ?= false
 BENCH_LOCAL_POSTGRES_RESET ?= false
 LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
@@ -73,6 +74,7 @@ SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--warmu
 FULL_SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--saturation-warmup-path "$(LASM_CAPACITY_WARMUP_PATH)",)
 LASM_DB_ADAPTER_FLAG = $(if $(strip $(BENCH_LASM_DB_ADAPTER)),--lasm-db-adapter "$(BENCH_LASM_DB_ADAPTER)",)
 LASM_DB_POSTGRES_DSN_FILE_FLAG = $(if $(strip $(BENCH_LASM_DB_POSTGRES_DSN_FILE)),--lasm-db-postgres-dsn-file "$(BENCH_LASM_DB_POSTGRES_DSN_FILE)",)
+ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG = $(if $(filter true,$(BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES)),--reset-db-between-phases,)
 BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG = $(if $(filter true,$(BENCH_LOCAL_POSTGRES_KEEP_UP)),--keep-up,)
 BENCH_LOCAL_POSTGRES_RESET_FLAG = $(if $(filter true,$(BENCH_LOCAL_POSTGRES_RESET)),--reset-db,)
 
@@ -104,6 +106,7 @@ help:
 	@echo "  bench-full-lasm-postgres-dry Print full LASM postgres suite command plan"
 	@echo "  bench-alpha-postgres-suite Run standardized two-phase baseline+DB-hot postgres comparison suite"
 	@echo "  bench-alpha-postgres-suite-dry Print standardized two-phase postgres comparison suite command plan"
+	@echo "    - set BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true to reset Postgres benchmark tables before DB-hot phase"
 	@echo "  bench-alpha-postgres-suite-local Run standardized postgres suite with repo local postgres infra orchestration"
 	@echo "  bench-alpha-postgres-suite-local-dry Print local-infra postgres suite command plan without docker start/stop"
 	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars incl PROFILE/WARMUP_PATH); set FULL_LASM_INCLUDE_MODE_COMPARE=true to add mode compare lane"
@@ -206,16 +209,16 @@ bench-full-lasm-postgres-dry:
 	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
 
 bench-alpha-postgres-suite:
-	scripts/run_alpha_postgres_comparison_suite.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_alpha_postgres_comparison_suite.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
 
 bench-alpha-postgres-suite-dry:
-	scripts/run_alpha_postgres_comparison_suite.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_alpha_postgres_comparison_suite.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
 
 bench-alpha-postgres-suite-local:
-	scripts/run_alpha_postgres_comparison_suite_local.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_alpha_postgres_comparison_suite_local.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
 
 bench-alpha-postgres-suite-local-dry:
-	scripts/run_alpha_postgres_comparison_suite_local.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_alpha_postgres_comparison_suite_local.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
 
 bench-full-saturation:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
