@@ -1494,5 +1494,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1522-m39-lasm-db-required-params-marker-hardening.md`
 - `1523-m39-lasm-db-op-count-marker-parse-and-min-bound-hardening.md`
 - `1524-m39-lasm-db-empty-params-marker-payload-rejection.md`
+- `1525-m39-lasm-db-indexed-markers-require-op-count.md`
 
 As milestones progress, chapters will be added and linked from this index.

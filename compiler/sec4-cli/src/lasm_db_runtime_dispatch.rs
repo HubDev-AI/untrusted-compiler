@@ -444,6 +444,40 @@ fn persist_lasm_db_record_with_capacity_guard(
     }
 }
 
+fn is_lasm_internal_db_indexed_header_name(header_name: &str, base_name: &str) -> bool {
+    if header_name.len() <= base_name.len() + 1 {
+        return false;
+    }
+    if !header_name[..base_name.len()].eq_ignore_ascii_case(base_name) {
+        return false;
+    }
+    if header_name.as_bytes()[base_name.len()] != b'-' {
+        return false;
+    }
+    let suffix = &header_name[(base_name.len() + 1)..];
+    !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn response_has_lasm_internal_db_indexed_headers(response: &sec4_core::HttpResponse) -> bool {
+    const INDEXED_BASE_HEADERS: [&str; 7] = [
+        LASM_INTERNAL_DB_OP_HEADER,
+        LASM_INTERNAL_DB_HANDLE_HEADER,
+        LASM_INTERNAL_DB_TEMPLATE_HEADER,
+        LASM_INTERNAL_DB_PARAMS_HEADER,
+        LASM_INTERNAL_DB_TX_HEADER,
+        LASM_INTERNAL_DB_TX_DB_HEADER,
+        LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    ];
+    for header_name in response.headers.keys() {
+        for base_name in INDEXED_BASE_HEADERS {
+            if is_lasm_internal_db_indexed_header_name(header_name.as_str(), base_name) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub(crate) fn apply_lasm_internal_db_operation_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
@@ -488,6 +522,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     } else {
         0
     };
+    if operation_count == 0 && response_has_lasm_internal_db_indexed_headers(response) {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.OPERATION_INVALID",
+                "validation",
+                "indexed internal db operation markers require operation count marker",
+                400,
+                trace_id,
+            ),
+        );
+        return true;
+    }
     if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
         set_lasm_json_response(
             response,
@@ -1902,11 +1950,12 @@ fn materialize_lasm_internal_header_value(
 mod tests {
     use super::apply_lasm_internal_db_operation_materialization;
     use crate::{
-        LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest,
-        LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
-        LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
-        LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-        LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+        lasm_internal_db_indexed_header, LasmDbRecord, LasmDbRecordsAdapter,
+        LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
+        LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
+        LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+        LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER,
+        LASM_INTERNAL_DB_TX_HEADER,
     };
     use std::collections::BTreeMap;
     use std::sync::Mutex;
@@ -2008,6 +2057,38 @@ mod tests {
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
         assert!(body.contains("\"code\":\"DB.OPERATION_INVALID\""));
         assert!(body.contains("internal db operation sequence marker value must be >= 2"));
+    }
+
+    #[test]
+    fn rejects_indexed_internal_db_markers_without_operation_count() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            lasm_internal_db_indexed_header(LASM_INTERNAL_DB_OP_HEADER, 0),
+            "exec".to_string(),
+        );
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "indexed markers without op-count should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.OPERATION_INVALID\""));
+        assert!(
+            body.contains("indexed internal db operation markers require operation count marker")
+        );
     }
 
     #[test]
