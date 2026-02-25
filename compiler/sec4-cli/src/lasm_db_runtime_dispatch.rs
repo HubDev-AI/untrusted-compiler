@@ -985,6 +985,20 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
                 );
+            if tx_db_source.is_some() && tx_handle_raw.is_some() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let template = template.trim().to_string();
             let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
             if !enforce_lasm_db_params_max_entries(
@@ -1784,6 +1798,7 @@ mod tests {
         LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest,
         LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
         LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+        LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
     };
     use std::collections::BTreeMap;
     use std::sync::Mutex;
@@ -1944,5 +1959,47 @@ mod tests {
                 .contains_key(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER),
             "internal row schema marker should not survive response materialization"
         );
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_ambiguous_dual_transaction_sources() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), "1".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), "2".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "ambiguous execTx tx-source markers should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
+        assert!(body.contains("either tx handle or db.tx(dbCap) source, not both"));
     }
 }
