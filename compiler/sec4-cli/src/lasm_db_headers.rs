@@ -8,6 +8,7 @@ pub(crate) const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 pub(crate) const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
 pub(crate) const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 pub(crate) const LASM_INTERNAL_DB_OP_COUNT_HEADER: &str = "X-Sec4-Internal-Db-Op-Count";
+pub(crate) const LASM_INTERNAL_DB_OP_SEQUENCE_MAX: usize = 64;
 
 pub(crate) fn lasm_internal_db_indexed_header(header_name: &str, index: usize) -> String {
     format!("{header_name}-{index}")

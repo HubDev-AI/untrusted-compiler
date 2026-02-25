@@ -89,8 +89,9 @@ use lasm_db_config::load_lasm_db_postgres_dsn_from_file;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, lasm_internal_db_indexed_header,
     LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
-    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_OP_SEQUENCE_MAX, LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 pub(crate) use lasm_dynamic_state::{
@@ -931,45 +932,63 @@ fn cmd_lasm_smoke(
     let mut runtime_route_method = method.trim().to_ascii_uppercase();
     let mut runtime_route_path = route.to_string();
     let mut route_registrations = Vec::<(String, String, sec4_core::HttpResponse)>::new();
-    let response_origin =
-        match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
-            Some(route_plan) => {
-                runtime_route_method = route_plan.route_method.clone();
-                runtime_route_path = route_plan.route_path.clone();
-                let mut response =
-                    sec4_core::HttpResponse::text(route_plan.status, route_plan.body);
-                response.headers = route_plan.headers;
-                route_registrations.push((
-                    runtime_route_method.clone(),
-                    runtime_route_path.clone(),
-                    response,
-                ));
-                format!("handler:{}", route_plan.handler_name)
+    let response_origin = match resolve_lasm_smoke_route_plan(
+        &program,
+        entry.name.as_str(),
+        method,
+        route,
+    ) {
+        Some(route_plan) => {
+            let operation_count = route_plan
+                .headers
+                .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
+                .and_then(|value| value.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+            if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+                eprintln!(
+                        "lasm-smoke failed: route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
+                        route_plan.route_method,
+                        route_plan.route_path,
+                        operation_count,
+                        LASM_INTERNAL_DB_OP_SEQUENCE_MAX
+                    );
+                return Err(1);
             }
-            None => {
-                let allowed_methods =
-                    resolve_lasm_smoke_allowed_methods(&program, entry.name.as_str(), route);
-                if let Some(allowed_methods) = allowed_methods {
-                    let selected_has_match = allowed_methods
-                        .iter()
-                        .any(|candidate| candidate == &runtime_route_method);
-                    if !selected_has_match {
-                        for allowed_method in allowed_methods {
-                            route_registrations.push((
-                                allowed_method,
-                                route.to_string(),
-                                sec4_core::HttpResponse::text(200, ""),
-                            ));
-                        }
-                        "method-mismatch".to_string()
-                    } else {
-                        "route-miss".to_string()
+            runtime_route_method = route_plan.route_method.clone();
+            runtime_route_path = route_plan.route_path.clone();
+            let mut response = sec4_core::HttpResponse::text(route_plan.status, route_plan.body);
+            response.headers = route_plan.headers;
+            route_registrations.push((
+                runtime_route_method.clone(),
+                runtime_route_path.clone(),
+                response,
+            ));
+            format!("handler:{}", route_plan.handler_name)
+        }
+        None => {
+            let allowed_methods =
+                resolve_lasm_smoke_allowed_methods(&program, entry.name.as_str(), route);
+            if let Some(allowed_methods) = allowed_methods {
+                let selected_has_match = allowed_methods
+                    .iter()
+                    .any(|candidate| candidate == &runtime_route_method);
+                if !selected_has_match {
+                    for allowed_method in allowed_methods {
+                        route_registrations.push((
+                            allowed_method,
+                            route.to_string(),
+                            sec4_core::HttpResponse::text(200, ""),
+                        ));
                     }
+                    "method-mismatch".to_string()
                 } else {
                     "route-miss".to_string()
                 }
+            } else {
+                "route-miss".to_string()
             }
-        };
+        }
+    };
     for (registration_method, registration_path, registration_response) in route_registrations {
         if let Err(message) = runtime.register_route(
             registration_method.as_str(),
@@ -1541,6 +1560,25 @@ fn collect_lasm_route_plans(
     }
 
     plans
+}
+
+fn validate_lasm_route_db_operation_sequence_limits(
+    routes: &[LasmRunRoutePlan],
+) -> Result<(), String> {
+    for route in routes {
+        let operation_count = route
+            .headers
+            .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+            return Err(format!(
+                "route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
+                route.method, route.path, operation_count, LASM_INTERNAL_DB_OP_SEQUENCE_MAX
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn resolve_lasm_smoke_route_plan(
@@ -8808,6 +8846,10 @@ fn cmd_run_lasm_backend(
             "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
             entry.name
         );
+        return Err(1);
+    }
+    if let Err(message) = validate_lasm_route_db_operation_sequence_limits(routes.as_slice()) {
+        eprintln!("run failed: {message}");
         return Err(1);
     }
     let listen_port = port.unwrap_or(8080);
