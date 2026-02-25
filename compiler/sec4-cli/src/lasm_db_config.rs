@@ -71,6 +71,26 @@ pub(crate) fn resolve_lasm_dynamic_db_tx_max_handles(
     Ok(parsed)
 }
 
+fn resolve_lasm_db_postgres_dsn_from_file_contents(
+    source: &str,
+    raw_contents: &str,
+) -> Result<String, String> {
+    let mut dsn: Option<String> = None;
+    for line in raw_contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if dsn.is_some() {
+            return Err(format!(
+                "{source} must contain exactly one DSN line (excluding comments/blank lines)"
+            ));
+        }
+        dsn = Some(trimmed.to_string());
+    }
+    dsn.ok_or_else(|| format!("{source} must contain a non-empty DSN"))
+}
+
 pub(crate) fn load_lasm_db_postgres_dsn_from_file(path: &Path) -> Result<String, String> {
     let raw = fs::read_to_string(path).map_err(|err| {
         format!(
@@ -78,14 +98,10 @@ pub(crate) fn load_lasm_db_postgres_dsn_from_file(path: &Path) -> Result<String,
             path.display()
         )
     })?;
-    let dsn = raw.trim().to_string();
-    if dsn.is_empty() {
-        return Err(format!(
-            "--db-postgres-dsn-file `{}` must contain a non-empty DSN",
-            path.display()
-        ));
-    }
-    Ok(dsn)
+    resolve_lasm_db_postgres_dsn_from_file_contents(
+        format!("--db-postgres-dsn-file `{}`", path.display()).as_str(),
+        raw.as_str(),
+    )
 }
 
 pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
@@ -134,13 +150,10 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
                 file_path.display()
             )
         })?;
-        let dsn = dsn.trim().to_string();
-        if dsn.is_empty() {
-            return Err(format!(
-                "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}` must contain a non-empty DSN",
-                file_path.display()
-            ));
-        }
+        let dsn = resolve_lasm_db_postgres_dsn_from_file_contents(
+            format!("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}`", file_path.display()).as_str(),
+            dsn.as_str(),
+        )?;
         return Ok(Some(dsn));
     }
     Err("db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string())
@@ -151,5 +164,33 @@ pub(crate) fn lasm_db_records_adapter_label(adapter: LasmDbRecordsAdapter) -> &'
         LasmDbRecordsAdapter::RecordsLog => "records.log",
         LasmDbRecordsAdapter::Sqlite => "sqlite",
         LasmDbRecordsAdapter::Postgres => "postgres",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_lasm_db_postgres_dsn_from_file_contents;
+
+    #[test]
+    fn postgres_dsn_file_contents_allow_comments_and_blank_lines() {
+        let parsed = resolve_lasm_db_postgres_dsn_from_file_contents(
+            "dsn-source",
+            "\n# comment\npostgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable\n",
+        )
+        .expect("dsn contents should parse");
+        assert_eq!(
+            parsed,
+            "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn postgres_dsn_file_contents_reject_multiple_non_comment_lines() {
+        let error = resolve_lasm_db_postgres_dsn_from_file_contents(
+            "dsn-source",
+            "postgres://first\npostgres://second\n",
+        )
+        .expect_err("multiple DSN lines should fail");
+        assert!(error.contains("must contain exactly one DSN line"));
     }
 }
