@@ -93,6 +93,16 @@ Checkpoint criteria for continuing this execution mode:
 3. Main branch CI stays green for at least 10 consecutive days.
 4. No alpha-critical runtime/compiler placeholder paths remain.
 
+## Alpha Priority Sequencing Lock (2026-02-25)
+
+Execution order is now fixed to avoid scope drift:
+
+1. Close strict no-stub alpha functionality checklist first (runtime/compiler behavior criteria in this roadmap).
+2. After that closure, complete full LASM DB client implementation on the intrinsic runtime path.
+3. After full DB client completion, implement `M39-S2` Composition Contract Analyzer.
+4. Defer performance-tuning feature work (including 1M req/s optimization campaign) until after `M39-S2` completion.
+5. Before step 4, only allow performance changes that are required for deterministic correctness/stability.
+
 ## Backend Engine Transition Lock (2026-02-17)
 
 This section resolves backend-engine direction explicitly.
@@ -236,7 +246,7 @@ Post-alpha track acceptance anchors:
 
 ### M39-S2 tracking (live status)
 
-- [ ] Deferred until post-alpha scope window unless promotion pipeline is blocked by missing analyzer guarantees.
+- [ ] Deferred by sequencing lock until after strict no-stub alpha functionality closure and full LASM DB client completion.
 - [ ] Composition contract analyzer implemented.
 - [ ] Fixture coverage added for pass/fail composition graphs.
 - [ ] Book chapter documenting S2 implementation added.
@@ -1893,7 +1903,7 @@ Post-alpha track acceptance anchors:
       - autoscale snapshot refresh helper now returns a change flag and bumps a shared worker-port generation only when topology changes,
       - relay worker loop and status writer loop now check generation first and avoid no-op `ArcSwap` snapshot loads when worker ports are unchanged.
       - documented in `docs/book/1490-m39-lasm-worker-port-generation-gated-snapshot-loads.md`.
-   - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
+   - [ ] Deferred by sequencing lock: performance-tuning feature work (including 1M req/s campaign) resumes only after `M39-S2` Composition Contract Analyzer is completed; correctness/stability-critical performance fixes may proceed before that.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,
