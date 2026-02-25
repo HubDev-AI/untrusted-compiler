@@ -1482,5 +1482,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`
 - `1511-m39-lasm-postgres-connect-error-detail-diagnostics.md`
 - `1512-m39-local-postgres-startup-credential-verification.md`
+- `1513-m39-local-postgres-artifact-ignore-rules.md`
 
 As milestones progress, chapters will be added and linked from this index.

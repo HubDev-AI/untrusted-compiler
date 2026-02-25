@@ -2280,6 +2280,9 @@ Post-alpha track acceptance anchors:
       - `infra/local-postgres/scripts/up.sh` now executes a real credentialed SQL probe (`select 1`) after container health checks, so stale `./data` initialized with different `POSTGRES_USER`/`POSTGRES_DB` fails fast instead of surfacing later as runtime `db error`,
       - mismatch failure now emits deterministic reset guidance (`infra/local-postgres/scripts/reset.sh`) for operator recovery.
       - documented in `docs/book/1512-m39-local-postgres-startup-credential-verification.md`.
+   - [x] Added repo-level ignore rules for local Postgres runtime artifacts:
+      - `.gitignore` now ignores `infra/local-postgres/.env` and `infra/local-postgres/data/` so local benchmark/infra runs do not pollute branch status with generated files.
+      - documented in `docs/book/1513-m39-local-postgres-artifact-ignore-rules.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
