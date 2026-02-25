@@ -72,24 +72,28 @@ Measure end-to-end service behavior across identical implementations:
 13. Run full combined suite (fixed + step + combined publish):
    - `make -C benchmark-suite bench-full-dry`
    - `make -C benchmark-suite bench-full`
-14. Run sec4 capacity probe (1M-request threshold + peak RSS):
+14. Run standardized Postgres comparison suite (baseline + DB hot-path snapshots):
+   - `make -C benchmark-suite bench-alpha-postgres-suite-dry BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+   - `make -C benchmark-suite bench-alpha-postgres-suite BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+   - writes summary: `benchmark-suite/results/summaries/alpha-postgres-comparison-suite.json`
+15. Run sec4 capacity probe (1M-request threshold + peak RSS):
    - `make -C benchmark-suite sec4-capacity-probe`
    - override endpoint and target requests:
      - `make -C benchmark-suite sec4-capacity-probe CAPACITY_ENDPOINT=ping CAPACITY_TARGET_REQUESTS=1000000`
-15. Run sec4 LASM cluster capacity probe (1M-request threshold + peak RSS):
+16. Run sec4 LASM cluster capacity probe (1M-request threshold + peak RSS):
    - `make -C benchmark-suite lasm-cluster-capacity-probe`
    - override project and target requests:
      - `make -C benchmark-suite lasm-cluster-capacity-probe LASM_CAPACITY_PROJECT_PATH=examples/lasm-alpha-full LASM_CAPACITY_TARGET_REQUESTS=1000000`
-16. Build deterministic artifact manifest:
+17. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
-17. Verify benchmark bundle completeness:
+18. Verify benchmark bundle completeness:
    - `make -C benchmark-suite verify-bundle IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
-18. Validate benchmark helper scripts:
+19. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-19. Validate cross-impl service contract parity:
+20. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-20. Stop DB:
+21. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -120,6 +124,9 @@ Measure end-to-end service behavior across identical implementations:
 - Matrix/step/full orchestrators accept LASM runtime DB mode wiring:
   - `--lasm-db-adapter records-log|sqlite|postgres`
   - `--lasm-db-postgres-dsn-file /abs/path/to/postgres.dsn` (or `SEC4_RT_LASM_DB_POSTGRES_DSN`)
+- `run_alpha_postgres_comparison_suite.sh` executes two deterministic phases (baseline + db-hot) and snapshots each phase to stable artifact suffixes:
+  - `*-alpha-base.*`
+  - `*-alpha-db-postgres.*`
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.
