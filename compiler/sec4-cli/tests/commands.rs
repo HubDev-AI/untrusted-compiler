@@ -29968,6 +29968,90 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_resolves_relative_postgres_dsn_file_env_from_project_path() {
+    let project_dir = temp_dir("sec4-run-command-db-adapter-postgres-relative-dsn-file-env");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresrelativedsnfileenvcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    let dsn_file_name = "dsn-relative-env-project.txt";
+    let dsn_file_path = project_dir.join(dsn_file_name);
+    fs::write(&dsn_file_path, "   \n").expect("dsn file should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", dsn_file_name)
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail after resolving project-relative env dsn-file because file content is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+            && stderr.contains("must contain a non-empty DSN"),
+        "stderr should contain deterministic empty env dsn-file guidance:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains(
+            "could not read SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `dsn-relative-env-project.txt`"
+        ),
+        "stderr should not report unresolved cwd-relative env dsn-file when project-relative file exists:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_overflow_probe_timeout_ms_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-overflow-probe-timeout-c-backend");
     let project_path = project_dir

@@ -1041,6 +1041,7 @@ fn cmd_lasm_smoke(
     let mut first_error_code = None;
     let mut first_error_kind = None;
     let smoke_dynamic_state = match build_lasm_dynamic_response_state(
+        Some(path),
         db_base,
         db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
         db_postgres_dsn,
@@ -8602,6 +8603,7 @@ fn cmd_run_lasm_backend(
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
     let dynamic_state = Arc::new(Mutex::new(
         build_lasm_dynamic_response_state(
+            Some(path),
             db_base,
             db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
             explicit_db_postgres_dsn.as_deref(),

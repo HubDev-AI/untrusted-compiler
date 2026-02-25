@@ -91,6 +91,7 @@ pub(crate) fn load_lasm_db_postgres_dsn_from_file(path: &Path) -> Result<String,
 pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
     adapter: LasmDbRecordsAdapter,
     explicit_dsn: Option<&str>,
+    project_path: Option<&Path>,
 ) -> Result<Option<String>, String> {
     if adapter != LasmDbRecordsAdapter::Postgres {
         return Ok(None);
@@ -118,7 +119,15 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
         if file_path_value.is_empty() {
             return Err("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE must not be empty".to_string());
         }
-        let file_path = PathBuf::from(file_path_value);
+        let mut file_path = PathBuf::from(file_path_value);
+        if file_path.is_relative() && !file_path.exists() {
+            if let Some(project_path) = project_path {
+                let candidate = project_path.join(file_path.as_path());
+                if candidate.exists() {
+                    file_path = candidate;
+                }
+            }
+        }
         let dsn = fs::read_to_string(&file_path).map_err(|err| {
             format!(
                 "could not read SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}`: {err}",
