@@ -2202,6 +2202,11 @@ Post-alpha track acceptance anchors:
       - LASM runtime dispatch and `lasm-smoke` now enforce the same max-sequence bound for internal DB marker execution,
       - over-limit handlers emit deterministic validation diagnostics instead of degraded runtime behavior.
       - documented in `docs/book/1492-m39-lasm-db-operation-sequence-limit-guard.md`.
+   - [x] Added sequence-local tx-handle reuse for multi-op `db.execTx` flows:
+      - LASM runtime dispatch now reuses one tx handle across sequence operations when repeated `execTx` steps resolve from the same `db.tx(dbCap)` source,
+      - retained sequence tx handles are deterministically cleaned after sequence completion (including failure paths),
+      - preserves single-op `execTx` behavior while enabling deterministic multi-op tx semantics.
+      - documented in `docs/book/1493-m39-lasm-db-multi-op-exectx-sequence-tx-reuse.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
