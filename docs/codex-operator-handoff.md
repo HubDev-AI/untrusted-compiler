@@ -61,6 +61,7 @@ Current runtime status:
 - `DbListRecordsResponse` now resolves via internal DB operation marker (`listRecords`) in route planning/runtime dispatch rather than schema-switch-only materialization.
 - Runtime now rejects invalid internal DB markers deterministically (`DB.OPERATION_INVALID`).
 - Multi-op DB handlers now execute deterministic ordered intrinsic operation sequences on LASM runtime dispatch (stop-on-first-error with deterministic envelope behavior).
+- DB operation sequence size is now bounded deterministically (`max 64 operations/handler`) in route planning/runtime guards.
 
 Remaining full-client work focuses on adapter extraction/package boundaries and parity hardening without changing language contracts.
 

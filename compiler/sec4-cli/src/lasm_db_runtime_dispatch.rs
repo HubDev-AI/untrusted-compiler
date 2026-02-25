@@ -22,9 +22,9 @@ use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
     lasm_internal_db_indexed_header, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
     LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
-    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX,
+    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -425,6 +425,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER)
             .and_then(|value| value.trim().parse::<usize>().ok())
             .unwrap_or(0);
+    if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.OPERATION_INVALID",
+                "validation",
+                "db operation sequence exceeds maximum supported operations per handler",
+                400,
+                trace_id,
+            ),
+        );
+        return true;
+    }
     if operation_count > 1 {
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(

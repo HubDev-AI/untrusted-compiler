@@ -2197,6 +2197,11 @@ Post-alpha track acceptance anchors:
       - LASM runtime dispatch now executes multi-op DB sequences in-order and stops on first deterministic failure envelope,
       - removes startup-time multi-op route rejection while preserving deterministic invalid-marker validation.
       - documented in `docs/book/1491-m39-lasm-db-multi-operation-sequence-dispatch.md`.
+   - [x] Added deterministic per-handler DB operation-sequence limit guard:
+      - LASM route planning/run validation now fails fast when a handler resolves more than `64` DB intrinsic operations,
+      - LASM runtime dispatch and `lasm-smoke` now enforce the same max-sequence bound for internal DB marker execution,
+      - over-limit handlers emit deterministic validation diagnostics instead of degraded runtime behavior.
+      - documented in `docs/book/1492-m39-lasm-db-operation-sequence-limit-guard.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
