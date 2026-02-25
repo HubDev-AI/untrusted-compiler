@@ -2323,6 +2323,10 @@ Post-alpha track acceptance anchors:
       - LASM DB runtime now rejects empty/whitespace internal SQL params marker payloads for `exec`, `execTx`, and `queryOne`,
       - empty params payloads now fail deterministically with operation-specific validation envelopes and message `sql.q params payload is required`.
       - documented in `docs/book/1524-m39-lasm-db-empty-params-marker-payload-rejection.md`.
+   - [x] Hardened indexed-marker contract for DB operation-sequence mode:
+      - LASM DB runtime now rejects indexed internal DB markers when operation-count marker is absent,
+      - malformed indexed-without-count marker sets now fail deterministically with `DB.OPERATION_INVALID` instead of falling back to single-operation parsing.
+      - documented in `docs/book/1525-m39-lasm-db-indexed-markers-require-op-count.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
