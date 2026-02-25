@@ -19,11 +19,12 @@ use crate::lasm_db_runtime_sqlite::{
     run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
 };
 use crate::{
-    append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
-    set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
-    LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
+    lasm_internal_db_indexed_header, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
+    LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
+    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -425,20 +426,135 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             .and_then(|value| value.trim().parse::<usize>().ok())
             .unwrap_or(0);
     if operation_count > 1 {
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                "DB.MULTI_OP_UNSUPPORTED",
-                "validation",
-                "multiple DB intrinsic operations in a single handler are not supported yet",
-                400,
+        for index in 0..operation_count {
+            let Some(raw_operation) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_OP_HEADER,
+                index,
+            ) else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.OPERATION_INVALID",
+                        "validation",
+                        "missing internal db operation marker for operation sequence",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+
+            response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+            response
+                .headers
+                .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), raw_operation);
+            if let Some(value) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_HANDLE_HEADER,
+                index,
+            ) {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), value);
+            }
+            if let Some(value) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_TEMPLATE_HEADER,
+                index,
+            ) {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(), value);
+            }
+            if let Some(value) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_PARAMS_HEADER,
+                index,
+            ) {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), value);
+            }
+            if let Some(value) =
+                take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_TX_HEADER, index)
+            {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), value);
+            }
+            if let Some(value) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_TX_DB_HEADER,
+                index,
+            ) {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
+            }
+            if let Some(value) = take_lasm_internal_header_value_indexed(
+                response,
+                LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                index,
+            ) {
+                response
+                    .headers
+                    .insert(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(), value);
+            }
+
+            if !apply_lasm_internal_db_operation_materialization_single(
+                response,
+                request,
+                path_params,
+                dynamic_state,
+                db_records_adapter,
                 trace_id,
-            ),
-        );
+            ) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.OPERATION_INVALID",
+                        "validation",
+                        "missing internal db operation marker",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
+            if response.status >= 400 {
+                return true;
+            }
+        }
         return true;
     }
 
+    apply_lasm_internal_db_operation_materialization_single(
+        response,
+        request,
+        path_params,
+        dynamic_state,
+        db_records_adapter,
+        trace_id,
+    )
+}
+
+fn apply_lasm_internal_db_operation_materialization_single(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    trace_id: &str,
+) -> bool {
     let Some(raw_operation) = take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_HEADER)
     else {
         return false;
@@ -1468,6 +1584,16 @@ fn take_lasm_internal_header_value(
     header_name: &str,
 ) -> Option<String> {
     let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
+    response.headers.remove(&key)
+}
+
+fn take_lasm_internal_header_value_indexed(
+    response: &mut sec4_core::HttpResponse,
+    header_name: &str,
+    index: usize,
+) -> Option<String> {
+    let indexed = lasm_internal_db_indexed_header(header_name, index);
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, indexed.as_str())?;
     response.headers.remove(&key)
 }
 

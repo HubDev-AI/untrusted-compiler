@@ -2192,6 +2192,11 @@ Post-alpha track acceptance anchors:
       - allocation now probes for vacant positive tx handles starting from `next_db_tx_handle` and wraps from `i64::MAX` back to `1`,
       - avoids handle overwrite risk under long-lived runtimes where handle counter approaches bounds or sparse handle sets are reused.
       - documented in `docs/book/1352-m39-lasm-db-tx-handle-wrap-and-collision-safe-allocation.md`.
+   - [x] Added ordered multi-operation DB intrinsic execution for LASM route handlers:
+      - route planning now emits indexed internal DB operation headers when a handler resolves multiple DB intrinsic calls,
+      - LASM runtime dispatch now executes multi-op DB sequences in-order and stops on first deterministic failure envelope,
+      - removes startup-time multi-op route rejection while preserving deterministic invalid-marker validation.
+      - documented in `docs/book/1491-m39-lasm-db-multi-operation-sequence-dispatch.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

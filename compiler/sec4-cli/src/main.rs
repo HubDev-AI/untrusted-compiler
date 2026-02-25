@@ -87,10 +87,10 @@ use lasm_db_cli::{
 };
 use lasm_db_config::load_lasm_db_postgres_dsn_from_file;
 pub(crate) use lasm_db_headers::{
-    clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
-    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    clear_lasm_internal_db_response_markers, lasm_internal_db_indexed_header,
+    LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
+    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 pub(crate) use lasm_dynamic_state::{
@@ -1473,18 +1473,15 @@ fn collect_lasm_route_plans(
                 "1".to_string(),
             );
         }
-        let (db_operation, db_operation_count) = lasm_db_plan::extract_lasm_db_operation_with_count(
+        let db_operations = lasm_db_plan::extract_lasm_db_operations(
             &functions,
             registration.handler_name.as_str(),
         );
-        if let Some(db_operation) = db_operation {
-            lasm_db_plan::apply_lasm_db_operation_plan_headers(&mut headers, &db_operation);
-            if db_operation_count > 1 {
-                headers.insert(
-                    LASM_INTERNAL_DB_OP_COUNT_HEADER.to_string(),
-                    db_operation_count.to_string(),
-                );
-            }
+        if !db_operations.is_empty() {
+            lasm_db_plan::apply_lasm_db_operation_plan_sequence_headers(
+                &mut headers,
+                db_operations.as_slice(),
+            );
         } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str())
             .as_deref()
             == Some("DbListRecordsResponse")
@@ -1511,23 +1508,6 @@ fn collect_lasm_route_plans(
     plans
 }
 
-fn validate_lasm_route_db_operation_markers(routes: &[LasmRunRoutePlan]) -> Result<(), String> {
-    for route in routes {
-        let operation_count = route
-            .headers
-            .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
-            .and_then(|value| value.trim().parse::<usize>().ok())
-            .unwrap_or(0);
-        if operation_count > 1 {
-            return Err(format!(
-                "route {} {} resolves {} DB intrinsic operations; split into separate handlers until multi-op DB sequencing is implemented",
-                route.method, route.path, operation_count
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn resolve_lasm_smoke_route_plan(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -1547,18 +1527,13 @@ fn resolve_lasm_smoke_route_plan(
     let registration = find_latest_route_registration(&functions, entry_name, method, route)?;
     let response_plan = extract_response_plan(&functions, registration.handler_name.as_str())?;
     let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
-    let (db_operation, db_operation_count) = lasm_db_plan::extract_lasm_db_operation_with_count(
-        &functions,
-        registration.handler_name.as_str(),
-    );
-    if let Some(db_operation) = db_operation {
-        lasm_db_plan::apply_lasm_db_operation_plan_headers(&mut headers, &db_operation);
-        if db_operation_count > 1 {
-            headers.insert(
-                LASM_INTERNAL_DB_OP_COUNT_HEADER.to_string(),
-                db_operation_count.to_string(),
-            );
-        }
+    let db_operations =
+        lasm_db_plan::extract_lasm_db_operations(&functions, registration.handler_name.as_str());
+    if !db_operations.is_empty() {
+        lasm_db_plan::apply_lasm_db_operation_plan_sequence_headers(
+            &mut headers,
+            db_operations.as_slice(),
+        );
     } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str()).as_deref()
         == Some("DbListRecordsResponse")
     {
@@ -8798,10 +8773,6 @@ fn cmd_run_lasm_backend(
             "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
             entry.name
         );
-        return Err(1);
-    }
-    if let Err(message) = validate_lasm_route_db_operation_markers(routes.as_slice()) {
-        eprintln!("run failed: {message}");
         return Err(1);
     }
     let listen_port = port.unwrap_or(8080);

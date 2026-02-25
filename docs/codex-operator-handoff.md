@@ -59,9 +59,10 @@ Current runtime status:
   - `db.queryOne`
   - `db.tx` (via `db.execTx` planning/runtime path)
 - `DbListRecordsResponse` now resolves via internal DB operation marker (`listRecords`) in route planning/runtime dispatch rather than schema-switch-only materialization.
-- Runtime now rejects invalid internal DB markers deterministically (`DB.OPERATION_INVALID`) and rejects multi-op handlers deterministically (`DB.MULTI_OP_UNSUPPORTED`) to prevent silent partial execution.
+- Runtime now rejects invalid internal DB markers deterministically (`DB.OPERATION_INVALID`).
+- Multi-op DB handlers now execute deterministic ordered intrinsic operation sequences on LASM runtime dispatch (stop-on-first-error with deterministic envelope behavior).
 
-Remaining full-client work focuses on multi-op sequencing semantics and adapter extraction/package boundaries without changing language contracts.
+Remaining full-client work focuses on adapter extraction/package boundaries and parity hardening without changing language contracts.
 
 ## 5) Mandatory Workflow (All Agents)
 
