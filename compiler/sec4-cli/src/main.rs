@@ -1511,6 +1511,23 @@ fn collect_lasm_route_plans(
     plans
 }
 
+fn validate_lasm_route_db_operation_markers(routes: &[LasmRunRoutePlan]) -> Result<(), String> {
+    for route in routes {
+        let operation_count = route
+            .headers
+            .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        if operation_count > 1 {
+            return Err(format!(
+                "route {} {} resolves {} DB intrinsic operations; split into separate handlers until multi-op DB sequencing is implemented",
+                route.method, route.path, operation_count
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn resolve_lasm_smoke_route_plan(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -8781,6 +8798,10 @@ fn cmd_run_lasm_backend(
             "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
             entry.name
         );
+        return Err(1);
+    }
+    if let Err(message) = validate_lasm_route_db_operation_markers(routes.as_slice()) {
+        eprintln!("run failed: {message}");
         return Err(1);
     }
     let listen_port = port.unwrap_or(8080);
