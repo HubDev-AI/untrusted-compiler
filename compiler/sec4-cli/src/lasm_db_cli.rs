@@ -68,6 +68,7 @@ pub(crate) struct ResolvedRunDbCliOptions {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn validate_and_resolve_run_db_cli_options(
+    project_path: &Path,
     backend: RunBackend,
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
@@ -342,7 +343,16 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         }
         Some(dsn.to_string())
     } else if let Some(path) = db_postgres_dsn_file {
-        Some(load_lasm_db_postgres_dsn_from_file(path)?)
+        let mut resolved_path = path.to_path_buf();
+        if path.is_relative() && !resolved_path.exists() {
+            let candidate = project_path.join(path);
+            if candidate.exists() {
+                resolved_path = candidate;
+            }
+        }
+        Some(load_lasm_db_postgres_dsn_from_file(
+            resolved_path.as_path(),
+        )?)
     } else {
         None
     };

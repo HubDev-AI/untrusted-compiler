@@ -29766,6 +29766,50 @@ fn run_command_rejects_empty_db_postgres_dsn_file() {
 }
 
 #[test]
+fn run_command_resolves_relative_db_postgres_dsn_file_from_project_path() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-file-relative-project");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let dsn_file_name = "dsn-relative-project.txt";
+    fs::write(project_dir.join(dsn_file_name), "   \n").expect("dsn file should be written");
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-dsn-file",
+        dsn_file_name,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail after resolving relative dsn-file from project path because file content is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-dsn-file")
+            && stderr.contains("must contain a non-empty DSN"),
+        "stderr should contain deterministic empty dsn-file guidance:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("could not read --db-postgres-dsn-file `dsn-relative-project.txt`"),
+        "stderr should not report unresolved cwd-relative path when project-relative dsn file exists:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_postgres_adapter_without_dsn() {
     let project_dir = temp_dir("sec4-run-command-db-adapter-postgres-missing-dsn");
     let port = find_available_tcp_port();
