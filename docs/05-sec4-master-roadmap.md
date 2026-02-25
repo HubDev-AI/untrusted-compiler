@@ -2246,6 +2246,10 @@ Post-alpha track acceptance anchors:
       - `run_alpha_postgres_comparison_suite.sh --reset-db-between-phases` now drops benchmark DB tables before DB-hot phase execution (`sec4_lasm_db_records`, `bench_users`, `users`) to keep repeated DB-hot runs isolated,
       - dry-run output now includes explicit reset action markers.
       - documented in `docs/book/1504-m39-alpha-postgres-suite-between-phase-db-reset.md`.
+   - [x] Wired alpha-suite between-phase reset option through Make entrypoints:
+      - `BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true` now forwards `--reset-db-between-phases` through `bench-alpha-postgres-suite{,-dry}` and local-wrapper variants,
+      - helps operators keep one-command benchmark loops while toggling DB isolation mode.
+      - documented in `docs/book/1505-m39-alpha-postgres-suite-reset-flag-make-wiring.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

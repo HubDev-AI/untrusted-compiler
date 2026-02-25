@@ -77,6 +77,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-alpha-postgres-suite BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
    - optional DB cleanup between baseline/db-hot phases:
      - `benchmark-suite/scripts/run_alpha_postgres_comparison_suite.sh --reset-db-between-phases ...`
+     - or from Make targets: `BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true`
    - writes summary: `benchmark-suite/results/summaries/alpha-postgres-comparison-suite.json`
 15. Run standardized Postgres comparison suite with repo-local Postgres infra orchestration:
    - `make -C benchmark-suite bench-alpha-postgres-suite-local-dry`
