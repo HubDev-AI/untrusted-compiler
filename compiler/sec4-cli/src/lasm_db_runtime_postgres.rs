@@ -811,6 +811,9 @@ fn evict_lasm_postgres_prepared_statement(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) {
+    state.db_postgres_stale_plan_reprepare_total = state
+        .db_postgres_stale_plan_reprepare_total
+        .saturating_add(1);
     state
         .db_records_postgres_statement_cache
         .remove(query_template);

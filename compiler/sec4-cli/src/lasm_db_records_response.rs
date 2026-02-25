@@ -511,6 +511,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
         postgres_retryable_conflict_retry_max,
         postgres_retryable_conflict_retry_attempts_total,
         postgres_retryable_conflict_retry_success_total,
+        postgres_stale_plan_reprepare_total,
         sqlite_busy_timeout_ms,
         sqlite_lock_retry_max,
         sqlite_lock_retry_delay_ms,
@@ -685,6 +686,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 state.db_postgres_retryable_conflict_retry_max,
                 state.db_postgres_retryable_conflict_retry_attempts_total,
                 state.db_postgres_retryable_conflict_retry_success_total,
+                state.db_postgres_stale_plan_reprepare_total,
                 state.db_sqlite_busy_timeout_ms,
                 state.db_sqlite_lock_retry_max,
                 state.db_sqlite_lock_retry_delay_ms,
@@ -784,6 +786,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
             "dbRetries": {
                 "postgresRetryableConflictAttemptsTotal": postgres_retryable_conflict_retry_attempts_total,
                 "postgresRetryableConflictSuccessTotal": postgres_retryable_conflict_retry_success_total,
+                "postgresStalePlanReprepareTotal": postgres_stale_plan_reprepare_total,
                 "sqliteLockAttemptsTotal": sqlite_lock_retry_attempts_total,
                 "sqliteLockSuccessTotal": sqlite_lock_retry_success_total,
             },
