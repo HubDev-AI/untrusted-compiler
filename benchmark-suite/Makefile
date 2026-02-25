@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -18,6 +18,7 @@ BENCH_LASM_DB_POSTGRES_DSN_FILE ?=
 LASM_DB_MATRIX_IMPLS ?= sec4-lasm
 LASM_DB_MATRIX_ENDPOINTS ?= db-hot-write,db-hot-write-tx,db-hot-query-one,db-records
 BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES ?= false
+BENCH_ALPHA_POSTGRES_REPEAT_RUNS ?= 3
 BENCH_LOCAL_POSTGRES_KEEP_UP ?= false
 BENCH_LOCAL_POSTGRES_RESET ?= false
 LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
@@ -107,6 +108,9 @@ help:
 	@echo "  bench-alpha-postgres-suite Run standardized two-phase baseline+DB-hot postgres comparison suite"
 	@echo "  bench-alpha-postgres-suite-dry Print standardized two-phase postgres comparison suite command plan"
 	@echo "    - set BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true to reset Postgres benchmark tables before DB-hot phase"
+	@echo "  bench-alpha-postgres-suite-repeats Run standardized postgres suite repeatedly and emit aggregate run-manifest summary"
+	@echo "  bench-alpha-postgres-suite-repeats-dry Print repeated-suite command plan"
+	@echo "    - set BENCH_ALPHA_POSTGRES_REPEAT_RUNS=<n> to control repeat count (default 3)"
 	@echo "  bench-alpha-postgres-suite-local Run standardized postgres suite with repo local postgres infra orchestration"
 	@echo "  bench-alpha-postgres-suite-local-dry Print local-infra postgres suite command plan without docker start/stop"
 	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars incl PROFILE/WARMUP_PATH); set FULL_LASM_INCLUDE_MODE_COMPARE=true to add mode compare lane"
@@ -213,6 +217,12 @@ bench-alpha-postgres-suite:
 
 bench-alpha-postgres-suite-dry:
 	scripts/run_alpha_postgres_comparison_suite.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
+
+bench-alpha-postgres-suite-repeats:
+	scripts/run_alpha_postgres_comparison_suite_repeats.sh --runs "$(BENCH_ALPHA_POSTGRES_REPEAT_RUNS)" --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
+
+bench-alpha-postgres-suite-repeats-dry:
+	scripts/run_alpha_postgres_comparison_suite_repeats.sh --dry-run --runs "$(BENCH_ALPHA_POSTGRES_REPEAT_RUNS)" --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
 
 bench-alpha-postgres-suite-local:
 	scripts/run_alpha_postgres_comparison_suite_local.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG) $(ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG)
