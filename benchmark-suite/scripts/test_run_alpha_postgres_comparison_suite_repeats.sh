@@ -44,6 +44,8 @@ dry_run="$(jq -r '.dryRun' "$tmp_out")"
 runs_len="$(jq -r '.runs | length' "$tmp_out")"
 first_run="$(jq -r '.runs[0].run' "$tmp_out")"
 first_dry="$(jq -r '.runs[0].dryRun' "$tmp_out")"
+baseline_stats_type="$(jq -r '.baselineStats | type' "$tmp_out")"
+db_hot_stats_type="$(jq -r '.dbHotStats | type' "$tmp_out")"
 
 if [ "$run_count" != "2" ]; then
   echo "unexpected runCount: $run_count" >&2
@@ -63,6 +65,14 @@ if [ "$first_run" != "run-001" ]; then
 fi
 if [ "$first_dry" != "true" ]; then
   echo "expected first run dryRun=true, got: $first_dry" >&2
+  exit 1
+fi
+if [ "$baseline_stats_type" != "null" ]; then
+  echo "expected baselineStats to be null on dry-run, got: $baseline_stats_type" >&2
+  exit 1
+fi
+if [ "$db_hot_stats_type" != "null" ]; then
+  echo "expected dbHotStats to be null on dry-run, got: $db_hot_stats_type" >&2
   exit 1
 fi
 

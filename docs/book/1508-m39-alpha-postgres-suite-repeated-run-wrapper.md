@@ -10,7 +10,8 @@
    - rewrites each per-run summary to point to run-scoped artifacts.
 3. Added aggregate repeated-run summary output:
    - default: `results/summaries/alpha-postgres-comparison-suite-repeats.json`,
-   - includes run count, forwarded args, and per-run summary/matrix references.
+   - includes run count, forwarded args, per-run summary/matrix references,
+   - includes aggregated per-impl/per-endpoint repeated-run stats for `requestsPerSec`, `p99Ms`, and `rssKb` under `baselineStats` / `dbHotStats`.
 4. Added script test:
    - `benchmark-suite/scripts/test_run_alpha_postgres_comparison_suite_repeats.sh`.
 5. Added Make entrypoints:
