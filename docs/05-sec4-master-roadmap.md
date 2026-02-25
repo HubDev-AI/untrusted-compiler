@@ -2233,6 +2233,10 @@ Post-alpha track acceptance anchors:
       - each phase snapshots matrix/analysis/step/report/manifest artifacts to deterministic `*-alpha-base` and `*-alpha-db-postgres` paths and emits one summary JSON.
       - make entrypoints added: `bench-alpha-postgres-suite` and `bench-alpha-postgres-suite-dry`.
       - documented in `docs/book/1499-m39-alpha-postgres-comparison-suite.md`.
+   - [x] Added local Postgres infra wrapper for alpha Postgres comparison suite:
+      - new benchmark wrapper `run_alpha_postgres_comparison_suite_local.sh` orchestrates `infra/local-postgres` lifecycle (`up` / optional `reset` / optional `keep-up`) and delegates into `run_alpha_postgres_comparison_suite.sh` with an auto-generated DSN file,
+      - make entrypoints added: `bench-alpha-postgres-suite-local` and `bench-alpha-postgres-suite-local-dry` so same-condition local DB runs are one command.
+      - documented in `docs/book/1500-m39-alpha-postgres-comparison-suite-local-infra-wrapper.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

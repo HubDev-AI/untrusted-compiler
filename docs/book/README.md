@@ -1469,5 +1469,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1497-m39-lasm-postgres-sqlstate-26000-conflict-fallback.md`
 - `1498-m39-benchmark-suite-lasm-postgres-db-path-wiring.md`
 - `1499-m39-alpha-postgres-comparison-suite.md`
+- `1500-m39-alpha-postgres-comparison-suite-local-infra-wrapper.md`
 
 As milestones progress, chapters will be added and linked from this index.

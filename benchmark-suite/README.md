@@ -76,24 +76,30 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-alpha-postgres-suite-dry BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
    - `make -C benchmark-suite bench-alpha-postgres-suite BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
    - writes summary: `benchmark-suite/results/summaries/alpha-postgres-comparison-suite.json`
-15. Run sec4 capacity probe (1M-request threshold + peak RSS):
+15. Run standardized Postgres comparison suite with repo-local Postgres infra orchestration:
+   - `make -C benchmark-suite bench-alpha-postgres-suite-local-dry`
+   - `make -C benchmark-suite bench-alpha-postgres-suite-local`
+   - optional:
+     - keep infra running after suite: `BENCH_LOCAL_POSTGRES_KEEP_UP=true`
+     - recreate local postgres data before suite: `BENCH_LOCAL_POSTGRES_RESET=true`
+16. Run sec4 capacity probe (1M-request threshold + peak RSS):
    - `make -C benchmark-suite sec4-capacity-probe`
    - override endpoint and target requests:
      - `make -C benchmark-suite sec4-capacity-probe CAPACITY_ENDPOINT=ping CAPACITY_TARGET_REQUESTS=1000000`
-16. Run sec4 LASM cluster capacity probe (1M-request threshold + peak RSS):
+17. Run sec4 LASM cluster capacity probe (1M-request threshold + peak RSS):
    - `make -C benchmark-suite lasm-cluster-capacity-probe`
    - override project and target requests:
      - `make -C benchmark-suite lasm-cluster-capacity-probe LASM_CAPACITY_PROJECT_PATH=examples/lasm-alpha-full LASM_CAPACITY_TARGET_REQUESTS=1000000`
-17. Build deterministic artifact manifest:
+18. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
-18. Verify benchmark bundle completeness:
+19. Verify benchmark bundle completeness:
    - `make -C benchmark-suite verify-bundle IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
-19. Validate benchmark helper scripts:
+20. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-20. Validate cross-impl service contract parity:
+21. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-21. Stop DB:
+22. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -127,6 +133,7 @@ Measure end-to-end service behavior across identical implementations:
 - `run_alpha_postgres_comparison_suite.sh` executes two deterministic phases (baseline + db-hot) and snapshots each phase to stable artifact suffixes:
   - `*-alpha-base.*`
   - `*-alpha-db-postgres.*`
+- `run_alpha_postgres_comparison_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the same two-phase suite and auto-injects DSN via temporary file, so local runs do not require manually exporting DSN flags.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.
