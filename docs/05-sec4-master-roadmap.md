@@ -2269,6 +2269,10 @@ Post-alpha track acceptance anchors:
       - supports `--keep-up`, `--reset-db`, `--infra-env` local controls and forwards repeated-suite args (`--runs`, endpoint/impl sets, reset-between-phases),
       - Make entrypoints added: `bench-alpha-postgres-suite-local-repeats` and `bench-alpha-postgres-suite-local-repeats-dry`.
       - documented in `docs/book/1509-m39-alpha-postgres-suite-local-repeated-run-wrapper.md`.
+   - [x] Added markdown report renderer for repeated Postgres suite summaries:
+      - new script `benchmark-suite/scripts/render_alpha_postgres_comparison_suite_repeats_summary.sh` renders repeated-run JSON summary into a deterministic markdown table report (baseline + db-hot aggregate stats),
+      - Make entrypoint added: `bench-alpha-postgres-suite-repeats-report` (with `ALPHA_POSTGRES_REPEATS_SUMMARY` / `ALPHA_POSTGRES_REPEATS_REPORT` overrides).
+      - documented in `docs/book/1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
