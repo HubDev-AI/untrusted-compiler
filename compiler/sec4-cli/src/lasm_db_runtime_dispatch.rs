@@ -702,12 +702,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 );
                 return true;
             }
-            let params = materialize_lasm_internal_header_value(
+            let Some(raw_params_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-                    .unwrap_or_else(|| "0".to_string()),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_INVALID",
+                        "validation",
+                        "db.exec requires db capability and query handle",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let params =
+                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
             if !enforce_lasm_db_params_max_bytes(response, "exec", params.as_str(), trace_id) {
                 return true;
             }
@@ -962,12 +974,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 );
                 return true;
             }
-            let params = materialize_lasm_internal_header_value(
+            let Some(raw_params_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-                    .unwrap_or_else(|| "0".to_string()),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        "db.execTx requires transaction and query handles",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let params =
+                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
             if !enforce_lasm_db_params_max_bytes(response, "execTx", params.as_str(), trace_id) {
                 return true;
             }
@@ -1317,12 +1341,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 );
                 return true;
             }
-            let params = materialize_lasm_internal_header_value(
+            let Some(raw_params_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-                    .unwrap_or_else(|| "0".to_string()),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_INVALID",
+                        "validation",
+                        "db.queryOne requires db capability, query, and row schema handles",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let params =
+                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
             if !enforce_lasm_db_params_max_bytes(response, "queryOne", params.as_str(), trace_id) {
                 return true;
             }
@@ -1917,6 +1953,41 @@ mod tests {
     }
 
     #[test]
+    fn exec_marker_rejects_missing_params_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "missing params marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_INVALID\""));
+    }
+
+    #[test]
     fn query_one_marker_rejects_missing_row_schema_header() {
         let request = empty_request();
         let path_params = BTreeMap::new();
@@ -1959,6 +2030,46 @@ mod tests {
                 .contains_key(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER),
             "internal row schema marker should not survive response materialization"
         );
+    }
+
+    #[test]
+    fn query_one_marker_rejects_missing_params_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "7".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "missing queryOne params marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
     }
 
     #[test]

@@ -1491,5 +1491,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1519-m39-postgres-large-unsigned-param-precision-preservation.md`
 - `1520-m39-lasm-db-internal-marker-required-handle-schema-hardening.md`
 - `1521-m39-lasm-db-exectx-dual-tx-source-marker-rejection.md`
+- `1522-m39-lasm-db-required-params-marker-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

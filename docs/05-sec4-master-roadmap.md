@@ -2311,6 +2311,10 @@ Post-alpha track acceptance anchors:
       - LASM DB runtime now rejects ambiguous internal `execTx` marker sets when both transaction-source headers are present (`tx handle` and `db.tx(dbCap)` source),
       - ambiguous marker sets now fail deterministically with `DB.EXEC_TX_INVALID` instead of silently preferring one source.
       - documented in `docs/book/1521-m39-lasm-db-exectx-dual-tx-source-marker-rejection.md`.
+   - [x] Hardened internal SQL params marker requirements for LASM DB dispatch:
+      - `exec`, `execTx`, and `queryOne` runtime paths now require explicit internal SQL params markers instead of silently defaulting missing params to `0`,
+      - missing params markers now fail deterministically with operation-specific validation envelopes (`DB.EXEC_INVALID`, `DB.EXEC_TX_INVALID`, `DB.QUERY_ONE_INVALID`).
+      - documented in `docs/book/1522-m39-lasm-db-required-params-marker-hardening.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
