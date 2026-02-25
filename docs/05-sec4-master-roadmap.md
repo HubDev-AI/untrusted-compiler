@@ -2238,6 +2238,10 @@ Post-alpha track acceptance anchors:
       - new benchmark wrapper `run_alpha_postgres_comparison_suite_local.sh` orchestrates `infra/local-postgres` lifecycle (`up` / optional `reset` / optional `keep-up`) and delegates into `run_alpha_postgres_comparison_suite.sh` with an auto-generated DSN file,
       - make entrypoints added: `bench-alpha-postgres-suite-local` and `bench-alpha-postgres-suite-local-dry` so same-condition local DB runs are one command.
       - documented in `docs/book/1500-m39-alpha-postgres-comparison-suite-local-infra-wrapper.md`.
+   - [x] Added alpha Postgres suite run-fingerprint metadata capture:
+      - `run_alpha_postgres_comparison_suite.sh` summary JSON now includes deterministic `runContext` metadata (`repoRevision`, host fingerprint, DSN source mode, and active `BENCH_*` load overrides),
+      - keeps artifact snapshots unchanged while making per-run condition comparisons explicit for operator review.
+      - documented in `docs/book/1503-m39-alpha-postgres-suite-run-fingerprint-metadata.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
