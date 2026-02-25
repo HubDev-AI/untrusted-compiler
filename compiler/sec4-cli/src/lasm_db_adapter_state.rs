@@ -166,19 +166,23 @@ fn connect_lasm_dynamic_db_records_postgres_client(
 ) -> Result<PostgresClient, String> {
     match tls_mode {
         LasmDbPostgresTlsMode::Disable => PostgresClient::connect(connect_dsn, NoTls)
-            .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}")),
+            .map_err(|err| {
+                format!("could not connect LASM dynamic postgres records store: {err} ({err:?})")
+            }),
         LasmDbPostgresTlsMode::Require => {
             let tls_connector = build_lasm_native_tls_connector().map_err(|tls_err| {
                 format!("could not connect LASM dynamic postgres records store: {tls_err}")
             })?;
             PostgresClient::connect(connect_dsn, tls_connector).map_err(|err| {
-                format!("could not connect LASM dynamic postgres records store: {err}")
+                format!(
+                    "could not connect LASM dynamic postgres records store: {err} ({err:?})"
+                )
             })
         }
         LasmDbPostgresTlsMode::Auto => match PostgresClient::connect(connect_dsn, NoTls) {
             Ok(client) => Ok(client),
             Err(no_tls_err) => {
-                let no_tls_message = no_tls_err.to_string();
+                let no_tls_message = format!("{no_tls_err} ({no_tls_err:?})");
                 if !is_lasm_postgres_tls_required_error(no_tls_message.as_str()) {
                     return Err(format!(
                         "could not connect LASM dynamic postgres records store: {no_tls_message}"
@@ -191,7 +195,7 @@ fn connect_lasm_dynamic_db_records_postgres_client(
                 })?;
                 PostgresClient::connect(connect_dsn, tls_connector).map_err(|tls_err| {
                     format!(
-                        "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err}"
+                        "could not connect LASM dynamic postgres records store: TLS retry failed after NoTLS error `{no_tls_message}`: {tls_err} ({tls_err:?})"
                     )
                 })
             }
