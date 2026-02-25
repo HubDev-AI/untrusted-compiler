@@ -47,14 +47,21 @@ Use it to keep speed high without losing architecture direction.
 
 Current LASM DB is **not** a full DB client yet.
 
-It currently works as a compatibility bridge in CLI runtime:
+Current runtime status:
 
 - Dynamic state + persistence:
   - `compiler/sec4-cli/src/main.rs`
 - Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE`.
-- DB routes are currently resolved through response-schema branches (`DbExecResponse`, `DbExecTxResponse`, `DbQueryOneResponse`, `DbListRecordsResponse`) instead of full intrinsic dispatch.
+- Active DB intrinsic runtime dispatch is real for:
+  - `sql.q`
+  - `db.exec`
+  - `db.execTx`
+  - `db.queryOne`
+  - `db.tx` (via `db.execTx` planning/runtime path)
+- `DbListRecordsResponse` now resolves via internal DB operation marker (`listRecords`) in route planning/runtime dispatch rather than schema-switch-only materialization.
+- Runtime now rejects invalid internal DB markers deterministically (`DB.OPERATION_INVALID`) and rejects multi-op handlers deterministically (`DB.MULTI_OP_UNSUPPORTED`) to prevent silent partial execution.
 
-C runtime DB path is already real in `runtime/c/sec4_runtime.c`; LASM needs parity-style intrinsic execution.
+Remaining full-client work focuses on multi-op sequencing semantics and adapter extraction/package boundaries without changing language contracts.
 
 ## 5) Mandatory Workflow (All Agents)
 

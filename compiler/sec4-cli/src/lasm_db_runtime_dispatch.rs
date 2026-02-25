@@ -1,6 +1,7 @@
 use crate::lasm_db_adapter_state::{
     persist_lasm_dynamic_db_record_append, persist_lasm_dynamic_db_records_full_sync,
 };
+use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
     normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
@@ -445,6 +446,15 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     let operation = materialize_lasm_internal_header_value(raw_operation, request, path_params);
     let operation = operation.trim();
     match operation {
+        "listRecords" => {
+            apply_lasm_db_list_records_response_materialization(
+                response,
+                request,
+                dynamic_state,
+                trace_id,
+            );
+            true
+        }
         "exec" => {
             let template = materialize_lasm_internal_header_value(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
@@ -1436,7 +1446,20 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             );
             true
         }
-        _ => false,
+        _ => {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    "unsupported internal db operation marker",
+                    400,
+                    trace_id,
+                ),
+            );
+            true
+        }
     }
 }
 
@@ -1457,5 +1480,94 @@ fn materialize_lasm_internal_header_value(
         crate::materialize_lasm_request_placeholders(value.as_str(), request, path_params)
     } else {
         value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_lasm_internal_db_operation_materialization;
+    use crate::{
+        LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest,
+        LASM_INTERNAL_DB_OP_HEADER,
+    };
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    fn empty_request() -> LasmRunRequest {
+        LasmRunRequest {
+            method: "GET".to_string(),
+            http_version: "HTTP/1.1".to_string(),
+            path: "/".to_string(),
+            query_params: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            body: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_internal_db_operation_marker() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "bogus".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "invalid marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.OPERATION_INVALID\""));
+    }
+
+    #[test]
+    fn list_records_marker_materializes_records_payload() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let mut state = LasmDynamicResponseState::default();
+        state.db_records.push(LasmDbRecord {
+            id: 1,
+            op: "exec".to_string(),
+            db: 1,
+            template: "SELECT 1".to_string(),
+            params: "[1]".to_string(),
+            tx: 0,
+            affected_rows: 1,
+            created_at_ms: 1,
+        });
+        let dynamic_state = Mutex::new(state);
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "listRecords".to_string(),
+        );
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(handled, "listRecords marker should be handled");
+        assert_eq!(response.status, 200);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"count\":1"));
+        assert!(body.contains("\"recordsTotal\":1"));
+        assert!(body.contains("\"op\":\"exec\""));
     }
 }
