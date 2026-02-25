@@ -136,10 +136,9 @@ fn has_lasm_postgres_connect_timeout(dsn: &str) -> bool {
     compact.contains("connect_timeout=")
 }
 
-fn redact_lasm_postgres_dsn_password(dsn: &str) -> String {
-    let trimmed = dsn.trim();
+fn redact_lasm_postgres_url_userinfo_password(dsn: &str) -> String {
     for scheme in ["postgres://", "postgresql://"] {
-        if let Some(rest) = trimmed.strip_prefix(scheme) {
+        if let Some(rest) = dsn.strip_prefix(scheme) {
             let Some(at_index) = rest.find('@') else {
                 continue;
             };
@@ -152,7 +151,89 @@ fn redact_lasm_postgres_dsn_password(dsn: &str) -> String {
             return format!("{scheme}{user}:***@{tail}");
         }
     }
-    trimmed.to_string()
+    dsn.to_string()
+}
+
+fn redact_lasm_postgres_keyword_dsn_password(dsn: &str) -> String {
+    let bytes = dsn.as_bytes();
+    let mut out = String::with_capacity(dsn.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index].is_ascii_whitespace() {
+            out.push(bytes[index] as char);
+            index += 1;
+            continue;
+        }
+
+        let key_start = index;
+        while index < bytes.len() && !bytes[index].is_ascii_whitespace() && bytes[index] != b'=' {
+            index += 1;
+        }
+        let key_end = index;
+        let mut eq_index = index;
+        while eq_index < bytes.len() && bytes[eq_index].is_ascii_whitespace() {
+            eq_index += 1;
+        }
+        if eq_index >= bytes.len() || bytes[eq_index] != b'=' {
+            out.push_str(&dsn[key_start..eq_index]);
+            index = eq_index;
+            continue;
+        }
+
+        let key = dsn[key_start..key_end].trim();
+        out.push_str(&dsn[key_start..=eq_index]);
+        index = eq_index + 1;
+
+        let value_ws_start = index;
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        out.push_str(&dsn[value_ws_start..index]);
+
+        let is_password = key.eq_ignore_ascii_case("password");
+        if index >= bytes.len() {
+            break;
+        }
+
+        if bytes[index] == b'\'' {
+            let value_start = index;
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\'' {
+                    if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                        index += 2;
+                        continue;
+                    }
+                    index += 1;
+                    break;
+                }
+                index += 1;
+            }
+            if is_password {
+                out.push_str("'***'");
+            } else {
+                out.push_str(&dsn[value_start..index]);
+            }
+            continue;
+        }
+
+        let value_start = index;
+        while index < bytes.len() && !bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if is_password {
+            out.push_str("***");
+        } else {
+            out.push_str(&dsn[value_start..index]);
+        }
+    }
+    out
+}
+
+fn redact_lasm_postgres_dsn_password(dsn: &str) -> String {
+    let trimmed = dsn.trim();
+    let url_redacted = redact_lasm_postgres_url_userinfo_password(trimmed);
+    redact_lasm_postgres_keyword_dsn_password(url_redacted.as_str())
 }
 
 fn redact_lasm_postgres_connect_error_message(message: String, connect_dsn: &str) -> String {
@@ -611,6 +692,32 @@ mod tests {
     }
 
     #[test]
+    fn redact_postgres_dsn_password_masks_keyword_conninfo_password() {
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "host=localhost user=sec4 password=sec4dev dbname=sec4_local"
+            ),
+            "host=localhost user=sec4 password=*** dbname=sec4_local"
+        );
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "host=localhost user=sec4 PASSWORD = sec4dev dbname=sec4_local"
+            ),
+            "host=localhost user=sec4 PASSWORD = *** dbname=sec4_local"
+        );
+    }
+
+    #[test]
+    fn redact_postgres_dsn_password_masks_quoted_keyword_password() {
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "host=localhost user=sec4 password='sec4 dev secret' dbname=sec4_local"
+            ),
+            "host=localhost user=sec4 password='***' dbname=sec4_local"
+        );
+    }
+
+    #[test]
     fn redact_postgres_connect_error_message_replaces_embedded_dsn() {
         let dsn = "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable";
         let raw_message = format!("connection refused for dsn {dsn}");
@@ -618,6 +725,17 @@ mod tests {
         assert_eq!(
             redacted,
             "connection refused for dsn postgres://sec4:***@127.0.0.1:5432/sec4_local?sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn redact_postgres_connect_error_message_replaces_keyword_conninfo_dsn() {
+        let dsn = "host=localhost user=sec4 password=sec4dev dbname=sec4_local";
+        let raw_message = format!("connection refused for dsn {dsn}");
+        let redacted = redact_lasm_postgres_connect_error_message(raw_message, dsn);
+        assert_eq!(
+            redacted,
+            "connection refused for dsn host=localhost user=sec4 password=*** dbname=sec4_local"
         );
     }
 
