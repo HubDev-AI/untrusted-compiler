@@ -2307,6 +2307,10 @@ Post-alpha track acceptance anchors:
       - missing `db handle` marker now returns deterministic `DB.EXEC_INVALID`,
       - missing `row schema` marker in `queryOne` now returns deterministic `DB.QUERY_ONE_INVALID`.
       - documented in `docs/book/1520-m39-lasm-db-internal-marker-required-handle-schema-hardening.md`.
+   - [x] Hardened `db.execTx` internal marker ambiguity handling:
+      - LASM DB runtime now rejects ambiguous internal `execTx` marker sets when both transaction-source headers are present (`tx handle` and `db.tx(dbCap)` source),
+      - ambiguous marker sets now fail deterministically with `DB.EXEC_TX_INVALID` instead of silently preferring one source.
+      - documented in `docs/book/1521-m39-lasm-db-exectx-dual-tx-source-marker-rejection.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
