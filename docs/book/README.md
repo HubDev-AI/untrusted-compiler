@@ -1484,5 +1484,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1512-m39-local-postgres-startup-credential-verification.md`
 - `1513-m39-local-postgres-artifact-ignore-rules.md`
 - `1514-m39-local-postgres-credential-probe-container-port-fix.md`
+- `1515-m39-local-postgres-dsn-password-redaction.md`
 
 As milestones progress, chapters will be added and linked from this index.

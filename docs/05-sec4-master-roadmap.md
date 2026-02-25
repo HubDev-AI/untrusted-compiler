@@ -2286,6 +2286,9 @@ Post-alpha track acceptance anchors:
    - [x] Fixed local Postgres credential probe to use container-side DB port:
       - `infra/local-postgres/scripts/up.sh` credential verification now always probes port `5432` inside the container (instead of host `PG_PORT`), preserving readiness correctness when host port mappings differ.
       - documented in `docs/book/1514-m39-local-postgres-credential-probe-container-port-fix.md`.
+   - [x] Redacted local Postgres DSN password in startup hints:
+      - `infra/local-postgres/scripts/up.sh` now redacts password segments in printed DSN output (`postgres://user:***@...`) to avoid leaking local DB credentials into terminal logs.
+      - documented in `docs/book/1515-m39-local-postgres-dsn-password-redaction.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
