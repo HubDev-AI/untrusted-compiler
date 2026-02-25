@@ -1004,8 +1004,18 @@ fn cmd_lasm_smoke(
     let mut first_body = None;
     let mut first_error_code = None;
     let mut first_error_kind = None;
-    let smoke_dynamic_state = Mutex::new(LasmDynamicResponseState::default());
-    let smoke_db_records_adapter = LasmDbRecordsAdapter::RecordsLog;
+    let smoke_dynamic_state = match build_lasm_dynamic_response_state(
+        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+        None, None,
+    ) {
+        Ok(state) => state,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+    };
+    let smoke_db_records_adapter = smoke_dynamic_state.db_records_adapter;
+    let smoke_dynamic_state = Mutex::new(smoke_dynamic_state);
     while let Some(mut exchange) = runtime.pop_response() {
         if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
             &mut exchange.response,
