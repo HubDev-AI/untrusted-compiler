@@ -191,6 +191,14 @@ db_step_snapshot="${summaries_dir}/step-matrix-alpha-db-postgres.json"
 db_report_snapshot="${results_dir}/benchmark-report-alpha-db-postgres.md"
 db_manifest_snapshot="${results_dir}/artifact-manifest-alpha-db-postgres.json"
 
+repo_revision="$(git -C "$root_dir/.." rev-parse --short HEAD 2>/dev/null || true)"
+host_uname="$(uname -srm 2>/dev/null || true)"
+host_cpu_count="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+dsn_source="env"
+if [ -n "$lasm_db_postgres_dsn_file" ]; then
+  dsn_source="file"
+fi
+
 snapshot_artifacts() {
   local matrix_path="$1"
   local analysis_path="$2"
@@ -247,6 +255,19 @@ snapshot_artifacts \
 jq -n \
   --arg mode "alpha-postgres-comparison-suite" \
   --arg generatedAt "$(date -u +%FT%TZ)" \
+  --arg repoRevision "$repo_revision" \
+  --arg dryRun "$dry_run" \
+  --arg dsnSource "$dsn_source" \
+  --arg dsnFile "$lasm_db_postgres_dsn_file" \
+  --arg hostUname "$host_uname" \
+  --arg hostCpuCount "$host_cpu_count" \
+  --arg benchThreads "${BENCH_THREADS:-}" \
+  --arg benchConnections "${BENCH_CONNECTIONS:-}" \
+  --arg benchDuration "${BENCH_DURATION:-}" \
+  --arg benchTarget "${BENCH_TARGET:-}" \
+  --arg benchPort "${BENCH_PORT:-}" \
+  --arg benchStepRates "${BENCH_STEP_RATES:-}" \
+  --arg benchStepDuration "${BENCH_STEP_DURATION:-}" \
   --arg baseImpls "$base_impls_csv" \
   --arg baseEndpoints "$base_endpoints_csv" \
   --arg dbImpls "$db_impls_csv" \
@@ -264,6 +285,27 @@ jq -n \
   '{
     mode: $mode,
     generatedAt: $generatedAt,
+    runContext: {
+      repoRevision: (if $repoRevision == "" then null else $repoRevision end),
+      dryRun: ($dryRun == "true"),
+      dsn: {
+        source: $dsnSource,
+        file: (if $dsnFile == "" then null else $dsnFile end)
+      },
+      host: {
+        uname: (if $hostUname == "" then null else $hostUname end),
+        cpuCount: (if $hostCpuCount == "" then null else ($hostCpuCount | tonumber?) end)
+      },
+      loadEnv: {
+        benchThreads: (if $benchThreads == "" then null else ($benchThreads | tonumber?) end),
+        benchConnections: (if $benchConnections == "" then null else ($benchConnections | tonumber?) end),
+        benchDuration: (if $benchDuration == "" then null else $benchDuration end),
+        benchTarget: (if $benchTarget == "" then null else ($benchTarget | tonumber?) end),
+        benchPort: (if $benchPort == "" then null else ($benchPort | tonumber?) end),
+        benchStepRates: (if $benchStepRates == "" then null else $benchStepRates end),
+        benchStepDuration: (if $benchStepDuration == "" then null else $benchStepDuration end)
+      }
+    },
     baseline: {
       impls: ($baseImpls | split(",") | map(gsub(" "; "")) | map(select(length > 0))),
       endpoints: ($baseEndpoints | split(",") | map(gsub(" "; "")) | map(select(length > 0))),
