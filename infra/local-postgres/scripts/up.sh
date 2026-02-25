@@ -26,7 +26,10 @@ verify_postgres_credentials() {
 
 redact_postgres_dsn_password() {
   local dsn="$1"
-  printf '%s' "$dsn" | sed -E 's#((postgres(ql)?://)[^:/?#]+:)[^@]*@#\1***@#'
+  printf '%s' "$dsn" | sed -E \
+    -e 's#((postgres(ql)?://)[^:/?#]+:)[^@]*@#\1***@#g' \
+    -e "s#([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*)'[^']*'#\\1'***'#g" \
+    -e 's#([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*)[^[:space:]]+#\1***#g'
 }
 
 if ! command -v docker >/dev/null 2>&1; then
