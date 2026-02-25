@@ -1560,6 +1560,226 @@ fn collect_lasm_route_plans(
     plans
 }
 
+fn resolve_lasm_entry_http_serve_port(
+    program: &sec4_core::ast::Program,
+    entry_name: &str,
+) -> Option<u16> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            sec4_core::ast::ItemKind::Function(function) => {
+                Some((function.name.as_str(), function))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let mut visited_functions = HashSet::new();
+    let mut ports = Vec::new();
+    collect_http_serve_ports_in_function(
+        &functions,
+        entry_name,
+        &mut visited_functions,
+        &mut ports,
+        None,
+    );
+    ports.into_iter().last()
+}
+
+fn collect_http_serve_ports_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    ports: &mut Vec<u16>,
+    seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
+) {
+    if visited.contains(function_name) {
+        return;
+    }
+    visited.insert(function_name.to_string());
+    let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
+        return;
+    };
+    let mut local_bindings = seed_bindings.unwrap_or_default();
+    collect_http_serve_ports_in_block(
+        functions,
+        &function.body,
+        visited,
+        ports,
+        &mut local_bindings,
+    );
+    visited.remove(function_name);
+}
+
+fn collect_http_serve_ports_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    ports: &mut Vec<u16>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    for statement in &block.statements {
+        collect_http_serve_ports_in_stmt(functions, statement, visited, ports, bindings);
+    }
+    if let Some(tail) = &block.tail {
+        collect_http_serve_ports_in_expr(functions, tail, visited, ports, bindings);
+    }
+}
+
+fn collect_http_serve_ports_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    ports: &mut Vec<u16>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            collect_http_serve_ports_in_expr(functions, value, visited, ports, bindings);
+            bindings.insert(name.clone(), value.clone());
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                collect_http_serve_ports_in_expr(functions, value, visited, ports, bindings);
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            collect_http_serve_ports_in_expr(functions, expr, visited, ports, bindings);
+        }
+    }
+}
+
+fn collect_http_serve_ports_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    ports: &mut Vec<u16>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(port) = match_http_serve_port_literal(&resolved_callee, args, bindings) {
+                ports.push(port);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+                let callee_bindings = collect_route_registration_call_bindings(
+                    functions,
+                    function_name,
+                    args,
+                    bindings,
+                );
+                collect_http_serve_ports_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    ports,
+                    Some(callee_bindings),
+                );
+            }
+            collect_http_serve_ports_in_expr(functions, callee, visited, ports, bindings);
+            for argument in args {
+                collect_http_serve_ports_in_expr(functions, argument, visited, ports, bindings);
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            collect_http_serve_ports_in_expr(functions, expr, visited, ports, bindings)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            collect_http_serve_ports_in_expr(functions, left, visited, ports, bindings);
+            collect_http_serve_ports_in_expr(functions, right, visited, ports, bindings);
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            collect_http_serve_ports_in_expr(functions, object, visited, ports, bindings)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_http_serve_ports_in_expr(functions, condition, visited, ports, bindings);
+            let mut then_bindings = bindings.clone();
+            collect_http_serve_ports_in_block(
+                functions,
+                then_branch,
+                visited,
+                ports,
+                &mut then_bindings,
+            );
+            if let Some(else_branch) = else_branch {
+                let mut else_bindings = bindings.clone();
+                collect_http_serve_ports_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    ports,
+                    &mut else_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            collect_http_serve_ports_in_expr(functions, scrutinee, visited, ports, bindings);
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                collect_http_serve_ports_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    ports,
+                    &mut arm_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            collect_http_serve_ports_in_block(
+                functions,
+                block,
+                visited,
+                ports,
+                &mut block_bindings,
+            );
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
+}
+
+fn match_http_serve_port_literal(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<u16> {
+    if !is_http_serve_call(callee) {
+        return None;
+    }
+    let port_expr = args.first()?;
+    let resolved_expr = resolve_route_registration_expr(port_expr, bindings, 0)
+        .unwrap_or_else(|| port_expr.clone());
+    let sec4_core::ast::ExprKind::Number(value) = &resolved_expr.kind else {
+        return None;
+    };
+    value.parse::<u16>().ok()
+}
+
+fn is_http_serve_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "serve"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref namespace) if namespace == "http"
+                )
+        }
+        sec4_core::ast::ExprKind::Identifier(name) => name == "http_serve",
+        _ => false,
+    }
+}
+
 fn validate_lasm_route_db_operation_sequence_limits(
     routes: &[LasmRunRoutePlan],
 ) -> Result<(), String> {
@@ -8209,6 +8429,8 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: compiled program does not expose an entrypoint");
         return Err(1);
     };
+    let inferred_serve_port = resolve_lasm_entry_http_serve_port(&program, entry.name.as_str());
+    let listen_port = port.or(inferred_serve_port).unwrap_or(8080);
 
     let policy_max_in_flight = match u64::try_from(policy.http.max_concurrency) {
         Ok(value) => value,
@@ -8460,7 +8682,7 @@ fn cmd_run_lasm_backend(
     if fixed_cluster_reuse_port_mode {
         return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
             path: path.to_path_buf(),
-            listen_port: port.unwrap_or(8080),
+            listen_port,
             max_header_bytes,
             max_body_bytes,
             max_concurrency,
@@ -8522,7 +8744,7 @@ fn cmd_run_lasm_backend(
             .max(1);
         return cmd_run_lasm_cluster(LasmClusterConfig {
             path: path.to_path_buf(),
-            listen_port: port.unwrap_or(8080),
+            listen_port,
             max_header_bytes,
             max_body_bytes,
             max_concurrency,
@@ -8589,7 +8811,6 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: {message}");
         return Err(1);
     }
-    let listen_port = port.unwrap_or(8080);
     let listener = match bind_lasm_listener(listen_port, reuse_port) {
         Ok(listener) => listener,
         Err(message) => {
