@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get]
+usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records]
+          [--lasm-db-adapter records-log|sqlite|postgres] [--lasm-db-postgres-dsn-file path]
 
 Runs step-load benchmark profiles for each implementation/endpoint and emits
 step analysis artifacts plus a cross-implementation step matrix.
@@ -13,6 +14,8 @@ USAGE
 dry_run="false"
 impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
+lasm_db_adapter="${BENCH_LASM_DB_ADAPTER:-}"
+lasm_db_postgres_dsn_file="${BENCH_LASM_DB_POSTGRES_DSN_FILE:-}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -42,6 +45,30 @@ while [ "$#" -gt 0 ]; do
       ;;
     --endpoints=*)
       endpoints_csv="${1#--endpoints=}"
+      shift
+      ;;
+    --lasm-db-adapter)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_adapter="$2"
+      shift 2
+      ;;
+    --lasm-db-adapter=*)
+      lasm_db_adapter="${1#--lasm-db-adapter=}"
+      shift
+      ;;
+    --lasm-db-postgres-dsn-file)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_postgres_dsn_file="$2"
+      shift 2
+      ;;
+    --lasm-db-postgres-dsn-file=*)
+      lasm_db_postgres_dsn_file="${1#--lasm-db-postgres-dsn-file=}"
       shift
       ;;
     -h|--help)
@@ -74,7 +101,14 @@ is_supported_impl() {
 
 is_supported_endpoint() {
   case "$1" in
-    ping|decode|users-post|users-get) return 0 ;;
+    ping|decode|users-post|users-get|db-hot-write|db-hot-write-tx|db-hot-query-one|db-records) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_supported_lasm_db_adapter() {
+  case "$1" in
+    records-log|sqlite|postgres) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -96,6 +130,29 @@ for raw_endpoint in "${endpoints[@]}"; do
     exit 2
   fi
 done
+
+if [ -n "$lasm_db_adapter" ] && ! is_supported_lasm_db_adapter "$lasm_db_adapter"; then
+  echo "unsupported LASM DB adapter: ${lasm_db_adapter}" >&2
+  exit 2
+fi
+
+lasm_postgres_dsn=""
+if [ "$lasm_db_adapter" = "postgres" ]; then
+  if [ -n "$lasm_db_postgres_dsn_file" ]; then
+    if [ ! -f "$lasm_db_postgres_dsn_file" ]; then
+      echo "lasm postgres dsn file not found: ${lasm_db_postgres_dsn_file}" >&2
+      exit 2
+    fi
+    lasm_postgres_dsn="$(<"$lasm_db_postgres_dsn_file")"
+    lasm_postgres_dsn="${lasm_postgres_dsn//$'\r'/}"
+    lasm_postgres_dsn="${lasm_postgres_dsn//$'\n'/}"
+  elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
+    lasm_postgres_dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN}"
+  else
+    echo "postgres adapter requires --lasm-db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+    exit 2
+  fi
+fi
 
 if [ "$dry_run" = "true" ]; then
   "${root_dir}/scripts/preflight.sh" --impls "$impls_csv" --dry-run-only
@@ -123,7 +180,15 @@ start_service() {
     sec4-lasm)
       (
         cd "$service_dir"
-        cargo run -q -p sec4 -- run --path "$service_dir" --backend lasm --port "$bench_port" --serve-timeout-ms 20000
+        sec4_lasm_cmd=(cargo run -q -p sec4 -- run --path "$service_dir" --backend lasm --port "$bench_port" --serve-timeout-ms 20000)
+        if [ -n "$lasm_db_adapter" ]; then
+          sec4_lasm_cmd+=(--db-adapter "$lasm_db_adapter")
+        fi
+        if [ -n "$lasm_postgres_dsn" ]; then
+          SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" "${sec4_lasm_cmd[@]}"
+        else
+          "${sec4_lasm_cmd[@]}"
+        fi
       ) >"$log_file" 2>&1 &
       ;;
     node)
@@ -180,7 +245,15 @@ for raw_impl in "${impls[@]}"; do
   echo "=== step impl=${impl} ==="
 
   if [ "$dry_run" = "true" ]; then
-    echo "start: ${impl} service on :${bench_port}"
+    if [ "$impl" = "sec4-lasm" ] && [ -n "$lasm_db_adapter" ]; then
+      if [ "$lasm_db_adapter" = "postgres" ]; then
+        echo "start: ${impl} service on :${bench_port} (db-adapter=${lasm_db_adapter} dsn-file=${lasm_db_postgres_dsn_file:-ENV})"
+      else
+        echo "start: ${impl} service on :${bench_port} (db-adapter=${lasm_db_adapter})"
+      fi
+    else
+      echo "start: ${impl} service on :${bench_port}"
+    fi
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="${raw_endpoint// /}"
       [ -z "$endpoint" ] && continue

@@ -55,6 +55,20 @@ if ! grep -q 'users-get seedUserId: 6f1c2e7c-9c4a-4d0d-8c1b-2b59a4c8f8e1' <<<"$u
   exit 1
 fi
 
+db_hot_query_one_out="$(PATH="${tmp}:$PATH" BENCH_TARGET_DB_HOT_QUERY_ONE=654 "${root_dir}/scripts/run_profile.sh" --dry-run sec4-lasm db-hot-query-one 2>&1)"
+if ! grep -q 'endpoint=db-hot-query-one' <<<"$db_hot_query_one_out"; then
+  echo "run_profile db-hot-query-one dry-run missing endpoint output" >&2
+  exit 1
+fi
+if ! grep -q 'targetRps=654' <<<"$db_hot_query_one_out"; then
+  echo "run_profile db-hot-query-one override missing targetRps output" >&2
+  exit 1
+fi
+if ! grep -q '/db/hot-query-one' <<<"$db_hot_query_one_out"; then
+  echo "run_profile db-hot-query-one dry-run missing endpoint path in command" >&2
+  exit 1
+fi
+
 rm -f "${tmp}/wrk2"
 cat >"${tmp}/wrk" <<'EOF'
 #!/usr/bin/env bash

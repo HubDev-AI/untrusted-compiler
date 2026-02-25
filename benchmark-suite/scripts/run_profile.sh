@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get> [base_url]" >&2
+  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get|db-hot-write|db-hot-write-tx|db-hot-query-one|db-records> [base_url]" >&2
 }
 
 dry_run="false"
@@ -128,6 +128,30 @@ case "$endpoint" in
     target="${BENCH_TARGET_USERS_GET:-$target}"
     target="${BENCH_TARGET:-$target}"
     build_wrk_cmd "${root_dir}/load/wrk2/get_user.lua" "${base_url}"
+    ;;
+  db-hot-write)
+    target=1000
+    target="${BENCH_TARGET_DB_HOT_WRITE:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-write"
+    ;;
+  db-hot-write-tx)
+    target=800
+    target="${BENCH_TARGET_DB_HOT_WRITE_TX:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-write-tx"
+    ;;
+  db-hot-query-one)
+    target=700
+    target="${BENCH_TARGET_DB_HOT_QUERY_ONE:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-query-one"
+    ;;
+  db-records)
+    target=1000
+    target="${BENCH_TARGET_DB_RECORDS:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/records"
     ;;
   *)
     echo "unsupported endpoint: $endpoint" >&2

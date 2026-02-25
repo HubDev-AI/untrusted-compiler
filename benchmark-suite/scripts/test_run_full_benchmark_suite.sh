@@ -2,6 +2,9 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
+tmp_dsn="$(mktemp)"
+trap 'rm -f "$tmp_dsn"' EXIT
+printf '%s\n' 'postgresql://bench:bench@127.0.0.1:5432/bench' >"$tmp_dsn"
 out="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls node --endpoints ping)"
 
 if ! grep -q '^phase: fixed-target matrix$' <<<"$out"; then
@@ -26,6 +29,20 @@ if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*an
 fi
 if ! grep -q 'build_artifact_manifest.sh .*results .*artifact-manifest.json' <<<"$out"; then
   echo "missing artifact manifest command" >&2
+  exit 1
+fi
+
+db_out="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints db-hot-write --lasm-db-adapter postgres --lasm-db-postgres-dsn-file "$tmp_dsn")"
+if ! grep -q "start: sec4-lasm service on :18085 (db-adapter=postgres dsn-file=${tmp_dsn})" <<<"$db_out"; then
+  echo "missing postgres adapter start marker in full-suite dry-run output" >&2
+  exit 1
+fi
+if ! grep -q 'run_profile.sh --dry-run sec4-lasm db-hot-write' <<<"$db_out"; then
+  echo "missing db-hot-write fixed-target dry-run command in full suite output" >&2
+  exit 1
+fi
+if ! grep -q 'run_step_profile.sh --dry-run sec4-lasm db-hot-write' <<<"$db_out"; then
+  echo "missing db-hot-write step-load dry-run command in full suite output" >&2
   exit 1
 fi
 

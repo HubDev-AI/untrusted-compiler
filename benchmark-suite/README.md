@@ -35,6 +35,11 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=decode`
    - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-post`
    - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-get`
+   - DB hot-path profiles (sec4/sec4-lasm services):
+     - `make -C benchmark-suite bench-profile IMPL=sec4-lasm ENDPOINT=db-hot-write`
+     - `make -C benchmark-suite bench-profile IMPL=sec4-lasm ENDPOINT=db-hot-write-tx`
+     - `make -C benchmark-suite bench-profile IMPL=sec4-lasm ENDPOINT=db-hot-query-one`
+     - `make -C benchmark-suite bench-profile IMPL=sec4-lasm ENDPOINT=db-records`
    - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=sec4 ENDPOINT=decode`
    - analyze step output: `make -C benchmark-suite analyze-step-profile IMPL=sec4 ENDPOINT=decode`
    - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=decode`
@@ -55,6 +60,12 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-matrix`
    - default run includes `sec4,sec4-lasm,node,go,rust`; override with `IMPLS=sec4,sec4-lasm,node,go,rust,c`
    - override endpoint set with `ENDPOINTS=ping,decode` for focused runs
+   - LASM Postgres mode for matrix/full suites:
+     - `make -C benchmark-suite bench-matrix BENCH_LASM_DB_ADAPTER=postgres BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+     - `make -C benchmark-suite bench-full BENCH_LASM_DB_ADAPTER=postgres BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+   - DB hot-path matrix convenience target (defaults: `sec4-lasm` + db endpoints):
+     - `make -C benchmark-suite bench-matrix-lasm-postgres BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+     - `make -C benchmark-suite bench-full-lasm-postgres BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
 12. Run step-load cross-impl orchestrator:
    - `make -C benchmark-suite bench-step-matrix-dry`
    - `make -C benchmark-suite bench-step-matrix`
@@ -106,6 +117,9 @@ Measure end-to-end service behavior across identical implementations:
 - Published markdown reports include explicit endpoint scope in the header (`Endpoints in matrix (...)`) for partial-run clarity.
 - Matrix comparison now scopes to selected implementations (`IMPLS`) so stale reports from other impls are excluded.
 - Published markdown reports also include implementation scope (`Implementations in matrix (...)`).
+- Matrix/step/full orchestrators accept LASM runtime DB mode wiring:
+  - `--lasm-db-adapter records-log|sqlite|postgres`
+  - `--lasm-db-postgres-dsn-file /abs/path/to/postgres.dsn` (or `SEC4_RT_LASM_DB_POSTGRES_DSN`)
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.

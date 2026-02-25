@@ -17,6 +17,16 @@ if ! grep -q 'step profile impl=sec4 endpoint=decode rate=3000 duration=30s' <<<
   exit 1
 fi
 
+db_out="$("${root_dir}/scripts/run_step_profile.sh" --dry-run sec4-lasm db-hot-query-one 2>&1)"
+if ! grep -q 'step profile impl=sec4-lasm endpoint=db-hot-query-one rate=300 duration=30s' <<<"$db_out"; then
+  echo "run_step_profile missing default db-hot-query-one step 300" >&2
+  exit 1
+fi
+if ! grep -q 'step profile impl=sec4-lasm endpoint=db-hot-query-one rate=700 duration=30s' <<<"$db_out"; then
+  echo "run_step_profile missing default db-hot-query-one step 700" >&2
+  exit 1
+fi
+
 override_out="$(BENCH_STEP_RATES=111,222 BENCH_STEP_DURATION=9s "${root_dir}/scripts/run_step_profile.sh" --dry-run sec4 ping 2>&1)"
 if ! grep -q 'rate=111 duration=9s' <<<"$override_out"; then
   echo "run_step_profile missing override step 111" >&2

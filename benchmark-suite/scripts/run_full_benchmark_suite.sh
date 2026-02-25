@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records] [--sec-audit path]
+          [--lasm-db-adapter records-log|sqlite|postgres] [--lasm-db-postgres-dsn-file path]
           [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
           [--saturation-profile ping|db-hot-write|db-hot-write-tx|db-hot-query-one]
@@ -25,6 +26,8 @@ dry_run="false"
 impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
+lasm_db_adapter="${BENCH_LASM_DB_ADAPTER:-}"
+lasm_db_postgres_dsn_file="${BENCH_LASM_DB_POSTGRES_DSN_FILE:-}"
 include_lasm_mode_compare="${LASM_INCLUDE_MODE_COMPARE:-false}"
 include_lasm_saturation="false"
 saturation_skip_verify="false"
@@ -86,6 +89,30 @@ while [ "$#" -gt 0 ]; do
       ;;
     --sec-audit=*)
       sec_audit_path="${1#--sec-audit=}"
+      shift
+      ;;
+    --lasm-db-adapter)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_adapter="$2"
+      shift 2
+      ;;
+    --lasm-db-adapter=*)
+      lasm_db_adapter="${1#--lasm-db-adapter=}"
+      shift
+      ;;
+    --lasm-db-postgres-dsn-file)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_postgres_dsn_file="$2"
+      shift 2
+      ;;
+    --lasm-db-postgres-dsn-file=*)
+      lasm_db_postgres_dsn_file="${1#--lasm-db-postgres-dsn-file=}"
       shift
       ;;
     --include-lasm-saturation)
@@ -357,17 +384,34 @@ if [ -z "$sec_audit_path" ]; then
 fi
 
 echo "phase: fixed-target matrix"
+fixed_matrix_args=(--impls "$impls_csv" --endpoints "$endpoints_csv")
+if [ -n "$sec_audit_path" ]; then
+  fixed_matrix_args+=(--sec-audit "$sec_audit_path")
+fi
+if [ -n "$lasm_db_adapter" ]; then
+  fixed_matrix_args+=(--lasm-db-adapter "$lasm_db_adapter")
+fi
+if [ -n "$lasm_db_postgres_dsn_file" ]; then
+  fixed_matrix_args+=(--lasm-db-postgres-dsn-file "$lasm_db_postgres_dsn_file")
+fi
 if [ "$dry_run" = "true" ]; then
-  "${root_dir}/scripts/run_comparison_matrix.sh" --dry-run --impls "$impls_csv" --endpoints "$endpoints_csv" ${sec_audit_path:+--sec-audit "$sec_audit_path"}
+  "${root_dir}/scripts/run_comparison_matrix.sh" --dry-run "${fixed_matrix_args[@]}"
 else
-  "${root_dir}/scripts/run_comparison_matrix.sh" --impls "$impls_csv" --endpoints "$endpoints_csv" ${sec_audit_path:+--sec-audit "$sec_audit_path"}
+  "${root_dir}/scripts/run_comparison_matrix.sh" "${fixed_matrix_args[@]}"
 fi
 
 echo "phase: step-load matrix"
+step_matrix_args=(--impls "$impls_csv" --endpoints "$endpoints_csv")
+if [ -n "$lasm_db_adapter" ]; then
+  step_matrix_args+=(--lasm-db-adapter "$lasm_db_adapter")
+fi
+if [ -n "$lasm_db_postgres_dsn_file" ]; then
+  step_matrix_args+=(--lasm-db-postgres-dsn-file "$lasm_db_postgres_dsn_file")
+fi
 if [ "$dry_run" = "true" ]; then
-  "${root_dir}/scripts/run_step_matrix.sh" --dry-run --impls "$impls_csv" --endpoints "$endpoints_csv"
+  "${root_dir}/scripts/run_step_matrix.sh" --dry-run "${step_matrix_args[@]}"
 else
-  "${root_dir}/scripts/run_step_matrix.sh" --impls "$impls_csv" --endpoints "$endpoints_csv"
+  "${root_dir}/scripts/run_step_matrix.sh" "${step_matrix_args[@]}"
 fi
 
 if [ "${include_lasm_saturation}" = "true" ]; then
