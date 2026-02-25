@@ -127,9 +127,18 @@ fn lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms: u64) -> u64 {
     timeout_ms.saturating_add(999).saturating_div(1000).max(1)
 }
 
+fn has_lasm_postgres_connect_timeout(dsn: &str) -> bool {
+    let compact = dsn
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    compact.contains("connect_timeout=")
+}
+
 fn build_lasm_postgres_connect_dsn(dsn: &str, connect_timeout_seconds: u64) -> String {
     let trimmed = dsn.trim();
-    if trimmed.contains("connect_timeout=") {
+    if has_lasm_postgres_connect_timeout(trimmed) {
         return trimmed.to_string();
     }
     if trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://") {
@@ -405,7 +414,8 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
 mod tests {
     use super::{
         build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
-        lasm_db_postgres_tls_mode_label, lasm_postgres_connect_timeout_seconds_from_ms,
+        has_lasm_postgres_connect_timeout, lasm_db_postgres_tls_mode_label,
+        lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
         parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
         LasmDbPostgresTlsMode,
@@ -450,6 +460,40 @@ mod tests {
             rewritten,
             "postgres://u:p@localhost/db?connect_timeout=9&sslmode=disable"
         );
+    }
+
+    #[test]
+    fn postgres_connect_dsn_preserves_existing_connect_timeout_case_insensitive() {
+        let rewritten = build_lasm_postgres_connect_dsn(
+            "postgres://u:p@localhost/db?CONNECT_TIMEOUT=9&sslmode=disable",
+            2,
+        );
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?CONNECT_TIMEOUT=9&sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn postgres_connect_dsn_preserves_existing_connect_timeout_with_keyword_spacing() {
+        let rewritten = build_lasm_postgres_connect_dsn(
+            "host=localhost dbname=sec4 connect_timeout = 9",
+            2,
+        );
+        assert_eq!(rewritten, "host=localhost dbname=sec4 connect_timeout = 9");
+    }
+
+    #[test]
+    fn postgres_connect_timeout_detector_handles_whitespace_and_case() {
+        assert!(has_lasm_postgres_connect_timeout(
+            "postgres://u:p@localhost/db?CONNECT_TIMEOUT=9&sslmode=disable"
+        ));
+        assert!(has_lasm_postgres_connect_timeout(
+            "host=localhost dbname=sec4 connect_timeout = 9"
+        ));
+        assert!(!has_lasm_postgres_connect_timeout(
+            "postgres://u:p@localhost/db?sslmode=disable"
+        ));
     }
 
     #[test]
