@@ -1953,21 +1953,25 @@ Post-alpha track acceptance anchors:
       - documented in `docs/book/1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`.
    - [x] Tightened SQLite positional parameter-count contract:
       - sqlite positional execution now rejects extra parameter payload entries instead of silently ignoring them when SQL template expects fewer placeholders,
-      - zero-placeholder SQL keeps compatibility behavior (extra params ignored),
+      - zero-placeholder SQL now also enforces exact `0` parameter arity (no compatibility bypass),
       - deterministic runtime validation now emits `sqlite query expects exactly N sql parameters but received M` for too-many positional params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1472-m39-lasm-sqlite-positional-parameter-count-contract.md`.
    - [x] Tightened Postgres parameter-count contract to exact arity:
       - Postgres runtime (`db.exec`, `db.execTx`, `db.queryOne`) now rejects extra SQL params instead of relying on driver/runtime mismatch errors,
-      - zero-placeholder SQL keeps compatibility behavior (extra params ignored),
+      - zero-placeholder SQL now also enforces exact `0` parameter arity (no compatibility bypass),
       - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
       - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
       - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
    - [x] Fixed Postgres zero-placeholder compatibility on runtime bind path:
       - `db.exec` / `db.execTx` now enter prepared+bind path only when placeholders are present,
       - `db.queryOne` now binds an empty parameter slice when placeholder count is zero,
-      - preserves documented compatibility contract for zero-placeholder SQL with legacy params payloads.
+      - this now aligns with strict exact-arity runtime validation for zero-placeholder SQL.
       - documented in `docs/book/1480-m39-lasm-postgres-zero-placeholder-bind-compat.md`.
+   - [x] Removed legacy zero-placeholder extra-param compatibility fixtures from DB runtime command coverage:
+      - sqlite and postgres DB integration fixtures now pass explicit empty params payloads (`[]`) on zero-placeholder SQL success paths,
+      - deterministic success/error envelopes stay unchanged while strict zero-placeholder exact-arity behavior remains active.
+      - documented in `docs/book/1507-m39-db-zero-placeholder-exact-arity-enforcement.md`.
    - [x] Added `/db/records` offset filter for deterministic paging windows:
       - list-records response now accepts `offset` (`>= 0`) and applies it before limit-window materialization,
       - `offset` is now echoed in response filter metadata,

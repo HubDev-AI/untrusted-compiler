@@ -15525,7 +15525,7 @@ fn main() effects { net } -> Int {
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
-        "POST /db/exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec-tx?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_tx_response.contains("HTTP/1.1 200 OK"),
@@ -15560,7 +15560,7 @@ fn main() effects { net } -> Int {
 
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
-        "GET /db/query-one?template=SELECT%201&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+        "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         query_one_response.contains("HTTP/1.1 200 OK"),
@@ -16718,7 +16718,7 @@ fn main() effects { net } -> Int {
 
     let exec_response = run_lasm_oneshot_request(
         exec_port,
-        "POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_response.contains("HTTP/1.1 200 OK"),
@@ -16735,7 +16735,7 @@ fn main() effects { net } -> Int {
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
-        "POST /db/exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec-tx?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_tx_response.contains("HTTP/1.1 200 OK"),
@@ -16796,7 +16796,7 @@ fn main() effects { net } -> Int {
             && sqlite_rows[0].1 == "exec"
             && sqlite_rows[0].2 == 1
             && sqlite_rows[0].3 == "SELECT 1"
-            && sqlite_rows[0].4 == "alpha"
+            && sqlite_rows[0].4 == "[]"
             && sqlite_rows[0].5 == 0
             && sqlite_rows[0].6 >= 0,
         "sqlite first record should match deterministic db.exec payload: {:?}",
@@ -16807,7 +16807,7 @@ fn main() effects { net } -> Int {
             && sqlite_rows[1].1 == "execTx"
             && sqlite_rows[1].2 == 1
             && sqlite_rows[1].3 == "SELECT 1"
-            && sqlite_rows[1].4 == "alpha"
+            && sqlite_rows[1].4 == "[]"
             && sqlite_rows[1].5 > 0
             && sqlite_rows[1].6 >= 0,
         "sqlite second record should match deterministic db.execTx payload: {:?}",
@@ -16816,7 +16816,7 @@ fn main() effects { net } -> Int {
 
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
-        "GET /db/query-one?template=SELECT%201&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+        "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         query_one_response.contains("HTTP/1.1 200 OK"),
@@ -17535,7 +17535,7 @@ fn main() effects { net } -> Int {
 
     let seed_exec_tx_response = run_lasm_oneshot_request(
         seed_exec_tx_port,
-        "POST /db/seed-exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/seed-exec-tx?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         seed_exec_tx_response.contains("HTTP/1.1 200 OK")
@@ -17687,7 +17687,7 @@ fn main() effects { net } -> Int {
     };
 
     let first_exec_tx_response = send_request(
-        "POST /db/exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        "POST /db/exec-tx?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
     );
     assert!(
         first_exec_tx_response.contains("HTTP/1.1 200 OK")
@@ -17697,7 +17697,7 @@ fn main() effects { net } -> Int {
     );
 
     let second_exec_tx_response = send_request(
-        "POST /db/exec-tx?template=SELECT%202&params=beta HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        "POST /db/exec-tx?template=SELECT%202&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
     );
     assert!(
         second_exec_tx_response.contains("HTTP/1.1 200 OK")
@@ -17718,8 +17718,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"txHandleCapacity\":1")
             && list_response.contains("\"dbTimeoutsMs\"")
             && list_response.contains("\"op\":\"execTx\"")
-            && list_response.contains("alpha")
-            && list_response.contains("beta"),
+            && list_response.contains("[]"),
         "inline db.tx handle cleanup should keep tx handle count bounded while allowing subsequent execTx records:\n{list_response}"
     );
 
@@ -19310,7 +19309,7 @@ fn main() effects { net } -> Int {
 
     let exec_response = run_lasm_oneshot_request(
         exec_port,
-        "POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_response.contains("HTTP/1.1 200 OK"),
@@ -28904,7 +28903,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        b"POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();

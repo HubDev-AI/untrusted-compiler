@@ -948,9 +948,6 @@ fn validate_lasm_postgres_parameter_arity(
     required_params: usize,
     provided_count: usize,
 ) -> Result<(), String> {
-    if required_params == 0 {
-        return Ok(());
-    }
     if provided_count < required_params {
         return Err(format!(
             "postgres query requires at least {required_params} sql parameters but received {provided_count}"
@@ -1765,9 +1762,13 @@ mod tests {
     }
 
     #[test]
-    fn postgres_parameter_arity_allows_extra_params_when_sql_has_no_placeholders() {
-        validate_lasm_postgres_parameter_arity(0, 2)
-            .expect("zero-placeholder sql should ignore extra params for compatibility");
+    fn postgres_parameter_arity_rejects_extra_params_when_sql_has_no_placeholders() {
+        let error =
+            validate_lasm_postgres_parameter_arity(0, 2).expect_err("extra params should fail");
+        assert_eq!(
+            error,
+            "postgres query expects exactly 0 sql parameters but received 2"
+        );
     }
 
     #[test]
