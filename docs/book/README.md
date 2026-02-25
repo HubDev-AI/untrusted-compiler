@@ -1460,5 +1460,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1488-m39-lasm-relay-backoff-skip-budget-aware-pump-scanning.md`
 - `1489-m39-lasm-relay-pump-scan-multiplier-runtime-tuning.md`
 - `1490-m39-lasm-worker-port-generation-gated-snapshot-loads.md`
+- `1491-m39-lasm-db-multi-operation-sequence-dispatch.md`
 
 As milestones progress, chapters will be added and linked from this index.

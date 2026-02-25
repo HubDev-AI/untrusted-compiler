@@ -16148,7 +16148,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_lasm_backend_rejects_multiple_db_intrinsic_ops_in_single_handler() {
+fn run_command_lasm_backend_executes_multiple_db_intrinsic_ops_in_single_handler() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-multi-op");
     let db_base = project_dir.join("lasm-db");
     let port = find_available_tcp_port();
@@ -16190,9 +16190,10 @@ fn main() effects { net } -> Int {
     )
     .expect("source should be written");
 
-    let path = project_dir
+    let project_path = project_dir
         .to_str()
-        .expect("project path should be valid utf-8");
+        .expect("project path should be valid utf-8")
+        .to_string();
     let db_base_value = db_base
         .to_str()
         .expect("db base path should be valid utf-8")
@@ -16202,14 +16203,14 @@ fn main() effects { net } -> Int {
         .args([
             "run",
             "--path",
-            path,
+            &project_path,
             "--backend",
             "lasm",
             "--db-base",
             db_base_value.as_str(),
             "--oneshot",
             "--port",
-            port_value.as_str(),
+            &port_value,
             "--serve-timeout-ms",
             "20000",
         ])
@@ -16227,7 +16228,6 @@ fn main() effects { net } -> Int {
         {
             panic!("run command exited before request with status: {status}");
         }
-
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
@@ -16276,20 +16276,24 @@ fn main() effects { net } -> Int {
         "run command LASM db multi-op process should exit successfully"
     );
     assert!(
-        response.contains("HTTP/1.1 400 Bad Request")
-            && response.contains("\"code\":\"DB.MULTI_OP_UNSUPPORTED\""),
-        "db multi-op response should return deterministic unsupported-operation error:\n{response}"
+        response.contains("HTTP/1.1 200 OK")
+            && response.contains("\"recordId\":2")
+            && response.contains("\"template\":\"SELECT 2\""),
+        "db multi-op response should materialize final op and include deterministic record metadata:\n{response}"
     );
 
     let records_log_path = db_base.join("records.log");
-    if records_log_path.exists() {
-        let records_log = fs::read_to_string(&records_log_path)
-            .expect("LASM db multi-op test should be able to read records.log when present");
-        assert!(
-            !records_log.contains("\"op\":\"exec\""),
-            "records.log should not persist exec records when multi-op handler is rejected:\n{records_log}"
-        );
-    }
+    let records_log =
+        fs::read_to_string(&records_log_path).expect("records.log should exist for db multi-op");
+    assert!(
+        records_log.matches("\"op\":\"exec\"").count() >= 2,
+        "records.log should contain persisted records for both db.exec operations:\n{records_log}"
+    );
+    assert!(
+        records_log.contains("\"template\":\"SELECT 1\"")
+            && records_log.contains("\"template\":\"SELECT 2\""),
+        "records.log should capture both templates from multi-op handler:\n{records_log}"
+    );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
