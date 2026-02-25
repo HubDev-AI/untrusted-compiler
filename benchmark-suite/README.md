@@ -75,10 +75,14 @@ Measure end-to-end service behavior across identical implementations:
 14. Run standardized Postgres comparison suite (baseline + DB hot-path snapshots):
    - `make -C benchmark-suite bench-alpha-postgres-suite-dry BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
    - `make -C benchmark-suite bench-alpha-postgres-suite BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn`
+   - repeated same-condition run-manifest wrapper:
+     - `make -C benchmark-suite bench-alpha-postgres-suite-repeats-dry BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn BENCH_ALPHA_POSTGRES_REPEAT_RUNS=3`
+     - `make -C benchmark-suite bench-alpha-postgres-suite-repeats BENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn BENCH_ALPHA_POSTGRES_REPEAT_RUNS=3`
    - optional DB cleanup between baseline/db-hot phases:
      - `benchmark-suite/scripts/run_alpha_postgres_comparison_suite.sh --reset-db-between-phases ...`
      - or from Make targets: `BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true`
    - writes summary: `benchmark-suite/results/summaries/alpha-postgres-comparison-suite.json`
+   - repeated wrapper writes aggregate summary: `benchmark-suite/results/summaries/alpha-postgres-comparison-suite-repeats.json`
 15. Run standardized Postgres comparison suite with repo-local Postgres infra orchestration:
    - `make -C benchmark-suite bench-alpha-postgres-suite-local-dry`
    - `make -C benchmark-suite bench-alpha-postgres-suite-local`
@@ -137,6 +141,7 @@ Measure end-to-end service behavior across identical implementations:
   - `*-alpha-base.*`
   - `*-alpha-db-postgres.*`
   - summary (`results/summaries/alpha-postgres-comparison-suite.json`) now also includes `runContext` metadata with repo revision, host fingerprint, DSN source mode, and active `BENCH_*` override values.
+- `run_alpha_postgres_comparison_suite_repeats.sh` wraps the same suite for repeated runs (`--runs <n>`), snapshots each run’s artifacts to run-scoped files under `results/summaries/alpha-postgres-comparison-suite-runs/`, and writes one aggregate run-manifest summary (`results/summaries/alpha-postgres-comparison-suite-repeats.json`).
 - `run_alpha_postgres_comparison_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the same two-phase suite and auto-injects DSN via temporary file, so local runs do not require manually exporting DSN flags.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.

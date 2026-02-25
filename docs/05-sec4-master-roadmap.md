@@ -2258,6 +2258,11 @@ Post-alpha track acceptance anchors:
       - `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE=<relative>` now resolves against `--path` project root when cwd-relative lookup misses, matching explicit `--db-postgres-dsn-file` behavior,
       - applies to both `sec4 run` and `sec4 lasm-smoke` dynamic-state bootstrap path and preserves deterministic invalid-content diagnostics.
       - documented in `docs/book/1506-m39-env-postgres-dsn-file-project-relative-resolution.md`.
+   - [x] Added repeated-run wrapper for standardized Postgres comparison suite:
+      - new script `benchmark-suite/scripts/run_alpha_postgres_comparison_suite_repeats.sh` executes `run_alpha_postgres_comparison_suite.sh` across `--runs <n>` with identical forwarded args,
+      - each non-dry run snapshots baseline/db-hot artifacts into run-scoped files under `results/summaries/alpha-postgres-comparison-suite-runs/` and writes aggregate run-manifest summary JSON (`alpha-postgres-comparison-suite-repeats.json`),
+      - Make entrypoints added: `bench-alpha-postgres-suite-repeats` and `bench-alpha-postgres-suite-repeats-dry` (`BENCH_ALPHA_POSTGRES_REPEAT_RUNS`).
+      - documented in `docs/book/1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

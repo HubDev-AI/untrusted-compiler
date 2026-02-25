@@ -1477,5 +1477,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1505-m39-alpha-postgres-suite-reset-flag-make-wiring.md`
 - `1506-m39-env-postgres-dsn-file-project-relative-resolution.md`
 - `1507-m39-db-zero-placeholder-exact-arity-enforcement.md`
+- `1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`
 
 As milestones progress, chapters will be added and linked from this index.
