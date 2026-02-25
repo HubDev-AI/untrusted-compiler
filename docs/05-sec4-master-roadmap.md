@@ -2207,6 +2207,10 @@ Post-alpha track acceptance anchors:
       - retained sequence tx handles are deterministically cleaned after sequence completion (including failure paths),
       - preserves single-op `execTx` behavior while enabling deterministic multi-op tx semantics.
       - documented in `docs/book/1493-m39-lasm-db-multi-op-exectx-sequence-tx-reuse.md`.
+   - [x] Hardened Postgres stale prepared-plan recovery for schema drift:
+      - runtime stale-plan detection now treats `cached plan must not change result type` as a stale prepared-statement signal in addition to missing prepared statements,
+      - stale-plan failures now trigger deterministic statement-cache eviction + reprepare retry on `exec`, `execTx`, and `queryOne` prepared paths.
+      - documented in `docs/book/1494-m39-lasm-postgres-stale-plan-reprepare-recovery.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

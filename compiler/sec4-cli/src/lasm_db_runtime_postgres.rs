@@ -794,12 +794,17 @@ fn is_lasm_postgres_stale_prepared_statement_sqlstate(code: Option<&str>) -> boo
     matches!(code, Some("26000"))
 }
 
+fn is_lasm_postgres_stale_prepared_statement_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    (normalized.contains("prepared statement") && normalized.contains("does not exist"))
+        || normalized.contains("cached plan must not change result type")
+}
+
 fn is_lasm_postgres_stale_prepared_statement_error(err: &postgres::Error) -> bool {
     if is_lasm_postgres_stale_prepared_statement_sqlstate(err.code().map(|code| code.code())) {
         return true;
     }
-    let normalized = err.to_string().to_ascii_lowercase();
-    normalized.contains("prepared statement") && normalized.contains("does not exist")
+    is_lasm_postgres_stale_prepared_statement_message(err.to_string().as_str())
 }
 
 fn evict_lasm_postgres_prepared_statement(
@@ -852,10 +857,11 @@ fn is_lasm_postgres_reconnectable_prepare_error(message: &str) -> bool {
 
 fn is_lasm_postgres_stale_prepare_error(message: &str) -> bool {
     if let Some(sqlstate) = extract_lasm_postgres_runtime_sqlstate(message) {
-        return is_lasm_postgres_stale_prepared_statement_sqlstate(Some(sqlstate.as_str()));
+        if is_lasm_postgres_stale_prepared_statement_sqlstate(Some(sqlstate.as_str())) {
+            return true;
+        }
     }
-    let normalized = message.to_ascii_lowercase();
-    normalized.contains("prepared statement") && normalized.contains("does not exist")
+    is_lasm_postgres_stale_prepared_statement_message(message)
 }
 
 fn prepare_lasm_postgres_statement_with_reconnect(
@@ -1718,6 +1724,9 @@ mod tests {
         ));
         assert!(is_lasm_postgres_stale_prepare_error(
             "postgres prepare failed: prepared statement \"s1\" does not exist"
+        ));
+        assert!(is_lasm_postgres_stale_prepare_error(
+            "postgres queryOne execution failed: cached plan must not change result type; sqlstate=0A000"
         ));
         assert!(!is_lasm_postgres_stale_prepare_error(
             "postgres prepare failed: admin shutdown; sqlstate=57P01"
