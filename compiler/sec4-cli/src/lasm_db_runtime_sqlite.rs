@@ -406,9 +406,6 @@ fn validate_lasm_sqlite_parameter_arity(
     parameter_count: usize,
     provided_count: usize,
 ) -> Result<(), String> {
-    if parameter_count == 0 {
-        return Ok(());
-    }
     if provided_count < parameter_count {
         return Err(format!(
             "sqlite query requires at least {parameter_count} sql parameters but received {provided_count}"
@@ -861,8 +858,9 @@ mod tests {
     }
 
     #[test]
-    fn positional_arity_validation_allows_extra_params_when_sql_has_no_placeholders() {
-        validate_lasm_sqlite_parameter_arity(0, 2)
-            .expect("zero-placeholder sql should ignore extra params for compatibility");
+    fn positional_arity_validation_rejects_extra_params_when_sql_has_no_placeholders() {
+        let error =
+            validate_lasm_sqlite_parameter_arity(0, 2).expect_err("extra params should fail");
+        assert!(error.contains("expects exactly 0 sql parameters but received 2"));
     }
 }
