@@ -1488,5 +1488,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1516-m39-postgres-connect-timeout-dsn-detection-hardening.md`
 - `1517-m39-postgres-connect-timeout-dsn-fragment-safe-rewrite.md`
 - `1518-m39-postgres-connect-diagnostic-dsn-redaction.md`
+- `1519-m39-postgres-large-unsigned-param-precision-preservation.md`
 
 As milestones progress, chapters will be added and linked from this index.
