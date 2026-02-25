@@ -2242,6 +2242,10 @@ Post-alpha track acceptance anchors:
       - `run_alpha_postgres_comparison_suite.sh` summary JSON now includes deterministic `runContext` metadata (`repoRevision`, host fingerprint, DSN source mode, and active `BENCH_*` load overrides),
       - keeps artifact snapshots unchanged while making per-run condition comparisons explicit for operator review.
       - documented in `docs/book/1503-m39-alpha-postgres-suite-run-fingerprint-metadata.md`.
+   - [x] Added optional Postgres DB reset hook between alpha-suite phases:
+      - `run_alpha_postgres_comparison_suite.sh --reset-db-between-phases` now drops benchmark DB tables before DB-hot phase execution (`sec4_lasm_db_records`, `bench_users`, `users`) to keep repeated DB-hot runs isolated,
+      - dry-run output now includes explicit reset action markers.
+      - documented in `docs/book/1504-m39-alpha-postgres-suite-between-phase-db-reset.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
