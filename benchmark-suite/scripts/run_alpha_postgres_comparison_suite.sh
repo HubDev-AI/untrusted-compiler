@@ -9,6 +9,7 @@ usage: $0 [--dry-run]
           [--db-impls sec4-lasm]
           [--db-endpoints db-hot-write,db-hot-write-tx,db-hot-query-one,db-records]
           [--lasm-db-postgres-dsn-file path]
+          [--reset-db-between-phases]
           [--sec-audit path]
           [--out path]
 
@@ -29,6 +30,7 @@ db_endpoints_csv="db-hot-write,db-hot-write-tx,db-hot-query-one,db-records"
 lasm_db_postgres_dsn_file="${BENCH_LASM_DB_POSTGRES_DSN_FILE:-}"
 sec_audit_path=""
 out_path=""
+reset_db_between_phases="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -96,6 +98,10 @@ while [ "$#" -gt 0 ]; do
       lasm_db_postgres_dsn_file="${1#--lasm-db-postgres-dsn-file=}"
       shift
       ;;
+    --reset-db-between-phases)
+      reset_db_between_phases="true"
+      shift
+      ;;
     --sec-audit)
       if [ "$#" -lt 2 ]; then
         usage
@@ -158,6 +164,22 @@ if [ -z "$lasm_db_postgres_dsn_file" ] && [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-
   exit 2
 fi
 
+resolve_postgres_dsn_value() {
+  if [ -n "$lasm_db_postgres_dsn_file" ]; then
+    local from_file
+    from_file="$(cat "$lasm_db_postgres_dsn_file")"
+    printf '%s' "$from_file" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+    return
+  fi
+  printf '%s' "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
+postgres_dsn_value="$(resolve_postgres_dsn_value)"
+if [ -z "$postgres_dsn_value" ]; then
+  echo "postgres suite requires a non-empty Postgres DSN source" >&2
+  exit 2
+fi
+
 base_run_cmd=(
   "${root_dir}/scripts/run_full_benchmark_suite.sh"
   --impls "$base_impls_csv"
@@ -213,6 +235,26 @@ snapshot_artifacts() {
   cp -f "${results_dir}/artifact-manifest.json" "$manifest_path"
 }
 
+reset_db_between_phases_if_requested() {
+  if [ "$reset_db_between_phases" != "true" ]; then
+    return
+  fi
+  if [ "$dry_run" = "true" ]; then
+    echo "reset-db (between-phases): would drop benchmark tables via psql"
+    return
+  fi
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "reset-db (between-phases): psql command not found" >&2
+    exit 2
+  fi
+  echo "reset-db (between-phases): dropping benchmark tables"
+  psql "$postgres_dsn_value" -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+DROP TABLE IF EXISTS sec4_lasm_db_records;
+DROP TABLE IF EXISTS bench_users;
+DROP TABLE IF EXISTS users;
+SQL
+}
+
 echo "phase: alpha postgres comparison suite (baseline)"
 echo "run: ${base_run_cmd[*]}"
 if [ "$dry_run" = "true" ]; then
@@ -233,6 +275,7 @@ else
 fi
 
 echo "phase: alpha postgres comparison suite (db-hot)"
+reset_db_between_phases_if_requested
 echo "run: ${db_run_cmd[*]}"
 if [ "$dry_run" = "true" ]; then
   "${db_run_cmd[@]}" --dry-run
@@ -257,6 +300,7 @@ jq -n \
   --arg generatedAt "$(date -u +%FT%TZ)" \
   --arg repoRevision "$repo_revision" \
   --arg dryRun "$dry_run" \
+  --arg resetDbBetweenPhases "$reset_db_between_phases" \
   --arg dsnSource "$dsn_source" \
   --arg dsnFile "$lasm_db_postgres_dsn_file" \
   --arg hostUname "$host_uname" \
@@ -288,6 +332,7 @@ jq -n \
     runContext: {
       repoRevision: (if $repoRevision == "" then null else $repoRevision end),
       dryRun: ($dryRun == "true"),
+      resetDbBetweenPhases: ($resetDbBetweenPhases == "true"),
       dsn: {
         source: $dsnSource,
         file: (if $dsnFile == "" then null else $dsnFile end)
