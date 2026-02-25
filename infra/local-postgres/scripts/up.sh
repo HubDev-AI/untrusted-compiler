@@ -24,6 +24,11 @@ verify_postgres_credentials() {
       -tAc "select 1" >/dev/null
 }
 
+redact_postgres_dsn_password() {
+  local dsn="$1"
+  printf '%s' "$dsn" | sed -E 's#((postgres(ql)?://)[^:/?#]+:)[^@]*@#\1***@#'
+}
+
 if ! command -v docker >/dev/null 2>&1; then
   fail "docker is required"
 fi
@@ -72,8 +77,10 @@ for _ in $(seq 1 60); do
       popd >/dev/null
       fail "postgres startup verification failed"
     fi
+    raw_dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:${PG_PORT:-5432}/$POSTGRES_DB?sslmode=disable}"
+    redacted_dsn="$(redact_postgres_dsn_password "$raw_dsn")"
     echo "postgres is ready"
-    echo "dsn: ${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:${PG_PORT:-5432}/$POSTGRES_DB?sslmode=disable}"
+    echo "dsn: $redacted_dsn"
     echo "next: export SEC4_RT_LASM_DB_ADAPTER=postgres"
     echo "next: export SEC4_RT_LASM_DB_POSTGRES_DSN=..."
     popd >/dev/null
