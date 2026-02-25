@@ -142,6 +142,7 @@ Measure end-to-end service behavior across identical implementations:
   - `*-alpha-db-postgres.*`
   - summary (`results/summaries/alpha-postgres-comparison-suite.json`) now also includes `runContext` metadata with repo revision, host fingerprint, DSN source mode, and active `BENCH_*` override values.
 - `run_alpha_postgres_comparison_suite_repeats.sh` wraps the same suite for repeated runs (`--runs <n>`), snapshots each run’s artifacts to run-scoped files under `results/summaries/alpha-postgres-comparison-suite-runs/`, and writes one aggregate run-manifest summary (`results/summaries/alpha-postgres-comparison-suite-repeats.json`).
+  - repeated summary now includes aggregated per-impl/per-endpoint stats across runs for `requestsPerSec`, `p99Ms`, and `rssKb` under `baselineStats` and `dbHotStats`.
 - `run_alpha_postgres_comparison_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the same two-phase suite and auto-injects DSN via temporary file, so local runs do not require manually exporting DSN flags.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.

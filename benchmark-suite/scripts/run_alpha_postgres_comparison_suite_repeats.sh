@@ -86,8 +86,12 @@ if [ -z "$out_path" ]; then
 fi
 
 entries_file="$(mktemp)"
-trap 'rm -f "$entries_file"' EXIT
+baseline_samples_file="$(mktemp)"
+db_hot_samples_file="$(mktemp)"
+trap 'rm -f "$entries_file" "$baseline_samples_file" "$db_hot_samples_file"' EXIT
 : >"$entries_file"
+: >"$baseline_samples_file"
+: >"$db_hot_samples_file"
 
 copy_artifact() {
   local src="$1"
@@ -97,6 +101,69 @@ copy_artifact() {
     exit 2
   fi
   cp -f "$src" "$dest"
+}
+
+append_matrix_samples() {
+  local matrix_path="$1"
+  local run_tag="$2"
+  local samples_file="$3"
+  jq -c \
+    --arg run "$run_tag" \
+    '.endpoints[]?.compared[]? | {
+      run: $run,
+      impl: (.impl // null),
+      endpoint: (.endpoint // null),
+      requestsPerSec: (.requestsPerSec // null),
+      p99: (.p99 // null),
+      rssKb: (.rssKb // null)
+    }' \
+    "$matrix_path" >>"$samples_file"
+}
+
+compute_phase_stats() {
+  local samples_file="$1"
+  jq -s '
+    def p99_to_ms:
+      if . == null then null
+      elif (type != "string") then null
+      elif test("ms$") then (sub("ms$";"") | tonumber?)
+      elif test("us$") then ((sub("us$";"") | tonumber?) / 1000)
+      elif test("s$") then ((sub("s$";"") | tonumber?) * 1000)
+      else (tonumber?)
+      end;
+    sort_by((.impl // "") + "|" + (.endpoint // ""))
+    | group_by((.impl // "") + "|" + (.endpoint // ""))
+    | map({
+        impl: .[0].impl,
+        endpoint: .[0].endpoint,
+        samples: length,
+        requestsPerSec: (
+          [.[].requestsPerSec | select(type == "number")] as $vals
+          | if ($vals | length) == 0 then null else {
+              mean: (($vals | add) / ($vals | length)),
+              min: ($vals | min),
+              max: ($vals | max)
+            } end
+        ),
+        p99Ms: (
+          [.[].p99 | p99_to_ms | select(type == "number")] as $vals
+          | if ($vals | length) == 0 then null else {
+              mean: (($vals | add) / ($vals | length)),
+              min: ($vals | min),
+              max: ($vals | max)
+            } end
+        ),
+        rssKb: (
+          [.[].rssKb | select(type == "number")] as $vals
+          | if ($vals | length) == 0 then null else {
+              mean: (($vals | add) / ($vals | length)),
+              min: ($vals | min),
+              max: ($vals | max)
+            } end
+        )
+      })
+    | sort_by(.endpoint, .impl)
+  ' "$samples_file"
 }
 
 for run_index in $(seq 1 "$runs"); do
@@ -187,15 +254,27 @@ for run_index in $(seq 1 "$runs"); do
     --arg dbMatrix "$db_matrix_copy" \
     '{run: $run, dryRun: false, summary: $summary, baselineMatrix: $baseMatrix, dbHotMatrix: $dbMatrix}' \
     >>"$entries_file"
+
+  append_matrix_samples "$base_matrix_copy" "$run_tag" "$baseline_samples_file"
+  append_matrix_samples "$db_matrix_copy" "$run_tag" "$db_hot_samples_file"
 done
 
 runs_json="$(jq -s '.' "$entries_file")"
+baseline_stats_json='null'
+db_hot_stats_json='null'
+if [ "$dry_run" != "true" ]; then
+  baseline_stats_json="$(compute_phase_stats "$baseline_samples_file")"
+  db_hot_stats_json="$(compute_phase_stats "$db_hot_samples_file")"
+fi
+
 jq -n \
   --arg mode "alpha-postgres-comparison-suite-repeats" \
   --arg generatedAt "$(date -u +%FT%TZ)" \
   --arg dryRun "$dry_run" \
   --argjson runCount "$runs" \
   --argjson runs "$runs_json" \
+  --argjson baselineStats "$baseline_stats_json" \
+  --argjson dbHotStats "$db_hot_stats_json" \
   --arg wrapper "${root_dir}/scripts/run_alpha_postgres_comparison_suite_repeats.sh" \
   --arg inner "${root_dir}/scripts/run_alpha_postgres_comparison_suite.sh" \
   --arg passthrough "$(printf '%s\n' "${passthrough[@]}" | jq -R . | jq -s .)" \
@@ -209,7 +288,9 @@ jq -n \
       inner: $inner
     },
     forwardedArgs: ($passthrough | fromjson),
-    runs: $runs
+    runs: $runs,
+    baselineStats: $baselineStats,
+    dbHotStats: $dbHotStats
   }' >"$out_path"
 
 echo "wrote ${out_path}"
