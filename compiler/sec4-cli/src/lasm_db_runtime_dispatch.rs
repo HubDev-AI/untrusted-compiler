@@ -20,8 +20,8 @@ use crate::lasm_db_runtime_sqlite::{
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
     set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
-    LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_HEADER,
-    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
+    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 use std::collections::BTreeMap;
@@ -419,6 +419,25 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     db_records_adapter: LasmDbRecordsAdapter,
     trace_id: &str,
 ) -> bool {
+    let operation_count =
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER)
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+    if operation_count > 1 {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.MULTI_OP_UNSUPPORTED",
+                "validation",
+                "multiple DB intrinsic operations in a single handler are not supported yet",
+                400,
+                trace_id,
+            ),
+        );
+        return true;
+    }
+
     let Some(raw_operation) = take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_HEADER)
     else {
         return false;

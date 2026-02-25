@@ -109,18 +109,27 @@ pub(crate) fn apply_lasm_db_operation_plan_headers(
     }
 }
 
-pub(crate) fn extract_lasm_db_operation(
+pub(crate) fn extract_lasm_db_operation_with_count(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
-) -> Option<LasmDbOperationPlan> {
+) -> (Option<LasmDbOperationPlan>, usize) {
     let mut visited = HashSet::new();
-    extract_lasm_db_operation_in_function(functions, function_name, &mut visited, None)
+    let mut operation_count = 0usize;
+    let operation = extract_lasm_db_operation_in_function(
+        functions,
+        function_name,
+        &mut visited,
+        &mut operation_count,
+        None,
+    );
+    (operation, operation_count)
 }
 
 fn extract_lasm_db_operation_in_function(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     visited: &mut HashSet<String>,
+    operation_count: &mut usize,
     seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
 ) -> Option<LasmDbOperationPlan> {
     if visited.contains(function_name) {
@@ -132,8 +141,13 @@ fn extract_lasm_db_operation_in_function(
         return None;
     };
     let mut bindings = seed_bindings.unwrap_or_default();
-    let operation =
-        extract_lasm_db_operation_in_block(functions, &function.body, visited, &mut bindings);
+    let operation = extract_lasm_db_operation_in_block(
+        functions,
+        &function.body,
+        visited,
+        operation_count,
+        &mut bindings,
+    );
     visited.remove(function_name);
     operation
 }
@@ -142,18 +156,25 @@ fn extract_lasm_db_operation_in_block(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
+    operation_count: &mut usize,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmDbOperationPlan> {
     let mut operation = None;
     for statement in &block.statements {
-        if let Some(next) =
-            extract_lasm_db_operation_in_stmt(functions, statement, visited, bindings)
-        {
+        if let Some(next) = extract_lasm_db_operation_in_stmt(
+            functions,
+            statement,
+            visited,
+            operation_count,
+            bindings,
+        ) {
             operation = Some(next);
         }
     }
     if let Some(tail) = &block.tail {
-        if let Some(next) = extract_lasm_db_operation_in_expr(functions, tail, visited, bindings) {
+        if let Some(next) =
+            extract_lasm_db_operation_in_expr(functions, tail, visited, operation_count, bindings)
+        {
             operation = Some(next);
         }
     }
@@ -164,19 +185,26 @@ fn extract_lasm_db_operation_in_stmt(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
+    operation_count: &mut usize,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmDbOperationPlan> {
     match &statement.kind {
         sec4_core::ast::StmtKind::Let { name, value, .. } => {
-            let operation = extract_lasm_db_operation_in_expr(functions, value, visited, bindings);
+            let operation = extract_lasm_db_operation_in_expr(
+                functions,
+                value,
+                visited,
+                operation_count,
+                bindings,
+            );
             bindings.insert(name.clone(), value.clone());
             operation
         }
         sec4_core::ast::StmtKind::Return { value } => value.as_ref().and_then(|entry| {
-            extract_lasm_db_operation_in_expr(functions, entry, visited, bindings)
+            extract_lasm_db_operation_in_expr(functions, entry, visited, operation_count, bindings)
         }),
         sec4_core::ast::StmtKind::Expr { expr } => {
-            extract_lasm_db_operation_in_expr(functions, expr, visited, bindings)
+            extract_lasm_db_operation_in_expr(functions, expr, visited, operation_count, bindings)
         }
     }
 }
@@ -185,6 +213,7 @@ fn extract_lasm_db_operation_in_expr(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
+    operation_count: &mut usize,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmDbOperationPlan> {
     match &expr.kind {
@@ -192,19 +221,28 @@ fn extract_lasm_db_operation_in_expr(
             let mut operation = None;
             let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
                 .unwrap_or_else(|| callee.as_ref().clone());
-            if let Some(next) =
-                extract_lasm_db_operation_in_expr(functions, callee, visited, bindings)
-            {
+            if let Some(next) = extract_lasm_db_operation_in_expr(
+                functions,
+                callee,
+                visited,
+                operation_count,
+                bindings,
+            ) {
                 operation = Some(next);
             }
             for argument in args {
-                if let Some(next) =
-                    extract_lasm_db_operation_in_expr(functions, argument, visited, bindings)
-                {
+                if let Some(next) = extract_lasm_db_operation_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    operation_count,
+                    bindings,
+                ) {
                     operation = Some(next);
                 }
             }
             if let Some(next) = match_lasm_db_operation_call(&resolved_callee, args, bindings) {
+                *operation_count = operation_count.saturating_add(1);
                 operation = Some(next);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
@@ -218,6 +256,7 @@ fn extract_lasm_db_operation_in_expr(
                     functions,
                     function_name,
                     visited,
+                    operation_count,
                     Some(call_bindings),
                 ) {
                     operation = Some(next);
@@ -226,45 +265,71 @@ fn extract_lasm_db_operation_in_expr(
             operation
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            extract_lasm_db_operation_in_expr(functions, expr, visited, bindings)
+            extract_lasm_db_operation_in_expr(functions, expr, visited, operation_count, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            let mut operation =
-                extract_lasm_db_operation_in_expr(functions, left, visited, bindings);
-            if let Some(next) =
-                extract_lasm_db_operation_in_expr(functions, right, visited, bindings)
-            {
+            let mut operation = extract_lasm_db_operation_in_expr(
+                functions,
+                left,
+                visited,
+                operation_count,
+                bindings,
+            );
+            if let Some(next) = extract_lasm_db_operation_in_expr(
+                functions,
+                right,
+                visited,
+                operation_count,
+                bindings,
+            ) {
                 operation = Some(next);
             }
             operation
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
-            extract_lasm_db_operation_in_expr(functions, object, visited, bindings)
+            extract_lasm_db_operation_in_expr(functions, object, visited, operation_count, bindings)
         }
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => extract_lasm_db_operation_in_expr(functions, condition, visited, bindings)
-            .or_else(|| {
-                let mut then_bindings = bindings.clone();
-                extract_lasm_db_operation_in_block(
+        } => extract_lasm_db_operation_in_expr(
+            functions,
+            condition,
+            visited,
+            operation_count,
+            bindings,
+        )
+        .or_else(|| {
+            let mut then_bindings = bindings.clone();
+            extract_lasm_db_operation_in_block(
+                functions,
+                then_branch,
+                visited,
+                operation_count,
+                &mut then_bindings,
+            )
+        })
+        .or_else(|| {
+            let mut else_bindings = bindings.clone();
+            else_branch.as_ref().and_then(|entry| {
+                extract_lasm_db_operation_in_expr(
                     functions,
-                    then_branch,
+                    entry,
                     visited,
-                    &mut then_bindings,
+                    operation_count,
+                    &mut else_bindings,
                 )
             })
-            .or_else(|| {
-                let mut else_bindings = bindings.clone();
-                else_branch.as_ref().and_then(|entry| {
-                    extract_lasm_db_operation_in_expr(functions, entry, visited, &mut else_bindings)
-                })
-            }),
+        }),
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            if let Some(operation) =
-                extract_lasm_db_operation_in_expr(functions, scrutinee, visited, bindings)
-            {
+            if let Some(operation) = extract_lasm_db_operation_in_expr(
+                functions,
+                scrutinee,
+                visited,
+                operation_count,
+                bindings,
+            ) {
                 return Some(operation);
             }
             for arm in arms {
@@ -273,6 +338,7 @@ fn extract_lasm_db_operation_in_expr(
                     functions,
                     &arm.value,
                     visited,
+                    operation_count,
                     &mut arm_bindings,
                 ) {
                     return Some(operation);
@@ -282,7 +348,13 @@ fn extract_lasm_db_operation_in_expr(
         }
         sec4_core::ast::ExprKind::Block(block) => {
             let mut block_bindings = bindings.clone();
-            extract_lasm_db_operation_in_block(functions, block, visited, &mut block_bindings)
+            extract_lasm_db_operation_in_block(
+                functions,
+                block,
+                visited,
+                operation_count,
+                &mut block_bindings,
+            )
         }
         sec4_core::ast::ExprKind::Identifier(_)
         | sec4_core::ast::ExprKind::Number(_)

@@ -16037,6 +16037,153 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_rejects_multiple_db_intrinsic_ops_in_single_handler() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-multi-op");
+    let db_base = project_dir.join("lasm-db");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbmultiopcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn dbMulti() effects { net, db.write } -> Int {
+  let db = DbCap();
+  let template1 = validate.nonEmpty(req.query("template1"));
+  let params1 = validate.nonEmpty(req.query("params1"));
+  let query1 = sql.q(template1, params1);
+  let template2 = validate.nonEmpty(req.query("template2"));
+  let params2 = validate.nonEmpty(req.query("params2"));
+  let query2 = sql.q(template2, params2);
+  db.exec(db, query1);
+  db.exec(db, query2);
+  res.json(200, "DbExecRuntimeResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/multi", dbMulti);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let request = "POST /db/multi?template1=SELECT%201&params1=%5B1%5D&template2=SELECT%202&params2=%5B2%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db multi-op flow could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db multi-op process did not exit in expected window");
+        }
+    };
+    assert!(
+        status.success(),
+        "run command LASM db multi-op process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request")
+            && response.contains("\"code\":\"DB.MULTI_OP_UNSUPPORTED\""),
+        "db multi-op response should return deterministic unsupported-operation error:\n{response}"
+    );
+
+    let records_log_path = db_base.join("records.log");
+    if records_log_path.exists() {
+        let records_log = fs::read_to_string(&records_log_path)
+            .expect("LASM db multi-op test should be able to read records.log when present");
+        assert!(
+            !records_log.contains("\"op\":\"exec\""),
+            "records.log should not persist exec records when multi-op handler is rejected:\n{records_log}"
+        );
+    }
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_persists_sqlite_records_and_query_one_when_db_intrinsics_are_used() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-sqlite");
     let db_base = project_dir.join("lasm-db");

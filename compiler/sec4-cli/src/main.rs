@@ -88,8 +88,9 @@ use lasm_db_cli::{
 use lasm_db_config::load_lasm_db_postgres_dsn_from_file;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 use lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
@@ -1451,10 +1452,18 @@ fn collect_lasm_route_plans(
                 "1".to_string(),
             );
         }
-        if let Some(db_operation) =
-            lasm_db_plan::extract_lasm_db_operation(&functions, registration.handler_name.as_str())
-        {
+        let (db_operation, db_operation_count) = lasm_db_plan::extract_lasm_db_operation_with_count(
+            &functions,
+            registration.handler_name.as_str(),
+        );
+        if let Some(db_operation) = db_operation {
             lasm_db_plan::apply_lasm_db_operation_plan_headers(&mut headers, &db_operation);
+            if db_operation_count > 1 {
+                headers.insert(
+                    LASM_INTERNAL_DB_OP_COUNT_HEADER.to_string(),
+                    db_operation_count.to_string(),
+                );
+            }
         }
         if let Some(content_type) = response_plan.default_content_type {
             headers

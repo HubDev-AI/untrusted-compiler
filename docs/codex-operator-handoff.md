@@ -1,6 +1,6 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-02-19  
+Updated: 2026-02-25  
 Primary branch: `dev`  
 Current baseline commit: `4de2d06`
 
@@ -20,29 +20,28 @@ Use it to keep speed high without losing architecture direction.
 
 ## 3) Backlog Priority (Immediate)
 
-### P0: LASM scale hardening to higher RPS ceilings (implementation-first)
+### P0: Close strict no-stub alpha functionality checklist (blocking)
 
-1. Optimize front proxy + worker dispatch hot path (current bottleneck before 1M req/s goal in dynamic/autoscale mode).
-2. Reduce per-connection overhead in cluster mode (threading/copy path) and re-benchmark.
-3. Keep deterministic overload/error behavior while tuning performance.
-4. Produce repeatable throughput+latency+RSS evidence from cluster mode runs.
-5. Continue tuning toward higher ceilings before claiming production-scale target.
+1. Finish remaining no-stub alpha functionality criteria from `docs/05-sec4-master-roadmap.md` (runtime/compiler behavior, not governance loops).
+2. Remove remaining compatibility-only branches on alpha-critical paths where real deterministic behavior is required.
+3. Keep implementation-first cadence: targeted checks for touched functionality, broad runs only near merge confidence.
 
-### P1: DB adapter progression after P0
+### P1: Full LASM DB client after P0
 
-1. Keep file adapter (`records.log`) as alpha v1.
-2. Add SQLite adapter behind same DB intrinsic surface.
-3. Extract adapter layers into packages/modules **without changing language semantics**.
-4. Keep external DB adapters post-alpha.
+1. Replace LASM DB compatibility-bridge handling with full intrinsic runtime client dispatch (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`, `sql.q`).
+2. Keep file adapter (`records.log`) and SQLite under one intrinsic surface with deterministic parity contracts.
+3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
+4. Extract adapter layers into packages/modules only after full client path is complete and stable.
 
-### P2: Fixed order after DB integration (must follow)
+### P2: Composition Contract Analyzer (`M39-S2`) after P1
 
-1. Keep LASM as default server backend for `sec4 run` (already active; C remains explicit fallback).
-2. Complete LASM stability/load hardening on that default path (throughput/latency/memory regressions tracked).
-3. Move DB adapter progression behind same intrinsic surface (SQLite next).
-4. Extract adapter layers into packages/modules while preserving intrinsic contracts/diagnostics.
-5. Finalize one canonical LASM+DB operator flow (`init/check/build/run/load-test`) with reproducible docs.
-6. Only then move additional capacity to WASM/browser track.
+1. Implement analyzer guarantees for promotion-ready composition contracts.
+2. Add deterministic pass/fail fixture coverage and operator docs.
+
+### P3: Performance tuning deferred until after P2
+
+1. Defer proxy/runtime feature-level performance tuning (including 1M req/s optimization campaign) until P2 is completed.
+2. Before P2 completion, only accept performance work that is required to preserve correctness/stability contracts.
 
 ## 4) DB Status (Explicit)
 
@@ -154,8 +153,11 @@ Read first:
 
 Execution mode:
 - Implementation-first.
-- Focus now: LASM DB parity (real intrinsic path), not composition analyzer.
-- After DB parity: follow P2 order exactly (LASM default -> load hardening -> SQLite adapter -> adapter extraction -> alpha usability -> WASM).
+- Follow strict sequence:
+  1) close strict no-stub alpha functionality checklist,
+  2) implement full LASM DB client path,
+  3) implement Composition Contract Analyzer (`M39-S2`),
+  4) only then resume performance tuning feature work.
 - Keep Cargo runs sequential.
 - Run only targeted tests for touched behavior.
 
