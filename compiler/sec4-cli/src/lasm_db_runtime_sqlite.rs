@@ -19,6 +19,12 @@ fn parse_lasm_sqlite_query_param_value(value: serde_json::Value) -> SqliteValue 
         serde_json::Value::Number(inner) => {
             if let Some(value) = inner.as_i64() {
                 SqliteValue::Integer(value)
+            } else if let Some(value) = inner.as_u64() {
+                if value <= i64::MAX as u64 {
+                    SqliteValue::Integer(value as i64)
+                } else {
+                    SqliteValue::Text(inner.to_string())
+                }
             } else if let Some(value) = inner.as_f64() {
                 SqliteValue::Real(value)
             } else {
@@ -709,6 +715,20 @@ mod tests {
         assert_eq!(values[0], SqliteValue::Null);
         assert_eq!(values[1], SqliteValue::Null);
         assert_eq!(values[2], SqliteValue::Integer(7));
+    }
+
+    #[test]
+    fn positional_object_params_preserve_large_unsigned_integer_as_text() {
+        let params = parse_lasm_sqlite_query_params("{\"1\":18446744073709551615}")
+            .expect("positional params should parse");
+        let LasmSqliteQueryParams::Positional(values) = params else {
+            panic!("expected positional params");
+        };
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            values[0],
+            SqliteValue::Text("18446744073709551615".to_string())
+        );
     }
 
     #[test]
