@@ -2241,6 +2241,10 @@ Post-alpha track acceptance anchors:
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
    - keep CLI/operator behavior unchanged while refactoring boundaries.
+   - [x] Extracted `sec4 run` LASM DB CLI validation + normalization flow from `main.rs` into `compiler/sec4-cli/src/lasm_db_cli.rs`:
+      - DB/LASM-only guard checks, DB numeric lower-bound guards, sqlite mode normalization, Postgres DSN source validation, and adapter auto-selection/coherence now resolve through one helper (`validate_and_resolve_run_db_cli_options`),
+      - `cmd_run` now delegates DB option resolution and preserves deterministic diagnostics/exit behavior.
+      - documented in `docs/book/1501-m39-run-db-cli-validation-resolution-module-extraction.md`.
    - [x] Extracted LASM DB config/adapter resolution helpers from `compiler/sec4-cli/src/main.rs` into dedicated module `compiler/sec4-cli/src/lasm_db_config.rs` (store-base resolution, adapter selection, tx-handle capacity resolution, postgres DSN resolution, adapter label), keeping command/runtime semantics unchanged while establishing the first explicit adapter-boundary seam (`docs/book/1103-m39-lasm-db-config-module-extraction.md`).
    - [x] Extracted LASM records-log persistence/serialization helpers into dedicated module `compiler/sec4-cli/src/lasm_db_records_log.rs` (record JSON conversion, records-log load, records-log persist), reducing DB adapter logic in `main.rs` while preserving `DbListRecordsResponse`/intrinsic runtime behavior (`docs/book/1104-m39-lasm-db-records-log-module-extraction.md`).
    - [x] Extracted sqlite/postgres DB-state load/bootstrap helpers into dedicated module `compiler/sec4-cli/src/lasm_db_adapter_state.rs` (`load_lasm_dynamic_db_records_from_sqlite`, `connect_lasm_dynamic_db_records_postgres`, postgres schema bootstrap, postgres load), further isolating adapter-specific state initialization from CLI/runtime orchestration (`docs/book/1105-m39-lasm-db-adapter-state-module-extraction.md`).
