@@ -62,6 +62,7 @@ Current runtime status:
 - Runtime now rejects invalid internal DB markers deterministically (`DB.OPERATION_INVALID`).
 - Multi-op DB handlers now execute deterministic ordered intrinsic operation sequences on LASM runtime dispatch (stop-on-first-error with deterministic envelope behavior).
 - DB operation sequence size is now bounded deterministically (`max 64 operations/handler`) in route planning/runtime guards.
+- Multi-op `db.execTx(...)` flows now support sequence-local tx-handle reuse for repeated `db.tx(dbCap)` sources (with deterministic cleanup after sequence completion).
 
 Remaining full-client work focuses on adapter extraction/package boundaries and parity hardening without changing language contracts.
 

@@ -25,6 +25,7 @@ use crate::{
     LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX,
     LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -440,6 +441,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         return true;
     }
     if operation_count > 1 {
+        let mut sequence_tx_handles_by_source = BTreeMap::<String, i64>::new();
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(
                 response,
@@ -459,6 +461,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             };
+            let operation = raw_operation.trim().to_string();
 
             response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
@@ -466,6 +469,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+            response
+                .headers
+                .remove(LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
             response
                 .headers
@@ -497,21 +503,68 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     .headers
                     .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), value);
             }
-            if let Some(value) =
-                take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_TX_HEADER, index)
-            {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), value);
-            }
-            if let Some(value) = take_lasm_internal_header_value_indexed(
-                response,
-                LASM_INTERNAL_DB_TX_DB_HEADER,
-                index,
-            ) {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
+            let mut sequence_allocated_tx_source: Option<String> = None;
+            if operation == "execTx" {
+                let raw_tx_db = take_lasm_internal_header_value_indexed(
+                    response,
+                    LASM_INTERNAL_DB_TX_DB_HEADER,
+                    index,
+                );
+                let raw_tx_handle = take_lasm_internal_header_value_indexed(
+                    response,
+                    LASM_INTERNAL_DB_TX_HEADER,
+                    index,
+                );
+                if let Some(raw_tx_db) = raw_tx_db {
+                    let tx_db_source = materialize_lasm_internal_header_value(
+                        raw_tx_db.clone(),
+                        request,
+                        path_params,
+                    )
+                    .trim()
+                    .to_string();
+                    if let Some(existing_tx_handle) = sequence_tx_handles_by_source
+                        .get(tx_db_source.as_str())
+                        .copied()
+                    {
+                        response.headers.insert(
+                            LASM_INTERNAL_DB_TX_HEADER.to_string(),
+                            existing_tx_handle.to_string(),
+                        );
+                    } else {
+                        response
+                            .headers
+                            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), raw_tx_db);
+                        response.headers.insert(
+                            LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
+                            "1".to_string(),
+                        );
+                        sequence_allocated_tx_source = Some(tx_db_source);
+                    }
+                } else if let Some(raw_tx_handle) = raw_tx_handle {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), raw_tx_handle);
+                }
+            } else {
+                if let Some(value) = take_lasm_internal_header_value_indexed(
+                    response,
+                    LASM_INTERNAL_DB_TX_HEADER,
+                    index,
+                ) {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), value);
+                }
+                if let Some(value) = take_lasm_internal_header_value_indexed(
+                    response,
+                    LASM_INTERNAL_DB_TX_DB_HEADER,
+                    index,
+                ) {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
+                }
             }
             if let Some(value) = take_lasm_internal_header_value_indexed(
                 response,
@@ -542,12 +595,47 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         trace_id,
                     ),
                 );
+                cleanup_lasm_internal_db_sequence_tx_handles(
+                    dynamic_state,
+                    sequence_tx_handles_by_source.values().copied(),
+                );
                 return true;
             }
             if response.status >= 400 {
+                cleanup_lasm_internal_db_sequence_tx_handles(
+                    dynamic_state,
+                    sequence_tx_handles_by_source.values().copied(),
+                );
                 return true;
             }
+            if let Some(tx_db_source) = sequence_allocated_tx_source {
+                let Some(tx_handle) =
+                    parse_lasm_internal_db_exec_tx_handle_from_response_body(response)
+                else {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.TX_INTERNAL",
+                            "internal",
+                            "db.tx runtime failure",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    cleanup_lasm_internal_db_sequence_tx_handles(
+                        dynamic_state,
+                        sequence_tx_handles_by_source.values().copied(),
+                    );
+                    return true;
+                };
+                sequence_tx_handles_by_source.insert(tx_db_source, tx_handle);
+            }
         }
+        cleanup_lasm_internal_db_sequence_tx_handles(
+            dynamic_state,
+            sequence_tx_handles_by_source.values().copied(),
+        );
         return true;
     }
 
@@ -871,6 +959,12 @@ fn apply_lasm_internal_db_operation_materialization_single(
             if !enforce_lasm_db_params_max_bytes(response, "execTx", params.as_str(), trace_id) {
                 return true;
             }
+            let keep_allocated_tx_handle = take_lasm_internal_header_value(
+                response,
+                LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+            )
+            .map(|value| value.trim() == "1")
+            .unwrap_or(false);
             let tx_db_source =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_DB_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
@@ -1119,7 +1213,9 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         affected_rows = sqlite_affected_rows;
                     }
                     if let Some(tx_handle) = allocated_tx_handle {
-                        state.db_tx_handles.remove(&tx_handle);
+                        if !keep_allocated_tx_handle {
+                            state.db_tx_handles.remove(&tx_handle);
+                        }
                     }
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
@@ -1590,6 +1686,28 @@ fn apply_lasm_internal_db_operation_materialization_single(
             );
             true
         }
+    }
+}
+
+fn parse_lasm_internal_db_exec_tx_handle_from_response_body(
+    response: &sec4_core::HttpResponse,
+) -> Option<i64> {
+    if response.status >= 400 || response.body.is_empty() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&response.body).ok()?;
+    value.get("tx")?.as_i64().filter(|value| *value > 0)
+}
+
+fn cleanup_lasm_internal_db_sequence_tx_handles(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    handles: impl IntoIterator<Item = i64>,
+) {
+    let Ok(mut state) = dynamic_state.lock() else {
+        return;
+    };
+    for handle in handles {
+        state.db_tx_handles.remove(&handle);
     }
 }
 

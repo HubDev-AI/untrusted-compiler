@@ -6,6 +6,8 @@ pub(crate) const LASM_INTERNAL_DB_TEMPLATE_HEADER: &str = "X-Sec4-Internal-Db-Te
 pub(crate) const LASM_INTERNAL_DB_PARAMS_HEADER: &str = "X-Sec4-Internal-Db-Params";
 pub(crate) const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 pub(crate) const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
+pub(crate) const LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER: &str =
+    "X-Sec4-Internal-Db-Tx-Sequence-Retain";
 pub(crate) const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 pub(crate) const LASM_INTERNAL_DB_OP_COUNT_HEADER: &str = "X-Sec4-Internal-Db-Op-Count";
 pub(crate) const LASM_INTERNAL_DB_OP_SEQUENCE_MAX: usize = 64;
@@ -22,6 +24,7 @@ pub(crate) fn clear_lasm_internal_db_response_markers(headers: &mut BTreeMap<Str
         LASM_INTERNAL_DB_PARAMS_HEADER,
         LASM_INTERNAL_DB_TX_HEADER,
         LASM_INTERNAL_DB_TX_DB_HEADER,
+        LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
         LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
         LASM_INTERNAL_DB_OP_COUNT_HEADER,
     ];

@@ -16299,6 +16299,191 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_reuses_tx_handle_across_multi_op_exec_tx_sequence() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-multi-op-exec-tx");
+    let db_base = project_dir.join("lasm-db");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbmultioptransactioncommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn dbMultiTx() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let tx = db.tx(db);
+  let template1 = validate.nonEmpty(req.query("template1"));
+  let params1 = validate.nonEmpty(req.query("params1"));
+  let query1 = sql.q(template1, params1);
+  let template2 = validate.nonEmpty(req.query("template2"));
+  let params2 = validate.nonEmpty(req.query("params2"));
+  let query2 = sql.q(template2, params2);
+  db.execTx(tx, query1);
+  db.execTx(tx, query2);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/multi-tx", dbMultiTx);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--oneshot",
+            "--port",
+            &port_value,
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let request = "POST /db/multi-tx?template1=SELECT%201%20LIMIT%201&params1=%5B1%5D&template2=SELECT%202%20LIMIT%201&params2=%5B2%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db multi-op execTx flow could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db multi-op execTx process did not exit in expected window");
+        }
+    };
+    assert!(
+        status.success(),
+        "run command LASM db multi-op execTx process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK") && response.contains("\"recordId\":2"),
+        "db multi-op execTx response should include deterministic materialized record metadata:\n{response}"
+    );
+
+    let records_log_path = db_base.join("records.log");
+    let records_log =
+        fs::read_to_string(&records_log_path).expect("records.log should exist for db multi-op");
+    let mut records = records_log
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            serde_json::from_str::<serde_json::Value>(trimmed).ok()
+        })
+        .collect::<Vec<_>>();
+    if records.is_empty() {
+        let records_value: serde_json::Value =
+            serde_json::from_str(&records_log).expect("records.log should parse as JSON");
+        records = match &records_value {
+            serde_json::Value::Array(entries) => entries.clone(),
+            serde_json::Value::Object(object) => object
+                .get("records")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+    }
+    let exec_tx_records = records
+        .iter()
+        .filter(|record| record.get("op") == Some(&serde_json::json!("execTx")))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        exec_tx_records.len(),
+        2,
+        "records.log should contain two execTx records for multi-op tx sequence:\n{records_log}"
+    );
+    let tx_values = exec_tx_records
+        .iter()
+        .map(|record| record.get("tx").and_then(serde_json::Value::as_i64))
+        .collect::<Vec<_>>();
+    assert!(
+        tx_values.iter().all(|value| value.is_some()),
+        "execTx records should always carry deterministic tx handle values:\n{records_log}"
+    );
+    assert_eq!(
+        tx_values[0], tx_values[1],
+        "multi-op execTx sequence should reuse one tx handle across sequence operations:\n{records_log}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_rejects_db_operation_sequence_over_limit() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-op-sequence-limit");
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
