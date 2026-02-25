@@ -182,6 +182,36 @@ fn enforce_lasm_db_params_max_bytes(
 }
 
 #[inline(always)]
+fn enforce_lasm_db_params_required(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    params: &str,
+    trace_id: &str,
+) -> bool {
+    if !params.trim().is_empty() {
+        return true;
+    }
+    let code = match operation {
+        "exec" => "DB.EXEC_INVALID",
+        "execTx" => "DB.EXEC_TX_INVALID",
+        "queryOne" => "DB.QUERY_ONE_INVALID",
+        _ => "DB.OPERATION_INVALID",
+    };
+    set_lasm_json_response(
+        response,
+        400,
+        &lasm_error_envelope(
+            code,
+            "validation",
+            "sql.q params payload is required",
+            400,
+            trace_id,
+        ),
+    );
+    false
+}
+
+#[inline(always)]
 fn resolve_lasm_db_params_max_entries() -> usize {
     let override_value = LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.load(Ordering::Relaxed);
     if override_value != 0 {
@@ -752,6 +782,9 @@ fn apply_lasm_internal_db_operation_materialization_single(
             };
             let params =
                 materialize_lasm_internal_header_value(raw_params_header, request, path_params);
+            if !enforce_lasm_db_params_required(response, "exec", params.as_str(), trace_id) {
+                return true;
+            }
             if !enforce_lasm_db_params_max_bytes(response, "exec", params.as_str(), trace_id) {
                 return true;
             }
@@ -1024,6 +1057,9 @@ fn apply_lasm_internal_db_operation_materialization_single(
             };
             let params =
                 materialize_lasm_internal_header_value(raw_params_header, request, path_params);
+            if !enforce_lasm_db_params_required(response, "execTx", params.as_str(), trace_id) {
+                return true;
+            }
             if !enforce_lasm_db_params_max_bytes(response, "execTx", params.as_str(), trace_id) {
                 return true;
             }
@@ -1391,6 +1427,9 @@ fn apply_lasm_internal_db_operation_materialization_single(
             };
             let params =
                 materialize_lasm_internal_header_value(raw_params_header, request, path_params);
+            if !enforce_lasm_db_params_required(response, "queryOne", params.as_str(), trace_id) {
+                return true;
+            }
             if !enforce_lasm_db_params_max_bytes(response, "queryOne", params.as_str(), trace_id) {
                 return true;
             }
@@ -2163,6 +2202,90 @@ mod tests {
         assert_eq!(response.status, 400);
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
         assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+    }
+
+    #[test]
+    fn exec_marker_rejects_empty_params_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_PARAMS_HEADER.to_string(),
+            "   ".to_string(),
+        );
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "empty params marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_INVALID\""));
+        assert!(body.contains("sql.q params payload is required"));
+    }
+
+    #[test]
+    fn query_one_marker_rejects_empty_params_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "7".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), " ".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "empty queryOne params marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+        assert!(body.contains("sql.q params payload is required"));
     }
 
     #[test]
