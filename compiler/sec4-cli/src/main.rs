@@ -77,15 +77,11 @@ use lasm_cluster_runtime_config::{
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
-use lasm_db_adapter_state::{
-    normalize_lasm_db_sqlite_journal_mode, normalize_lasm_db_sqlite_synchronous,
-};
 use lasm_db_cli::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_tls_mode_run_arg,
     run_db_adapter_to_lasm_db_records_adapter,
-    run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode,
+    run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode, validate_and_resolve_run_db_cli_options,
 };
-use lasm_db_config::load_lasm_db_postgres_dsn_from_file;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, lasm_internal_db_indexed_header,
     LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
@@ -7206,304 +7202,42 @@ fn cmd_run(
         eprintln!("run failed: --overflow-probe-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
-    if backend != RunBackend::Lasm && db_base.is_some() {
-        eprintln!("run failed: --db-base is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_adapter.is_some() {
-        eprintln!("run failed: --db-adapter is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_dsn.is_some() {
-        eprintln!("run failed: --db-postgres-dsn is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_dsn_file.is_some() {
-        eprintln!("run failed: --db-postgres-dsn-file is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_tls_mode.is_some() {
-        eprintln!("run failed: --db-postgres-tls-mode is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_max_tx_handles.is_some() {
-        eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_records_max.is_some() {
-        eprintln!("run failed: --db-records-max is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_query_one_row_max_bytes.is_some() {
-        eprintln!("run failed: --db-query-one-row-max-bytes is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_query_one_row_max_columns.is_some() {
-        eprintln!(
-            "run failed: --db-query-one-row-max-columns is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sql_template_max_bytes.is_some() {
-        eprintln!("run failed: --db-sql-template-max-bytes is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_params_max_bytes.is_some() {
-        eprintln!("run failed: --db-params-max-bytes is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_params_max_entries.is_some() {
-        eprintln!("run failed: --db-params-max-entries is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_statement_cache_max.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-statement-cache-max is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_placeholder_cache_max.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-placeholder-cache-max is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_statement_timeout_ms.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_lock_timeout_ms.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-lock-timeout-ms is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_connect_timeout_ms.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-connect-timeout-ms is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sqlite_busy_timeout_ms.is_some() {
-        eprintln!("run failed: --db-sqlite-busy-timeout-ms is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sqlite_journal_mode.is_some() {
-        eprintln!("run failed: --db-sqlite-journal-mode is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sqlite_synchronous.is_some() {
-        eprintln!("run failed: --db-sqlite-synchronous is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_postgres_retryable_conflict_retry_max.is_some() {
-        eprintln!(
-            "run failed: --db-postgres-retryable-conflict-retry-max is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sqlite_lock_retry_max.is_some() {
-        eprintln!("run failed: --db-sqlite-lock-retry-max is only supported with --backend lasm");
-        return Err(2);
-    }
-    if backend != RunBackend::Lasm && db_sqlite_lock_retry_delay_ms.is_some() {
-        eprintln!(
-            "run failed: --db-sqlite-lock-retry-delay-ms is only supported with --backend lasm"
-        );
-        return Err(2);
-    }
-    if db_max_tx_handles == Some(0) {
-        eprintln!("run failed: --db-max-tx-handles must be >= 1");
-        return Err(2);
-    }
-    if db_records_max == Some(0) {
-        eprintln!("run failed: --db-records-max must be >= 1");
-        return Err(2);
-    }
-    if db_query_one_row_max_bytes == Some(0) {
-        eprintln!("run failed: --db-query-one-row-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_query_one_row_max_columns == Some(0) {
-        eprintln!("run failed: --db-query-one-row-max-columns must be >= 1");
-        return Err(2);
-    }
-    if db_sql_template_max_bytes == Some(0) {
-        eprintln!("run failed: --db-sql-template-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_params_max_bytes == Some(0) {
-        eprintln!("run failed: --db-params-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_params_max_entries == Some(0) {
-        eprintln!("run failed: --db-params-max-entries must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_statement_cache_max == Some(0) {
-        eprintln!("run failed: --db-postgres-statement-cache-max must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_placeholder_cache_max == Some(0) {
-        eprintln!("run failed: --db-postgres-placeholder-cache-max must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_statement_timeout_ms == Some(0) {
-        eprintln!("run failed: --db-postgres-statement-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_lock_timeout_ms == Some(0) {
-        eprintln!("run failed: --db-postgres-lock-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_connect_timeout_ms == Some(0) {
-        eprintln!("run failed: --db-postgres-connect-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_sqlite_busy_timeout_ms == Some(0) {
-        eprintln!("run failed: --db-sqlite-busy-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
-        eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
-        return Err(2);
-    }
-    if db_query_one_row_max_bytes
-        .map(|value| usize::try_from(value).is_err())
-        .unwrap_or(false)
-    {
-        eprintln!("run failed: --db-query-one-row-max-bytes exceeds platform limits");
-        return Err(2);
-    }
-    if db_query_one_row_max_columns
-        .map(|value| usize::try_from(value).is_err())
-        .unwrap_or(false)
-    {
-        eprintln!("run failed: --db-query-one-row-max-columns exceeds platform limits");
-        return Err(2);
-    }
-    if db_sql_template_max_bytes
-        .map(|value| usize::try_from(value).is_err())
-        .unwrap_or(false)
-    {
-        eprintln!("run failed: --db-sql-template-max-bytes exceeds platform limits");
-        return Err(2);
-    }
-    if db_params_max_bytes
-        .map(|value| usize::try_from(value).is_err())
-        .unwrap_or(false)
-    {
-        eprintln!("run failed: --db-params-max-bytes exceeds platform limits");
-        return Err(2);
-    }
-    if db_params_max_entries
-        .map(|value| usize::try_from(value).is_err())
-        .unwrap_or(false)
-    {
-        eprintln!("run failed: --db-params-max-entries exceeds platform limits");
-        return Err(2);
-    }
-    let explicit_db_sqlite_journal_mode = if let Some(mode) = db_sqlite_journal_mode {
-        let trimmed = mode.trim();
-        if trimmed.is_empty() {
-            eprintln!("run failed: --db-sqlite-journal-mode must not be empty");
+    let resolved_db_cli = match validate_and_resolve_run_db_cli_options(
+        backend,
+        db_base,
+        db_adapter,
+        db_postgres_dsn,
+        db_postgres_dsn_file,
+        db_postgres_tls_mode,
+        db_max_tx_handles,
+        db_records_max,
+        db_query_one_row_max_bytes,
+        db_query_one_row_max_columns,
+        db_sql_template_max_bytes,
+        db_params_max_bytes,
+        db_params_max_entries,
+        db_postgres_statement_cache_max,
+        db_postgres_placeholder_cache_max,
+        db_postgres_statement_timeout_ms,
+        db_postgres_lock_timeout_ms,
+        db_postgres_connect_timeout_ms,
+        db_sqlite_busy_timeout_ms,
+        db_sqlite_journal_mode,
+        db_sqlite_synchronous,
+        db_postgres_retryable_conflict_retry_max,
+        db_sqlite_lock_retry_max,
+        db_sqlite_lock_retry_delay_ms,
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
             return Err(2);
         }
-        match normalize_lasm_db_sqlite_journal_mode(trimmed) {
-            Some(normalized) => Some(normalized.to_string()),
-            None => {
-                eprintln!(
-                    "run failed: --db-sqlite-journal-mode must be one of wal, delete, truncate, persist, memory, off"
-                );
-                return Err(2);
-            }
-        }
-    } else {
-        None
     };
-    let explicit_db_sqlite_synchronous = if let Some(mode) = db_sqlite_synchronous {
-        let trimmed = mode.trim();
-        if trimmed.is_empty() {
-            eprintln!("run failed: --db-sqlite-synchronous must not be empty");
-            return Err(2);
-        }
-        match normalize_lasm_db_sqlite_synchronous(trimmed) {
-            Some(normalized) => Some(normalized.to_string()),
-            None => {
-                eprintln!(
-                    "run failed: --db-sqlite-synchronous must be one of off, normal, full, extra"
-                );
-                return Err(2);
-            }
-        }
-    } else {
-        None
-    };
-    let postgres_runtime_overrides = db_postgres_dsn.is_some()
-        || db_postgres_dsn_file.is_some()
-        || db_postgres_tls_mode.is_some()
-        || db_postgres_statement_cache_max.is_some()
-        || db_postgres_placeholder_cache_max.is_some()
-        || db_postgres_statement_timeout_ms.is_some()
-        || db_postgres_lock_timeout_ms.is_some()
-        || db_postgres_connect_timeout_ms.is_some()
-        || db_postgres_retryable_conflict_retry_max.is_some();
-    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
-        || explicit_db_sqlite_journal_mode.is_some()
-        || explicit_db_sqlite_synchronous.is_some()
-        || db_sqlite_lock_retry_max.is_some()
-        || db_sqlite_lock_retry_delay_ms.is_some();
-    if backend == RunBackend::Lasm && postgres_runtime_overrides && sqlite_runtime_overrides {
-        eprintln!(
-            "run failed: postgres and sqlite runtime overrides cannot be combined in the same run"
-        );
-        return Err(2);
-    }
-    let effective_db_adapter = if backend == RunBackend::Lasm && postgres_runtime_overrides {
-        match db_adapter {
-            Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
-            Some(_) => {
-                eprintln!(
-                    "run failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
-                );
-                return Err(2);
-            }
-            None => Some(RunDbAdapter::Postgres),
-        }
-    } else if backend == RunBackend::Lasm && sqlite_runtime_overrides {
-        match db_adapter {
-            Some(RunDbAdapter::Sqlite) => Some(RunDbAdapter::Sqlite),
-            Some(_) => {
-                eprintln!(
-                    "run failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
-                );
-                return Err(2);
-            }
-            None => Some(RunDbAdapter::Sqlite),
-        }
-    } else {
-        db_adapter
-    };
-    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
-        let dsn = dsn.trim();
-        if dsn.is_empty() {
-            eprintln!("run failed: --db-postgres-dsn must not be empty");
-            return Err(2);
-        }
-        Some(dsn.to_string())
-    } else if let Some(path) = db_postgres_dsn_file {
-        match load_lasm_db_postgres_dsn_from_file(path) {
-            Ok(dsn) => Some(dsn),
-            Err(message) => {
-                eprintln!("run failed: {message}");
-                return Err(2);
-            }
-        }
-    } else {
-        None
-    };
+    let effective_db_adapter = resolved_db_cli.effective_db_adapter;
+    let explicit_db_postgres_dsn = resolved_db_cli.explicit_db_postgres_dsn;
+    let explicit_db_sqlite_journal_mode = resolved_db_cli.explicit_db_sqlite_journal_mode;
+    let explicit_db_sqlite_synchronous = resolved_db_cli.explicit_db_sqlite_synchronous;
     if backend != RunBackend::Lasm && instances != 1 {
         eprintln!("run failed: --instances is only supported with --backend lasm");
         return Err(2);

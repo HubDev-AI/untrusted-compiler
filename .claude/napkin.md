@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-25 | self | Running `rustfmt` on `main.rs` recursively reformatted unrelated module files, creating avoidable diff noise (`lasm_db_adapter_state.rs`). | Keep formatting scoped to edited files only and re-check `git status` immediately; revert unrelated formatting before commit. |
 | 2026-02-25 | self | I resumed the session with git/status checks before the mandatory standalone `.claude/napkin.md` read. | Enforce a strict first-command gate on every continuation: run `cat .claude/napkin.md` alone before any git/status/search commands. |
 | 2026-02-26 | self | I accidentally triggered `web.run` during a local-only Postgres runtime implementation loop. | Keep local coding slices strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tools unless external research is explicitly needed. |
 | 2026-02-26 | self | I started this continuation with git/status commands before reading `.claude/napkin.md` and also began coding on local `dev` before creating a `codex/*` branch. | Keep strict startup/order gates: read `.claude/napkin.md` first, then branch from `dev` to `codex/*` before any edits. |
