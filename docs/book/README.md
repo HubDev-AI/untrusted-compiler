@@ -1475,5 +1475,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1503-m39-alpha-postgres-suite-run-fingerprint-metadata.md`
 - `1504-m39-alpha-postgres-suite-between-phase-db-reset.md`
 - `1505-m39-alpha-postgres-suite-reset-flag-make-wiring.md`
+- `1506-m39-env-postgres-dsn-file-project-relative-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.

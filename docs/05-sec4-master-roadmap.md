@@ -2250,6 +2250,10 @@ Post-alpha track acceptance anchors:
       - `BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true` now forwards `--reset-db-between-phases` through `bench-alpha-postgres-suite{,-dry}` and local-wrapper variants,
       - helps operators keep one-command benchmark loops while toggling DB isolation mode.
       - documented in `docs/book/1505-m39-alpha-postgres-suite-reset-flag-make-wiring.md`.
+   - [x] Resolved relative env DSN-file paths from selected project root in LASM runtime bootstrap:
+      - `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE=<relative>` now resolves against `--path` project root when cwd-relative lookup misses, matching explicit `--db-postgres-dsn-file` behavior,
+      - applies to both `sec4 run` and `sec4 lasm-smoke` dynamic-state bootstrap path and preserves deterministic invalid-content diagnostics.
+      - documented in `docs/book/1506-m39-env-postgres-dsn-file-project-relative-resolution.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

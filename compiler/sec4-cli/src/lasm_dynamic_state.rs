@@ -215,6 +215,7 @@ pub(crate) fn append_lasm_dynamic_db_record(
 }
 
 pub(crate) fn build_lasm_dynamic_response_state(
+    project_path: Option<&Path>,
     explicit_db_base: Option<&Path>,
     explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
     explicit_db_postgres_dsn: Option<&str>,
@@ -329,8 +330,11 @@ pub(crate) fn build_lasm_dynamic_response_state(
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
     let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
-    let db_records_postgres_dsn =
-        resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter, explicit_db_postgres_dsn)?;
+    let db_records_postgres_dsn = resolve_lasm_dynamic_db_postgres_dsn(
+        db_records_adapter,
+        explicit_db_postgres_dsn,
+        project_path,
+    )?;
     let mut db_records_sqlite_connection = None;
     let mut db_records_postgres_client = None;
     let users_by_id = users_store_path
