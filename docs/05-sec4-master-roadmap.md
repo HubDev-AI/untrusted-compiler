@@ -2302,6 +2302,11 @@ Post-alpha track acceptance anchors:
    - [x] Preserved large unsigned JSON param precision in Postgres query param parsing:
       - Postgres param parsing now treats JSON numbers above signed 64-bit range as exact text params instead of passing through `f64`, preventing precision loss for large unsigned integer inputs.
       - documented in `docs/book/1519-m39-postgres-large-unsigned-param-precision-preservation.md`.
+   - [x] Hardened internal DB marker requirements for LASM `exec` and `queryOne` dispatch:
+      - LASM DB runtime no longer silently defaults missing internal DB capability/row-schema markers to `1`,
+      - missing `db handle` marker now returns deterministic `DB.EXEC_INVALID`,
+      - missing `row schema` marker in `queryOne` now returns deterministic `DB.QUERY_ONE_INVALID`.
+      - documented in `docs/book/1520-m39-lasm-db-internal-marker-required-handle-schema-hardening.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
