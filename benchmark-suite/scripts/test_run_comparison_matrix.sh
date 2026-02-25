@@ -93,6 +93,23 @@ if ! grep -q 'build_report.sh sec4-lasm .*baselines/sec-audit/default-secure-pro
   exit 1
 fi
 
+tmp_dsn="$(mktemp)"
+trap 'rm -f "$tmp_dsn"' EXIT
+printf '%s\n' 'postgresql://bench:bench@127.0.0.1:5432/bench' >"$tmp_dsn"
+lasm_db_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls sec4-lasm --endpoints db-hot-write,db-hot-query-one --lasm-db-adapter postgres --lasm-db-postgres-dsn-file "$tmp_dsn")"
+if ! grep -q "start: sec4-lasm service on :18085 (db-adapter=postgres dsn-file=${tmp_dsn})" <<<"$lasm_db_out"; then
+  echo "missing sec4-lasm postgres adapter start marker in dry-run output" >&2
+  exit 1
+fi
+if ! grep -q 'run_profile.sh --dry-run sec4-lasm db-hot-write' <<<"$lasm_db_out"; then
+  echo "missing sec4-lasm db-hot-write dry-run command" >&2
+  exit 1
+fi
+if ! grep -q 'run_profile.sh --dry-run sec4-lasm db-hot-query-one' <<<"$lasm_db_out"; then
+  echo "missing sec4-lasm db-hot-query-one dry-run command" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_comparison_matrix.sh" --dry-run --impls unknown >/dev/null 2>&1; then
   echo "expected unsupported implementation to fail" >&2
   exit 1

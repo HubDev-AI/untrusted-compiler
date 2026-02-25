@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -13,6 +13,10 @@ CAPACITY_ENDPOINT ?= ping
 CAPACITY_TARGET_REQUESTS ?= 1000000
 LASM_CAPACITY_PROJECT_PATH ?= examples/lasm-alpha-full
 LASM_CAPACITY_TARGET_REQUESTS ?= 1000000
+BENCH_LASM_DB_ADAPTER ?=
+BENCH_LASM_DB_POSTGRES_DSN_FILE ?=
+LASM_DB_MATRIX_IMPLS ?= sec4-lasm
+LASM_DB_MATRIX_ENDPOINTS ?= db-hot-write,db-hot-write-tx,db-hot-query-one,db-records
 LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
 LASM_CAPACITY_PROFILE ?= ping
 LASM_CAPACITY_WARMUP_PATH ?=
@@ -65,6 +69,8 @@ FIXED_REUSE_PORT_FLAG = $(if $(filter true,$(LASM_CAPACITY_FIXED_REUSE_PORT_MODE
 LASM_MODE_COMPARE_FLAG = $(if $(filter true,$(FULL_LASM_INCLUDE_MODE_COMPARE)),--include-lasm-mode-compare,)
 SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--warmup-path "$(LASM_CAPACITY_WARMUP_PATH)",)
 FULL_SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--saturation-warmup-path "$(LASM_CAPACITY_WARMUP_PATH)",)
+LASM_DB_ADAPTER_FLAG = $(if $(strip $(BENCH_LASM_DB_ADAPTER)),--lasm-db-adapter "$(BENCH_LASM_DB_ADAPTER)",)
+LASM_DB_POSTGRES_DSN_FILE_FLAG = $(if $(strip $(BENCH_LASM_DB_POSTGRES_DSN_FILE)),--lasm-db-postgres-dsn-file "$(BENCH_LASM_DB_POSTGRES_DSN_FILE)",)
 
 help:
 	@echo "Targets:"
@@ -78,7 +84,7 @@ help:
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users-get Run users read benchmark (requires service at $(BASE_URL))"
-	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get)"
+	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get|db-hot-write|db-hot-write-tx|db-hot-query-one|db-records)"
 	@echo "  bench-step-profile Run step-load profile for one endpoint (ENDPOINT=...)"
 	@echo "  analyze-step-profile Analyze one step-profile summary artifact"
 	@echo "  compare-step-matrix Build cross-impl step analysis matrix"
@@ -86,8 +92,12 @@ help:
 	@echo "  bench-step-matrix-dry Print step-load orchestrator command plan"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
+	@echo "  bench-matrix-lasm-postgres Run LASM DB hot-path matrix in postgres mode (IMPLS=$(LASM_DB_MATRIX_IMPLS), ENDPOINTS=$(LASM_DB_MATRIX_ENDPOINTS))"
+	@echo "  bench-matrix-lasm-postgres-dry Print LASM postgres DB matrix command plan"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
+	@echo "  bench-full-lasm-postgres Run full suite in LASM postgres mode for DB hot-path endpoints"
+	@echo "  bench-full-lasm-postgres-dry Print full LASM postgres suite command plan"
 	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars incl PROFILE/WARMUP_PATH); set FULL_LASM_INCLUDE_MODE_COMPARE=true to add mode compare lane"
 	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
 	@echo "  bench-full-saturation-throughput Run saturation-enabled full suite with tuned throughput preset knobs"
@@ -158,35 +168,47 @@ compare-step-matrix:
 	scripts/compare_step_matrix.sh results/summaries $(STEP_MATRIX) "$(IMPLS)" "$(ENDPOINTS)"
 
 bench-step-matrix:
-	scripts/run_step_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_step_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-step-matrix-dry:
-	scripts/run_step_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_step_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-matrix:
-	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-matrix-dry:
-	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+bench-matrix-lasm-postgres:
+	scripts/run_comparison_matrix.sh --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+bench-matrix-lasm-postgres-dry:
+	scripts/run_comparison_matrix.sh --dry-run --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-full:
-	scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_MODE_COMPARE_FLAG)
+	scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
 
 bench-full-dry:
-	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_MODE_COMPARE_FLAG)
+	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
+
+bench-full-lasm-postgres:
+	scripts/run_full_benchmark_suite.sh --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
+
+bench-full-lasm-postgres-dry:
+	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
 
 bench-full-saturation:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	else \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	fi
 
 bench-full-saturation-dry:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	else \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_DB_ADAPTER_FLAG) $(LASM_DB_POSTGRES_DSN_FILE_FLAG) --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-profile "$(LASM_CAPACITY_PROFILE)" $(FULL_SATURATION_WARMUP_PATH_FLAG) --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	fi
 
 bench-full-saturation-throughput:

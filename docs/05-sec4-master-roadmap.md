@@ -2223,6 +2223,11 @@ Post-alpha track acceptance anchors:
       - shared DB runtime classifier now maps bare Postgres `sqlstate=26000` (invalid SQL statement name / stale prepared statement) to `409` `DB.*_CONFLICT` even when message text omits stale-plan keywords,
       - keeps stale-plan conflict classification deterministic across adapter/driver message variants.
       - documented in `docs/book/1497-m39-lasm-postgres-sqlstate-26000-conflict-fallback.md`.
+   - [x] Extended benchmark-suite runtime wiring for LASM Postgres DB-path runs:
+      - fixed/step/full orchestrators now accept LASM DB adapter wiring (`--lasm-db-adapter`, `--lasm-db-postgres-dsn-file`) and pass it through sec4-lasm service startup,
+      - benchmark profile/step endpoints now include DB hot paths (`db-hot-write`, `db-hot-write-tx`, `db-hot-query-one`, `db-records`) with deterministic target/step defaults,
+      - added make entrypoints `bench-matrix-lasm-postgres` and `bench-full-lasm-postgres` for repeatable Postgres-mode benchmark loops.
+      - documented in `docs/book/1498-m39-benchmark-suite-lasm-postgres-db-path-wiring.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
