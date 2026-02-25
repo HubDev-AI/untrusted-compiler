@@ -8431,6 +8431,10 @@ fn cmd_run_lasm_backend(
     };
     let inferred_serve_port = resolve_lasm_entry_http_serve_port(&program, entry.name.as_str());
     let listen_port = port.or(inferred_serve_port).unwrap_or(8080);
+    if listen_port == 0 {
+        eprintln!("run failed: runtime listen port must be >= 1");
+        return Err(2);
+    }
 
     let policy_max_in_flight = match u64::try_from(policy.http.max_concurrency) {
         Ok(value) => value,

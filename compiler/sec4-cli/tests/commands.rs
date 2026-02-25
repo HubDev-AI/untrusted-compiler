@@ -27763,6 +27763,70 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_fails_for_invalid_runtime_port() {
+    let project_dir = temp_dir("sec4-run-command-lasm-invalid-port");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasminvalidport"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(0, router)
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--oneshot",
+        "--serve-timeout-ms",
+        "150",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when LASM runtime startup uses invalid port"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "LASM runtime should reject invalid port with deterministic exit status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: runtime listen port must be >= 1"),
+        "stderr should include deterministic LASM invalid-port diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_max_header_bytes_override() {
     let project_dir = temp_dir("sec4-run-command-zero-max-header-bytes");
     let project_path = project_dir
