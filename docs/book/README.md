@@ -1465,5 +1465,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1493-m39-lasm-db-multi-op-exectx-sequence-tx-reuse.md`
 - `1494-m39-lasm-postgres-stale-plan-reprepare-recovery.md`
 - `1495-m39-lasm-postgres-stale-plan-reprepare-telemetry.md`
+- `1496-m39-lasm-postgres-stale-plan-conflict-classification.md`
 
 As milestones progress, chapters will be added and linked from this index.

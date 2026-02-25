@@ -2215,6 +2215,10 @@ Post-alpha track acceptance anchors:
       - runtime now tracks cumulative stale prepared-plan recoveries (`db_postgres_stale_plan_reprepare_total`) whenever statement-cache eviction/reprepare is triggered,
       - `/db/records` `dbRetries` payload now emits `postgresStalePlanReprepareTotal` for deterministic operator visibility.
       - documented in `docs/book/1495-m39-lasm-postgres-stale-plan-reprepare-telemetry.md`.
+   - [x] Hardened stale-plan fallback error classification for Postgres prepared execution:
+      - shared DB runtime classifier now maps stale-plan signatures (`prepared statement ... does not exist`, `cached plan must not change result type`) to deterministic `409` conflict envelopes instead of validation,
+      - generic `sqlstate=0A000` (`feature not supported`) remains validation unless stale-plan signature is present.
+      - documented in `docs/book/1496-m39-lasm-postgres-stale-plan-conflict-classification.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

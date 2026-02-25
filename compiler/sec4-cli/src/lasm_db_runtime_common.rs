@@ -93,6 +93,14 @@ fn extract_lasm_db_runtime_sqlite_extended_code(normalized_message: &str) -> Opt
     tail[..end].parse::<i32>().ok()
 }
 
+fn is_lasm_db_runtime_postgres_stale_plan_error(normalized_message: &str) -> bool {
+    let has_prepared_statement_not_found = normalized_message.contains("prepared statement")
+        && normalized_message.contains("does not exist");
+    let has_cached_plan_shape_drift =
+        normalized_message.contains("cached plan must not change result type");
+    has_prepared_statement_not_found || has_cached_plan_shape_drift
+}
+
 pub(crate) fn classify_lasm_db_runtime_error(
     operation: &str,
     message: &str,
@@ -107,6 +115,9 @@ pub(crate) fn classify_lasm_db_runtime_error(
         || normalized.contains("could not open lasm dynamic sqlite records store")
     {
         return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
+    }
+    if is_lasm_db_runtime_postgres_stale_plan_error(normalized.as_str()) {
+        return (409, lasm_db_operation_conflict_code(operation), "conflict");
     }
     if let Some(sqlstate) = extract_lasm_db_runtime_sqlstate(normalized.as_str()) {
         match sqlstate {
@@ -736,6 +747,28 @@ mod tests {
         assert_eq!(status, 400);
         assert_eq!(code, "DB.QUERY_ONE_INVALID");
         assert_eq!(kind, "validation");
+    }
+
+    #[test]
+    fn classify_db_runtime_stale_prepared_statement_error_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "exec",
+            "postgres execution failed after stale prepared statement refresh: prepared statement \"s1\" does not exist; sqlstate=26000",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.EXEC_CONFLICT");
+        assert_eq!(kind, "conflict");
+    }
+
+    #[test]
+    fn classify_db_runtime_cached_plan_shape_drift_as_conflict() {
+        let (status, code, kind) = classify_lasm_db_runtime_error(
+            "queryOne",
+            "postgres queryOne execution failed after stale prepared statement refresh: cached plan must not change result type; sqlstate=0A000",
+        );
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.QUERY_ONE_CONFLICT");
+        assert_eq!(kind, "conflict");
     }
 
     #[test]
