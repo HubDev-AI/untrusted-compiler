@@ -15630,6 +15630,7 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"postgresPlaceholderEvictedTotal\":")
             && list_response.contains("\"dbTimeoutsMs\":{")
             && list_response.contains("\"dbRetries\":{")
+            && list_response.contains("\"postgresStalePlanReprepareTotal\":")
             && list_response.contains("\"sqliteJournalMode\":")
             && list_response.contains("\"sqliteSynchronous\":")
             && list_response.contains("\"sqliteLockRetryMax\":")

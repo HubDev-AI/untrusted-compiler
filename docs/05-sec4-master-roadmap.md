@@ -2211,6 +2211,10 @@ Post-alpha track acceptance anchors:
       - runtime stale-plan detection now treats `cached plan must not change result type` as a stale prepared-statement signal in addition to missing prepared statements,
       - stale-plan failures now trigger deterministic statement-cache eviction + reprepare retry on `exec`, `execTx`, and `queryOne` prepared paths.
       - documented in `docs/book/1494-m39-lasm-postgres-stale-plan-reprepare-recovery.md`.
+   - [x] Added Postgres stale-plan recovery telemetry in `DbListRecordsResponse`:
+      - runtime now tracks cumulative stale prepared-plan recoveries (`db_postgres_stale_plan_reprepare_total`) whenever statement-cache eviction/reprepare is triggered,
+      - `/db/records` `dbRetries` payload now emits `postgresStalePlanReprepareTotal` for deterministic operator visibility.
+      - documented in `docs/book/1495-m39-lasm-postgres-stale-plan-reprepare-telemetry.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
