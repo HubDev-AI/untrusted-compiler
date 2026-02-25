@@ -136,7 +136,39 @@ fn has_lasm_postgres_connect_timeout(dsn: &str) -> bool {
     compact.contains("connect_timeout=")
 }
 
+fn is_lasm_postgres_url_dsn(dsn: &str) -> bool {
+    dsn.starts_with("postgres://") || dsn.starts_with("postgresql://")
+}
+
+fn redact_lasm_postgres_url_query_password(dsn: &str) -> String {
+    if !is_lasm_postgres_url_dsn(dsn) {
+        return dsn.to_string();
+    }
+    let (base, fragment) = split_lasm_postgres_dsn_fragment(dsn);
+    let Some((prefix, query)) = base.split_once('?') else {
+        return dsn.to_string();
+    };
+    let rewritten_query = query
+        .split('&')
+        .map(|segment| {
+            if let Some((name, _value)) = segment.split_once('=') {
+                if name.trim().eq_ignore_ascii_case("password") {
+                    return format!("{name}=***");
+                }
+            }
+            segment.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("&");
+    if let Some(fragment_text) = fragment {
+        format!("{prefix}?{rewritten_query}#{fragment_text}")
+    } else {
+        format!("{prefix}?{rewritten_query}")
+    }
+}
+
 fn redact_lasm_postgres_url_userinfo_password(dsn: &str) -> String {
+    let mut rewritten = dsn.to_string();
     for scheme in ["postgres://", "postgresql://"] {
         if let Some(rest) = dsn.strip_prefix(scheme) {
             let Some(at_index) = rest.find('@') else {
@@ -148,10 +180,11 @@ fn redact_lasm_postgres_url_userinfo_password(dsn: &str) -> String {
             };
             let user = &auth[..colon_index];
             let tail = &rest[at_index + 1..];
-            return format!("{scheme}{user}:***@{tail}");
+            rewritten = format!("{scheme}{user}:***@{tail}");
+            break;
         }
     }
-    dsn.to_string()
+    redact_lasm_postgres_url_query_password(rewritten.as_str())
 }
 
 fn redact_lasm_postgres_keyword_dsn_password(dsn: &str) -> String {
@@ -551,11 +584,13 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
 mod tests {
     use super::{
         build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
-        has_lasm_postgres_connect_timeout, lasm_db_postgres_tls_mode_label,
+        has_lasm_postgres_connect_timeout, is_lasm_postgres_url_dsn,
+        lasm_db_postgres_tls_mode_label,
         lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
         parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
         redact_lasm_postgres_connect_error_message, redact_lasm_postgres_dsn_password,
+        redact_lasm_postgres_url_query_password,
         split_lasm_postgres_dsn_fragment, LasmDbPostgresTlsMode,
     };
 
@@ -737,6 +772,43 @@ mod tests {
             redacted,
             "connection refused for dsn host=localhost user=sec4 password=*** dbname=sec4_local"
         );
+    }
+
+    #[test]
+    fn redact_postgres_dsn_password_masks_url_query_password_param() {
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?password=secret&sslmode=disable"
+            ),
+            "postgres://sec4:***@127.0.0.1:5432/sec4_local?password=***&sslmode=disable"
+        );
+        assert_eq!(
+            redact_lasm_postgres_dsn_password(
+                "postgres://127.0.0.1:5432/sec4_local?PASSWORD=secret&sslmode=disable"
+            ),
+            "postgres://127.0.0.1:5432/sec4_local?PASSWORD=***&sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn redact_postgres_url_query_password_preserves_non_password_params() {
+        assert_eq!(
+            redact_lasm_postgres_url_query_password(
+                "postgres://127.0.0.1:5432/sec4_local?sslmode=disable&application_name=sec4"
+            ),
+            "postgres://127.0.0.1:5432/sec4_local?sslmode=disable&application_name=sec4"
+        );
+        assert_eq!(
+            redact_lasm_postgres_url_query_password("host=localhost user=sec4 password=secret"),
+            "host=localhost user=sec4 password=secret"
+        );
+    }
+
+    #[test]
+    fn postgres_url_dsn_detector_accepts_postgres_schemes_only() {
+        assert!(is_lasm_postgres_url_dsn("postgres://localhost/db"));
+        assert!(is_lasm_postgres_url_dsn("postgresql://localhost/db"));
+        assert!(!is_lasm_postgres_url_dsn("host=localhost dbname=sec4"));
     }
 
     #[test]
