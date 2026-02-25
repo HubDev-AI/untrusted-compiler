@@ -2219,6 +2219,10 @@ Post-alpha track acceptance anchors:
       - shared DB runtime classifier now maps stale-plan signatures (`prepared statement ... does not exist`, `cached plan must not change result type`) to deterministic `409` conflict envelopes instead of validation,
       - generic `sqlstate=0A000` (`feature not supported`) remains validation unless stale-plan signature is present.
       - documented in `docs/book/1496-m39-lasm-postgres-stale-plan-conflict-classification.md`.
+   - [x] Added deterministic SQLSTATE fallback mapping for unrecovered stale-plan errors:
+      - shared DB runtime classifier now maps bare Postgres `sqlstate=26000` (invalid SQL statement name / stale prepared statement) to `409` `DB.*_CONFLICT` even when message text omits stale-plan keywords,
+      - keeps stale-plan conflict classification deterministic across adapter/driver message variants.
+      - documented in `docs/book/1497-m39-lasm-postgres-sqlstate-26000-conflict-fallback.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
