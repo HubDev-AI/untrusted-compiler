@@ -29,7 +29,7 @@ redact_postgres_dsn_password() {
   printf '%s' "$dsn" | sed -E \
     -e 's#((postgres(ql)?://)[^:/?#]+:)[^@]*@#\1***@#g' \
     -e "s#([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*)'[^']*'#\\1'***'#g" \
-    -e 's#([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*)[^[:space:]]+#\1***#g'
+    -e 's#([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*=[[:space:]]*)[^[:space:]&]+#\1***#g'
 }
 
 if ! command -v docker >/dev/null 2>&1; then
