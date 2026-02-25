@@ -25,6 +25,12 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
             if let Some(value) = inner.as_i64() {
                 return LasmPostgresParam::Int(value);
             }
+            if let Some(value) = inner.as_u64() {
+                if value <= i64::MAX as u64 {
+                    return LasmPostgresParam::Int(value as i64);
+                }
+                return LasmPostgresParam::Text(inner.to_string());
+            }
             if let Some(value) = inner.as_f64() {
                 return LasmPostgresParam::Float(value);
             }
@@ -1787,6 +1793,17 @@ mod tests {
         match &params[2] {
             LasmPostgresParam::Bool(value) => assert!(*value),
             _ => panic!("expected bool param at position 3"),
+        }
+    }
+
+    #[test]
+    fn positional_object_params_preserve_large_unsigned_integer_as_text() {
+        let params = parse_lasm_postgres_query_params("{\"1\":18446744073709551615}")
+            .expect("positional params should parse");
+        assert_eq!(params.len(), 1);
+        match &params[0] {
+            LasmPostgresParam::Text(value) => assert_eq!(value, "18446744073709551615"),
+            _ => panic!("expected large unsigned integer param to be preserved as text"),
         }
     }
 
