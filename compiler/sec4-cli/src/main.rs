@@ -278,6 +278,14 @@ enum Commands {
         max_request_ms: Option<u64>,
         #[arg(long)]
         runtime_script: Option<String>,
+        #[arg(long)]
+        db_base: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        db_adapter: Option<RunDbAdapter>,
+        #[arg(long)]
+        db_postgres_dsn: Option<String>,
+        #[arg(long, value_enum)]
+        db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
         #[arg(long, default_value_t = 1)]
         requests: usize,
         #[arg(long, default_value_t = 128)]
@@ -714,6 +722,10 @@ fn main() {
             max_pending,
             max_request_ms,
             runtime_script,
+            db_base,
+            db_adapter,
+            db_postgres_dsn,
+            db_postgres_tls_mode,
             requests,
             max_steps,
             fail_on_errors,
@@ -729,6 +741,10 @@ fn main() {
             max_pending,
             max_request_ms,
             runtime_script.as_deref(),
+            db_base.as_deref(),
+            db_adapter,
+            db_postgres_dsn.as_deref(),
+            db_postgres_tls_mode,
             requests,
             max_steps,
             fail_on_errors,
@@ -803,6 +819,10 @@ fn cmd_lasm_smoke(
     max_pending: Option<usize>,
     max_request_ms: Option<u64>,
     runtime_script: Option<&str>,
+    db_base: Option<&Path>,
+    db_adapter: Option<RunDbAdapter>,
+    db_postgres_dsn: Option<&str>,
+    db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     requests: usize,
     max_steps: usize,
     fail_on_errors: bool,
@@ -1005,8 +1025,23 @@ fn cmd_lasm_smoke(
     let mut first_error_code = None;
     let mut first_error_kind = None;
     let smoke_dynamic_state = match build_lasm_dynamic_response_state(
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None,
+        db_base,
+        db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
+        db_postgres_dsn,
+        db_postgres_tls_mode.map(run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
     ) {
         Ok(state) => state,
         Err(message) => {
