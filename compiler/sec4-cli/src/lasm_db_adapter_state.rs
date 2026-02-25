@@ -136,19 +136,34 @@ fn has_lasm_postgres_connect_timeout(dsn: &str) -> bool {
     compact.contains("connect_timeout=")
 }
 
+fn split_lasm_postgres_dsn_fragment(dsn: &str) -> (&str, Option<&str>) {
+    if let Some((base, fragment)) = dsn.split_once('#') {
+        (base, Some(fragment))
+    } else {
+        (dsn, None)
+    }
+}
+
 fn build_lasm_postgres_connect_dsn(dsn: &str, connect_timeout_seconds: u64) -> String {
     let trimmed = dsn.trim();
-    if has_lasm_postgres_connect_timeout(trimmed) {
+    let (base_dsn, fragment) = split_lasm_postgres_dsn_fragment(trimmed);
+    if has_lasm_postgres_connect_timeout(base_dsn) {
         return trimmed.to_string();
     }
-    if trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://") {
-        if trimmed.contains('?') {
-            format!("{trimmed}&connect_timeout={connect_timeout_seconds}")
+    let rewritten_base =
+        if base_dsn.starts_with("postgres://") || base_dsn.starts_with("postgresql://") {
+            if base_dsn.contains('?') {
+                format!("{base_dsn}&connect_timeout={connect_timeout_seconds}")
+            } else {
+                format!("{base_dsn}?connect_timeout={connect_timeout_seconds}")
+            }
         } else {
-            format!("{trimmed}?connect_timeout={connect_timeout_seconds}")
-        }
+            format!("{base_dsn} connect_timeout={connect_timeout_seconds}")
+        };
+    if let Some(fragment_text) = fragment {
+        format!("{rewritten_base}#{fragment_text}")
     } else {
-        format!("{trimmed} connect_timeout={connect_timeout_seconds}")
+        rewritten_base
     }
 }
 
@@ -418,7 +433,7 @@ mod tests {
         lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
         parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
-        LasmDbPostgresTlsMode,
+        split_lasm_postgres_dsn_fragment, LasmDbPostgresTlsMode,
     };
 
     #[test]
@@ -494,6 +509,49 @@ mod tests {
         assert!(!has_lasm_postgres_connect_timeout(
             "postgres://u:p@localhost/db?sslmode=disable"
         ));
+    }
+
+    #[test]
+    fn postgres_connect_dsn_injects_timeout_before_fragment_without_query() {
+        let rewritten = build_lasm_postgres_connect_dsn("postgres://u:p@localhost/db#frag", 2);
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?connect_timeout=2#frag"
+        );
+    }
+
+    #[test]
+    fn postgres_connect_dsn_injects_timeout_before_fragment_with_query() {
+        let rewritten =
+            build_lasm_postgres_connect_dsn("postgres://u:p@localhost/db?sslmode=disable#frag", 3);
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?sslmode=disable&connect_timeout=3#frag"
+        );
+    }
+
+    #[test]
+    fn postgres_connect_dsn_preserves_existing_connect_timeout_with_fragment() {
+        let rewritten = build_lasm_postgres_connect_dsn(
+            "postgres://u:p@localhost/db?CONNECT_TIMEOUT=9&sslmode=disable#frag",
+            2,
+        );
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?CONNECT_TIMEOUT=9&sslmode=disable#frag"
+        );
+    }
+
+    #[test]
+    fn split_postgres_dsn_fragment_handles_fragment_and_non_fragment_cases() {
+        assert_eq!(
+            split_lasm_postgres_dsn_fragment("postgres://u:p@localhost/db#frag"),
+            ("postgres://u:p@localhost/db", Some("frag"))
+        );
+        assert_eq!(
+            split_lasm_postgres_dsn_fragment("postgres://u:p@localhost/db"),
+            ("postgres://u:p@localhost/db", None)
+        );
     }
 
     #[test]

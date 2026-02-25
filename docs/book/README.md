@@ -1486,5 +1486,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1514-m39-local-postgres-credential-probe-container-port-fix.md`
 - `1515-m39-local-postgres-dsn-password-redaction.md`
 - `1516-m39-postgres-connect-timeout-dsn-detection-hardening.md`
+- `1517-m39-postgres-connect-timeout-dsn-fragment-safe-rewrite.md`
 
 As milestones progress, chapters will be added and linked from this index.
