@@ -17,7 +17,7 @@ verify_postgres_credentials() {
     env PGPASSWORD="$POSTGRES_PASSWORD" \
     psql \
       -h 127.0.0.1 \
-      -p "${PG_PORT:-5432}" \
+      -p 5432 \
       -U "$POSTGRES_USER" \
       -d "$POSTGRES_DB" \
       -v ON_ERROR_STOP=1 \

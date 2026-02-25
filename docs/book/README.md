@@ -1483,5 +1483,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1511-m39-lasm-postgres-connect-error-detail-diagnostics.md`
 - `1512-m39-local-postgres-startup-credential-verification.md`
 - `1513-m39-local-postgres-artifact-ignore-rules.md`
+- `1514-m39-local-postgres-credential-probe-container-port-fix.md`
 
 As milestones progress, chapters will be added and linked from this index.
