@@ -7203,6 +7203,7 @@ fn cmd_run(
         return Err(2);
     }
     let resolved_db_cli = match validate_and_resolve_run_db_cli_options(
+        path,
         backend,
         db_base,
         db_adapter,

@@ -1471,5 +1471,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1499-m39-alpha-postgres-comparison-suite.md`
 - `1500-m39-alpha-postgres-comparison-suite-local-infra-wrapper.md`
 - `1501-m39-run-db-cli-validation-resolution-module-extraction.md`
+- `1502-m39-run-db-postgres-dsn-file-project-relative-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.
