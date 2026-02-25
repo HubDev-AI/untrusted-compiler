@@ -12,6 +12,18 @@ fail() {
   exit 1
 }
 
+verify_postgres_credentials() {
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T postgres \
+    env PGPASSWORD="$POSTGRES_PASSWORD" \
+    psql \
+      -h 127.0.0.1 \
+      -p "${PG_PORT:-5432}" \
+      -U "$POSTGRES_USER" \
+      -d "$POSTGRES_DB" \
+      -v ON_ERROR_STOP=1 \
+      -tAc "select 1" >/dev/null
+}
+
 if ! command -v docker >/dev/null 2>&1; then
   fail "docker is required"
 fi
@@ -54,6 +66,12 @@ fi
 for _ in $(seq 1 60); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
   if [ "$health" = "healthy" ] || [ "$health" = "running" ]; then
+    if ! verify_postgres_credentials; then
+      echo "configured Postgres credentials failed verification (POSTGRES_USER=$POSTGRES_USER POSTGRES_DB=$POSTGRES_DB)" >&2
+      echo "hint: existing local data may be initialized with different credentials; run $INFRA_DIR/scripts/reset.sh" >&2
+      popd >/dev/null
+      fail "postgres startup verification failed"
+    fi
     echo "postgres is ready"
     echo "dsn: ${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:${PG_PORT:-5432}/$POSTGRES_DB?sslmode=disable}"
     echo "next: export SEC4_RT_LASM_DB_ADAPTER=postgres"

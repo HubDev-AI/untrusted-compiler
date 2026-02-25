@@ -2273,6 +2273,13 @@ Post-alpha track acceptance anchors:
       - new script `benchmark-suite/scripts/render_alpha_postgres_comparison_suite_repeats_summary.sh` renders repeated-run JSON summary into a deterministic markdown table report (baseline + db-hot aggregate stats),
       - Make entrypoint added: `bench-alpha-postgres-suite-repeats-report` (with `ALPHA_POSTGRES_REPEATS_SUMMARY` / `ALPHA_POSTGRES_REPEATS_REPORT` overrides).
       - documented in `docs/book/1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`.
+   - [x] Hardened LASM Postgres connect diagnostics to emit actionable error detail:
+      - startup connect failures now include debug error context (`{err:?}`) in addition to short `db error` display text, so auth/TLS/network root causes surface directly in operator logs.
+      - documented in `docs/book/1511-m39-lasm-postgres-connect-error-detail-diagnostics.md`.
+   - [x] Hardened local Postgres infra startup readiness to verify configured credentials:
+      - `infra/local-postgres/scripts/up.sh` now executes a real credentialed SQL probe (`select 1`) after container health checks, so stale `./data` initialized with different `POSTGRES_USER`/`POSTGRES_DB` fails fast instead of surfacing later as runtime `db error`,
+      - mismatch failure now emits deterministic reset guidance (`infra/local-postgres/scripts/reset.sh`) for operator recovery.
+      - documented in `docs/book/1512-m39-local-postgres-startup-credential-verification.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

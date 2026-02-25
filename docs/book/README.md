@@ -1480,5 +1480,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`
 - `1509-m39-alpha-postgres-suite-local-repeated-run-wrapper.md`
 - `1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`
+- `1511-m39-lasm-postgres-connect-error-detail-diagnostics.md`
+- `1512-m39-local-postgres-startup-credential-verification.md`
 
 As milestones progress, chapters will be added and linked from this index.
