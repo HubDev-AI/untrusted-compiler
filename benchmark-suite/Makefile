@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -98,6 +98,8 @@ help:
 	@echo "  bench-full-dry Print full-suite command plan"
 	@echo "  bench-full-lasm-postgres Run full suite in LASM postgres mode for DB hot-path endpoints"
 	@echo "  bench-full-lasm-postgres-dry Print full LASM postgres suite command plan"
+	@echo "  bench-alpha-postgres-suite Run standardized two-phase baseline+DB-hot postgres comparison suite"
+	@echo "  bench-alpha-postgres-suite-dry Print standardized two-phase postgres comparison suite command plan"
 	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars incl PROFILE/WARMUP_PATH); set FULL_LASM_INCLUDE_MODE_COMPARE=true to add mode compare lane"
 	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
 	@echo "  bench-full-saturation-throughput Run saturation-enabled full suite with tuned throughput preset knobs"
@@ -196,6 +198,12 @@ bench-full-lasm-postgres:
 
 bench-full-lasm-postgres-dry:
 	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(LASM_DB_MATRIX_IMPLS)" --endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" --lasm-db-adapter postgres $(LASM_DB_POSTGRES_DSN_FILE_FLAG) $(LASM_MODE_COMPARE_FLAG)
+
+bench-alpha-postgres-suite:
+	scripts/run_alpha_postgres_comparison_suite.sh --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+bench-alpha-postgres-suite-dry:
+	scripts/run_alpha_postgres_comparison_suite.sh --dry-run --base-impls "$(IMPLS)" --base-endpoints "$(ENDPOINTS)" --db-impls "$(LASM_DB_MATRIX_IMPLS)" --db-endpoints "$(LASM_DB_MATRIX_ENDPOINTS)" $(LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-full-saturation:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
@@ -366,6 +374,7 @@ test-scripts:
 	scripts/test_run_step_profile.sh
 	scripts/test_run_step_matrix.sh
 	scripts/test_run_full_benchmark_suite.sh
+	scripts/test_run_alpha_postgres_comparison_suite.sh
 	scripts/test_build_artifact_manifest.sh
 	scripts/test_verify_benchmark_bundle.sh
 	scripts/test_preflight.sh

@@ -2228,6 +2228,11 @@ Post-alpha track acceptance anchors:
       - benchmark profile/step endpoints now include DB hot paths (`db-hot-write`, `db-hot-write-tx`, `db-hot-query-one`, `db-records`) with deterministic target/step defaults,
       - added make entrypoints `bench-matrix-lasm-postgres` and `bench-full-lasm-postgres` for repeatable Postgres-mode benchmark loops.
       - documented in `docs/book/1498-m39-benchmark-suite-lasm-postgres-db-path-wiring.md`.
+   - [x] Added standardized two-phase Postgres comparison suite command:
+      - new benchmark orchestrator `run_alpha_postgres_comparison_suite.sh` runs baseline cross-impl endpoints and LASM DB hot-path endpoints sequentially in Postgres mode,
+      - each phase snapshots matrix/analysis/step/report/manifest artifacts to deterministic `*-alpha-base` and `*-alpha-db-postgres` paths and emits one summary JSON.
+      - make entrypoints added: `bench-alpha-postgres-suite` and `bench-alpha-postgres-suite-dry`.
+      - documented in `docs/book/1499-m39-alpha-postgres-comparison-suite.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
