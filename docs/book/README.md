@@ -1479,5 +1479,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1507-m39-db-zero-placeholder-exact-arity-enforcement.md`
 - `1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`
 - `1509-m39-alpha-postgres-suite-local-repeated-run-wrapper.md`
+- `1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -89,6 +89,8 @@ Measure end-to-end service behavior across identical implementations:
    - repeated local-infra run wrapper:
      - `make -C benchmark-suite bench-alpha-postgres-suite-local-repeats-dry BENCH_ALPHA_POSTGRES_REPEAT_RUNS=3`
      - `make -C benchmark-suite bench-alpha-postgres-suite-local-repeats BENCH_ALPHA_POSTGRES_REPEAT_RUNS=3`
+   - render markdown from repeated summary:
+     - `make -C benchmark-suite bench-alpha-postgres-suite-repeats-report`
    - optional:
      - keep infra running after suite: `BENCH_LOCAL_POSTGRES_KEEP_UP=true`
      - recreate local postgres data before suite: `BENCH_LOCAL_POSTGRES_RESET=true`
@@ -148,6 +150,7 @@ Measure end-to-end service behavior across identical implementations:
   - repeated summary now includes aggregated per-impl/per-endpoint stats across runs for `requestsPerSec`, `p99Ms`, and `rssKb` under `baselineStats` and `dbHotStats`.
 - `run_alpha_postgres_comparison_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the same two-phase suite and auto-injects DSN via temporary file, so local runs do not require manually exporting DSN flags.
 - `run_alpha_postgres_comparison_suite_local_repeats.sh` orchestrates repo-local Postgres infra for repeated-run suites and delegates into the repeated wrapper with the same DSN auto-injection flow.
+- `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.
