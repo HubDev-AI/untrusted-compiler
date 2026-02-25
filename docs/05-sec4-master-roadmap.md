@@ -2289,6 +2289,9 @@ Post-alpha track acceptance anchors:
    - [x] Redacted local Postgres DSN password in startup hints:
       - `infra/local-postgres/scripts/up.sh` now redacts password segments in printed DSN output (`postgres://user:***@...`) to avoid leaking local DB credentials into terminal logs.
       - documented in `docs/book/1515-m39-local-postgres-dsn-password-redaction.md`.
+   - [x] Hardened Postgres connect-timeout DSN detection for case/whitespace variants:
+      - runtime DSN rewrite now treats existing `connect_timeout` keys as case-insensitive and whitespace-tolerant (URL and keyword DSN forms), preventing duplicate timeout injection when DSNs use variants like `CONNECT_TIMEOUT=...` or `connect_timeout = ...`.
+      - documented in `docs/book/1516-m39-postgres-connect-timeout-dsn-detection-hardening.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
