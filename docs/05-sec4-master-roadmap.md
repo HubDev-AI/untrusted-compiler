@@ -477,6 +477,10 @@ Post-alpha track acceptance anchors:
 ### Remaining implementation slices (priority order)
 
 1. [x] Completed LASM DB parity for active DB intrinsics (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) and removed schema-switch fallback branches for write/query-one paths while keeping deterministic envelopes on `records.log` adapter v1.
+   - [x] Routed `DbListRecordsResponse` through LASM internal DB operation dispatch (`listRecords`) for planned routes (including `lasm-smoke`) instead of relying on schema-switch-only runtime materialization.
+   - [x] Hardened internal DB marker handling:
+      - invalid DB operation markers now fail deterministically with `DB.OPERATION_INVALID`,
+      - handlers that resolve to more than one DB intrinsic operation now fail deterministically with `DB.MULTI_OP_UNSUPPORTED` (no silent partial execution).
 2. [x] Made LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), with clean-machine `init -> check -> build -> run` validated on LASM-first flow.
 3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
    - [x] Added built-in LASM horizontal front-layer orchestration in `sec4 run`:

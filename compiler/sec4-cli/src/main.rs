@@ -93,7 +93,6 @@ pub(crate) use lasm_db_headers::{
     LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
-use lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 pub(crate) use lasm_dynamic_state::{
     append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
     persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
@@ -1005,7 +1004,19 @@ fn cmd_lasm_smoke(
     let mut first_body = None;
     let mut first_error_code = None;
     let mut first_error_kind = None;
+    let smoke_dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+    let smoke_db_records_adapter = LasmDbRecordsAdapter::RecordsLog;
     while let Some(mut exchange) = runtime.pop_response() {
+        if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
+            &mut exchange.response,
+            &smoke_request,
+            &exchange.path_params,
+            &smoke_dynamic_state,
+            smoke_db_records_adapter,
+            "rt-smoke",
+        ) {
+            clear_lasm_internal_db_response_markers(&mut exchange.response.headers);
+        }
         apply_lasm_text_placeholder_materialization(
             &mut exchange.response,
             &smoke_request,
@@ -1464,6 +1475,14 @@ fn collect_lasm_route_plans(
                     db_operation_count.to_string(),
                 );
             }
+        } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str())
+            .as_deref()
+            == Some("DbListRecordsResponse")
+        {
+            headers.insert(
+                LASM_INTERNAL_DB_OP_HEADER.to_string(),
+                "listRecords".to_string(),
+            );
         }
         if let Some(content_type) = response_plan.default_content_type {
             headers
@@ -1501,6 +1520,26 @@ fn resolve_lasm_smoke_route_plan(
     let registration = find_latest_route_registration(&functions, entry_name, method, route)?;
     let response_plan = extract_response_plan(&functions, registration.handler_name.as_str())?;
     let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
+    let (db_operation, db_operation_count) = lasm_db_plan::extract_lasm_db_operation_with_count(
+        &functions,
+        registration.handler_name.as_str(),
+    );
+    if let Some(db_operation) = db_operation {
+        lasm_db_plan::apply_lasm_db_operation_plan_headers(&mut headers, &db_operation);
+        if db_operation_count > 1 {
+            headers.insert(
+                LASM_INTERNAL_DB_OP_COUNT_HEADER.to_string(),
+                db_operation_count.to_string(),
+            );
+        }
+    } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str()).as_deref()
+        == Some("DbListRecordsResponse")
+    {
+        headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "listRecords".to_string(),
+        );
+    }
     if let Some(content_type) = response_plan.default_content_type {
         headers
             .entry("Content-Type".to_string())
@@ -10266,14 +10305,6 @@ fn apply_lasm_dynamic_response_materialization(
                 }),
             );
         }
-        "DbListRecordsResponse" => {
-            apply_lasm_db_list_records_response_materialization(
-                response,
-                request,
-                dynamic_state,
-                trace_id,
-            );
-        }
         _ => {}
     }
 }
@@ -10801,6 +10832,14 @@ fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
 
 fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {
     let parsed = parse_lasm_json_payload(&response.body)?;
+    parsed
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn extract_lasm_schema_hint_from_response_body(body: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
     parsed
         .get("schema")
         .and_then(serde_json::Value::as_str)

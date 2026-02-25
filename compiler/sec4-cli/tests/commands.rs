@@ -1194,6 +1194,61 @@ fn lasm_smoke_command_runs_in_memory_runtime_with_compiled_entrypoint() {
 }
 
 #[test]
+fn lasm_smoke_command_materializes_db_list_records_response() {
+    let root = temp_dir("sec4-lasm-smoke-db-list-records");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-db-list-records\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn dbListRecords() effects { net } -> Int {\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/db/records",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:dbListRecords"),
+        "lasm-smoke output should include DB list handler origin:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=200"),
+        "lasm-smoke output should include deterministic status:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"count\":0")
+            && stdout.contains("\"recordsTotal\":0")
+            && stdout.contains("\"adapter\":\"records.log\""),
+        "lasm-smoke output should include materialized DB list records payload:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_resolves_routes_and_response_through_helper_calls() {
     let root = temp_dir("sec4-lasm-smoke-helper-call-graph");
     let project_dir = root.join("project");
