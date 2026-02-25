@@ -2264,6 +2264,11 @@ Post-alpha track acceptance anchors:
       - aggregate summary now also emits per-impl/per-endpoint repeated-run stats (`baselineStats`, `dbHotStats`) for throughput/latency/memory signals (`requestsPerSec`, `p99Ms`, `rssKb`),
       - Make entrypoints added: `bench-alpha-postgres-suite-repeats` and `bench-alpha-postgres-suite-repeats-dry` (`BENCH_ALPHA_POSTGRES_REPEAT_RUNS`).
       - documented in `docs/book/1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`.
+   - [x] Added local-infra repeated-run wrapper for Postgres comparison suite:
+      - new script `benchmark-suite/scripts/run_alpha_postgres_comparison_suite_local_repeats.sh` orchestrates `infra/local-postgres` lifecycle and delegates into repeated wrapper with auto-generated DSN file,
+      - supports `--keep-up`, `--reset-db`, `--infra-env` local controls and forwards repeated-suite args (`--runs`, endpoint/impl sets, reset-between-phases),
+      - Make entrypoints added: `bench-alpha-postgres-suite-local-repeats` and `bench-alpha-postgres-suite-local-repeats-dry`.
+      - documented in `docs/book/1509-m39-alpha-postgres-suite-local-repeated-run-wrapper.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

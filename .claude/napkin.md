@@ -694,3 +694,4 @@
 - 2026-02-26 | self | Started the next slice on local `dev` right after merging PR #827 and only then switched to a `codex/*` branch. | After every merge operation, run `git branch --show-current` and create/switch to `codex/*` before the first new edit.
 - 2026-02-26 | self | Triggered a web-search tool call by mistake while in a local benchmark-script implementation flow. | Keep implementation sessions strictly on local shell tools; avoid web tooling unless external facts are required.
 - 2026-02-26 | self | While extending the repeated-run benchmark wrapper, I edited on local `dev` again before branching. | Immediately create/switch to `codex/*` after each merge fast-forward and before the first new change.
+- 2026-02-26 | self | Started the local repeated-suite wrapper slice on `dev` before creating a feature branch. | Keep strict post-merge hygiene: create `codex/*` branch immediately after sync and before first file edit.
