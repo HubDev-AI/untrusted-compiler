@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-26 | self | I started this continuation with git/status commands before reading `.claude/napkin.md` and also began coding on local `dev` before creating a `codex/*` branch. | Keep strict startup/order gates: read `.claude/napkin.md` first, then branch from `dev` to `codex/*` before any edits. |
 | 2026-02-23 | self | I again started the runtime-config fallback-cap resolver slice on local `dev` before branching. | Keep strict branch discipline: after each merge, create the next `codex/*` branch first, then edit. |
 | 2026-02-23 | self | I started the relay fallback rotating-cursor slice on local `dev` before branching (again). | Enforce non-negotiable pre-edit branch gate after each merge: create `codex/*` first, then edit. |
 | 2026-02-23 | self | I started the status-writer visibility slice on local `dev` before branching again. | Keep a strict branch-first rhythm after each merge: create the next `codex/*` branch immediately, then begin edits. |
