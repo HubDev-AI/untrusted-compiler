@@ -15,7 +15,7 @@
     {
       "impl": "node",
       "servicePath": "benchmark-suite/services/node-workbench",
-      "status": "planned"
+      "status": "implemented-alpha"
     },
     {
       "impl": "go",

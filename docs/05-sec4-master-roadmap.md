@@ -2336,6 +2336,11 @@ Post-alpha track acceptance anchors:
       - added workbench smoke orchestrator (`make -C benchmark-suite workbench-smoke`) producing `results/summaries/workbench-smoke-matrix.json`,
       - marked `sec4-lasm` as `implemented-alpha` in workbench backend matrix for cross-backend generation/benchmark follow-up.
       - documented in `docs/book/1527-m39-workbench-sec4-lasm-service-and-smoke-matrix-bootstrap.md`.
+   - [x] Added first non-sec4 workbench backend with real Postgres path:
+      - added `benchmark-suite/services/node-workbench` with deterministic task/comment API flows and auth-gated mutating routes,
+      - updated workbench matrix status for `node` to `implemented-alpha`,
+      - workbench smoke matrix now runs two implemented lanes (`sec4-lasm` + `node`) and reports pass/fail/skip summary.
+      - documented in `docs/book/1528-m39-workbench-node-backend-real-postgres-lane.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
