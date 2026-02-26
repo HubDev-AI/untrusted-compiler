@@ -86,8 +86,103 @@ if [ -z "$out_path" ]; then
 fi
 
 entries_file="$(mktemp)"
-trap 'rm -f "$entries_file"' EXIT
+compare_samples_file="$(mktemp)"
+step_samples_file="$(mktemp)"
+trap 'rm -f "$entries_file" "$compare_samples_file" "$step_samples_file"' EXIT
 : >"$entries_file"
+: >"$compare_samples_file"
+: >"$step_samples_file"
+
+append_compare_samples() {
+  local matrix_path="$1"
+  local run_tag="$2"
+  jq -c \
+    --arg run "$run_tag" \
+    '.endpoints[]?.compared[]? | {
+      run: $run,
+      impl: (.impl // null),
+      endpoint: (.endpoint // null),
+      requestsPerSec: (.requestsPerSec // null),
+      p99: (.p99 // null),
+      rssKb: (.rssKb // null)
+    }' \
+    "$matrix_path" >>"$compare_samples_file"
+}
+
+append_step_samples() {
+  local step_matrix_path="$1"
+  local run_tag="$2"
+  jq -c \
+    --arg run "$run_tag" \
+    '.endpoints[]?.compared[]? | {
+      run: $run,
+      impl: (.impl // null),
+      endpoint: (.endpoint // null),
+      kneeDetected: (.kneeDetected // false),
+      kneeAtTargetRps: (.kneeAtTargetRps // null),
+      achievedRatioMin: (.achievedRatioMin // null),
+      achievedRatioMax: (.achievedRatioMax // null),
+      p99MinMs: (.p99MinMs // null),
+      p99MaxMs: (.p99MaxMs // null)
+    }' \
+    "$step_matrix_path" >>"$step_samples_file"
+}
+
+compute_compare_stats() {
+  jq -s '
+    def p99_to_ms:
+      if . == null then null
+      elif (type != "string") then null
+      elif test("ms$") then (sub("ms$";"") | tonumber?)
+      elif test("us$") then ((sub("us$";"") | tonumber?) / 1000)
+      elif test("s$") then ((sub("s$";"") | tonumber?) * 1000)
+      else (tonumber?)
+      end;
+    def metric($vals):
+      if ($vals | length) == 0 then null else {
+        mean: (($vals | add) / ($vals | length)),
+        min: ($vals | min),
+        max: ($vals | max)
+      } end;
+    sort_by((.impl // "") + "|" + (.endpoint // ""))
+    | group_by((.impl // "") + "|" + (.endpoint // ""))
+    | map({
+        impl: .[0].impl,
+        endpoint: .[0].endpoint,
+        samples: length,
+        requestsPerSec: metric([.[].requestsPerSec | select(type == "number")]),
+        p99Ms: metric([.[].p99 | p99_to_ms | select(type == "number")]),
+        rssKb: metric([.[].rssKb | select(type == "number")])
+      })
+    | sort_by(.endpoint, .impl)
+  ' "$compare_samples_file"
+}
+
+compute_step_stats() {
+  jq -s '
+    def metric($vals):
+      if ($vals | length) == 0 then null else {
+        mean: (($vals | add) / ($vals | length)),
+        min: ($vals | min),
+        max: ($vals | max)
+      } end;
+    sort_by((.impl // "") + "|" + (.endpoint // ""))
+    | group_by((.impl // "") + "|" + (.endpoint // ""))
+    | map({
+        impl: .[0].impl,
+        endpoint: .[0].endpoint,
+        samples: length,
+        kneeDetectedCount: ([.[].kneeDetected | select(. == true)] | length),
+        kneeDetectedRatio: (([.[].kneeDetected | select(. == true)] | length) / length),
+        kneeAtTargetRps: metric([.[].kneeAtTargetRps | select(type == "number")]),
+        achievedRatioMin: metric([.[].achievedRatioMin | select(type == "number")]),
+        achievedRatioMax: metric([.[].achievedRatioMax | select(type == "number")]),
+        p99MinMs: metric([.[].p99MinMs | select(type == "number")]),
+        p99MaxMs: metric([.[].p99MaxMs | select(type == "number")])
+      })
+    | sort_by(.endpoint, .impl)
+  ' "$step_samples_file"
+}
 
 for run_index in $(seq 1 "$runs"); do
   run_tag="$(printf 'run-%03d' "$run_index")"
@@ -116,6 +211,11 @@ for run_index in $(seq 1 "$runs"); do
   echo "run: ${run_cmd[*]}"
   "${run_cmd[@]}"
 
+  if [ "$dry_run" != "true" ]; then
+    append_compare_samples "$run_compare" "$run_tag"
+    append_step_samples "$run_step_matrix" "$run_tag"
+  fi
+
   jq -n \
     --arg run "$run_tag" \
     --arg summary "$run_summary_path" \
@@ -138,6 +238,12 @@ for run_index in $(seq 1 "$runs"); do
 done
 
 runs_json="$(jq -s '.' "$entries_file")"
+compare_stats_json='null'
+step_stats_json='null'
+if [ "$dry_run" != "true" ]; then
+  compare_stats_json="$(compute_compare_stats)"
+  step_stats_json="$(compute_step_stats)"
+fi
 
 jq -n \
   --arg mode "workbench-full-benchmark-suite-repeats" \
@@ -148,6 +254,8 @@ jq -n \
   --arg inner "${suite_dir}/scripts/run_workbench_full_benchmark_suite.sh" \
   --arg passthrough "$(printf '%s\n' "${passthrough[@]}" | jq -R . | jq -s .)" \
   --argjson runs "$runs_json" \
+  --argjson compareStats "$compare_stats_json" \
+  --argjson stepStats "$step_stats_json" \
   '{
     mode: $mode,
     generatedAt: $generatedAt,
@@ -158,7 +266,9 @@ jq -n \
       inner: $inner
     },
     forwardedArgs: ($passthrough | fromjson),
-    runs: $runs
+    runs: $runs,
+    compareStats: $compareStats,
+    stepStats: $stepStats
   }' >"$out_path"
 
 echo "wrote ${out_path}"

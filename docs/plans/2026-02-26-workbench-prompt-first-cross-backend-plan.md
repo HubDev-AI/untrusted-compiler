@@ -175,6 +175,14 @@ Required characteristics:
       - output artifacts:
         - `benchmark-suite/results/summaries/workbench-full-benchmark-repeats.json`
         - `benchmark-suite/results/summaries/workbench-full-benchmark-runs/`
+   - repeated-run aggregate stats + markdown summary implemented:
+      - repeated JSON summary now includes aggregate `compareStats` and `stepStats` fields across runs,
+      - renderer script:
+        - `benchmark-suite/scripts/render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - make target:
+        - `make -C benchmark-suite workbench-full-bench-repeats-report`
+      - markdown output:
+        - `benchmark-suite/results/workbench-full-benchmark-repeats.md`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.

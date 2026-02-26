@@ -1508,5 +1508,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1536-m39-workbench-step-matrix-runner.md`
 - `1537-m39-workbench-full-benchmark-suite-runner.md`
 - `1538-m39-workbench-full-suite-repeated-run-wrapper.md`
+- `1539-m39-workbench-full-suite-repeats-stats-and-report-renderer.md`
 
 As milestones progress, chapters will be added and linked from this index.
