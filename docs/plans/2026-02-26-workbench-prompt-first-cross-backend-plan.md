@@ -116,10 +116,14 @@ Required characteristics:
    - `node` workbench service implemented:
      - `benchmark-suite/services/node-workbench`
      - real Postgres-backed task/comment routes with deterministic envelope contract.
+   - `go` workbench service implemented:
+     - `benchmark-suite/services/go-workbench`
+     - real Postgres-backed task/comment routes with deterministic envelope contract.
    - workbench smoke orchestrator implemented:
-     - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
-     - `make -C benchmark-suite workbench-smoke`
+      - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
+      - `make -C benchmark-suite workbench-smoke`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
-   - `sec4`, `go`, `rust`: planned.
+   - `go`: `implemented-alpha` and passing smoke.
+   - `sec4`, `rust`: planned.

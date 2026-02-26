@@ -1498,5 +1498,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1526-m39-lasm-db-required-template-marker-hardening.md`
 - `1527-m39-workbench-sec4-lasm-service-and-smoke-matrix-bootstrap.md`
 - `1528-m39-workbench-node-backend-real-postgres-lane.md`
+- `1529-m39-workbench-go-backend-real-postgres-lane.md`
 
 As milestones progress, chapters will be added and linked from this index.
