@@ -36,6 +36,21 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
      - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
      - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
      - `benchmark-suite/results/workbench-benchmark-report.md`
+6. Run step-load benchmark matrix (knee detection):
+   - `make -C benchmark-suite workbench-step-bench-dry`
+   - `make -C benchmark-suite workbench-step-bench`
+   - optional scope overrides:
+     - `WORKBENCH_IMPLS=sec4,sec4-lasm`
+     - `WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
+   - optional `sec4-lasm` DB mode overrides:
+     - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
+     - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode)
+     - `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn` (postgres mode)
+   - outputs:
+     - `benchmark-suite/results/summaries/workbench-step-runs.json`
+     - `benchmark-suite/results/summaries/workbench-step-matrix.json`
+     - `benchmark-suite/results/summaries/<impl>-<endpoint>-step.json`
+     - `benchmark-suite/results/summaries/<impl>-<endpoint>-step-analysis.json`
 
 ## Current implementation lanes
 

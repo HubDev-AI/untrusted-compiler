@@ -148,6 +148,16 @@ Required characteristics:
       - `run_workbench_benchmark_matrix.sh` now supports `--lasm-db-adapter sqlite|postgres`, `--lasm-db-base`, and `--lasm-postgres-dsn-file`,
       - make-level passthrough knobs added (`WORKBENCH_LASM_DB_ADAPTER`, `WORKBENCH_LASM_DB_BASE`, `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE`),
       - workbench task insert templates now cast priority placeholder (`cast($5 as bigint)`) to remove LASM Postgres write-path serialization failure.
+   - workbench step-load matrix runner implemented:
+      - `benchmark-suite/scripts/run_workbench_step_profile.sh`
+      - `benchmark-suite/scripts/run_workbench_step_matrix.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-step-bench-dry`
+        - `make -C benchmark-suite workbench-step-bench`
+      - output artifacts:
+        - `benchmark-suite/results/summaries/workbench-step-runs.json`
+        - `benchmark-suite/results/summaries/workbench-step-matrix.json`
+        - per-lane step summaries + analyses (`<impl>-<endpoint>-step.json`, `<impl>-<endpoint>-step-analysis.json`).
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
