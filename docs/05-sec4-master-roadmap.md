@@ -2370,6 +2370,10 @@ Post-alpha track acceptance anchors:
       - added matrix orchestrator `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh` that starts each implemented lane, seeds benchmark state, runs endpoint profiles, and emits compare/analysis/report outputs,
       - added make targets `workbench-bench` and `workbench-bench-dry` for one-command workbench matrix execution.
       - documented in `docs/book/1534-m39-workbench-benchmark-matrix-runner.md`.
+   - [x] Added LASM DB-mode controls to workbench benchmark runner and fixed Postgres task-write placeholder compatibility:
+      - `workbench-bench` now accepts `sec4-lasm` adapter overrides (`sqlite|postgres`) with optional sqlite base path / postgres DSN file wiring,
+      - workbench task insert SQL templates now cast priority placeholder via `cast($5 as bigint)` to avoid deterministic LASM Postgres write-path serialization failures.
+      - documented in `docs/book/1535-m39-workbench-lasm-postgres-mode-and-param-cast-compat.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

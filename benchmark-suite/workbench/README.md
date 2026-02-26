@@ -27,6 +27,10 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 5. Run load benchmark matrix:
    - `make -C benchmark-suite workbench-bench-dry`
    - `make -C benchmark-suite workbench-bench`
+   - optional `sec4-lasm` DB mode overrides:
+     - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
+     - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode)
+     - `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn` (postgres mode)
    - outputs:
      - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
      - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`

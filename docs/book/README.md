@@ -1504,5 +1504,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1532-m39-workbench-sec4-backend-lane.md`
 - `1533-m39-workbench-alpha-wire-format-parity-across-backends.md`
 - `1534-m39-workbench-benchmark-matrix-runner.md`
+- `1535-m39-workbench-lasm-postgres-mode-and-param-cast-compat.md`
 
 As milestones progress, chapters will be added and linked from this index.

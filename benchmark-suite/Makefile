@@ -17,6 +17,9 @@ BENCH_LASM_DB_ADAPTER ?=
 BENCH_LASM_DB_POSTGRES_DSN_FILE ?=
 LASM_DB_MATRIX_IMPLS ?= sec4-lasm
 LASM_DB_MATRIX_ENDPOINTS ?= db-hot-write,db-hot-write-tx,db-hot-query-one,db-records
+WORKBENCH_LASM_DB_ADAPTER ?=
+WORKBENCH_LASM_DB_BASE ?=
+WORKBENCH_LASM_DB_POSTGRES_DSN_FILE ?=
 BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES ?= false
 BENCH_ALPHA_POSTGRES_REPEAT_RUNS ?= 3
 ALPHA_POSTGRES_REPEATS_SUMMARY ?= results/summaries/alpha-postgres-comparison-suite-repeats.json
@@ -77,6 +80,9 @@ SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--warmu
 FULL_SATURATION_WARMUP_PATH_FLAG = $(if $(strip $(LASM_CAPACITY_WARMUP_PATH)),--saturation-warmup-path "$(LASM_CAPACITY_WARMUP_PATH)",)
 LASM_DB_ADAPTER_FLAG = $(if $(strip $(BENCH_LASM_DB_ADAPTER)),--lasm-db-adapter "$(BENCH_LASM_DB_ADAPTER)",)
 LASM_DB_POSTGRES_DSN_FILE_FLAG = $(if $(strip $(BENCH_LASM_DB_POSTGRES_DSN_FILE)),--lasm-db-postgres-dsn-file "$(BENCH_LASM_DB_POSTGRES_DSN_FILE)",)
+WORKBENCH_LASM_DB_ADAPTER_FLAG = $(if $(strip $(WORKBENCH_LASM_DB_ADAPTER)),--lasm-db-adapter "$(WORKBENCH_LASM_DB_ADAPTER)",)
+WORKBENCH_LASM_DB_BASE_FLAG = $(if $(strip $(WORKBENCH_LASM_DB_BASE)),--lasm-db-base "$(WORKBENCH_LASM_DB_BASE)",)
+WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG = $(if $(strip $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE)),--lasm-postgres-dsn-file "$(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE)",)
 ALPHA_POSTGRES_RESET_BETWEEN_PHASES_FLAG = $(if $(filter true,$(BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES)),--reset-db-between-phases,)
 BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG = $(if $(filter true,$(BENCH_LOCAL_POSTGRES_KEEP_UP)),--keep-up,)
 BENCH_LOCAL_POSTGRES_RESET_FLAG = $(if $(filter true,$(BENCH_LOCAL_POSTGRES_RESET)),--reset-db,)
@@ -91,6 +97,7 @@ help:
 	@echo "  preflight-dry Validate dry-run tooling only (skips wrk2 requirement)"
 	@echo "  workbench-smoke Run workbench matrix smoke orchestration"
 	@echo "  workbench-bench Run workbench matrix load benchmarks + compare/analysis/report outputs"
+	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
 	@echo "  workbench-bench-dry Print workbench benchmark command plan without executing load"
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
@@ -170,10 +177,10 @@ workbench-smoke:
 	scripts/run_workbench_smoke_matrix.sh
 
 workbench-bench:
-	scripts/run_workbench_benchmark_matrix.sh
+	scripts/run_workbench_benchmark_matrix.sh $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-bench-dry:
-	scripts/run_workbench_benchmark_matrix.sh --dry-run
+	scripts/run_workbench_benchmark_matrix.sh --dry-run $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-ping:
 	scripts/run_profile.sh $(IMPL) ping $(BASE_URL)

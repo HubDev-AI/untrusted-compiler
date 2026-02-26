@@ -119,6 +119,10 @@ Measure end-to-end service behavior across identical implementations:
      - `make -C benchmark-suite workbench-bench-dry`
    - full run:
      - `make -C benchmark-suite workbench-bench`
+   - optional LASM DB mode knobs:
+     - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
+     - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode only)
+     - `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn` (postgres mode only)
    - outputs:
      - `results/summaries/workbench-benchmark-runs.json`
      - `results/summaries/workbench-benchmark-compare-matrix.json`
@@ -166,12 +170,17 @@ Measure end-to-end service behavior across identical implementations:
 - `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
 - `run_workbench_smoke_matrix.sh` executes `benchmark-suite/workbench/matrix.backends.json` implementations with status `implemented-alpha|implemented`, runs each service smoke script, and writes `results/summaries/workbench-smoke-matrix.json`.
 - `run_workbench_benchmark_matrix.sh` executes the same workbench matrix with load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`), writes per-impl summary/report artifacts, then emits compare/analysis/markdown report artifacts under `results/`.
+  - `sec4-lasm` DB mode is configurable via:
+    - `--lasm-db-adapter sqlite|postgres`
+    - `--lasm-db-base <path>` (sqlite)
+    - `--lasm-postgres-dsn-file <path>` (postgres)
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
   - `BENCH_TARGET_WB_TASKS_POST`
   - `BENCH_TARGET_WB_TASKS_WITH_COMMENT`
   - `BENCH_TARGET_WB_TASK_COMMENT_POST`
   - `BENCH_TARGET_WB_TASK_GET`
   - `BENCH_TARGET_WB_TASKS_LIST`
+- Workbench mutation load profiles preserve the same alpha array payload contract across lanes (`params`, `task_params`, `comment_params`).
 - Workbench endpoint profiles use deterministic auth + seeded task IDs; matrix runner seeds state via `/wb/setup` and one seed task/comment before load.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
