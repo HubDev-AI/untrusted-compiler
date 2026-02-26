@@ -128,7 +128,25 @@ Measure end-to-end service behavior across identical implementations:
      - `results/summaries/workbench-benchmark-compare-matrix.json`
      - `results/summaries/workbench-benchmark-analysis.json`
      - `results/workbench-benchmark-report.md`
-24. Stop DB:
+24. Run workbench step-load benchmark matrix (feature-app knee detection + step matrix):
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-step-bench-dry`
+   - full run:
+     - `make -C benchmark-suite workbench-step-bench`
+   - optional scope overrides:
+     - `WORKBENCH_IMPLS=sec4,sec4-lasm`
+     - `WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
+   - optional LASM DB mode knobs:
+     - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
+     - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode only)
+     - `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn` (postgres mode only)
+   - outputs:
+     - `results/summaries/workbench-step-runs.json`
+     - `results/summaries/workbench-step-matrix.json`
+     - per-step summaries and analyses:
+       - `results/summaries/<impl>-<endpoint>-step.json`
+       - `results/summaries/<impl>-<endpoint>-step-analysis.json`
+25. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -174,6 +192,12 @@ Measure end-to-end service behavior across identical implementations:
     - `--lasm-db-adapter sqlite|postgres`
     - `--lasm-db-base <path>` (sqlite)
     - `--lasm-postgres-dsn-file <path>` (postgres)
+- `run_workbench_step_profile.sh` executes step-load rates for one workbench endpoint and writes:
+  - per-rate snapshots: `results/summaries/<impl>-<endpoint>-r<rate>.json`
+  - aggregate step summary: `results/summaries/<impl>-<endpoint>-step.json`
+- `run_workbench_step_matrix.sh` executes workbench step-load profiles across matrix implementations/endpoints, runs step analysis per lane, and emits:
+  - `results/summaries/workbench-step-runs.json`
+  - `results/summaries/workbench-step-matrix.json`
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
   - `BENCH_TARGET_WB_TASKS_POST`
   - `BENCH_TARGET_WB_TASKS_WITH_COMMENT`
