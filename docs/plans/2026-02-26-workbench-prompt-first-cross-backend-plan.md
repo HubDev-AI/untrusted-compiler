@@ -119,6 +119,9 @@ Required characteristics:
    - `go` workbench service implemented:
      - `benchmark-suite/services/go-workbench`
      - real Postgres-backed task/comment routes with deterministic envelope contract.
+   - `rust` workbench service implemented:
+     - `benchmark-suite/services/rust-workbench`
+     - real Postgres-backed task/comment routes with deterministic envelope contract.
    - workbench smoke orchestrator implemented:
       - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
       - `make -C benchmark-suite workbench-smoke`
@@ -126,4 +129,5 @@ Required characteristics:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
    - `go`: `implemented-alpha` and passing smoke.
-   - `sec4`, `rust`: planned.
+   - `rust`: `implemented-alpha` and passing smoke.
+   - `sec4`: planned.
