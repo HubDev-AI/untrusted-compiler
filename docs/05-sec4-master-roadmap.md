@@ -2365,6 +2365,11 @@ Post-alpha track acceptance anchors:
       - smoke scripts for those lanes now exercise the shared wire-format path,
       - workbench spec/prompt docs updated to pin this alpha harness contract.
       - documented in `docs/book/1533-m39-workbench-alpha-wire-format-parity-across-backends.md`.
+   - [x] Added dedicated workbench benchmark-matrix runner (beyond smoke):
+      - added deterministic workbench endpoint load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`) and runner script `benchmark-suite/scripts/run_workbench_profile.sh`,
+      - added matrix orchestrator `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh` that starts each implemented lane, seeds benchmark state, runs endpoint profiles, and emits compare/analysis/report outputs,
+      - added make targets `workbench-bench` and `workbench-bench-dry` for one-command workbench matrix execution.
+      - documented in `docs/book/1534-m39-workbench-benchmark-matrix-runner.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

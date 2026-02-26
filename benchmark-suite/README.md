@@ -114,7 +114,17 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite test-services`
 22. Run workbench smoke matrix (prompt-first generated feature app lane):
    - `make -C benchmark-suite workbench-smoke`
-23. Stop DB:
+23. Run workbench benchmark matrix (feature-app load profiles + compare artifacts):
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-bench-dry`
+   - full run:
+     - `make -C benchmark-suite workbench-bench`
+   - outputs:
+     - `results/summaries/workbench-benchmark-runs.json`
+     - `results/summaries/workbench-benchmark-compare-matrix.json`
+     - `results/summaries/workbench-benchmark-analysis.json`
+     - `results/workbench-benchmark-report.md`
+24. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -155,6 +165,14 @@ Measure end-to-end service behavior across identical implementations:
 - `run_alpha_postgres_comparison_suite_local_repeats.sh` orchestrates repo-local Postgres infra for repeated-run suites and delegates into the repeated wrapper with the same DSN auto-injection flow.
 - `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
 - `run_workbench_smoke_matrix.sh` executes `benchmark-suite/workbench/matrix.backends.json` implementations with status `implemented-alpha|implemented`, runs each service smoke script, and writes `results/summaries/workbench-smoke-matrix.json`.
+- `run_workbench_benchmark_matrix.sh` executes the same workbench matrix with load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`), writes per-impl summary/report artifacts, then emits compare/analysis/markdown report artifacts under `results/`.
+- `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
+  - `BENCH_TARGET_WB_TASKS_POST`
+  - `BENCH_TARGET_WB_TASKS_WITH_COMMENT`
+  - `BENCH_TARGET_WB_TASK_COMMENT_POST`
+  - `BENCH_TARGET_WB_TASK_GET`
+  - `BENCH_TARGET_WB_TASKS_LIST`
+- Workbench endpoint profiles use deterministic auth + seeded task IDs; matrix runner seeds state via `/wb/setup` and one seed task/comment before load.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.
