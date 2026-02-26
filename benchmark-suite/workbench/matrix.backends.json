@@ -25,7 +25,7 @@
     {
       "impl": "rust",
       "servicePath": "benchmark-suite/services/rust-workbench",
-      "status": "planned"
+      "status": "implemented-alpha"
     }
   ]
 }

@@ -2346,6 +2346,11 @@ Post-alpha track acceptance anchors:
       - updated workbench matrix status for `go` to `implemented-alpha`,
       - workbench smoke matrix now runs three implemented lanes (`sec4-lasm` + `node` + `go`) and reports pass/fail/skip summary.
       - documented in `docs/book/1529-m39-workbench-go-backend-real-postgres-lane.md`.
+   - [x] Added Rust workbench backend with real Postgres path:
+      - added `benchmark-suite/services/rust-workbench` with deterministic task/comment API flows and auth-gated mutating routes,
+      - updated workbench matrix status for `rust` to `implemented-alpha`,
+      - workbench smoke matrix now runs four implemented lanes (`sec4-lasm` + `node` + `go` + `rust`) and reports pass/fail/skip summary.
+      - documented in `docs/book/1530-m39-workbench-rust-backend-real-postgres-lane.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
