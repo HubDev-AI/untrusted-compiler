@@ -16,6 +16,7 @@ Measure end-to-end service behavior across identical implementations:
 - `spec/`: endpoint contract, payloads, and DB schema
   - includes canonical output artifact contract: `spec/artifact-contract-v0.1.md`
 - `services/`: per-language service implementations (to be added)
+- `workbench/`: prompt-first feature-app benchmark scaffold (contract + generation prompts + backend matrix)
 - `load/wrk2/`: load scripts
 - `results/`: raw outputs, summaries, plots
 - `docker-compose.yml`: shared Postgres for DB endpoints

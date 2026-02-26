@@ -2327,6 +2327,10 @@ Post-alpha track acceptance anchors:
       - LASM DB runtime now rejects indexed internal DB markers when operation-count marker is absent,
       - malformed indexed-without-count marker sets now fail deterministically with `DB.OPERATION_INVALID` instead of falling back to single-operation parsing.
       - documented in `docs/book/1525-m39-lasm-db-indexed-markers-require-op-count.md`.
+   - [x] Hardened internal SQL template marker requirements for LASM DB dispatch:
+      - `exec`, `execTx`, and `queryOne` runtime paths now require explicit internal SQL template markers instead of silently defaulting missing templates to empty payloads,
+      - missing template markers now fail deterministically with operation-specific validation envelopes (`DB.EXEC_INVALID`, `DB.EXEC_TX_INVALID`, `DB.QUERY_ONE_INVALID`).
+      - documented in `docs/book/1526-m39-lasm-db-required-template-marker-hardening.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

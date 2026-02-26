@@ -784,12 +784,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
         "exec" => {
-            let template = materialize_lasm_internal_header_value(
+            let Some(raw_template_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-                    .unwrap_or_default(),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_INVALID",
+                        "validation",
+                        "db.exec requires db capability and query handle",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let template =
+                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
             if !enforce_lasm_db_sql_template_max_bytes(
                 response,
                 "exec",
@@ -1059,12 +1071,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
         "execTx" => {
-            let template = materialize_lasm_internal_header_value(
+            let Some(raw_template_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-                    .unwrap_or_default(),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        "db.execTx requires transaction and query handles",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let template =
+                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
             if !enforce_lasm_db_sql_template_max_bytes(
                 response,
                 "execTx",
@@ -1429,12 +1453,24 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
         "queryOne" => {
-            let template = materialize_lasm_internal_header_value(
+            let Some(raw_template_header) =
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-                    .unwrap_or_default(),
-                request,
-                path_params,
-            );
+            else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_INVALID",
+                        "validation",
+                        "db.queryOne requires db capability, query, and row schema handles",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let template =
+                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
             if !enforce_lasm_db_sql_template_max_bytes(
                 response,
                 "queryOne",
@@ -2201,6 +2237,40 @@ mod tests {
     }
 
     #[test]
+    fn exec_marker_rejects_missing_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "missing template marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_INVALID\""));
+    }
+
+    #[test]
     fn query_one_marker_rejects_missing_row_schema_header() {
         let request = empty_request();
         let path_params = BTreeMap::new();
@@ -2279,6 +2349,45 @@ mod tests {
         assert!(
             handled,
             "missing queryOne params marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+    }
+
+    #[test]
+    fn query_one_marker_rejects_missing_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "7".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "missing queryOne template marker should be handled deterministically"
         );
         assert_eq!(response.status, 400);
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
@@ -2409,5 +2518,39 @@ mod tests {
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
         assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
         assert!(body.contains("either tx handle or db.tx(dbCap) source, not both"));
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_missing_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), "1".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "missing execTx template marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
     }
 }
