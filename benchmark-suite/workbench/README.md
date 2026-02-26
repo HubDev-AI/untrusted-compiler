@@ -67,10 +67,13 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 8. Run repeated full workbench benchmark suites (same settings, run-scoped artifacts):
    - `make -C benchmark-suite workbench-full-bench-repeats-dry`
    - `make -C benchmark-suite workbench-full-bench-repeats`
+   - render markdown summary:
+     - `make -C benchmark-suite workbench-full-bench-repeats-report`
    - repeat count override:
      - `WORKBENCH_REPEAT_RUNS=3` (default)
    - outputs:
      - `benchmark-suite/results/summaries/workbench-full-benchmark-repeats.json`
+     - `benchmark-suite/results/workbench-full-benchmark-repeats.md`
      - `benchmark-suite/results/summaries/workbench-full-benchmark-runs/`
 
 ## Current implementation lanes
