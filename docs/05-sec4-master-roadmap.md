@@ -2351,6 +2351,15 @@ Post-alpha track acceptance anchors:
       - updated workbench matrix status for `rust` to `implemented-alpha`,
       - workbench smoke matrix now runs four implemented lanes (`sec4-lasm` + `node` + `go` + `rust`) and reports pass/fail/skip summary.
       - documented in `docs/book/1530-m39-workbench-rust-backend-real-postgres-lane.md`.
+   - [x] Fixed C backend response-intrinsic lowering mismatch for `res.json(status, schema, value)`:
+      - C emitter now rewrites status-form `res.json` calls to `sec4_rt_res_ok(status, schema, value)` instead of emitting invalid `sec4_rt_res_json` 3-arg calls,
+      - unblocks C emit for workbench/service routes using strict-mode status-form JSON responses.
+      - documented in `docs/book/1531-m39-c-backend-res-json-status-form-rewrite.md`.
+   - [x] Added sec4 workbench backend lane:
+      - added `benchmark-suite/services/sec4-workbench` and smoke harness on `sec4 run --backend c`,
+      - updated workbench matrix status for `sec4` to `implemented-alpha`,
+      - workbench smoke matrix now runs all five implemented lanes (`sec4` + `sec4-lasm` + `node` + `go` + `rust`) with zero skips.
+      - documented in `docs/book/1532-m39-workbench-sec4-backend-lane.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

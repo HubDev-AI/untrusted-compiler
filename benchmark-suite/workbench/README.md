@@ -30,7 +30,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 2. `node-workbench` - `implemented-alpha`
 3. `go-workbench` - `implemented-alpha`
 4. `rust-workbench` - `implemented-alpha`
-5. `sec4-workbench` - planned
+5. `sec4-workbench` - `implemented-alpha`
 
 ## Constraints
 

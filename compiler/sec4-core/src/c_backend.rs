@@ -416,6 +416,7 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("err_internal(", "__SEC4_INTRINSIC_ERR_INTERNAL__(");
     lowered = lowered.replace("err.auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
     lowered = lowered.replace("err_auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
+    lowered = rewrite_res_json_status_form_to_res_ok(&lowered);
     lowered = lowered.replace("__SEC4_CONSTRUCTOR_CTX__(", "sec4_rt_ctx(");
     lowered = lowered.replace("__SEC4_CONSTRUCTOR_DB_CAP__(", "sec4_rt_db_cap(");
     lowered = lowered.replace("__SEC4_CONSTRUCTOR_FS_CAP__(", "sec4_rt_fs_cap(");
@@ -616,4 +617,145 @@ fn lower_c_expr(expr: &str) -> String {
         "sec4_rt_err_with_cause(",
     );
     lowered
+}
+
+fn rewrite_res_json_status_form_to_res_ok(lowered: &str) -> String {
+    rewrite_call_marker_by_min_arg_count(
+        lowered,
+        "__SEC4_INTRINSIC_RES_JSON__(",
+        "__SEC4_INTRINSIC_RES_OK__(",
+        3,
+    )
+}
+
+fn rewrite_call_marker_by_min_arg_count(
+    source: &str,
+    from_marker: &str,
+    to_marker: &str,
+    min_args: usize,
+) -> String {
+    let mut rewritten = String::with_capacity(source.len());
+    let mut cursor = 0usize;
+
+    while let Some(relative_start) = source[cursor..].find(from_marker) {
+        let call_start = cursor + relative_start;
+        rewritten.push_str(&source[cursor..call_start]);
+        let open_paren_index = call_start + from_marker.len() - 1;
+        let Some(call_end) = find_matching_call_paren(source, open_paren_index) else {
+            rewritten.push_str(&source[call_start..]);
+            cursor = source.len();
+            break;
+        };
+
+        let args_start = open_paren_index + 1;
+        let args = &source[args_start..call_end];
+        if count_top_level_arguments(args) >= min_args {
+            rewritten.push_str(to_marker);
+        } else {
+            rewritten.push_str(from_marker);
+        }
+        rewritten.push_str(args);
+        rewritten.push(')');
+        cursor = call_end + 1;
+    }
+
+    rewritten.push_str(&source[cursor..]);
+    rewritten
+}
+
+fn find_matching_call_paren(source: &str, open_paren_index: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut string_quote = '\0';
+    let mut escaped = false;
+
+    for (index, ch) in source
+        .char_indices()
+        .skip_while(|(index, _)| *index < open_paren_index)
+    {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == string_quote {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => {
+                in_string = true;
+                string_quote = ch;
+            }
+            '(' => depth += 1,
+            ')' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn count_top_level_arguments(args: &str) -> usize {
+    if args.trim().is_empty() {
+        return 0;
+    }
+
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut in_string = false;
+    let mut string_quote = '\0';
+    let mut escaped = false;
+    let mut comma_count = 0usize;
+
+    for ch in args.chars() {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == string_quote {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => {
+                in_string = true;
+                string_quote = ch;
+            }
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            ',' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                comma_count += 1;
+            }
+            _ => {}
+        }
+    }
+
+    comma_count + 1
 }

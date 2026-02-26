@@ -1500,5 +1500,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1528-m39-workbench-node-backend-real-postgres-lane.md`
 - `1529-m39-workbench-go-backend-real-postgres-lane.md`
 - `1530-m39-workbench-rust-backend-real-postgres-lane.md`
+- `1531-m39-c-backend-res-json-status-form-rewrite.md`
+- `1532-m39-workbench-sec4-backend-lane.md`
 
 As milestones progress, chapters will be added and linked from this index.
