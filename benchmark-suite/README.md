@@ -112,7 +112,9 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite test-scripts`
 21. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-22. Stop DB:
+22. Run workbench smoke matrix (prompt-first generated feature app lane):
+   - `make -C benchmark-suite workbench-smoke`
+23. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -152,6 +154,7 @@ Measure end-to-end service behavior across identical implementations:
 - `run_alpha_postgres_comparison_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the same two-phase suite and auto-injects DSN via temporary file, so local runs do not require manually exporting DSN flags.
 - `run_alpha_postgres_comparison_suite_local_repeats.sh` orchestrates repo-local Postgres infra for repeated-run suites and delegates into the repeated wrapper with the same DSN auto-injection flow.
 - `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
+- `run_workbench_smoke_matrix.sh` executes `benchmark-suite/workbench/matrix.backends.json` implementations with status `implemented-alpha|implemented`, runs each service smoke script, and writes `results/summaries/workbench-smoke-matrix.json`.
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.

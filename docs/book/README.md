@@ -1496,5 +1496,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1524-m39-lasm-db-empty-params-marker-payload-rejection.md`
 - `1525-m39-lasm-db-indexed-markers-require-op-count.md`
 - `1526-m39-lasm-db-required-template-marker-hardening.md`
+- `1527-m39-workbench-sec4-lasm-service-and-smoke-matrix-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.
