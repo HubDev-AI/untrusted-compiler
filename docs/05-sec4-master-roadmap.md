@@ -2360,6 +2360,11 @@ Post-alpha track acceptance anchors:
       - updated workbench matrix status for `sec4` to `implemented-alpha`,
       - workbench smoke matrix now runs all five implemented lanes (`sec4` + `sec4-lasm` + `node` + `go` + `rust`) with zero skips.
       - documented in `docs/book/1532-m39-workbench-sec4-backend-lane.md`.
+   - [x] Unified alpha benchmark wire-format contract across non-sec4 workbench backends:
+      - `node`, `go`, and `rust` lanes now support `params`, `task_params`, and `comment_params` JSON-array query payload forms used by `sec4`/`sec4-lasm`,
+      - smoke scripts for those lanes now exercise the shared wire-format path,
+      - workbench spec/prompt docs updated to pin this alpha harness contract.
+      - documented in `docs/book/1533-m39-workbench-alpha-wire-format-parity-across-backends.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

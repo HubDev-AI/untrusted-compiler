@@ -28,3 +28,4 @@ benchmark-suite/services/rust-workbench/smoke.sh
 
 1. Mutating routes require `Authorization: Bearer token123`.
 2. This bootstrap implementation uses `psql` CLI execution to keep setup minimal in the benchmark matrix lane.
+3. Route inputs support workbench JSON query payloads (`params`, `task_params`, `comment_params`) for cross-backend parity with sec4 lanes.

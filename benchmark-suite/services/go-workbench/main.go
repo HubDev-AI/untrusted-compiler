@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,6 +26,40 @@ type httpError struct {
 type apiServer struct {
 	pgDSN     string
 	authToken string
+}
+
+type taskInput struct {
+	id          string
+	title       string
+	description string
+	status      string
+	priority    int
+	createdAtMs int
+}
+
+type taskWithCommentInput struct {
+	taskID             string
+	title              string
+	description        string
+	status             string
+	priority           int
+	createdAtMs        int
+	commentID          string
+	commentTaskID      string
+	commentBody        string
+	commentCreatedAtMs int
+}
+
+type commentInput struct {
+	id          string
+	body        string
+	createdAtMs int
+}
+
+type listInput struct {
+	status string
+	limit  int
+	offset int
 }
 
 func main() {
@@ -181,99 +216,61 @@ func (s *apiServer) setupSchema() *httpError {
 }
 
 func (s *apiServer) insertTask(r *http.Request) (map[string]any, *httpError) {
-	id, err := requireTextParam(r, "id")
+	input, err := parseTaskInput(r)
 	if err != nil {
 		return nil, err
 	}
-	title, err := requireTextParam(r, "title")
-	if err != nil {
-		return nil, err
-	}
-	description := optionalTextParam(r, "description", "")
-	status, err := requireTextParam(r, "status")
-	if err != nil {
-		return nil, err
-	}
-	if !isValidStatus(status) {
+	if !isValidStatus(input.status) {
 		return nil, &httpError{Code: "VALIDATION.INVALID", Kind: "validation", Status: 400, Message: "status must be one of: open, in_progress, done"}
 	}
-	priority, err2 := requireIntParam(r, "priority")
-	if err2 != nil {
-		return nil, err2
-	}
-	if priority < 1 || priority > 5 {
+	if input.priority < 1 || input.priority > 5 {
 		return nil, &httpError{Code: "VALIDATION.INVALID", Kind: "validation", Status: 400, Message: "priority must be in range 1..5"}
-	}
-	createdAtMs, err3 := requireIntParam(r, "created_at_ms")
-	if err3 != nil {
-		return nil, err3
 	}
 
 	sql := fmt.Sprintf(
 		"insert into wb_tasks (id, title, description, status, priority, created_at_ms) values (%s, %s, %s, %s, %d, %d);",
-		sqlLiteral(id),
-		sqlLiteral(title),
-		sqlLiteral(description),
-		sqlLiteral(status),
-		priority,
-		createdAtMs,
+		sqlLiteral(input.id),
+		sqlLiteral(input.title),
+		sqlLiteral(input.description),
+		sqlLiteral(input.status),
+		input.priority,
+		input.createdAtMs,
 	)
 	if _, err := runPsql(s.pgDSN, sql); err != nil {
 		return nil, &httpError{Code: "DB.QUERY_FAILED", Kind: "internal", Status: 500, Message: err.Error()}
 	}
-	return map[string]any{"id": id}, nil
+	return map[string]any{"id": input.id}, nil
 }
 
 func (s *apiServer) createTaskWithComment(r *http.Request) (map[string]any, *httpError) {
-	taskID, err := requireTextParam(r, "id")
+	input, err := parseTaskWithCommentInput(r)
 	if err != nil {
 		return nil, err
 	}
-	title, err := requireTextParam(r, "title")
-	if err != nil {
-		return nil, err
-	}
-	description := optionalTextParam(r, "description", "")
-	status, err := requireTextParam(r, "status")
-	if err != nil {
-		return nil, err
-	}
-	if !isValidStatus(status) {
+	if !isValidStatus(input.status) {
 		return nil, &httpError{Code: "VALIDATION.INVALID", Kind: "validation", Status: 400, Message: "status must be one of: open, in_progress, done"}
 	}
-	priority, err2 := requireIntParam(r, "priority")
-	if err2 != nil {
-		return nil, err2
-	}
-	if priority < 1 || priority > 5 {
+	if input.priority < 1 || input.priority > 5 {
 		return nil, &httpError{Code: "VALIDATION.INVALID", Kind: "validation", Status: 400, Message: "priority must be in range 1..5"}
 	}
-	createdAtMs, err3 := requireIntParam(r, "created_at_ms")
-	if err3 != nil {
-		return nil, err3
-	}
-	commentID, err4 := requireTextParam(r, "comment_id")
-	if err4 != nil {
-		return nil, err4
-	}
-	commentBody, err5 := requireTextParam(r, "comment_body")
-	if err5 != nil {
-		return nil, err5
-	}
-	commentCreatedAtMs, err6 := requireIntParam(r, "comment_created_at_ms")
-	if err6 != nil {
-		return nil, err6
+	if input.commentTaskID != "" && input.commentTaskID != input.taskID {
+		return nil, &httpError{
+			Code:    "VALIDATION.INVALID",
+			Kind:    "validation",
+			Status:  400,
+			Message: "comment task id must match task id",
+		}
 	}
 
 	stmts := []string{
 		"BEGIN;",
 		fmt.Sprintf(
 			"insert into wb_tasks (id, title, description, status, priority, created_at_ms) values (%s, %s, %s, %s, %d, %d);",
-			sqlLiteral(taskID), sqlLiteral(title), sqlLiteral(description), sqlLiteral(status), priority, createdAtMs,
+			sqlLiteral(input.taskID), sqlLiteral(input.title), sqlLiteral(input.description), sqlLiteral(input.status), input.priority, input.createdAtMs,
 		),
 		fmt.Sprintf(
 			"insert into wb_comments (id, task_id, body, created_at_ms) values (%s, %s, %s, %d);",
-			sqlLiteral(commentID), sqlLiteral(taskID), sqlLiteral(commentBody), commentCreatedAtMs,
+			sqlLiteral(input.commentID), sqlLiteral(input.taskID), sqlLiteral(input.commentBody), input.commentCreatedAtMs,
 		),
 		"COMMIT;",
 	}
@@ -284,31 +281,23 @@ func (s *apiServer) createTaskWithComment(r *http.Request) (map[string]any, *htt
 		}
 	}
 
-	return map[string]any{"taskId": taskID, "commentId": commentID}, nil
+	return map[string]any{"taskId": input.taskID, "commentId": input.commentID}, nil
 }
 
 func (s *apiServer) insertComment(taskID string, r *http.Request) (map[string]any, *httpError) {
-	commentID, err := requireTextParam(r, "comment_id")
+	input, err := parseCommentInput(r, taskID)
 	if err != nil {
 		return nil, err
-	}
-	commentBody, err2 := requireTextParam(r, "comment_body")
-	if err2 != nil {
-		return nil, err2
-	}
-	commentCreatedAtMs, err3 := requireIntParam(r, "comment_created_at_ms")
-	if err3 != nil {
-		return nil, err3
 	}
 
 	stmt := fmt.Sprintf(
 		"insert into wb_comments (id, task_id, body, created_at_ms) values (%s, %s, %s, %d);",
-		sqlLiteral(commentID), sqlLiteral(taskID), sqlLiteral(commentBody), commentCreatedAtMs,
+		sqlLiteral(input.id), sqlLiteral(taskID), sqlLiteral(input.body), input.createdAtMs,
 	)
 	if _, err := runPsql(s.pgDSN, stmt); err != nil {
 		return nil, &httpError{Code: "DB.QUERY_FAILED", Kind: "internal", Status: 500, Message: err.Error()}
 	}
-	return map[string]any{"id": commentID}, nil
+	return map[string]any{"id": input.id}, nil
 }
 
 func (s *apiServer) getTask(taskID string) (map[string]any, *httpError) {
@@ -331,22 +320,25 @@ func (s *apiServer) getTask(taskID string) (map[string]any, *httpError) {
 }
 
 func (s *apiServer) listTasks(r *http.Request) (map[string]any, *httpError) {
-	status := optionalTextParam(r, "status", "")
-	limit := optionalIntParam(r, "limit", 20)
-	offset := optionalIntParam(r, "offset", 0)
+	input, parseErr := parseListInput(r)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	limit := input.limit
 	if limit < 1 {
 		limit = 1
 	}
 	if limit > 100 {
 		limit = 100
 	}
+	offset := input.offset
 	if offset < 0 {
 		offset = 0
 	}
 
 	whereClause := "true"
-	if status != "" {
-		whereClause = "status = " + sqlLiteral(status)
+	if input.status != "" {
+		whereClause = "status = " + sqlLiteral(input.status)
 	}
 
 	itemsSQL := fmt.Sprintf(
@@ -411,6 +403,242 @@ func requireTextParam(r *http.Request, key string) (string, *httpError) {
 		}
 	}
 	return value, nil
+}
+
+func parseJSONArrayParam(r *http.Request, key string, minLength int) ([]any, bool, *httpError) {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return nil, false, nil
+	}
+	var values []any
+	if err := json.Unmarshal([]byte(raw), &values); err != nil || len(values) < minLength {
+		return nil, false, &httpError{
+			Code:    "VALIDATION.INVALID",
+			Kind:    "validation",
+			Status:  400,
+			Message: "invalid JSON array query param: " + key,
+		}
+	}
+	return values, true, nil
+}
+
+func parseIntValue(raw any, key string) (int, *httpError) {
+	switch value := raw.(type) {
+	case float64:
+		if math.Trunc(value) != value {
+			break
+		}
+		return int(value), nil
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(value))
+		if err == nil {
+			return parsed, nil
+		}
+	case json.Number:
+		parsed, err := value.Int64()
+		if err == nil {
+			return int(parsed), nil
+		}
+	}
+	return 0, &httpError{
+		Code:    "VALIDATION.INVALID",
+		Kind:    "validation",
+		Status:  400,
+		Message: "invalid integer query param: " + key,
+	}
+}
+
+func parseTaskInput(r *http.Request) (taskInput, *httpError) {
+	params, hasParams, err := parseJSONArrayParam(r, "params", 6)
+	if err != nil {
+		return taskInput{}, err
+	}
+	if hasParams {
+		priority, intErr := parseIntValue(params[4], "priority")
+		if intErr != nil {
+			return taskInput{}, intErr
+		}
+		createdAtMs, intErr := parseIntValue(params[5], "created_at_ms")
+		if intErr != nil {
+			return taskInput{}, intErr
+		}
+		return taskInput{
+			id:          fmt.Sprintf("%v", params[0]),
+			title:       fmt.Sprintf("%v", params[1]),
+			description: fmt.Sprintf("%v", params[2]),
+			status:      fmt.Sprintf("%v", params[3]),
+			priority:    priority,
+			createdAtMs: createdAtMs,
+		}, nil
+	}
+
+	id, textErr := requireTextParam(r, "id")
+	if textErr != nil {
+		return taskInput{}, textErr
+	}
+	title, textErr := requireTextParam(r, "title")
+	if textErr != nil {
+		return taskInput{}, textErr
+	}
+	status, textErr := requireTextParam(r, "status")
+	if textErr != nil {
+		return taskInput{}, textErr
+	}
+	priority, intErr := requireIntParam(r, "priority")
+	if intErr != nil {
+		return taskInput{}, intErr
+	}
+	createdAtMs, intErr := requireIntParam(r, "created_at_ms")
+	if intErr != nil {
+		return taskInput{}, intErr
+	}
+	return taskInput{
+		id:          id,
+		title:       title,
+		description: optionalTextParam(r, "description", ""),
+		status:      status,
+		priority:    priority,
+		createdAtMs: createdAtMs,
+	}, nil
+}
+
+func parseTaskWithCommentInput(r *http.Request) (taskWithCommentInput, *httpError) {
+	taskParams, hasTaskParams, err := parseJSONArrayParam(r, "task_params", 6)
+	if err != nil {
+		return taskWithCommentInput{}, err
+	}
+	commentParams, hasCommentParams, err := parseJSONArrayParam(r, "comment_params", 4)
+	if err != nil {
+		return taskWithCommentInput{}, err
+	}
+	if hasTaskParams && hasCommentParams {
+		priority, intErr := parseIntValue(taskParams[4], "priority")
+		if intErr != nil {
+			return taskWithCommentInput{}, intErr
+		}
+		createdAtMs, intErr := parseIntValue(taskParams[5], "created_at_ms")
+		if intErr != nil {
+			return taskWithCommentInput{}, intErr
+		}
+		commentCreatedAtMs, intErr := parseIntValue(commentParams[3], "comment_created_at_ms")
+		if intErr != nil {
+			return taskWithCommentInput{}, intErr
+		}
+		return taskWithCommentInput{
+			taskID:             fmt.Sprintf("%v", taskParams[0]),
+			title:              fmt.Sprintf("%v", taskParams[1]),
+			description:        fmt.Sprintf("%v", taskParams[2]),
+			status:             fmt.Sprintf("%v", taskParams[3]),
+			priority:           priority,
+			createdAtMs:        createdAtMs,
+			commentID:          fmt.Sprintf("%v", commentParams[0]),
+			commentTaskID:      fmt.Sprintf("%v", commentParams[1]),
+			commentBody:        fmt.Sprintf("%v", commentParams[2]),
+			commentCreatedAtMs: commentCreatedAtMs,
+		}, nil
+	}
+
+	base, baseErr := parseTaskInput(r)
+	if baseErr != nil {
+		return taskWithCommentInput{}, baseErr
+	}
+	commentID, textErr := requireTextParam(r, "comment_id")
+	if textErr != nil {
+		return taskWithCommentInput{}, textErr
+	}
+	commentBody, textErr := requireTextParam(r, "comment_body")
+	if textErr != nil {
+		return taskWithCommentInput{}, textErr
+	}
+	commentCreatedAtMs, intErr := requireIntParam(r, "comment_created_at_ms")
+	if intErr != nil {
+		return taskWithCommentInput{}, intErr
+	}
+	return taskWithCommentInput{
+		taskID:             base.id,
+		title:              base.title,
+		description:        base.description,
+		status:             base.status,
+		priority:           base.priority,
+		createdAtMs:        base.createdAtMs,
+		commentID:          commentID,
+		commentTaskID:      "",
+		commentBody:        commentBody,
+		commentCreatedAtMs: commentCreatedAtMs,
+	}, nil
+}
+
+func parseCommentInput(r *http.Request, routeTaskID string) (commentInput, *httpError) {
+	params, hasParams, err := parseJSONArrayParam(r, "params", 4)
+	if err != nil {
+		return commentInput{}, err
+	}
+	if hasParams {
+		paramTaskID := fmt.Sprintf("%v", params[1])
+		if paramTaskID != routeTaskID {
+			return commentInput{}, &httpError{
+				Code:    "VALIDATION.INVALID",
+				Kind:    "validation",
+				Status:  400,
+				Message: "comment task id must match route task id",
+			}
+		}
+		createdAtMs, intErr := parseIntValue(params[3], "comment_created_at_ms")
+		if intErr != nil {
+			return commentInput{}, intErr
+		}
+		return commentInput{
+			id:          fmt.Sprintf("%v", params[0]),
+			body:        fmt.Sprintf("%v", params[2]),
+			createdAtMs: createdAtMs,
+		}, nil
+	}
+
+	commentID, textErr := requireTextParam(r, "comment_id")
+	if textErr != nil {
+		return commentInput{}, textErr
+	}
+	commentBody, textErr := requireTextParam(r, "comment_body")
+	if textErr != nil {
+		return commentInput{}, textErr
+	}
+	commentCreatedAtMs, intErr := requireIntParam(r, "comment_created_at_ms")
+	if intErr != nil {
+		return commentInput{}, intErr
+	}
+	return commentInput{
+		id:          commentID,
+		body:        commentBody,
+		createdAtMs: commentCreatedAtMs,
+	}, nil
+}
+
+func parseListInput(r *http.Request) (listInput, *httpError) {
+	params, hasParams, err := parseJSONArrayParam(r, "params", 3)
+	if err != nil {
+		return listInput{}, err
+	}
+	if hasParams {
+		limit, intErr := parseIntValue(params[1], "limit")
+		if intErr != nil {
+			return listInput{}, intErr
+		}
+		offset, intErr := parseIntValue(params[2], "offset")
+		if intErr != nil {
+			return listInput{}, intErr
+		}
+		return listInput{
+			status: fmt.Sprintf("%v", params[0]),
+			limit:  limit,
+			offset: offset,
+		}, nil
+	}
+
+	return listInput{
+		status: optionalTextParam(r, "status", ""),
+		limit:  optionalIntParam(r, "limit", 20),
+		offset: optionalIntParam(r, "offset", 0),
+	}, nil
 }
 
 func optionalTextParam(r *http.Request, key, fallback string) string {

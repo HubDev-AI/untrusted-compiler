@@ -22,12 +22,14 @@ Rules:
 4. Return deterministic success/error envelope shape exactly as specified.
 5. Ensure deterministic ordering for list endpoint.
 6. Include a runnable startup entrypoint binding to `127.0.0.1:${PORT}`.
-7. Add a minimal smoke script that:
+7. Implement the alpha wire-format contract:
+   - `params`, `task_params`, and `comment_params` query-string JSON arrays as defined in the spec.
+8. Add a minimal smoke script that:
    - starts service,
    - calls one write endpoint and one read endpoint,
    - validates status code and key response fields.
-8. Do not add placeholder TODO paths for required flows.
-9. Keep implementation minimal and benchmark-focused (no extra features).
+9. Do not add placeholder TODO paths for required flows.
+10. Keep implementation minimal and benchmark-focused (no extra features).
 
 Deliverables:
 

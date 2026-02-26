@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::process::Command;
@@ -35,6 +35,40 @@ impl HttpError {
 struct ApiServerConfig {
     pg_dsn: String,
     auth_token: String,
+}
+
+struct TaskInput {
+    id: String,
+    title: String,
+    description: String,
+    status: String,
+    priority: i64,
+    created_at_ms: i64,
+}
+
+struct TaskWithCommentInput {
+    task_id: String,
+    title: String,
+    description: String,
+    status: String,
+    priority: i64,
+    created_at_ms: i64,
+    comment_id: String,
+    comment_task_id: String,
+    comment_body: String,
+    comment_created_at_ms: i64,
+}
+
+struct CommentInput {
+    id: String,
+    body: String,
+    created_at_ms: i64,
+}
+
+struct ListInput {
+    status: String,
+    limit: i64,
+    offset: i64,
 }
 
 enum RouteBody {
@@ -234,71 +268,66 @@ fn insert_task(
     config: &ApiServerConfig,
     query: &HashMap<String, String>,
 ) -> Result<Value, HttpError> {
-    let id = require_text_param(query, "id")?;
-    let title = require_text_param(query, "title")?;
-    let description = optional_text_param(query, "description", "");
-    let status = require_text_param(query, "status")?;
-    let priority = require_int_param(query, "priority")?;
-    let created_at_ms = require_int_param(query, "created_at_ms")?;
+    let input = parse_task_input(query)?;
 
-    validate_status(&status)?;
-    validate_priority(priority)?;
+    validate_status(&input.status)?;
+    validate_priority(input.priority)?;
 
     let sql = format!(
         "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ({}, {}, {}, {}, {}, {});",
-        sql_literal(&id),
-        sql_literal(&title),
-        sql_literal(&description),
-        sql_literal(&status),
-        priority,
-        created_at_ms
+        sql_literal(&input.id),
+        sql_literal(&input.title),
+        sql_literal(&input.description),
+        sql_literal(&input.status),
+        input.priority,
+        input.created_at_ms
     );
     run_psql(config, &sql)?;
-    Ok(json!({ "id": id }))
+    Ok(json!({ "id": input.id }))
 }
 
 fn create_task_with_comment(
     config: &ApiServerConfig,
     query: &HashMap<String, String>,
 ) -> Result<Value, HttpError> {
-    let task_id = require_text_param(query, "id")?;
-    let title = require_text_param(query, "title")?;
-    let description = optional_text_param(query, "description", "");
-    let status = require_text_param(query, "status")?;
-    let priority = require_int_param(query, "priority")?;
-    let created_at_ms = require_int_param(query, "created_at_ms")?;
-    let comment_id = require_text_param(query, "comment_id")?;
-    let comment_body = require_text_param(query, "comment_body")?;
-    let comment_created_at_ms = require_int_param(query, "comment_created_at_ms")?;
+    let input = parse_task_with_comment_input(query)?;
 
-    validate_status(&status)?;
-    validate_priority(priority)?;
+    validate_status(&input.status)?;
+    validate_priority(input.priority)?;
+    if !input.comment_task_id.is_empty() && input.comment_task_id != input.task_id {
+        return Err(HttpError::new(
+            "VALIDATION.INVALID",
+            "validation",
+            400,
+            "comment task id must match task id",
+        ));
+    }
 
     run_psql_tx(
         config,
         &[
             format!(
                 "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ({}, {}, {}, {}, {}, {});",
-                sql_literal(&task_id),
-                sql_literal(&title),
-                sql_literal(&description),
-                sql_literal(&status),
-                priority,
-                created_at_ms
+                sql_literal(&input.task_id),
+                sql_literal(&input.title),
+                sql_literal(&input.description),
+                sql_literal(&input.status),
+                input.priority,
+                input.created_at_ms
             ),
             format!(
                 "insert into wb_comments (id, task_id, body, created_at_ms) values ({}, {}, {}, {});",
-                sql_literal(&comment_id),
-                sql_literal(&task_id),
-                sql_literal(&comment_body),
-                comment_created_at_ms
+                sql_literal(&input.comment_id),
+                sql_literal(&input.task_id),
+                sql_literal(&input.comment_body),
+                input.comment_created_at_ms
             ),
         ],
     )?;
 
     Ok(json!({
-        "taskId": task_id,
-        "commentId": comment_id
+        "taskId": input.task_id,
+        "commentId": input.comment_id
     }))
 }
 
@@ -307,18 +336,16 @@ fn insert_comment(
     task_id: &str,
     query: &HashMap<String, String>,
 ) -> Result<Value, HttpError> {
-    let id = require_text_param(query, "comment_id")?;
-    let body = require_text_param(query, "comment_body")?;
-    let created_at_ms = require_int_param(query, "comment_created_at_ms")?;
+    let input = parse_comment_input(query, task_id)?;
     let sql = format!(
         "insert into wb_comments (id, task_id, body, created_at_ms) values ({}, {}, {}, {});",
-        sql_literal(&id),
+        sql_literal(&input.id),
         sql_literal(task_id),
-        sql_literal(&body),
-        created_at_ms
+        sql_literal(&input.body),
+        input.created_at_ms
     );
     run_psql(config, &sql)?;
-    Ok(json!({ "id": id }))
+    Ok(json!({ "id": input.id }))
 }
 
 fn get_task(config: &ApiServerConfig, task_id: &str) -> Result<Value, HttpError> {
@@ -351,17 +378,15 @@ fn list_tasks(
     config: &ApiServerConfig,
     query: &HashMap<String, String>,
 ) -> Result<Value, HttpError> {
-    let status = optional_text_param(query, "status", "");
-    let limit = optional_int_param(query, "limit", 20)?;
-    let offset = optional_int_param(query, "offset", 0)?;
+    let input = parse_list_input(query)?;
 
-    let bounded_limit = limit.clamp(1, 100);
-    let bounded_offset = offset.max(0);
+    let bounded_limit = input.limit.clamp(1, 100);
+    let bounded_offset = input.offset.max(0);
 
-    let where_sql = if status.is_empty() {
+    let where_sql = if input.status.is_empty() {
         "true".to_string()
     } else {
-        format!("status = {}", sql_literal(&status))
+        format!("status = {}", sql_literal(&input.status))
     };
 
     let items_json = run_psql(
@@ -477,6 +502,174 @@ fn optional_int_param(
         }),
         _ => Ok(fallback),
     }
+}
+
+fn parse_json_array_param(
+    query: &HashMap<String, String>,
+    key: &'static str,
+    min_len: usize,
+) -> Result<Option<Vec<Value>>, HttpError> {
+    let Some(raw) = query.get(key) else {
+        return Ok(None);
+    };
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    let parsed = serde_json::from_str::<Value>(raw).map_err(|_| {
+        HttpError::new(
+            "VALIDATION.INVALID",
+            "validation",
+            400,
+            format!("invalid JSON array query param: {key}"),
+        )
+    })?;
+    let Some(values) = parsed.as_array() else {
+        return Err(HttpError::new(
+            "VALIDATION.INVALID",
+            "validation",
+            400,
+            format!("invalid JSON array query param: {key}"),
+        ));
+    };
+    if values.len() < min_len {
+        return Err(HttpError::new(
+            "VALIDATION.INVALID",
+            "validation",
+            400,
+            format!("invalid JSON array query param: {key}"),
+        ));
+    }
+    Ok(Some(values.clone()))
+}
+
+fn parse_i64_value(value: &Value, key: &'static str) -> Result<i64, HttpError> {
+    if let Some(number) = value.as_i64() {
+        return Ok(number);
+    }
+    if let Some(text) = value.as_str() {
+        return text.parse::<i64>().map_err(|_| {
+            HttpError::new(
+                "VALIDATION.INVALID",
+                "validation",
+                400,
+                format!("invalid integer query param: {key}"),
+            )
+        });
+    }
+    Err(HttpError::new(
+        "VALIDATION.INVALID",
+        "validation",
+        400,
+        format!("invalid integer query param: {key}"),
+    ))
+}
+
+fn parse_string_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        _ => value.to_string().trim_matches('"').to_string(),
+    }
+}
+
+fn parse_task_input(query: &HashMap<String, String>) -> Result<TaskInput, HttpError> {
+    if let Some(params) = parse_json_array_param(query, "params", 6)? {
+        return Ok(TaskInput {
+            id: parse_string_value(&params[0]),
+            title: parse_string_value(&params[1]),
+            description: parse_string_value(&params[2]),
+            status: parse_string_value(&params[3]),
+            priority: parse_i64_value(&params[4], "priority")?,
+            created_at_ms: parse_i64_value(&params[5], "created_at_ms")?,
+        });
+    }
+
+    Ok(TaskInput {
+        id: require_text_param(query, "id")?,
+        title: require_text_param(query, "title")?,
+        description: optional_text_param(query, "description", ""),
+        status: require_text_param(query, "status")?,
+        priority: require_int_param(query, "priority")?,
+        created_at_ms: require_int_param(query, "created_at_ms")?,
+    })
+}
+
+fn parse_task_with_comment_input(
+    query: &HashMap<String, String>,
+) -> Result<TaskWithCommentInput, HttpError> {
+    if let (Some(task_params), Some(comment_params)) = (
+        parse_json_array_param(query, "task_params", 6)?,
+        parse_json_array_param(query, "comment_params", 4)?,
+    ) {
+        return Ok(TaskWithCommentInput {
+            task_id: parse_string_value(&task_params[0]),
+            title: parse_string_value(&task_params[1]),
+            description: parse_string_value(&task_params[2]),
+            status: parse_string_value(&task_params[3]),
+            priority: parse_i64_value(&task_params[4], "priority")?,
+            created_at_ms: parse_i64_value(&task_params[5], "created_at_ms")?,
+            comment_id: parse_string_value(&comment_params[0]),
+            comment_task_id: parse_string_value(&comment_params[1]),
+            comment_body: parse_string_value(&comment_params[2]),
+            comment_created_at_ms: parse_i64_value(&comment_params[3], "comment_created_at_ms")?,
+        });
+    }
+
+    Ok(TaskWithCommentInput {
+        task_id: require_text_param(query, "id")?,
+        title: require_text_param(query, "title")?,
+        description: optional_text_param(query, "description", ""),
+        status: require_text_param(query, "status")?,
+        priority: require_int_param(query, "priority")?,
+        created_at_ms: require_int_param(query, "created_at_ms")?,
+        comment_id: require_text_param(query, "comment_id")?,
+        comment_task_id: String::new(),
+        comment_body: require_text_param(query, "comment_body")?,
+        comment_created_at_ms: require_int_param(query, "comment_created_at_ms")?,
+    })
+}
+
+fn parse_comment_input(
+    query: &HashMap<String, String>,
+    route_task_id: &str,
+) -> Result<CommentInput, HttpError> {
+    if let Some(params) = parse_json_array_param(query, "params", 4)? {
+        let params_task_id = parse_string_value(&params[1]);
+        if params_task_id != route_task_id {
+            return Err(HttpError::new(
+                "VALIDATION.INVALID",
+                "validation",
+                400,
+                "comment task id must match route task id",
+            ));
+        }
+        return Ok(CommentInput {
+            id: parse_string_value(&params[0]),
+            body: parse_string_value(&params[2]),
+            created_at_ms: parse_i64_value(&params[3], "comment_created_at_ms")?,
+        });
+    }
+
+    Ok(CommentInput {
+        id: require_text_param(query, "comment_id")?,
+        body: require_text_param(query, "comment_body")?,
+        created_at_ms: require_int_param(query, "comment_created_at_ms")?,
+    })
+}
+
+fn parse_list_input(query: &HashMap<String, String>) -> Result<ListInput, HttpError> {
+    if let Some(params) = parse_json_array_param(query, "params", 3)? {
+        return Ok(ListInput {
+            status: parse_string_value(&params[0]),
+            limit: parse_i64_value(&params[1], "limit")?,
+            offset: parse_i64_value(&params[2], "offset")?,
+        });
+    }
+
+    Ok(ListInput {
+        status: optional_text_param(query, "status", ""),
+        limit: optional_int_param(query, "limit", 20)?,
+        offset: optional_int_param(query, "offset", 0)?,
+    })
 }
 
 fn split_path_and_query(raw_url: &str) -> (String, HashMap<String, String>) {
