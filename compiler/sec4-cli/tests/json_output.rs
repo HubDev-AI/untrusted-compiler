@@ -8972,6 +8972,7 @@ entry = "src/main.ut"
 
 fn encode(schema: Schema<Int>) effects { net } -> Int {
   res.json(schema, 1);
+  res.json(202, schema, 1);
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
   let raw = req.query("html");
@@ -9009,6 +9010,7 @@ fn main() -> Int {
     assert!(generated_c.contains("sec4_rt_req_http_version()"));
     assert!(generated_c.contains("sec4_rt_req_json(schema)"));
     assert!(generated_c.contains("sec4_rt_res_json(schema, 1)"));
+    assert!(generated_c.contains("sec4_rt_res_ok(202, schema, 1)"));
     assert!(generated_c.contains("sec4_rt_res_ok(201, schema, 1)"));
     assert!(generated_c.contains("sec4_rt_res_ok_meta(201, schema, 1, 2)"));
     assert!(generated_c.contains("sec4_rt_req_query(\"html\")"));

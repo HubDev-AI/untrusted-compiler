@@ -122,6 +122,11 @@ Required characteristics:
    - `rust` workbench service implemented:
      - `benchmark-suite/services/rust-workbench`
      - real Postgres-backed task/comment routes with deterministic envelope contract.
+   - `sec4` workbench service implemented:
+     - `benchmark-suite/services/sec4-workbench`
+     - c-backend execution of the same route contract with deterministic runtime envelope checks.
+   - c-backend emit unblock for status-form JSON responses:
+     - `res.json(status, schema, value)` now lowers to `sec4_rt_res_ok(...)` on C emit paths.
    - workbench smoke orchestrator implemented:
       - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
       - `make -C benchmark-suite workbench-smoke`
@@ -130,4 +135,4 @@ Required characteristics:
    - `node`: `implemented-alpha` and passing smoke.
    - `go`: `implemented-alpha` and passing smoke.
    - `rust`: `implemented-alpha` and passing smoke.
-   - `sec4`: planned.
+   - `sec4`: `implemented-alpha` and passing smoke.

@@ -5,7 +5,7 @@
     {
       "impl": "sec4",
       "servicePath": "benchmark-suite/services/sec4-workbench",
-      "status": "planned"
+      "status": "implemented-alpha"
     },
     {
       "impl": "sec4-lasm",
