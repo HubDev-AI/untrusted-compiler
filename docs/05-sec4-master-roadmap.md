@@ -2385,6 +2385,11 @@ Post-alpha track acceptance anchors:
       - added make targets `workbench-full-bench` and `workbench-full-bench-dry`,
       - combined suite emits deterministic summary/report artifacts (`workbench-full-runs.json`, `workbench-full-benchmark-report.md`).
       - documented in `docs/book/1537-m39-workbench-full-benchmark-suite-runner.md`.
+   - [x] Added repeated-run wrapper for workbench full benchmark suite:
+      - added `benchmark-suite/scripts/run_workbench_full_benchmark_suite_repeats.sh` to execute full-suite runs repeatedly under identical settings and store run-scoped artifacts,
+      - added make targets `workbench-full-bench-repeats` and `workbench-full-bench-repeats-dry`,
+      - emits aggregate run-manifest summary (`workbench-full-benchmark-repeats.json`) plus per-run artifacts under `workbench-full-benchmark-runs/`.
+      - documented in `docs/book/1538-m39-workbench-full-suite-repeated-run-wrapper.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

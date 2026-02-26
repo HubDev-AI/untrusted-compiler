@@ -161,7 +161,18 @@ Measure end-to-end service behavior across identical implementations:
    - outputs:
      - `results/summaries/workbench-full-runs.json`
      - `results/workbench-full-benchmark-report.md`
-26. Stop DB:
+26. Run repeated workbench full suites under identical settings:
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-full-bench-repeats-dry`
+   - full run:
+     - `make -C benchmark-suite workbench-full-bench-repeats`
+   - repeat count override:
+     - `WORKBENCH_REPEAT_RUNS=3` (default)
+   - outputs:
+     - `results/summaries/workbench-full-benchmark-repeats.json`
+     - run-scoped artifacts under:
+       - `results/summaries/workbench-full-benchmark-runs/`
+27. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -216,6 +227,9 @@ Measure end-to-end service behavior across identical implementations:
 - `run_workbench_full_benchmark_suite.sh` runs workbench fixed-target matrix + workbench step matrix and republishes one combined markdown report with step-load signals:
   - `results/summaries/workbench-full-runs.json`
   - `results/workbench-full-benchmark-report.md`
+- `run_workbench_full_benchmark_suite_repeats.sh` wraps the full workbench suite repeatedly with run-scoped outputs and aggregate run manifest:
+  - `results/summaries/workbench-full-benchmark-repeats.json`
+  - `results/summaries/workbench-full-benchmark-runs/`
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
   - `BENCH_TARGET_WB_TASKS_POST`
   - `BENCH_TARGET_WB_TASKS_WITH_COMMENT`

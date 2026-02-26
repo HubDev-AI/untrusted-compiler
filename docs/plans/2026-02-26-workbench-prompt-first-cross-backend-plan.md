@@ -167,6 +167,14 @@ Required characteristics:
         - `benchmark-suite/results/summaries/workbench-full-runs.json`
         - `benchmark-suite/results/workbench-full-benchmark-report.md`
       - runs fixed-target matrix + step matrix and republishes one combined report with step-load signals.
+   - repeated full-suite wrapper implemented:
+      - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_repeats.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-full-bench-repeats-dry`
+        - `make -C benchmark-suite workbench-full-bench-repeats`
+      - output artifacts:
+        - `benchmark-suite/results/summaries/workbench-full-benchmark-repeats.json`
+        - `benchmark-suite/results/summaries/workbench-full-benchmark-runs/`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
