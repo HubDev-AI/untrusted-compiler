@@ -146,7 +146,22 @@ Measure end-to-end service behavior across identical implementations:
      - per-step summaries and analyses:
        - `results/summaries/<impl>-<endpoint>-step.json`
        - `results/summaries/<impl>-<endpoint>-step-analysis.json`
-25. Stop DB:
+25. Run workbench full benchmark suite (fixed-target + step-load + combined report):
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-full-bench-dry`
+   - full run:
+     - `make -C benchmark-suite workbench-full-bench`
+   - optional scope overrides:
+     - `WORKBENCH_IMPLS=sec4,sec4-lasm`
+     - `WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
+   - optional LASM DB mode knobs:
+     - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
+     - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode only)
+     - `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=/abs/path/to/postgres.dsn` (postgres mode only)
+   - outputs:
+     - `results/summaries/workbench-full-runs.json`
+     - `results/workbench-full-benchmark-report.md`
+26. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -198,6 +213,9 @@ Measure end-to-end service behavior across identical implementations:
 - `run_workbench_step_matrix.sh` executes workbench step-load profiles across matrix implementations/endpoints, runs step analysis per lane, and emits:
   - `results/summaries/workbench-step-runs.json`
   - `results/summaries/workbench-step-matrix.json`
+- `run_workbench_full_benchmark_suite.sh` runs workbench fixed-target matrix + workbench step matrix and republishes one combined markdown report with step-load signals:
+  - `results/summaries/workbench-full-runs.json`
+  - `results/workbench-full-benchmark-report.md`
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
   - `BENCH_TARGET_WB_TASKS_POST`
   - `BENCH_TARGET_WB_TASKS_WITH_COMMENT`

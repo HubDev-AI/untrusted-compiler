@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry workbench-smoke workbench-bench workbench-bench-dry workbench-step-bench workbench-step-bench-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry workbench-smoke workbench-bench workbench-bench-dry workbench-step-bench workbench-step-bench-dry workbench-full-bench workbench-full-bench-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -105,6 +105,10 @@ help:
 	@echo "    - defaults: WORKBENCH_IMPLS=$(WORKBENCH_IMPLS), WORKBENCH_ENDPOINTS=$(WORKBENCH_ENDPOINTS)"
 	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
 	@echo "  workbench-step-bench-dry Print workbench step-load benchmark command plan without executing load"
+	@echo "  workbench-full-bench Run workbench fixed-target + step-load suites and publish one combined report"
+	@echo "    - defaults: WORKBENCH_IMPLS=$(WORKBENCH_IMPLS), WORKBENCH_ENDPOINTS=$(WORKBENCH_ENDPOINTS)"
+	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
+	@echo "  workbench-full-bench-dry Print workbench full-suite command plan without executing load"
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
@@ -193,6 +197,12 @@ workbench-step-bench:
 
 workbench-step-bench-dry:
 	scripts/run_workbench_step_matrix.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+workbench-full-bench:
+	scripts/run_workbench_full_benchmark_suite.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+workbench-full-bench-dry:
+	scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 bench-ping:
 	scripts/run_profile.sh $(IMPL) ping $(BASE_URL)
