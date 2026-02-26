@@ -22,7 +22,16 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 1. Freeze contract (`spec/feature-app-v1.md`).
 2. Generate per-backend services from `prompts/generate-feature-app-v1.md`.
 3. Validate parity against contract.
-4. Run existing benchmark-suite matrix runners.
+4. Run smoke parity matrix:
+   - `make -C benchmark-suite workbench-smoke`
+5. Run load benchmark matrix:
+   - `make -C benchmark-suite workbench-bench-dry`
+   - `make -C benchmark-suite workbench-bench`
+   - outputs:
+     - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+     - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+     - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+     - `benchmark-suite/results/workbench-benchmark-report.md`
 
 ## Current implementation lanes
 

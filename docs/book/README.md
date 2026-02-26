@@ -1503,5 +1503,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1531-m39-c-backend-res-json-status-form-rewrite.md`
 - `1532-m39-workbench-sec4-backend-lane.md`
 - `1533-m39-workbench-alpha-wire-format-parity-across-backends.md`
+- `1534-m39-workbench-benchmark-matrix-runner.md`
 
 As milestones progress, chapters will be added and linked from this index.

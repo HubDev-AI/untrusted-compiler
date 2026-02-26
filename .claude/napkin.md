@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-26 | self | I resumed this continuation with git/status/search commands before the required standalone `cat .claude/napkin.md` first-command gate. | Keep a hard first-command rule on every continuation: run `cat .claude/napkin.md` alone first, then proceed with git/status/search commands. |
+| 2026-02-26 | self | I started editing this slice directly on local `dev` instead of creating a fresh `codex/*` branch first. | Keep strict branch discipline after each merge: run `git branch --show-current` and create the next `codex/*` branch before any edits. |
 | 2026-02-25 | self | I resumed this continuation with `git status`/search commands before the required standalone `cat .claude/napkin.md` first-command gate. | Keep a hard first-command rule on every continuation: run `cat .claude/napkin.md` alone first, then run git/status/search commands. |
 | 2026-02-25 | self | Running `rustfmt` on `main.rs` recursively reformatted unrelated module files, creating avoidable diff noise (`lasm_db_adapter_state.rs`). | Keep formatting scoped to edited files only and re-check `git status` immediately; revert unrelated formatting before commit. |
 | 2026-02-25 | self | I resumed the session with git/status checks before the mandatory standalone `.claude/napkin.md` read. | Enforce a strict first-command gate on every continuation: run `cat .claude/napkin.md` alone before any git/status/search commands. |

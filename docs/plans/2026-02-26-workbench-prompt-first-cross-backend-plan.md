@@ -132,6 +132,18 @@ Required characteristics:
    - workbench smoke orchestrator implemented:
       - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
       - `make -C benchmark-suite workbench-smoke`
+   - workbench benchmark matrix runner implemented:
+      - endpoint load profiles added (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`)
+      - `benchmark-suite/scripts/run_workbench_profile.sh`
+      - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-bench-dry`
+        - `make -C benchmark-suite workbench-bench`
+      - output artifacts:
+        - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+        - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+        - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+        - `benchmark-suite/results/workbench-benchmark-report.md`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
