@@ -20,7 +20,7 @@
     {
       "impl": "go",
       "servicePath": "benchmark-suite/services/go-workbench",
-      "status": "planned"
+      "status": "implemented-alpha"
     },
     {
       "impl": "rust",

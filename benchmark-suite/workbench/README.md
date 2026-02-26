@@ -28,7 +28,8 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 
 1. `sec4-lasm-workbench` - `implemented-alpha`
 2. `node-workbench` - `implemented-alpha`
-3. `sec4-workbench`, `go-workbench`, `rust-workbench` - planned
+3. `go-workbench` - `implemented-alpha`
+4. `sec4-workbench`, `rust-workbench` - planned
 
 ## Constraints
 
