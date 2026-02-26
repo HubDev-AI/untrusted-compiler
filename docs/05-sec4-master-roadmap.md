@@ -2331,6 +2331,11 @@ Post-alpha track acceptance anchors:
       - `exec`, `execTx`, and `queryOne` runtime paths now require explicit internal SQL template markers instead of silently defaulting missing templates to empty payloads,
       - missing template markers now fail deterministically with operation-specific validation envelopes (`DB.EXEC_INVALID`, `DB.EXEC_TX_INVALID`, `DB.QUERY_ONE_INVALID`).
       - documented in `docs/book/1526-m39-lasm-db-required-template-marker-hardening.md`.
+   - [x] Bootstrapped prompt-first workbench execution lane with real LASM DB service + matrix smoke runner:
+      - added `benchmark-suite/services/sec4-lasm-workbench` (feature-rich auth-gated DB routes on LASM runtime),
+      - added workbench smoke orchestrator (`make -C benchmark-suite workbench-smoke`) producing `results/summaries/workbench-smoke-matrix.json`,
+      - marked `sec4-lasm` as `implemented-alpha` in workbench backend matrix for cross-backend generation/benchmark follow-up.
+      - documented in `docs/book/1527-m39-workbench-sec4-lasm-service-and-smoke-matrix-bootstrap.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

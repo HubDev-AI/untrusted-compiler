@@ -105,3 +105,17 @@ Required characteristics:
 1. Land workbench scaffold files (contract + prompts + matrix config).
 2. Add sec4/sec4-lasm workbench service skeletons.
 3. Add one dry-run generation pass for node/go/rust.
+
+## Progress Snapshot (2026-02-26)
+
+1. Completed:
+   - workbench scaffold files landed.
+   - `sec4-lasm` workbench service implemented:
+     - `benchmark-suite/services/sec4-lasm-workbench`
+     - real auth-gated DB routes (`db.exec`, `db.execTx`, `db.queryOne`).
+   - workbench smoke orchestrator implemented:
+     - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
+     - `make -C benchmark-suite workbench-smoke`
+2. Current matrix state:
+   - `sec4-lasm`: `implemented-alpha` and passing smoke.
+   - `sec4`, `node`, `go`, `rust`: still planned.

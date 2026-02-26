@@ -10,7 +10,7 @@
     {
       "impl": "sec4-lasm",
       "servicePath": "benchmark-suite/services/sec4-lasm-workbench",
-      "status": "planned"
+      "status": "implemented-alpha"
     },
     {
       "impl": "node",
