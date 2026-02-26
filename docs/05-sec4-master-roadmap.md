@@ -2380,6 +2380,11 @@ Post-alpha track acceptance anchors:
       - added make targets `workbench-step-bench` and `workbench-step-bench-dry`,
       - workbench step orchestration supports the same LASM DB adapter controls as fixed-target workbench benchmark runs (`sqlite|postgres`, optional sqlite base, optional postgres DSN file).
       - documented in `docs/book/1536-m39-workbench-step-matrix-runner.md`.
+   - [x] Added workbench full benchmark suite runner (fixed-target + step-load + combined report):
+      - added `benchmark-suite/scripts/run_workbench_full_benchmark_suite.sh` to run both workbench matrix lanes in one command and republish a combined markdown report with step-load signals,
+      - added make targets `workbench-full-bench` and `workbench-full-bench-dry`,
+      - combined suite emits deterministic summary/report artifacts (`workbench-full-runs.json`, `workbench-full-benchmark-report.md`).
+      - documented in `docs/book/1537-m39-workbench-full-benchmark-suite-runner.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

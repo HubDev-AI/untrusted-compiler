@@ -1506,5 +1506,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1534-m39-workbench-benchmark-matrix-runner.md`
 - `1535-m39-workbench-lasm-postgres-mode-and-param-cast-compat.md`
 - `1536-m39-workbench-step-matrix-runner.md`
+- `1537-m39-workbench-full-benchmark-suite-runner.md`
 
 As milestones progress, chapters will be added and linked from this index.

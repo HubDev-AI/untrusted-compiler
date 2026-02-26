@@ -158,6 +158,15 @@ Required characteristics:
         - `benchmark-suite/results/summaries/workbench-step-runs.json`
         - `benchmark-suite/results/summaries/workbench-step-matrix.json`
         - per-lane step summaries + analyses (`<impl>-<endpoint>-step.json`, `<impl>-<endpoint>-step-analysis.json`).
+   - workbench full benchmark suite runner implemented:
+      - `benchmark-suite/scripts/run_workbench_full_benchmark_suite.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-full-bench-dry`
+        - `make -C benchmark-suite workbench-full-bench`
+      - output artifacts:
+        - `benchmark-suite/results/summaries/workbench-full-runs.json`
+        - `benchmark-suite/results/workbench-full-benchmark-report.md`
+      - runs fixed-target matrix + step matrix and republishes one combined report with step-load signals.
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
