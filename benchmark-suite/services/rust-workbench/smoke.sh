@@ -34,6 +34,15 @@ fi
 auth_header='Authorization: Bearer token123'
 run_id="$(date +%s%N)"
 task_id="rust-wb-task-${run_id}"
+task_params="$(jq -nc \
+  --arg id "$task_id" \
+  --arg title "RustTask" \
+  --arg description "smoke" \
+  --arg status "open" \
+  --argjson priority 3 \
+  --argjson created 1700000020000 \
+  '[ $id, $title, $description, $status, $priority, $created ]')"
+task_params_uri="$(printf '%s' "$task_params" | jq -sRr @uri)"
 
 setup_status="$(curl -sS -o /tmp/rust-workbench-setup.json -w '%{http_code}' \
   -X POST -H "$auth_header" \
@@ -45,7 +54,7 @@ fi
 
 create_status="$(curl -sS -o /tmp/rust-workbench-create.json -w '%{http_code}' \
   -X POST -H "$auth_header" \
-  "http://127.0.0.1:${port}/wb/tasks?id=${task_id}&title=RustTask&description=smoke&status=open&priority=3&created_at_ms=1700000020000")"
+  "http://127.0.0.1:${port}/wb/tasks?params=${task_params_uri}")"
 if [ "$create_status" != "201" ]; then
   echo "rust-workbench /wb/tasks expected 201, got $create_status" >&2
   exit 1
@@ -55,14 +64,32 @@ if ! jq -e --arg id "$task_id" '.ok == true and .data.id == $id' /tmp/rust-workb
   exit 1
 fi
 
+task_tx_id="rust-wb-task-tx-${run_id}"
+comment_id="rust-wb-comment-${run_id}"
+task_params_tx="$(jq -nc \
+  --arg id "$task_tx_id" \
+  --arg title "RustTaskTx" \
+  --arg description "smoke2" \
+  --arg status "in_progress" \
+  --argjson priority 4 \
+  --argjson created 1700000020001 \
+  '[ $id, $title, $description, $status, $priority, $created ]')"
+comment_params_tx="$(jq -nc \
+  --arg id "$comment_id" \
+  --arg task_id "$task_tx_id" \
+  --arg body "hello" \
+  --argjson created 1700000020002 \
+  '[ $id, $task_id, $body, $created ]')"
+task_params_tx_uri="$(printf '%s' "$task_params_tx" | jq -sRr @uri)"
+comment_params_tx_uri="$(printf '%s' "$comment_params_tx" | jq -sRr @uri)"
 create_tx_status="$(curl -sS -o /tmp/rust-workbench-create-tx.json -w '%{http_code}' \
   -X POST -H "$auth_header" \
-  "http://127.0.0.1:${port}/wb/tasks/with-comment?id=rust-wb-task-tx-${run_id}&title=RustTaskTx&description=smoke2&status=in_progress&priority=4&created_at_ms=1700000020001&comment_id=rust-wb-comment-${run_id}&comment_body=hello&comment_created_at_ms=1700000020002")"
+  "http://127.0.0.1:${port}/wb/tasks/with-comment?task_params=${task_params_tx_uri}&comment_params=${comment_params_tx_uri}")"
 if [ "$create_tx_status" != "201" ]; then
   echo "rust-workbench /wb/tasks/with-comment expected 201, got $create_tx_status" >&2
   exit 1
 fi
-if ! jq -e --arg taskId "rust-wb-task-tx-${run_id}" --arg commentId "rust-wb-comment-${run_id}" '.ok == true and .data.taskId == $taskId and .data.commentId == $commentId' /tmp/rust-workbench-create-tx.json >/dev/null; then
+if ! jq -e --arg taskId "$task_tx_id" --arg commentId "$comment_id" '.ok == true and .data.taskId == $taskId and .data.commentId == $commentId' /tmp/rust-workbench-create-tx.json >/dev/null; then
   echo "rust-workbench /wb/tasks/with-comment response mismatch" >&2
   exit 1
 fi
@@ -78,8 +105,10 @@ if ! jq -e --arg id "$task_id" '.ok == true and .data.id == $id' /tmp/rust-workb
   exit 1
 fi
 
+list_params='["open",20,0]'
+list_params_uri="$(printf '%s' "$list_params" | jq -sRr @uri)"
 list_status="$(curl -sS -o /tmp/rust-workbench-list.json -w '%{http_code}' \
-  "http://127.0.0.1:${port}/wb/tasks?status=open&limit=20&offset=0")"
+  "http://127.0.0.1:${port}/wb/tasks?params=${list_params_uri}")"
 if [ "$list_status" != "200" ]; then
   echo "rust-workbench /wb/tasks list expected 200, got $list_status" >&2
   exit 1

@@ -138,6 +138,23 @@ Behavior:
 1. Deterministic ordering by `created_at_ms DESC`, then `id DESC`.
 2. Return `{ items, count, limit, offset }`.
 
+## Alpha Wire-Format Profile (current benchmark lanes)
+
+For deterministic cross-backend parity in this alpha slice, implementations must accept query-string JSON-array payloads in addition to backend-native field forms.
+
+1. `POST /wb/tasks`:
+   - `params=[id,title,description,status,priority,created_at_ms]`
+2. `POST /wb/tasks/with-comment`:
+   - `task_params=[id,title,description,status,priority,created_at_ms]`
+   - `comment_params=[id,task_id,body,created_at_ms]`
+3. `POST /wb/tasks/:id/comments`:
+   - `params=[id,task_id,body,created_at_ms]`
+   - `task_id` from params must match route task id.
+4. `GET /wb/tasks`:
+   - `params=[status,limit,offset]`
+
+These alpha wire-format keys are benchmark harness contracts, not language semantics. They can evolve once a shared benchmark request-generator profile is introduced.
+
 ## Validation Error Contract
 
 Validation failures return:

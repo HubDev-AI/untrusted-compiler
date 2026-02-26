@@ -127,6 +127,8 @@ Required characteristics:
      - c-backend execution of the same route contract with deterministic runtime envelope checks.
    - c-backend emit unblock for status-form JSON responses:
      - `res.json(status, schema, value)` now lowers to `sec4_rt_res_ok(...)` on C emit paths.
+   - wire-format parity across all implementations:
+     - `node`, `go`, and `rust` lanes now accept the same alpha benchmark query payload keys used by sec4 lanes (`params`, `task_params`, `comment_params`).
    - workbench smoke orchestrator implemented:
       - `benchmark-suite/scripts/run_workbench_smoke_matrix.sh`
       - `make -C benchmark-suite workbench-smoke`

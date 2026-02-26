@@ -28,3 +28,4 @@ benchmark-suite/services/node-workbench/smoke.sh
 
 1. Mutating routes require `Authorization: Bearer token123`.
 2. This implementation uses `psql` CLI invocation for DB operations to keep the service dependency-light for benchmark scaffolding.
+3. Route inputs support workbench JSON query payloads (`params`, `task_params`, `comment_params`) for cross-backend parity with sec4 lanes.

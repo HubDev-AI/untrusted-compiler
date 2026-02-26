@@ -37,3 +37,5 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 1. No placeholder/stub behavior in DB paths.
 2. Mutating endpoints require auth.
 3. Error/success envelope contract must be deterministic across all implementations.
+4. Alpha wire-format parity is enforced across lanes for benchmark calls:
+   - `params`, `task_params`, `comment_params` JSON-array query payloads.

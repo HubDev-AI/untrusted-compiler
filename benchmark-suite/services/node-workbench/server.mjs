@@ -101,6 +101,140 @@ function parseTextParam(url, key, required = true, fallback = '') {
   return raw;
 }
 
+function parseJsonArrayParam(url, key, minLength) {
+  const raw = url.searchParams.get(key);
+  if (raw === null || raw === '') {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new HttpError(
+      'VALIDATION.INVALID',
+      'validation',
+      400,
+      `invalid JSON array query param: ${key}`,
+    );
+  }
+  if (!Array.isArray(parsed) || parsed.length < minLength) {
+    throw new HttpError(
+      'VALIDATION.INVALID',
+      'validation',
+      400,
+      `invalid JSON array query param: ${key}`,
+    );
+  }
+  return parsed;
+}
+
+function parseIntValue(raw, key) {
+  const value = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(value)) {
+    throw new HttpError(
+      'VALIDATION.INVALID',
+      'validation',
+      400,
+      `invalid integer query param: ${key}`,
+    );
+  }
+  return value;
+}
+
+function parseTaskInput(url) {
+  const params = parseJsonArrayParam(url, 'params', 6);
+  if (params) {
+    return {
+      id: String(params[0]),
+      title: String(params[1]),
+      description: String(params[2] ?? ''),
+      status: String(params[3]),
+      priority: parseIntValue(params[4], 'priority'),
+      createdAtMs: parseIntValue(params[5], 'created_at_ms'),
+    };
+  }
+  return {
+    id: parseTextParam(url, 'id'),
+    title: parseTextParam(url, 'title'),
+    description: parseTextParam(url, 'description', false, ''),
+    status: parseTextParam(url, 'status'),
+    priority: parseIntParam(url, 'priority'),
+    createdAtMs: parseIntParam(url, 'created_at_ms'),
+  };
+}
+
+function parseTaskWithCommentInput(url) {
+  const taskParams = parseJsonArrayParam(url, 'task_params', 6);
+  const commentParams = parseJsonArrayParam(url, 'comment_params', 4);
+  if (taskParams && commentParams) {
+    return {
+      taskId: String(taskParams[0]),
+      title: String(taskParams[1]),
+      description: String(taskParams[2] ?? ''),
+      status: String(taskParams[3]),
+      priority: parseIntValue(taskParams[4], 'priority'),
+      createdAtMs: parseIntValue(taskParams[5], 'created_at_ms'),
+      commentId: String(commentParams[0]),
+      commentTaskId: String(commentParams[1]),
+      commentBody: String(commentParams[2]),
+      commentCreatedAtMs: parseIntValue(commentParams[3], 'comment_created_at_ms'),
+    };
+  }
+  return {
+    taskId: parseTextParam(url, 'id'),
+    title: parseTextParam(url, 'title'),
+    description: parseTextParam(url, 'description', false, ''),
+    status: parseTextParam(url, 'status'),
+    priority: parseIntParam(url, 'priority'),
+    createdAtMs: parseIntParam(url, 'created_at_ms'),
+    commentId: parseTextParam(url, 'comment_id'),
+    commentTaskId: '',
+    commentBody: parseTextParam(url, 'comment_body'),
+    commentCreatedAtMs: parseIntParam(url, 'comment_created_at_ms'),
+  };
+}
+
+function parseCommentInput(url, taskId) {
+  const params = parseJsonArrayParam(url, 'params', 4);
+  if (params) {
+    const paramsTaskId = String(params[1]);
+    if (paramsTaskId !== taskId) {
+      throw new HttpError(
+        'VALIDATION.INVALID',
+        'validation',
+        400,
+        'comment task id must match route task id',
+      );
+    }
+    return {
+      id: String(params[0]),
+      body: String(params[2]),
+      createdAtMs: parseIntValue(params[3], 'comment_created_at_ms'),
+    };
+  }
+  return {
+    id: parseTextParam(url, 'comment_id'),
+    body: parseTextParam(url, 'comment_body'),
+    createdAtMs: parseIntParam(url, 'comment_created_at_ms'),
+  };
+}
+
+function parseListInput(url) {
+  const params = parseJsonArrayParam(url, 'params', 3);
+  if (params) {
+    return {
+      status: String(params[0]),
+      limit: parseIntValue(params[1], 'limit'),
+      offset: parseIntValue(params[2], 'offset'),
+    };
+  }
+  return {
+    status: parseTextParam(url, 'status', false, ''),
+    limit: parseIntParam(url, 'limit', false, 20),
+    offset: parseIntParam(url, 'offset', false, 0),
+  };
+}
+
 function requireAuth(req) {
   const auth = req.headers.authorization || '';
   if (auth !== `Bearer ${AUTH_TOKEN}`) {
@@ -154,12 +288,7 @@ function setupSchema() {
 }
 
 function insertTask(url) {
-  const id = parseTextParam(url, 'id');
-  const title = parseTextParam(url, 'title');
-  const description = parseTextParam(url, 'description', false, '');
-  const status = parseTextParam(url, 'status');
-  const priority = parseIntParam(url, 'priority');
-  const createdAtMs = parseIntParam(url, 'created_at_ms');
+  const { id, title, description, status, priority, createdAtMs } = parseTaskInput(url);
   if (!VALID_STATUS.has(status)) {
     throw new HttpError(
       'VALIDATION.INVALID',
@@ -178,9 +307,7 @@ function insertTask(url) {
 }
 
 function insertComment(taskId, url) {
-  const id = parseTextParam(url, 'comment_id');
-  const body = parseTextParam(url, 'comment_body');
-  const createdAtMs = parseIntParam(url, 'comment_created_at_ms');
+  const { id, body, createdAtMs } = parseCommentInput(url, taskId);
   runPsql(
     `insert into wb_comments (id, task_id, body, created_at_ms) values (${sqlLiteral(id)}, ${sqlLiteral(taskId)}, ${sqlLiteral(body)}, ${createdAtMs});`,
   );
@@ -188,15 +315,26 @@ function insertComment(taskId, url) {
 }
 
 function createTaskWithComment(url) {
-  const taskId = parseTextParam(url, 'id');
-  const title = parseTextParam(url, 'title');
-  const description = parseTextParam(url, 'description', false, '');
-  const status = parseTextParam(url, 'status');
-  const priority = parseIntParam(url, 'priority');
-  const createdAtMs = parseIntParam(url, 'created_at_ms');
-  const commentId = parseTextParam(url, 'comment_id');
-  const commentBody = parseTextParam(url, 'comment_body');
-  const commentCreatedAtMs = parseIntParam(url, 'comment_created_at_ms');
+  const {
+    taskId,
+    title,
+    description,
+    status,
+    priority,
+    createdAtMs,
+    commentId,
+    commentTaskId,
+    commentBody,
+    commentCreatedAtMs,
+  } = parseTaskWithCommentInput(url);
+  if (commentTaskId !== '' && commentTaskId !== taskId) {
+    throw new HttpError(
+      'VALIDATION.INVALID',
+      'validation',
+      400,
+      'comment task id must match task id',
+    );
+  }
 
   if (!VALID_STATUS.has(status)) {
     throw new HttpError(
@@ -229,9 +367,7 @@ function getTask(taskId) {
 }
 
 function listTasks(url) {
-  const status = parseTextParam(url, 'status', false, '');
-  const limit = parseIntParam(url, 'limit', false, 20);
-  const offset = parseIntParam(url, 'offset', false, 0);
+  const { status, limit, offset } = parseListInput(url);
   const boundedLimit = Math.min(Math.max(limit, 1), 100);
   const boundedOffset = Math.max(offset, 0);
   const whereSql =
