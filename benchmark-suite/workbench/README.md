@@ -24,6 +24,12 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 3. Validate parity against contract.
 4. Run existing benchmark-suite matrix runners.
 
+## Current implementation lanes
+
+1. `sec4-lasm-workbench` - `implemented-alpha`
+2. `node-workbench` - `implemented-alpha`
+3. `sec4-workbench`, `go-workbench`, `rust-workbench` - planned
+
 ## Constraints
 
 1. No placeholder/stub behavior in DB paths.
