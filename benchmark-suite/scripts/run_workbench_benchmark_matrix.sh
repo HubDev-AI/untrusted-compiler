@@ -5,6 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4,sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--port <n>] [--out-runs path] [--out-compare path] [--out-analysis path] [--out-report path]
 
 Runs workbench benchmark profiles across implemented matrix lanes and emits:
@@ -19,6 +20,9 @@ matrix_path=""
 impls_csv=""
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
+lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
+lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
+lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
 out_runs=""
 out_compare=""
 out_analysis=""
@@ -76,6 +80,42 @@ while [ "$#" -gt 0 ]; do
       ;;
     --port=*)
       bench_port="${1#--port=}"
+      shift
+      ;;
+    --lasm-db-adapter)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_adapter="$2"
+      shift 2
+      ;;
+    --lasm-db-adapter=*)
+      lasm_db_adapter="${1#--lasm-db-adapter=}"
+      shift
+      ;;
+    --lasm-db-base)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_base="$2"
+      shift 2
+      ;;
+    --lasm-db-base=*)
+      lasm_db_base="${1#--lasm-db-base=}"
+      shift
+      ;;
+    --lasm-postgres-dsn-file)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_postgres_dsn_file="$2"
+      shift 2
+      ;;
+    --lasm-postgres-dsn-file=*)
+      lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
       shift
       ;;
     --out-runs)
@@ -198,6 +238,17 @@ supported_endpoint() {
   esac
 }
 
+supported_lasm_db_adapter() {
+  case "$1" in
+    sqlite|postgres)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -231,6 +282,11 @@ if [ "$(jq 'length' <<<"$runnable_rows_json")" -eq 0 ]; then
   exit 2
 fi
 
+if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
+  echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
+  exit 2
+fi
+
 runnable_impls_csv="$(
   jq -r '.[].impl' <<<"$runnable_rows_json" | paste -sd, -
 )"
@@ -243,6 +299,20 @@ fi
 
 base_url="http://127.0.0.1:${bench_port}"
 pg_dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgresql://127.0.0.1:5432/postgres?sslmode=disable}}"
+lasm_postgres_dsn=""
+if [ "$lasm_db_adapter" = "postgres" ]; then
+  if [ -n "$lasm_postgres_dsn_file" ]; then
+    if [ ! -f "$lasm_postgres_dsn_file" ]; then
+      echo "lasm postgres dsn file not found: $lasm_postgres_dsn_file" >&2
+      exit 2
+    fi
+    lasm_postgres_dsn="$(<"$lasm_postgres_dsn_file")"
+    lasm_postgres_dsn="${lasm_postgres_dsn//$'\r'/}"
+    lasm_postgres_dsn="${lasm_postgres_dsn//$'\n'/}"
+  else
+    lasm_postgres_dsn="$pg_dsn"
+  fi
+fi
 
 service_pid=""
 service_log=""
@@ -285,18 +355,37 @@ start_impl_service() {
       ) >"$log_file" 2>&1 &
       ;;
     sec4-lasm)
-      service_temp_dir="$(mktemp -d "/tmp/sec4-lasm-workbench-bench-db.XXXXXX")"
-      cleanup_temp_dir="true"
-      (
-        cd "$repo_root"
-        cargo run -q -p sec4 -- run \
-          --path "$service_abs" \
-          --backend lasm \
-          --db-adapter sqlite \
-          --db-base "$service_temp_dir" \
-          --port "$bench_port" \
-          --serve-timeout-ms 20000
-      ) >"$log_file" 2>&1 &
+      if [ "$lasm_db_adapter" = "sqlite" ]; then
+        if [ -n "$lasm_db_base" ]; then
+          service_temp_dir="$lasm_db_base"
+          cleanup_temp_dir="false"
+          mkdir -p "$service_temp_dir"
+        else
+          service_temp_dir="$(mktemp -d "/tmp/sec4-lasm-workbench-bench-db.XXXXXX")"
+          cleanup_temp_dir="true"
+        fi
+        (
+          cd "$repo_root"
+          cargo run -q -p sec4 -- run \
+            --path "$service_abs" \
+            --backend lasm \
+            --db-adapter sqlite \
+            --db-base "$service_temp_dir" \
+            --port "$bench_port" \
+            --serve-timeout-ms 20000
+        ) >"$log_file" 2>&1 &
+      else
+        (
+          cd "$repo_root"
+          SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
+            cargo run -q -p sec4 -- run \
+              --path "$service_abs" \
+              --backend lasm \
+              --db-adapter postgres \
+              --port "$bench_port" \
+              --serve-timeout-ms 20000
+        ) >"$log_file" 2>&1 &
+      fi
       ;;
     node)
       (
@@ -423,7 +512,15 @@ while IFS= read -r impl_row; do
   log_file="${suite_dir}/results/raw/${impl}-workbench-service.log"
 
   if [ "$dry_run" = "true" ]; then
-    echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port}"
+    if [ "$impl" = "sec4-lasm" ]; then
+      if [ "$lasm_db_adapter" = "postgres" ]; then
+        echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port} lasmDbAdapter=${lasm_db_adapter} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+      else
+        echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port} lasmDbAdapter=${lasm_db_adapter} lasmDbBase=${lasm_db_base:-mktemp}"
+      fi
+    else
+      echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port}"
+    fi
     echo "run: ${suite_dir}/scripts/run_workbench_profile.sh --dry-run ${impl} <endpoint> ${base_url}"
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"

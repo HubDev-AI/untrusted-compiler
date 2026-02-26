@@ -144,6 +144,10 @@ Required characteristics:
         - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
         - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
         - `benchmark-suite/results/workbench-benchmark-report.md`
+   - workbench LASM DB mode controls and Postgres compatibility hardening:
+      - `run_workbench_benchmark_matrix.sh` now supports `--lasm-db-adapter sqlite|postgres`, `--lasm-db-base`, and `--lasm-postgres-dsn-file`,
+      - make-level passthrough knobs added (`WORKBENCH_LASM_DB_ADAPTER`, `WORKBENCH_LASM_DB_BASE`, `WORKBENCH_LASM_DB_POSTGRES_DSN_FILE`),
+      - workbench task insert templates now cast priority placeholder (`cast($5 as bigint)`) to remove LASM Postgres write-path serialization failure.
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.

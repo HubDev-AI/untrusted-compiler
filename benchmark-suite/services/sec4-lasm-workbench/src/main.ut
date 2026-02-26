@@ -55,7 +55,7 @@ fn wbCreateTask() effects { net, db.write } -> Int {
   let db = DbCap();
   let params = validate.nonEmpty(req.query("params"));
   let query = sql.q(
-    "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, $5, $6)",
+    "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
     params
   );
   db.exec(db, query);
@@ -73,7 +73,7 @@ fn wbCreateTaskWithComment() effects { net, db.write, db.tx } -> Int {
   db.execTx(
     tx,
     sql.q(
-      "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, $5, $6)",
+      "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
       taskParams
     )
   );
