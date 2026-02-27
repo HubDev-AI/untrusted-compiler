@@ -18453,6 +18453,154 @@ fn run_command_rejects_zero_db_postgres_connect_timeout_override() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_shared_client_max_idle_per_key_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-shared-idle-per-key-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-shared-client-max-idle-per-key",
+        "32",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-shared-client-max-idle-per-key is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-shared-client-max-idle-per-key is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-shared-client-max-idle-per-key guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_shared_client_max_idle_per_key_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-shared-idle-per-key");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-shared-client-max-idle-per-key",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-shared-client-max-idle-per-key override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-shared-client-max-idle-per-key must be >= 1"),
+        "stderr should include deterministic db-postgres-shared-client-max-idle-per-key validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_shared_client_max_total_idle_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-shared-total-idle-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-shared-client-max-total-idle",
+        "256",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-shared-client-max-total-idle is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-shared-client-max-total-idle is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-shared-client-max-total-idle guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_shared_client_max_total_idle_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-shared-total-idle");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-shared-client-max-total-idle",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-shared-client-max-total-idle override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-shared-client-max-total-idle must be >= 1"),
+        "stderr should include deterministic db-postgres-shared-client-max-total-idle validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_postgres_persist_workers_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-persist-workers-c-backend");
     let project_path = project_dir

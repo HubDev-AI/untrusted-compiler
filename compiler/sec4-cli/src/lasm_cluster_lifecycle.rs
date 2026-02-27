@@ -138,6 +138,16 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_u64_run_arg(
         &mut cmd,
+        "--db-postgres-shared-client-max-idle-per-key",
+        config.db_postgres_shared_client_max_idle_per_key,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-shared-client-max-total-idle",
+        config.db_postgres_shared_client_max_total_idle,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
         "--db-postgres-persist-workers",
         config.db_postgres_persist_workers,
     );

@@ -192,6 +192,10 @@ enum Commands {
         #[arg(long)]
         db_postgres_connect_timeout_ms: Option<u64>,
         #[arg(long)]
+        db_postgres_shared_client_max_idle_per_key: Option<u64>,
+        #[arg(long)]
+        db_postgres_shared_client_max_total_idle: Option<u64>,
+        #[arg(long)]
         db_postgres_persist_workers: Option<u64>,
         #[arg(long)]
         db_postgres_persist_queue_capacity: Option<u64>,
@@ -644,6 +648,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -703,6 +709,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -7316,6 +7324,8 @@ fn cmd_run(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -7479,6 +7489,8 @@ fn cmd_run(
         db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
+        db_postgres_shared_client_max_idle_per_key,
+        db_postgres_shared_client_max_total_idle,
         db_postgres_persist_workers,
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
@@ -7687,6 +7699,8 @@ fn cmd_run(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -8058,6 +8072,8 @@ struct LasmClusterConfig {
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -8390,6 +8406,8 @@ fn cmd_run_lasm_backend(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -8705,6 +8723,18 @@ fn cmd_run_lasm_backend(
             run_db_postgres_persist_queue_full_mode_to_env_value(mode),
         );
     }
+    if let Some(value) = db_postgres_shared_client_max_idle_per_key {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_shared_client_max_total_idle {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE",
+            value.to_string(),
+        );
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -8787,6 +8817,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -8853,6 +8885,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
