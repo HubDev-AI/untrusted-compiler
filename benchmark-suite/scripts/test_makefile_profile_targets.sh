@@ -113,6 +113,16 @@ require_target_contains_token "workbench-full-bench-repeats-dry" "--dry-run"
 require_target_contains_token "workbench-full-bench-repeats-report" "render_workbench_full_benchmark_suite_repeats_summary.sh"
 require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_SUMMARY)"'
 require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_REPORT)"'
+require_target_contains_token "workbench-bench-local" "run_workbench_benchmark_matrix_local.sh"
+require_target_contains_token "workbench-bench-local" '$(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG)'
+require_target_contains_token "workbench-bench-local" '$(BENCH_LOCAL_POSTGRES_RESET_FLAG)'
+require_target_contains_token "workbench-bench-local-dry" "run_workbench_benchmark_matrix_local.sh"
+require_target_contains_token "workbench-bench-local-dry" "--dry-run"
+require_target_contains_token "workbench-step-bench-local" "run_workbench_step_matrix_local.sh"
+require_target_contains_token "workbench-step-bench-local" '$(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG)'
+require_target_contains_token "workbench-step-bench-local" '$(BENCH_LOCAL_POSTGRES_RESET_FLAG)'
+require_target_contains_token "workbench-step-bench-local-dry" "run_workbench_step_matrix_local.sh"
+require_target_contains_token "workbench-step-bench-local-dry" "--dry-run"
 require_target_contains_token "workbench-full-bench-local" "run_workbench_full_benchmark_suite_local.sh"
 require_target_contains_token "workbench-full-bench-local" '$(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG)'
 require_target_contains_token "workbench-full-bench-local" '$(BENCH_LOCAL_POSTGRES_RESET_FLAG)'
