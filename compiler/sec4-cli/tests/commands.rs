@@ -30220,6 +30220,48 @@ fn main() effects { net } -> Int {
             .unwrap_or(false),
         "first status json should include dbPostgresPersistQueueFullMode placeholder field"
     );
+    assert!(
+        first_status
+            .get("dbPostgresSharedClientPoolKeys")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include dbPostgresSharedClientPoolKeys telemetry field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresSharedClientPoolIdleTotal")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include dbPostgresSharedClientPoolIdleTotal telemetry field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistWorkersAvailable")
+            .and_then(serde_json::Value::as_bool)
+            .is_some(),
+        "first status json should include dbPostgresPersistWorkersAvailable telemetry field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistQueueDepth")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include dbPostgresPersistQueueDepth telemetry field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistQueueBackpressureTotal")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include dbPostgresPersistQueueBackpressureTotal telemetry field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistSyncFallbackTotal")
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "first status json should include dbPostgresPersistSyncFallbackTotal telemetry field"
+    );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")
         .and_then(serde_json::Value::as_u64)
