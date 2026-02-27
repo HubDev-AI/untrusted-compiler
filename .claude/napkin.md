@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-27 | self | After PR merge returned me to `dev`, I started the next cluster-status adapter patch directly on `dev` before branching. | Enforce a hard post-merge gate: check current branch immediately after each merge and create the next `codex/*` branch before any edits. |
 | 2026-02-27 | self | I launched branch creation (`git checkout -b ...`) in a parallel tool call alongside roadmap/search reads while starting the next slice. | Keep branch create/switch commands standalone and run parallel read/search commands only after branch state is finalized. |
 | 2026-02-27 | self | I started this continuation with a parallel command bundle (`pwd/status`, napkin read, search) instead of enforcing the standalone first-command napkin gate. | Keep strict startup order on every continuation: run only `cat .claude/napkin.md` first, then run status/search commands. |
 | 2026-02-27 | self | I kicked off `cargo check` and two `cargo test` commands in one parallel tool call and reintroduced avoidable package/build lock contention risk. | Keep all Cargo commands strictly sequential; reserve parallel tool calls for read/search commands only. |
