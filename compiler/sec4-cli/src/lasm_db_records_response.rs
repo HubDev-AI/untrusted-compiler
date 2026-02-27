@@ -6,8 +6,8 @@ use crate::lasm_db_runtime_dispatch::{
     lasm_db_sql_template_max_bytes_limit,
 };
 use crate::lasm_db_runtime_postgres::{
-    lasm_postgres_shared_client_max_idle_per_key, lasm_postgres_shared_client_pool_idle_total,
-    lasm_postgres_shared_client_pool_key_count,
+    lasm_postgres_shared_client_max_idle_per_key, lasm_postgres_shared_client_max_total_idle,
+    lasm_postgres_shared_client_pool_idle_total, lasm_postgres_shared_client_pool_key_count,
 };
 use crate::lasm_db_runtime_postgres_persist::{
     lasm_postgres_persist_queue_backpressure_total,
@@ -733,6 +733,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let postgres_shared_client_pool_key_count = lasm_postgres_shared_client_pool_key_count();
     let postgres_shared_client_pool_idle_total = lasm_postgres_shared_client_pool_idle_total();
     let postgres_shared_client_max_idle_per_key = lasm_postgres_shared_client_max_idle_per_key();
+    let postgres_shared_client_max_total_idle = lasm_postgres_shared_client_max_total_idle();
     set_lasm_json_response(
         response,
         200,
@@ -790,6 +791,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresSharedClientPoolKeys": postgres_shared_client_pool_key_count,
                 "postgresSharedClientPoolIdleTotal": postgres_shared_client_pool_idle_total,
                 "postgresSharedClientMaxIdlePerKey": postgres_shared_client_max_idle_per_key,
+                "postgresSharedClientMaxTotalIdle": postgres_shared_client_max_total_idle,
             },
             "dbTimeoutsMs": {
                 "postgresStatement": postgres_statement_timeout_ms,

@@ -41,9 +41,15 @@ const LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_ENV: &str =
 const LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_DEFAULT: usize = 16;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_MAX: usize = 256;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_ENV: &str =
+    "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE";
+const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_DEFAULT: usize = 128;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MIN: usize = 1;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MAX: usize = 4096;
 static LASM_POSTGRES_SHARED_CLIENTS: OnceLock<Mutex<HashMap<String, Vec<PostgresClient>>>> =
     OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_RESOLVED: OnceLock<usize> = OnceLock::new();
 
 fn resolve_lasm_postgres_shared_client_max_idle_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED.get_or_init(|| {
@@ -64,8 +70,31 @@ fn resolve_lasm_postgres_shared_client_max_idle_per_key() -> usize {
     })
 }
 
+fn resolve_lasm_postgres_shared_client_max_total_idle() -> usize {
+    *LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_RESOLVED.get_or_init(|| {
+        let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_ENV) else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MIN,
+            LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MAX,
+        )
+    })
+}
+
 pub(crate) fn lasm_postgres_shared_client_max_idle_per_key() -> usize {
     resolve_lasm_postgres_shared_client_max_idle_per_key()
+}
+
+pub(crate) fn lasm_postgres_shared_client_max_total_idle() -> usize {
+    resolve_lasm_postgres_shared_client_max_total_idle()
 }
 
 pub(crate) fn lasm_postgres_shared_client_pool_key_count() -> usize {
@@ -82,6 +111,12 @@ pub(crate) fn lasm_postgres_shared_client_pool_idle_total() -> usize {
         Ok(guard) => guard.values().map(Vec::len).sum(),
         Err(_) => 0,
     }
+}
+
+fn lasm_postgres_shared_pool_idle_total_locked(
+    pool: &HashMap<String, Vec<PostgresClient>>,
+) -> usize {
+    pool.values().map(Vec::len).sum()
 }
 
 fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgresParam {
@@ -1548,6 +1583,7 @@ fn run_lasm_postgres_thread_local_with_client<R>(
     operation: impl FnOnce(&mut PostgresClient) -> Result<R, postgres::Error>,
 ) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
     let max_idle = resolve_lasm_postgres_shared_client_max_idle_per_key();
+    let max_total_idle = resolve_lasm_postgres_shared_client_max_total_idle();
     let key = lasm_postgres_thread_local_client_key(config);
     let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut client = {
@@ -1571,9 +1607,12 @@ fn run_lasm_postgres_thread_local_with_client<R>(
     match &result {
         Ok(_) => {
             if let Ok(mut guard) = pool.lock() {
-                let entry = guard.entry(key).or_default();
-                if entry.len() < max_idle {
-                    entry.push(client);
+                let total_idle = lasm_postgres_shared_pool_idle_total_locked(&guard);
+                if total_idle < max_total_idle {
+                    let entry = guard.entry(key).or_default();
+                    if entry.len() < max_idle {
+                        entry.push(client);
+                    }
                 }
             }
         }
@@ -1581,9 +1620,12 @@ fn run_lasm_postgres_thread_local_with_client<R>(
             if !is_lasm_postgres_reconnectable_error(err) =>
         {
             if let Ok(mut guard) = pool.lock() {
-                let entry = guard.entry(key).or_default();
-                if entry.len() < max_idle {
-                    entry.push(client);
+                let total_idle = lasm_postgres_shared_pool_idle_total_locked(&guard);
+                if total_idle < max_total_idle {
+                    let entry = guard.entry(key).or_default();
+                    if entry.len() < max_idle {
+                        entry.push(client);
+                    }
                 }
             }
         }
