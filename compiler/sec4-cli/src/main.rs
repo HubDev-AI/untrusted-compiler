@@ -295,6 +295,8 @@ enum Commands {
         db_adapter: Option<RunDbAdapter>,
         #[arg(long)]
         db_postgres_dsn: Option<String>,
+        #[arg(long)]
+        db_postgres_dsn_file: Option<PathBuf>,
         #[arg(long, value_enum)]
         db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
         #[arg(long, default_value_t = 1)]
@@ -763,6 +765,7 @@ fn main() {
             db_base,
             db_adapter,
             db_postgres_dsn,
+            db_postgres_dsn_file,
             db_postgres_tls_mode,
             requests,
             max_steps,
@@ -782,6 +785,7 @@ fn main() {
             db_base.as_deref(),
             db_adapter,
             db_postgres_dsn.as_deref(),
+            db_postgres_dsn_file.as_deref(),
             db_postgres_tls_mode,
             requests,
             max_steps,
@@ -860,6 +864,7 @@ fn cmd_lasm_smoke(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
+    db_postgres_dsn_file: Option<&Path>,
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
     requests: usize,
     max_steps: usize,
@@ -924,6 +929,36 @@ fn cmd_lasm_smoke(
             }
         };
     let request_headers = finalize_lasm_smoke_request_headers(request_headers, request_body.len());
+
+    if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
+        eprintln!("lasm-smoke failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
+        return Err(2);
+    }
+    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
+        let trimmed = dsn.trim();
+        if trimmed.is_empty() {
+            eprintln!("lasm-smoke failed: --db-postgres-dsn must not be empty");
+            return Err(2);
+        }
+        Some(trimmed.to_string())
+    } else if let Some(path_arg) = db_postgres_dsn_file {
+        let mut resolved_path = path_arg.to_path_buf();
+        if path_arg.is_relative() && !resolved_path.exists() {
+            let candidate = path.join(path_arg);
+            if candidate.exists() {
+                resolved_path = candidate;
+            }
+        }
+        match lasm_db_config::load_lasm_db_postgres_dsn_from_file(resolved_path.as_path()) {
+            Ok(dsn) => Some(dsn),
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
+                return Err(2);
+            }
+        }
+    } else {
+        None
+    };
 
     let runtime_actions = if let Some(script) = runtime_script {
         match parse_lasm_runtime_script(script) {
@@ -1084,7 +1119,7 @@ fn cmd_lasm_smoke(
         Some(path),
         db_base,
         db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
-        db_postgres_dsn,
+        explicit_db_postgres_dsn.as_deref(),
         db_postgres_tls_mode.map(run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode),
         None,
         None,
