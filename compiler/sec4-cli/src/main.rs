@@ -1177,13 +1177,11 @@ fn cmd_lasm_smoke(
         }
         Some(trimmed.to_string())
     } else if let Some(path_arg) = db_postgres_dsn_file {
-        let mut resolved_path = path_arg.to_path_buf();
-        if path_arg.is_relative() && !resolved_path.exists() {
-            let candidate = path.join(path_arg);
-            if candidate.exists() {
-                resolved_path = candidate;
-            }
-        }
+        let resolved_path = if path_arg.is_relative() {
+            path.join(path_arg)
+        } else {
+            path_arg.to_path_buf()
+        };
         match lasm_db_config::load_lasm_db_postgres_dsn_from_file(resolved_path.as_path()) {
             Ok(dsn) => Some(dsn),
             Err(message) => {
