@@ -199,6 +199,12 @@ Required characteristics:
       - benchmark-smoke CI now runs:
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh`
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh`
+   - local-infra full-suite bundle wrapper added (repeats + markdown render in one command):
+      - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_bundle.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-full-bench-local-bundle[-dry]`
+      - benchmark-smoke CI now runs:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_bundle.sh`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.

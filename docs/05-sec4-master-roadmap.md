@@ -2421,6 +2421,18 @@ Post-alpha track acceptance anchors:
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh`
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh`
       - documented in `docs/book/1541-m39-workbench-full-suite-local-postgres-infra-wrappers.md`.
+   - [x] Added one-command local-infra workbench full-suite bundle (repeats + markdown render):
+      - added wrapper:
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_bundle.sh`
+      - wrapper delegates to:
+        - `run_workbench_full_benchmark_suite_local_repeats.sh`
+        - `render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - added make targets:
+        - `workbench-full-bench-local-bundle`
+        - `workbench-full-bench-local-bundle-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_bundle.sh`
+      - documented in `docs/book/1542-m39-workbench-full-suite-local-bundle-wrapper.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

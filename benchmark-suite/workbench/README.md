@@ -81,6 +81,9 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
    - repeated local-infra wrapper:
      - `make -C benchmark-suite workbench-full-bench-local-repeats-dry WORKBENCH_REPEAT_RUNS=3`
      - `make -C benchmark-suite workbench-full-bench-local-repeats WORKBENCH_REPEAT_RUNS=3`
+   - repeated local-infra bundle (run + markdown render):
+     - `make -C benchmark-suite workbench-full-bench-local-bundle-dry WORKBENCH_REPEAT_RUNS=3`
+     - `make -C benchmark-suite workbench-full-bench-local-bundle WORKBENCH_REPEAT_RUNS=3`
    - optional:
      - keep local infra up: `BENCH_LOCAL_POSTGRES_KEEP_UP=true`
      - reset local infra data before suite: `BENCH_LOCAL_POSTGRES_RESET=true`
