@@ -1302,6 +1302,14 @@ fn lasm_smoke_command_supports_sqlite_db_adapter_flags() {
             && stdout.contains("\"recordsTotal\":0"),
         "lasm-smoke output should include sqlite-backed DB list records payload:\n{stdout}"
     );
+    assert!(
+        stdout.contains("dbAdapter=sqlite"),
+        "lasm-smoke output should surface effective sqlite adapter in summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("dbSqliteStorePath="),
+        "lasm-smoke output should surface sqlite store path in summary:\n{stdout}"
+    );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
 }
@@ -1652,6 +1660,23 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
             .and_then(serde_json::Value::as_str),
         Some("application/json; charset=utf-8"),
         "lasm-smoke json should include default JSON content-type for res.ok handlers"
+    );
+    assert_eq!(
+        parsed
+            .get("db")
+            .and_then(|db| db.get("adapter"))
+            .and_then(serde_json::Value::as_str),
+        Some("records.log"),
+        "lasm-smoke json should include effective db adapter label"
+    );
+    assert_eq!(
+        parsed
+            .get("db")
+            .and_then(|db| db.get("postgres"))
+            .and_then(|pg| pg.get("dsnConfigured"))
+            .and_then(serde_json::Value::as_bool),
+        Some(false),
+        "lasm-smoke json should expose whether postgres dsn is configured"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -30062,6 +30087,13 @@ fn main() effects { net } -> Int {
         Some("sqlite"),
         "first status json should include dbAdapter runtime selection"
     );
+    assert!(
+        first_status
+            .get("dbPostgresDsnConfigured")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresDsnConfigured null when postgres adapter is not active"
+    );
     assert_eq!(
         first_status
             .get("dbMaxTxHandles")
@@ -30145,6 +30177,48 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(9),
         "first status json should include dbSqliteLockRetryDelayMs runtime tuning"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresSharedClientMaxIdlePerKey")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresSharedClientMaxIdlePerKey placeholder field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresSharedClientMaxTotalIdle")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresSharedClientMaxTotalIdle placeholder field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistWorkers")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresPersistWorkers placeholder field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistQueueCapacity")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresPersistQueueCapacity placeholder field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistBatchMax")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresPersistBatchMax placeholder field"
+    );
+    assert!(
+        first_status
+            .get("dbPostgresPersistQueueFullMode")
+            .map(serde_json::Value::is_null)
+            .unwrap_or(false),
+        "first status json should include dbPostgresPersistQueueFullMode placeholder field"
     );
     let first_updated_at_ms = first_status
         .get("updatedAtMs")

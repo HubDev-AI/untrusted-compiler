@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-27 | self | I started this continuation with a parallel command bundle (`pwd/status`, napkin read, search) instead of enforcing the standalone first-command napkin gate. | Keep strict startup order on every continuation: run only `cat .claude/napkin.md` first, then run status/search commands. |
+| 2026-02-27 | self | I kicked off `cargo check` and two `cargo test` commands in one parallel tool call and reintroduced avoidable package/build lock contention risk. | Keep all Cargo commands strictly sequential; reserve parallel tool calls for read/search commands only. |
 | 2026-02-26 | self | I accidentally triggered `web.run` during a local-only benchmark scripting slice while editing `run_workbench_profile.sh`. | Keep local implementation turns strictly on repository tools (`exec_command`, `apply_patch`) and avoid web tool calls unless external research is explicitly required. |
 | 2026-02-26 | self | I resumed this continuation with git/status/search commands before the required standalone `cat .claude/napkin.md` first-command gate. | Keep a hard first-command rule on every continuation: run `cat .claude/napkin.md` alone first, then proceed with git/status/search commands. |
 | 2026-02-26 | self | I started editing this slice directly on local `dev` instead of creating a fresh `codex/*` branch first. | Keep strict branch discipline after each merge: run `git branch --show-current` and create the next `codex/*` branch before any edits. |
