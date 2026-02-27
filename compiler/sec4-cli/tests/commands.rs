@@ -2393,6 +2393,56 @@ fn lasm_smoke_command_rejects_postgres_runtime_overrides_with_non_postgres_adapt
 }
 
 #[test]
+fn lasm_smoke_command_rejects_sqlite_runtime_overrides_with_non_sqlite_adapter() {
+    let root = temp_dir("sec4-lasm-smoke-sqlite-overrides-non-sqlite-adapter");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-sqlite-overrides-non-sqlite\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/health\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--db-adapter",
+        "postgres",
+        "--db-sqlite-busy-timeout-ms",
+        "100",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail when sqlite runtime overrides are combined with non-sqlite adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "lasm-smoke mismatch should exit with deterministic invalid-flag status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "lasm-smoke failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
+        ),
+        "lasm-smoke mismatch failure should mention deterministic sqlite-adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_fails_when_step_budget_is_too_low_for_batch() {
     let root = temp_dir("sec4-lasm-smoke-step-budget-too-low");
     let project_dir = root.join("project");
