@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$INFRA_DIR/.env"
+DEFAULT_ENV_FILE="$INFRA_DIR/.env"
+ENV_FILE="${SEC4_LOCAL_POSTGRES_ENV_FILE:-$DEFAULT_ENV_FILE}"
 ENV_EXAMPLE_FILE="$INFRA_DIR/.env.example"
 COMPOSE_FILE="$INFRA_DIR/docker-compose.yml"
 
@@ -22,6 +23,25 @@ verify_postgres_credentials() {
       -d "$POSTGRES_DB" \
       -v ON_ERROR_STOP=1 \
       -tAc "select 1" >/dev/null
+}
+
+verify_postgres_host_route() {
+  if ! command -v psql >/dev/null 2>&1; then
+    return 0
+  fi
+  local current_user
+  current_user="$(
+    env PGPASSWORD="$POSTGRES_PASSWORD" \
+      psql \
+        -h 127.0.0.1 \
+        -p "${PG_PORT:-5432}" \
+        -U "$POSTGRES_USER" \
+        -d "$POSTGRES_DB" \
+        -v ON_ERROR_STOP=1 \
+        -tAc "select current_user" 2>/dev/null || true
+  )"
+  current_user="$(printf '%s' "$current_user" | tr -d '[:space:]')"
+  [ "$current_user" = "$POSTGRES_USER" ]
 }
 
 redact_postgres_dsn_password() {
@@ -45,10 +65,14 @@ if [ ! -f "$COMPOSE_FILE" ]; then
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
+  if [ -n "${SEC4_LOCAL_POSTGRES_ENV_FILE:-}" ]; then
+    fail "configured env file does not exist: $ENV_FILE"
+  fi
   if [ ! -f "$ENV_EXAMPLE_FILE" ]; then
     fail "missing env example at $ENV_EXAMPLE_FILE"
   fi
-  cp "$ENV_EXAMPLE_FILE" "$ENV_FILE"
+  cp "$ENV_EXAMPLE_FILE" "$DEFAULT_ENV_FILE"
+  ENV_FILE="$DEFAULT_ENV_FILE"
   echo "created $ENV_FILE from .env.example"
 fi
 
@@ -79,6 +103,12 @@ for _ in $(seq 1 60); do
       echo "hint: existing local data may be initialized with different credentials; run $INFRA_DIR/scripts/reset.sh" >&2
       popd >/dev/null
       fail "postgres startup verification failed"
+    fi
+    if ! verify_postgres_host_route; then
+      echo "configured host route verification failed for 127.0.0.1:${PG_PORT:-5432} (POSTGRES_USER=$POSTGRES_USER POSTGRES_DB=$POSTGRES_DB)" >&2
+      echo "hint: another local Postgres service may shadow the docker-mapped port; set PG_PORT to an unused value (for example 55432) in $ENV_FILE and rerun $INFRA_DIR/scripts/reset.sh" >&2
+      popd >/dev/null
+      fail "postgres host route verification failed"
     fi
     raw_dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:${PG_PORT:-5432}/$POSTGRES_DB?sslmode=disable}"
     redacted_dsn="$(redact_postgres_dsn_password "$raw_dsn")"

@@ -153,6 +153,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+infra_env_file="$(resolve_infra_env_file)"
+export SEC4_LOCAL_POSTGRES_ENV_FILE="$infra_env_file"
+
 if [ "$dry_run" = "true" ]; then
   echo "local postgres workbench full repeats mode: dry-run (no docker start/stop)"
 else
@@ -167,7 +170,6 @@ else
   needs_cleanup="true"
 fi
 
-infra_env_file="$(resolve_infra_env_file)"
 resolved_dsn="$(load_dsn_from_env_file "$infra_env_file")"
 
 temp_dsn_file="$(mktemp)"

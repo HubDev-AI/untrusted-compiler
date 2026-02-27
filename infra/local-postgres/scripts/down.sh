@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$INFRA_DIR/.env"
+DEFAULT_ENV_FILE="$INFRA_DIR/.env"
+ENV_FILE="${SEC4_LOCAL_POSTGRES_ENV_FILE:-$DEFAULT_ENV_FILE}"
 COMPOSE_FILE="$INFRA_DIR/docker-compose.yml"
 
 if ! command -v docker >/dev/null 2>&1; then
