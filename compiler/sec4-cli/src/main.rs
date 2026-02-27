@@ -299,6 +299,18 @@ enum Commands {
         db_postgres_dsn_file: Option<PathBuf>,
         #[arg(long, value_enum)]
         db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
+        #[arg(long)]
+        db_postgres_shared_client_max_idle_per_key: Option<u64>,
+        #[arg(long)]
+        db_postgres_shared_client_max_total_idle: Option<u64>,
+        #[arg(long)]
+        db_postgres_persist_workers: Option<u64>,
+        #[arg(long)]
+        db_postgres_persist_queue_capacity: Option<u64>,
+        #[arg(long)]
+        db_postgres_persist_batch_max: Option<u64>,
+        #[arg(long, value_enum)]
+        db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
         #[arg(long, default_value_t = 1)]
         requests: usize,
         #[arg(long, default_value_t = 128)]
@@ -767,6 +779,12 @@ fn main() {
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_postgres_tls_mode,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             requests,
             max_steps,
             fail_on_errors,
@@ -787,6 +805,12 @@ fn main() {
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_postgres_tls_mode,
+            db_postgres_shared_client_max_idle_per_key,
+            db_postgres_shared_client_max_total_idle,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             requests,
             max_steps,
             fail_on_errors,
@@ -866,6 +890,12 @@ fn cmd_lasm_smoke(
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     requests: usize,
     max_steps: usize,
     fail_on_errors: bool,
@@ -959,6 +989,84 @@ fn cmd_lasm_smoke(
     } else {
         None
     };
+    if db_postgres_shared_client_max_idle_per_key == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-shared-client-max-idle-per-key must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_shared_client_max_total_idle == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-shared-client-max-total-idle must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_persist_workers == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-persist-workers must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_persist_queue_capacity == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-persist-queue-capacity must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_persist_batch_max == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-persist-batch-max must be >= 1");
+        return Err(2);
+    }
+    let postgres_runtime_overrides = explicit_db_postgres_dsn.is_some()
+        || db_postgres_tls_mode.is_some()
+        || db_postgres_shared_client_max_idle_per_key.is_some()
+        || db_postgres_shared_client_max_total_idle.is_some()
+        || db_postgres_persist_workers.is_some()
+        || db_postgres_persist_queue_capacity.is_some()
+        || db_postgres_persist_batch_max.is_some()
+        || db_postgres_persist_queue_full_mode.is_some();
+    let effective_db_adapter = if postgres_runtime_overrides {
+        match db_adapter {
+            Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
+            Some(_) => {
+                eprintln!(
+                    "lasm-smoke failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
+                );
+                return Err(2);
+            }
+            None => Some(RunDbAdapter::Postgres),
+        }
+    } else {
+        db_adapter
+    };
+    if let Some(value) = db_postgres_shared_client_max_idle_per_key {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_shared_client_max_total_idle {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_workers {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_WORKERS",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_queue_capacity {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_CAPACITY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_batch_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(mode) = db_postgres_persist_queue_full_mode {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE",
+            run_db_postgres_persist_queue_full_mode_to_env_value(mode),
+        );
+    }
 
     let runtime_actions = if let Some(script) = runtime_script {
         match parse_lasm_runtime_script(script) {
@@ -1118,7 +1226,7 @@ fn cmd_lasm_smoke(
     let smoke_dynamic_state = match build_lasm_dynamic_response_state(
         Some(path),
         db_base,
-        db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
+        effective_db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
         explicit_db_postgres_dsn.as_deref(),
         db_postgres_tls_mode.map(run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode),
         None,
