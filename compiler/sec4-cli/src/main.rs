@@ -162,12 +162,6 @@ enum Commands {
         #[arg(long, value_enum)]
         db_adapter: Option<RunDbAdapter>,
         #[arg(long)]
-        db_postgres_dsn: Option<String>,
-        #[arg(long)]
-        db_postgres_dsn_file: Option<PathBuf>,
-        #[arg(long, value_enum)]
-        db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
-        #[arg(long)]
         db_max_tx_handles: Option<u64>,
         #[arg(long)]
         db_records_max: Option<u64>,
@@ -181,6 +175,12 @@ enum Commands {
         db_params_max_bytes: Option<u64>,
         #[arg(long)]
         db_params_max_entries: Option<u64>,
+        #[arg(long)]
+        db_postgres_dsn: Option<String>,
+        #[arg(long)]
+        db_postgres_dsn_file: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
         #[arg(long)]
         db_postgres_statement_cache_max: Option<u64>,
         #[arg(long)]
@@ -293,6 +293,20 @@ enum Commands {
         db_base: Option<PathBuf>,
         #[arg(long, value_enum)]
         db_adapter: Option<RunDbAdapter>,
+        #[arg(long)]
+        db_max_tx_handles: Option<u64>,
+        #[arg(long)]
+        db_records_max: Option<u64>,
+        #[arg(long)]
+        db_query_one_row_max_bytes: Option<u64>,
+        #[arg(long)]
+        db_query_one_row_max_columns: Option<u64>,
+        #[arg(long)]
+        db_sql_template_max_bytes: Option<u64>,
+        #[arg(long)]
+        db_params_max_bytes: Option<u64>,
+        #[arg(long)]
+        db_params_max_entries: Option<u64>,
         #[arg(long)]
         db_postgres_dsn: Option<String>,
         #[arg(long)]
@@ -798,6 +812,13 @@ fn main() {
             runtime_script,
             db_base,
             db_adapter,
+            db_max_tx_handles,
+            db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
+            db_sql_template_max_bytes,
+            db_params_max_bytes,
+            db_params_max_entries,
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_postgres_tls_mode,
@@ -835,6 +856,13 @@ fn main() {
             runtime_script.as_deref(),
             db_base.as_deref(),
             db_adapter,
+            db_max_tx_handles,
+            db_records_max,
+            db_query_one_row_max_bytes,
+            db_query_one_row_max_columns,
+            db_sql_template_max_bytes,
+            db_params_max_bytes,
+            db_params_max_entries,
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_postgres_tls_mode,
@@ -931,6 +959,13 @@ fn cmd_lasm_smoke(
     runtime_script: Option<&str>,
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
+    db_max_tx_handles: Option<u64>,
+    db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
+    db_sql_template_max_bytes: Option<u64>,
+    db_params_max_bytes: Option<u64>,
+    db_params_max_entries: Option<u64>,
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
@@ -1014,6 +1049,121 @@ fn cmd_lasm_smoke(
             }
         };
     let request_headers = finalize_lasm_smoke_request_headers(request_headers, request_body.len());
+    if db_max_tx_handles == Some(0) {
+        eprintln!("lasm-smoke failed: --db-max-tx-handles must be >= 1");
+        return Err(2);
+    }
+    if db_records_max == Some(0) {
+        eprintln!("lasm-smoke failed: --db-records-max must be >= 1");
+        return Err(2);
+    }
+    if db_query_one_row_max_bytes == Some(0) {
+        eprintln!("lasm-smoke failed: --db-query-one-row-max-bytes must be >= 1");
+        return Err(2);
+    }
+    if db_query_one_row_max_columns == Some(0) {
+        eprintln!("lasm-smoke failed: --db-query-one-row-max-columns must be >= 1");
+        return Err(2);
+    }
+    if db_sql_template_max_bytes == Some(0) {
+        eprintln!("lasm-smoke failed: --db-sql-template-max-bytes must be >= 1");
+        return Err(2);
+    }
+    if db_params_max_bytes == Some(0) {
+        eprintln!("lasm-smoke failed: --db-params-max-bytes must be >= 1");
+        return Err(2);
+    }
+    if db_params_max_entries == Some(0) {
+        eprintln!("lasm-smoke failed: --db-params-max-entries must be >= 1");
+        return Err(2);
+    }
+    let explicit_db_max_tx_handles = match db_max_tx_handles {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-max-tx-handles exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let explicit_db_records_max = match db_records_max {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-records-max exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let db_query_one_row_max_bytes_override = match db_query_one_row_max_bytes {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!(
+                    "lasm-smoke failed: --db-query-one-row-max-bytes exceeds platform limits"
+                );
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let db_query_one_row_max_columns_override = match db_query_one_row_max_columns {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!(
+                    "lasm-smoke failed: --db-query-one-row-max-columns exceeds platform limits"
+                );
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let db_sql_template_max_bytes_override = match db_sql_template_max_bytes {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-sql-template-max-bytes exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let db_params_max_bytes_override = match db_params_max_bytes {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-params-max-bytes exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let db_params_max_entries_override = match db_params_max_entries {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-params-max-entries exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
+        db_query_one_row_max_bytes_override,
+    );
+    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_columns_override(
+        db_query_one_row_max_columns_override,
+    );
+    lasm_db_runtime_dispatch::set_lasm_db_sql_template_max_bytes_override(
+        db_sql_template_max_bytes_override,
+    );
+    lasm_db_runtime_dispatch::set_lasm_db_params_max_bytes_override(db_params_max_bytes_override);
+    lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
+        db_params_max_entries_override,
+    );
 
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
         eprintln!("lasm-smoke failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
@@ -1388,8 +1538,8 @@ fn cmd_lasm_smoke(
         db_sqlite_lock_retry_delay_ms,
         db_sqlite_journal_mode.as_deref(),
         db_sqlite_synchronous.as_deref(),
-        None,
-        None,
+        explicit_db_max_tx_handles,
+        explicit_db_records_max,
         explicit_db_postgres_statement_cache_max,
         explicit_db_postgres_placeholder_cache_max,
     ) {
