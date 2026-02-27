@@ -470,6 +470,9 @@ test-scripts:
 	scripts/test_run_step_profile.sh
 	scripts/test_run_step_matrix.sh
 	scripts/test_run_full_benchmark_suite.sh
+	scripts/test_run_workbench_full_benchmark_suite.sh
+	scripts/test_run_workbench_full_benchmark_suite_repeats.sh
+	scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh
 	scripts/test_run_alpha_postgres_comparison_suite.sh
 	scripts/test_run_alpha_postgres_comparison_suite_local.sh
 	scripts/test_build_artifact_manifest.sh

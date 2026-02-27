@@ -103,6 +103,16 @@ require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-ful
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-throughput-dry'
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-latency-dry'
 require_target_contains_token "lasm-cluster-mode-compare" "run_lasm_cluster_mode_compare.sh"
+require_target_contains_token "workbench-full-bench" "run_workbench_full_benchmark_suite.sh"
+require_target_contains_token "workbench-full-bench" '--impls "$(WORKBENCH_IMPLS)"'
+require_target_contains_token "workbench-full-bench" '--endpoints "$(WORKBENCH_ENDPOINTS)"'
+require_target_contains_token "workbench-full-bench-dry" "--dry-run"
+require_target_contains_token "workbench-full-bench-repeats" "run_workbench_full_benchmark_suite_repeats.sh"
+require_target_contains_token "workbench-full-bench-repeats" '--runs "$(WORKBENCH_REPEAT_RUNS)"'
+require_target_contains_token "workbench-full-bench-repeats-dry" "--dry-run"
+require_target_contains_token "workbench-full-bench-repeats-report" "render_workbench_full_benchmark_suite_repeats_summary.sh"
+require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_SUMMARY)"'
+require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_REPORT)"'
 require_target_contains_token "lasm-cluster-capacity-probe" '--profile "$(LASM_CAPACITY_PROFILE)"'
 require_target_contains_token "lasm-cluster-capacity-probe" '$(SATURATION_WARMUP_PATH_FLAG)'
 require_target_contains_token "lasm-cluster-saturation-boost-matrix" '--profile "$(LASM_CAPACITY_PROFILE)"'
