@@ -1776,7 +1776,14 @@ pub(crate) fn persist_lasm_postgres_record_append_batch_thread_local(
     if records.is_empty() {
         return Ok(());
     }
-    let mut converted = Vec::with_capacity(records.len());
+    let mut ids = Vec::with_capacity(records.len());
+    let mut ops = Vec::with_capacity(records.len());
+    let mut dbs = Vec::with_capacity(records.len());
+    let mut templates = Vec::with_capacity(records.len());
+    let mut params_payloads = Vec::with_capacity(records.len());
+    let mut txs = Vec::with_capacity(records.len());
+    let mut affected_rows_values = Vec::with_capacity(records.len());
+    let mut created_at_ms_values = Vec::with_capacity(records.len());
     for record in records {
         let id = i64::try_from(record.id).map_err(|_| {
             format!(
@@ -1796,11 +1803,27 @@ pub(crate) fn persist_lasm_postgres_record_append_batch_thread_local(
                 record.affected_rows
             )
         })?;
-        converted.push((record, id, created_at_ms, affected_rows));
+        ids.push(id);
+        ops.push(record.op.clone());
+        dbs.push(record.db);
+        templates.push(record.template.clone());
+        params_payloads.push(record.params.clone());
+        txs.push(record.tx);
+        affected_rows_values.push(affected_rows);
+        created_at_ms_values.push(created_at_ms);
     }
     let insert_statement = format!(
         "INSERT INTO {} (id, op, db, template, params, tx, affected_rows, created_at_ms) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+         SELECT * FROM UNNEST( \
+             $1::bigint[], \
+             $2::text[], \
+             $3::bigint[], \
+             $4::text[], \
+             $5::text[], \
+             $6::bigint[], \
+             $7::bigint[], \
+             $8::bigint[] \
+         ) AS _sec4_records(id, op, db, template, params, tx, affected_rows, created_at_ms) \
          ON CONFLICT (id) DO UPDATE SET \
              op = EXCLUDED.op, \
              db = EXCLUDED.db, \
@@ -1815,23 +1838,21 @@ pub(crate) fn persist_lasm_postgres_record_append_batch_thread_local(
         config,
         "could not append LASM dynamic postgres record batch",
         |client| {
-            let mut tx = client.transaction()?;
-            for (record, id, created_at_ms, affected_rows) in &converted {
-                tx.execute(
+            client
+                .execute(
                     insert_statement.as_str(),
                     &[
-                        id,
-                        &record.op,
-                        &record.db,
-                        &record.template,
-                        &record.params,
-                        &record.tx,
-                        affected_rows,
-                        created_at_ms,
+                        &ids,
+                        &ops,
+                        &dbs,
+                        &templates,
+                        &params_payloads,
+                        &txs,
+                        &affected_rows_values,
+                        &created_at_ms_values,
                     ],
-                )?;
-            }
-            tx.commit().map(|_| ())
+                )
+                .map(|_| ())
         },
     )
 }
@@ -1842,7 +1863,14 @@ pub(crate) fn persist_lasm_postgres_records_full_sync_thread_local(
 ) -> Result<(), String> {
     let mut ordered = records.to_vec();
     ordered.sort_by_key(|record| record.id);
-    let mut converted = Vec::with_capacity(ordered.len());
+    let mut ids = Vec::with_capacity(ordered.len());
+    let mut ops = Vec::with_capacity(ordered.len());
+    let mut dbs = Vec::with_capacity(ordered.len());
+    let mut templates = Vec::with_capacity(ordered.len());
+    let mut params_payloads = Vec::with_capacity(ordered.len());
+    let mut txs = Vec::with_capacity(ordered.len());
+    let mut affected_rows_values = Vec::with_capacity(ordered.len());
+    let mut created_at_ms_values = Vec::with_capacity(ordered.len());
     for record in &ordered {
         let id = i64::try_from(record.id).map_err(|_| {
             format!(
@@ -1862,12 +1890,28 @@ pub(crate) fn persist_lasm_postgres_records_full_sync_thread_local(
                 record.affected_rows
             )
         })?;
-        converted.push((record, id, created_at_ms, affected_rows));
+        ids.push(id);
+        ops.push(record.op.clone());
+        dbs.push(record.db);
+        templates.push(record.template.clone());
+        params_payloads.push(record.params.clone());
+        txs.push(record.tx);
+        affected_rows_values.push(affected_rows);
+        created_at_ms_values.push(created_at_ms);
     }
     let delete_statement = format!("DELETE FROM {}", LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE);
     let insert_statement = format!(
         "INSERT INTO {} (id, op, db, template, params, tx, affected_rows, created_at_ms) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+         SELECT * FROM UNNEST( \
+             $1::bigint[], \
+             $2::text[], \
+             $3::bigint[], \
+             $4::text[], \
+             $5::text[], \
+             $6::bigint[], \
+             $7::bigint[], \
+             $8::bigint[] \
+         ) AS _sec4_records(id, op, db, template, params, tx, affected_rows, created_at_ms)",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
     run_lasm_postgres_thread_local_operation(
@@ -1876,18 +1920,18 @@ pub(crate) fn persist_lasm_postgres_records_full_sync_thread_local(
         |client| {
             let mut tx = client.transaction()?;
             tx.execute(delete_statement.as_str(), &[])?;
-            for (record, id, created_at_ms, affected_rows) in &converted {
+            if !ids.is_empty() {
                 tx.execute(
                     insert_statement.as_str(),
                     &[
-                        id,
-                        &record.op,
-                        &record.db,
-                        &record.template,
-                        &record.params,
-                        &record.tx,
-                        affected_rows,
-                        created_at_ms,
+                        &ids,
+                        &ops,
+                        &dbs,
+                        &templates,
+                        &params_payloads,
+                        &txs,
+                        &affected_rows_values,
+                        &created_at_ms_values,
                     ],
                 )?;
             }
