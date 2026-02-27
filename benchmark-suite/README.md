@@ -119,6 +119,9 @@ Measure end-to-end service behavior across identical implementations:
      - `make -C benchmark-suite workbench-bench-dry`
    - full run:
      - `make -C benchmark-suite workbench-bench`
+   - local-infra run:
+     - `make -C benchmark-suite workbench-bench-local-dry`
+     - `make -C benchmark-suite workbench-bench-local`
    - optional LASM DB mode knobs:
      - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
      - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode only)
@@ -133,6 +136,9 @@ Measure end-to-end service behavior across identical implementations:
      - `make -C benchmark-suite workbench-step-bench-dry`
    - full run:
      - `make -C benchmark-suite workbench-step-bench`
+   - local-infra run:
+     - `make -C benchmark-suite workbench-step-bench-local-dry`
+     - `make -C benchmark-suite workbench-step-bench-local`
    - optional scope overrides:
      - `WORKBENCH_IMPLS=sec4,sec4-lasm`
      - `WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
@@ -241,12 +247,14 @@ Measure end-to-end service behavior across identical implementations:
     - `--lasm-db-adapter sqlite|postgres`
     - `--lasm-db-base <path>` (sqlite)
     - `--lasm-postgres-dsn-file <path>` (postgres)
+- `run_workbench_benchmark_matrix_local.sh` orchestrates repo-local Postgres infra around workbench matrix fixed-target benchmarking and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
 - `run_workbench_step_profile.sh` executes step-load rates for one workbench endpoint and writes:
   - per-rate snapshots: `results/summaries/<impl>-<endpoint>-r<rate>.json`
   - aggregate step summary: `results/summaries/<impl>-<endpoint>-step.json`
 - `run_workbench_step_matrix.sh` executes workbench step-load profiles across matrix implementations/endpoints, runs step analysis per lane, and emits:
   - `results/summaries/workbench-step-runs.json`
   - `results/summaries/workbench-step-matrix.json`
+- `run_workbench_step_matrix_local.sh` orchestrates repo-local Postgres infra around workbench step-load matrix runs and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
 - `run_workbench_full_benchmark_suite.sh` runs workbench fixed-target matrix + workbench step matrix and republishes one combined markdown report with step-load signals:
   - `results/summaries/workbench-full-runs.json`
   - `results/workbench-full-benchmark-report.md`

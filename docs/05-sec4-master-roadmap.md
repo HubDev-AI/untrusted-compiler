@@ -2433,6 +2433,22 @@ Post-alpha track acceptance anchors:
       - added CI/script guards:
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_bundle.sh`
       - documented in `docs/book/1542-m39-workbench-full-suite-local-bundle-wrapper.md`.
+   - [x] Added repo-local Postgres infra wrappers for workbench matrix and step runners:
+      - added wrappers:
+        - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh`
+        - `benchmark-suite/scripts/run_workbench_step_matrix_local.sh`
+      - wrappers auto-wire:
+        - `--lasm-db-adapter postgres`
+        - temporary `--lasm-postgres-dsn-file` from `infra/local-postgres` env defaults,
+      - added make targets:
+        - `workbench-bench-local`
+        - `workbench-bench-local-dry`
+        - `workbench-step-bench-local`
+        - `workbench-step-bench-local-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_benchmark_matrix_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_step_matrix_local.sh`
+      - documented in `docs/book/1543-m39-workbench-matrix-step-local-postgres-wrappers.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

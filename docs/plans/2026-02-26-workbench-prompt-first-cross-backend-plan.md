@@ -205,6 +205,15 @@ Required characteristics:
         - `make -C benchmark-suite workbench-full-bench-local-bundle[-dry]`
       - benchmark-smoke CI now runs:
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_bundle.sh`
+   - local-infra wrappers added for workbench matrix and step lanes:
+      - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh`
+      - `benchmark-suite/scripts/run_workbench_step_matrix_local.sh`
+      - make targets:
+        - `make -C benchmark-suite workbench-bench-local[-dry]`
+        - `make -C benchmark-suite workbench-step-bench-local[-dry]`
+      - benchmark-smoke CI now runs:
+        - `benchmark-suite/scripts/test_run_workbench_benchmark_matrix_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_step_matrix_local.sh`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.

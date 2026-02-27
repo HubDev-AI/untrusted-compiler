@@ -27,6 +27,9 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 5. Run load benchmark matrix:
    - `make -C benchmark-suite workbench-bench-dry`
    - `make -C benchmark-suite workbench-bench`
+   - local-infra wrapper:
+     - `make -C benchmark-suite workbench-bench-local-dry`
+     - `make -C benchmark-suite workbench-bench-local`
    - optional `sec4-lasm` DB mode overrides:
      - `WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres`
      - `WORKBENCH_LASM_DB_BASE=/tmp/sec4-lasm-workbench-db` (sqlite mode)
@@ -39,6 +42,9 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 6. Run step-load benchmark matrix (knee detection):
    - `make -C benchmark-suite workbench-step-bench-dry`
    - `make -C benchmark-suite workbench-step-bench`
+   - local-infra wrapper:
+     - `make -C benchmark-suite workbench-step-bench-local-dry`
+     - `make -C benchmark-suite workbench-step-bench-local`
    - optional scope overrides:
      - `WORKBENCH_IMPLS=sec4,sec4-lasm`
      - `WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
