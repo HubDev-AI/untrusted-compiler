@@ -1310,6 +1310,10 @@ fn lasm_smoke_command_supports_sqlite_db_adapter_flags() {
         stdout.contains("dbSqliteStorePath="),
         "lasm-smoke output should surface sqlite store path in summary:\n{stdout}"
     );
+    assert!(
+        stdout.contains("dbPostgresPersistQueueDepth="),
+        "lasm-smoke output should surface postgres persist queue depth telemetry in summary:\n{stdout}"
+    );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
 }
@@ -1677,6 +1681,26 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
             .and_then(serde_json::Value::as_bool),
         Some(false),
         "lasm-smoke json should expose whether postgres dsn is configured"
+    );
+    assert!(
+        parsed
+            .get("db")
+            .and_then(|db| db.get("postgres"))
+            .and_then(|pg| pg.get("sharedClient"))
+            .and_then(|shared| shared.get("poolKeys"))
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "lasm-smoke json should include postgres shared-client telemetry fields"
+    );
+    assert!(
+        parsed
+            .get("db")
+            .and_then(|db| db.get("postgres"))
+            .and_then(|pg| pg.get("persist"))
+            .and_then(|persist| persist.get("queueDepth"))
+            .and_then(serde_json::Value::as_u64)
+            .is_some(),
+        "lasm-smoke json should include postgres persist telemetry fields"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
