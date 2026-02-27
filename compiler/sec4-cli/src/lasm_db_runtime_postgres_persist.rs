@@ -20,9 +20,14 @@ const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_ENV: &str =
 const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT: usize = 8192;
 const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_MIN: usize = 256;
 const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_MAX: usize = 1_048_576;
+const LASM_POSTGRES_PERSIST_BATCH_MAX_ENV: &str = "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX";
+const LASM_POSTGRES_PERSIST_BATCH_MAX_DEFAULT: usize = 256;
+const LASM_POSTGRES_PERSIST_BATCH_MAX_MIN: usize = 1;
+const LASM_POSTGRES_PERSIST_BATCH_MAX_MAX: usize = 4096;
 
 static LASM_POSTGRES_PERSIST_WORKERS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_POSTGRES_PERSIST_BATCH_MAX_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE: OnceLock<Sender<LasmPostgresPersistTask>> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL: AtomicUsize = AtomicUsize::new(0);
@@ -68,12 +73,36 @@ fn resolve_lasm_postgres_persist_queue_capacity() -> usize {
     })
 }
 
+#[inline(always)]
+fn resolve_lasm_postgres_persist_batch_max() -> usize {
+    *LASM_POSTGRES_PERSIST_BATCH_MAX_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_BATCH_MAX_ENV) else {
+            return LASM_POSTGRES_PERSIST_BATCH_MAX_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_POSTGRES_PERSIST_BATCH_MAX_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_POSTGRES_PERSIST_BATCH_MAX_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_POSTGRES_PERSIST_BATCH_MAX_MIN,
+            LASM_POSTGRES_PERSIST_BATCH_MAX_MAX,
+        )
+    })
+}
+
 pub(crate) fn lasm_postgres_persist_workers_configured() -> usize {
     resolve_lasm_postgres_persist_workers()
 }
 
 pub(crate) fn lasm_postgres_persist_queue_capacity_configured() -> usize {
     resolve_lasm_postgres_persist_queue_capacity()
+}
+
+pub(crate) fn lasm_postgres_persist_batch_max_configured() -> usize {
+    resolve_lasm_postgres_persist_batch_max()
 }
 
 pub(crate) fn lasm_postgres_persist_workers_available() -> bool {
@@ -194,6 +223,7 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
     LASM_POSTGRES_PERSIST_QUEUE.get_or_init(|| {
         let worker_target = resolve_lasm_postgres_persist_workers();
         let queue_capacity = resolve_lasm_postgres_persist_queue_capacity();
+        let batch_max = resolve_lasm_postgres_persist_batch_max();
         let (sender, receiver) = bounded::<LasmPostgresPersistTask>(queue_capacity.max(1));
         let mut started_workers = 0usize;
         for worker_index in 0..worker_target.max(1) {
@@ -202,9 +232,9 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
                 .name(format!("sec4-lasm-postgres-persist-{worker_index}"))
                 .spawn(move || {
                     while let Ok(task) = worker_receiver.recv() {
-                        let mut batch = Vec::with_capacity(256);
+                        let mut batch = Vec::with_capacity(batch_max);
                         batch.push(task);
-                        for _ in 1..256 {
+                        for _ in 1..batch_max {
                             match worker_receiver.try_recv() {
                                 Ok(next) => batch.push(next),
                                 Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => {
