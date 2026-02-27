@@ -300,6 +300,18 @@ enum Commands {
         #[arg(long, value_enum)]
         db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
         #[arg(long)]
+        db_postgres_statement_cache_max: Option<u64>,
+        #[arg(long)]
+        db_postgres_placeholder_cache_max: Option<u64>,
+        #[arg(long)]
+        db_postgres_statement_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_lock_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_connect_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_retryable_conflict_retry_max: Option<u64>,
+        #[arg(long)]
         db_postgres_shared_client_max_idle_per_key: Option<u64>,
         #[arg(long)]
         db_postgres_shared_client_max_total_idle: Option<u64>,
@@ -779,6 +791,12 @@ fn main() {
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_postgres_tls_mode,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
+            db_postgres_connect_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
@@ -805,6 +823,12 @@ fn main() {
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_postgres_tls_mode,
+            db_postgres_statement_cache_max,
+            db_postgres_placeholder_cache_max,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
+            db_postgres_connect_timeout_ms,
+            db_postgres_retryable_conflict_retry_max,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
@@ -890,6 +914,12 @@ fn cmd_lasm_smoke(
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
+    db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_retryable_conflict_retry_max: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
@@ -1009,8 +1039,67 @@ fn cmd_lasm_smoke(
         eprintln!("lasm-smoke failed: --db-postgres-persist-batch-max must be >= 1");
         return Err(2);
     }
+    if db_postgres_statement_cache_max == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-statement-cache-max must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_placeholder_cache_max == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-placeholder-cache-max must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_statement_timeout_ms == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-statement-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_lock_timeout_ms == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-lock-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_connect_timeout_ms == Some(0) {
+        eprintln!("lasm-smoke failed: --db-postgres-connect-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    let explicit_db_postgres_statement_cache_max = match db_postgres_statement_cache_max {
+        Some(value) => {
+            match usize::try_from(value) {
+                Ok(parsed) => Some(parsed),
+                Err(_) => {
+                    eprintln!("lasm-smoke failed: --db-postgres-statement-cache-max exceeds platform limits");
+                    return Err(2);
+                }
+            }
+        }
+        None => None,
+    };
+    let explicit_db_postgres_placeholder_cache_max = match db_postgres_placeholder_cache_max {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-postgres-placeholder-cache-max exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
+    let explicit_db_postgres_retryable_conflict_retry_max =
+        match db_postgres_retryable_conflict_retry_max {
+            Some(value) => match usize::try_from(value) {
+                Ok(parsed) => Some(parsed),
+                Err(_) => {
+                    eprintln!("lasm-smoke failed: --db-postgres-retryable-conflict-retry-max exceeds platform limits");
+                    return Err(2);
+                }
+            },
+            None => None,
+        };
     let postgres_runtime_overrides = explicit_db_postgres_dsn.is_some()
         || db_postgres_tls_mode.is_some()
+        || db_postgres_statement_cache_max.is_some()
+        || db_postgres_placeholder_cache_max.is_some()
+        || db_postgres_statement_timeout_ms.is_some()
+        || db_postgres_lock_timeout_ms.is_some()
+        || db_postgres_connect_timeout_ms.is_some()
+        || db_postgres_retryable_conflict_retry_max.is_some()
         || db_postgres_shared_client_max_idle_per_key.is_some()
         || db_postgres_shared_client_max_total_idle.is_some()
         || db_postgres_persist_workers.is_some()
@@ -1229,19 +1318,19 @@ fn cmd_lasm_smoke(
         effective_db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
         explicit_db_postgres_dsn.as_deref(),
         db_postgres_tls_mode.map(run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode),
+        db_postgres_statement_timeout_ms,
+        db_postgres_lock_timeout_ms,
+        db_postgres_connect_timeout_ms,
+        None,
+        explicit_db_postgres_retryable_conflict_retry_max,
         None,
         None,
         None,
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        explicit_db_postgres_statement_cache_max,
+        explicit_db_postgres_placeholder_cache_max,
     ) {
         Ok(state) => state,
         Err(message) => {
