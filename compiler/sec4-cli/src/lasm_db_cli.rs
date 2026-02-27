@@ -109,6 +109,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
@@ -185,6 +187,17 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
             "--db-postgres-connect-timeout-ms is only supported with --backend lasm".to_string(),
         );
     }
+    if backend != RunBackend::Lasm && db_postgres_persist_workers.is_some() {
+        return Err(
+            "--db-postgres-persist-workers is only supported with --backend lasm".to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_persist_queue_capacity.is_some() {
+        return Err(
+            "--db-postgres-persist-queue-capacity is only supported with --backend lasm"
+                .to_string(),
+        );
+    }
     if backend != RunBackend::Lasm && db_postgres_persist_batch_max.is_some() {
         return Err(
             "--db-postgres-persist-batch-max is only supported with --backend lasm".to_string(),
@@ -258,6 +271,12 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if db_postgres_connect_timeout_ms == Some(0) {
         return Err("--db-postgres-connect-timeout-ms must be >= 1".to_string());
     }
+    if db_postgres_persist_workers == Some(0) {
+        return Err("--db-postgres-persist-workers must be >= 1".to_string());
+    }
+    if db_postgres_persist_queue_capacity == Some(0) {
+        return Err("--db-postgres-persist-queue-capacity must be >= 1".to_string());
+    }
     if db_postgres_persist_batch_max == Some(0) {
         return Err("--db-postgres-persist-batch-max must be >= 1".to_string());
     }
@@ -303,6 +322,18 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     {
         return Err("--db-postgres-persist-batch-max exceeds platform limits".to_string());
     }
+    if db_postgres_persist_workers
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err("--db-postgres-persist-workers exceeds platform limits".to_string());
+    }
+    if db_postgres_persist_queue_capacity
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err("--db-postgres-persist-queue-capacity exceeds platform limits".to_string());
+    }
 
     let explicit_db_sqlite_journal_mode = if let Some(mode) = db_sqlite_journal_mode {
         let trimmed = mode.trim();
@@ -345,6 +376,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         || db_postgres_statement_timeout_ms.is_some()
         || db_postgres_lock_timeout_ms.is_some()
         || db_postgres_connect_timeout_ms.is_some()
+        || db_postgres_persist_workers.is_some()
+        || db_postgres_persist_queue_capacity.is_some()
         || db_postgres_persist_batch_max.is_some()
         || db_postgres_persist_queue_full_mode.is_some()
         || db_postgres_retryable_conflict_retry_max.is_some();

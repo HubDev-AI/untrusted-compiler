@@ -192,6 +192,10 @@ enum Commands {
         #[arg(long)]
         db_postgres_connect_timeout_ms: Option<u64>,
         #[arg(long)]
+        db_postgres_persist_workers: Option<u64>,
+        #[arg(long)]
+        db_postgres_persist_queue_capacity: Option<u64>,
+        #[arg(long)]
         db_postgres_persist_batch_max: Option<u64>,
         #[arg(long, value_enum)]
         db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
@@ -640,6 +644,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
             db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
@@ -697,6 +703,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
             db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
@@ -7308,6 +7316,8 @@ fn cmd_run(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
@@ -7469,6 +7479,8 @@ fn cmd_run(
         db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
+        db_postgres_persist_workers,
+        db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
         db_postgres_persist_queue_full_mode,
         db_sqlite_busy_timeout_ms,
@@ -7675,6 +7687,8 @@ fn cmd_run(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
             db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
@@ -8044,6 +8058,8 @@ struct LasmClusterConfig {
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
@@ -8374,6 +8390,8 @@ fn cmd_run_lasm_backend(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
@@ -8663,6 +8681,18 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    if let Some(value) = db_postgres_persist_workers {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_WORKERS",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_queue_capacity {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_CAPACITY",
+            value.to_string(),
+        );
+    }
     if let Some(value) = db_postgres_persist_batch_max {
         std::env::set_var(
             "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
@@ -8757,6 +8787,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
             db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
@@ -8821,6 +8853,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_workers,
+            db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
             db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
