@@ -189,6 +189,16 @@ Required characteristics:
         - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_repeats.sh`
         - `benchmark-suite/scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh`
       - added to benchmark smoke workflow and `make -C benchmark-suite test-scripts` run list.
+   - local Postgres infra wrappers added for workbench full-suite lanes:
+      - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local.sh`
+      - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_repeats.sh`
+      - wrappers auto-wire `--lasm-db-adapter postgres` and temp DSN file resolution from `infra/local-postgres`,
+      - make targets:
+        - `make -C benchmark-suite workbench-full-bench-local[-dry]`
+        - `make -C benchmark-suite workbench-full-bench-local-repeats[-dry]`
+      - benchmark-smoke CI now runs:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh`
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.

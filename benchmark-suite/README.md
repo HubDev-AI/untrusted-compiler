@@ -175,7 +175,23 @@ Measure end-to-end service behavior across identical implementations:
      - `results/workbench-full-benchmark-repeats.md`
      - run-scoped artifacts under:
        - `results/summaries/workbench-full-benchmark-runs/`
-27. Stop DB:
+27. Run workbench full suite with repo-local Postgres infra orchestration:
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-full-bench-local-dry`
+   - full run:
+     - `make -C benchmark-suite workbench-full-bench-local`
+   - optional:
+     - keep infra running after suite: `BENCH_LOCAL_POSTGRES_KEEP_UP=true`
+     - recreate local postgres data before suite: `BENCH_LOCAL_POSTGRES_RESET=true`
+28. Run repeated workbench full suite with repo-local Postgres infra orchestration:
+   - dry-run plan:
+     - `make -C benchmark-suite workbench-full-bench-local-repeats-dry WORKBENCH_REPEAT_RUNS=3`
+   - full run:
+     - `make -C benchmark-suite workbench-full-bench-local-repeats WORKBENCH_REPEAT_RUNS=3`
+   - outputs are the same as non-local repeated wrapper:
+     - `results/summaries/workbench-full-benchmark-repeats.json`
+     - `results/summaries/workbench-full-benchmark-runs/`
+29. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -234,6 +250,8 @@ Measure end-to-end service behavior across identical implementations:
   - `results/summaries/workbench-full-benchmark-repeats.json`
   - `results/summaries/workbench-full-benchmark-runs/`
   - includes aggregate `compareStats` and `stepStats` across runs.
+- `run_workbench_full_benchmark_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the workbench full-suite runner and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
+- `run_workbench_full_benchmark_suite_local_repeats.sh` orchestrates repo-local Postgres infra around repeated workbench full-suite runs and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
 - `render_workbench_full_benchmark_suite_repeats_summary.sh` converts repeated-run summary JSON to markdown:
   - `results/workbench-full-benchmark-repeats.md`
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:

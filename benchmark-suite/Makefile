@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry workbench-smoke workbench-bench workbench-bench-dry workbench-step-bench workbench-step-bench-dry workbench-full-bench workbench-full-bench-dry workbench-full-bench-repeats workbench-full-bench-repeats-dry workbench-full-bench-repeats-report bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry workbench-smoke workbench-bench workbench-bench-dry workbench-step-bench workbench-step-bench-dry workbench-full-bench workbench-full-bench-dry workbench-full-bench-repeats workbench-full-bench-repeats-dry workbench-full-bench-repeats-report workbench-full-bench-local workbench-full-bench-local-dry workbench-full-bench-local-repeats workbench-full-bench-local-repeats-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -116,6 +116,10 @@ help:
 	@echo "    - default repeat count: WORKBENCH_REPEAT_RUNS=$(WORKBENCH_REPEAT_RUNS)"
 	@echo "  workbench-full-bench-repeats-dry Print repeated full-suite command plan"
 	@echo "  workbench-full-bench-repeats-report Render markdown summary from repeated full-suite run-manifest JSON"
+	@echo "  workbench-full-bench-local Run workbench full suite with repo local postgres infra orchestration"
+	@echo "  workbench-full-bench-local-dry Print local-infra workbench full-suite command plan without docker start/stop"
+	@echo "  workbench-full-bench-local-repeats Run repeated workbench full suite with repo local postgres infra orchestration"
+	@echo "  workbench-full-bench-local-repeats-dry Print local-infra repeated workbench full-suite command plan without docker start/stop"
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
@@ -219,6 +223,18 @@ workbench-full-bench-repeats-dry:
 
 workbench-full-bench-repeats-report:
 	scripts/render_workbench_full_benchmark_suite_repeats_summary.sh "$(WORKBENCH_FULL_REPEATS_SUMMARY)" "$(WORKBENCH_FULL_REPEATS_REPORT)"
+
+workbench-full-bench-local:
+	scripts/run_workbench_full_benchmark_suite_local.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+
+workbench-full-bench-local-dry:
+	scripts/run_workbench_full_benchmark_suite_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+
+workbench-full-bench-local-repeats:
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+
+workbench-full-bench-local-repeats-dry:
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --dry-run --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 bench-ping:
 	scripts/run_profile.sh $(IMPL) ping $(BASE_URL)
@@ -472,6 +488,8 @@ test-scripts:
 	scripts/test_run_full_benchmark_suite.sh
 	scripts/test_run_workbench_full_benchmark_suite.sh
 	scripts/test_run_workbench_full_benchmark_suite_repeats.sh
+	scripts/test_run_workbench_full_benchmark_suite_local.sh
+	scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh
 	scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh
 	scripts/test_run_alpha_postgres_comparison_suite.sh
 	scripts/test_run_alpha_postgres_comparison_suite_local.sh

@@ -113,6 +113,15 @@ require_target_contains_token "workbench-full-bench-repeats-dry" "--dry-run"
 require_target_contains_token "workbench-full-bench-repeats-report" "render_workbench_full_benchmark_suite_repeats_summary.sh"
 require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_SUMMARY)"'
 require_target_contains_token "workbench-full-bench-repeats-report" '"$(WORKBENCH_FULL_REPEATS_REPORT)"'
+require_target_contains_token "workbench-full-bench-local" "run_workbench_full_benchmark_suite_local.sh"
+require_target_contains_token "workbench-full-bench-local" '$(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG)'
+require_target_contains_token "workbench-full-bench-local" '$(BENCH_LOCAL_POSTGRES_RESET_FLAG)'
+require_target_contains_token "workbench-full-bench-local-dry" "run_workbench_full_benchmark_suite_local.sh"
+require_target_contains_token "workbench-full-bench-local-dry" "--dry-run"
+require_target_contains_token "workbench-full-bench-local-repeats" "run_workbench_full_benchmark_suite_local_repeats.sh"
+require_target_contains_token "workbench-full-bench-local-repeats" '--runs "$(WORKBENCH_REPEAT_RUNS)"'
+require_target_contains_token "workbench-full-bench-local-repeats-dry" "run_workbench_full_benchmark_suite_local_repeats.sh"
+require_target_contains_token "workbench-full-bench-local-repeats-dry" "--dry-run"
 require_target_contains_token "lasm-cluster-capacity-probe" '--profile "$(LASM_CAPACITY_PROFILE)"'
 require_target_contains_token "lasm-cluster-capacity-probe" '$(SATURATION_WARMUP_PATH_FLAG)'
 require_target_contains_token "lasm-cluster-saturation-boost-matrix" '--profile "$(LASM_CAPACITY_PROFILE)"'
