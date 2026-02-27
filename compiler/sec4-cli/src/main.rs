@@ -46,6 +46,7 @@ mod lasm_db_records_response;
 mod lasm_db_runtime_common;
 mod lasm_db_runtime_dispatch;
 mod lasm_db_runtime_postgres;
+mod lasm_db_runtime_postgres_persist;
 mod lasm_db_runtime_records_log;
 mod lasm_db_runtime_sqlite;
 mod lasm_dynamic_state;
@@ -8954,7 +8955,9 @@ fn cmd_run_lasm_backend(
                         dynamic_state_for_worker.as_ref(),
                         db_records_adapter_for_worker,
                     ) {
-                        eprintln!("warning: LASM backend worker failed: {message}");
+                        if !is_lasm_expected_disconnect_error(message.as_str()) {
+                            eprintln!("warning: LASM backend worker failed: {message}");
+                        }
                     }
                 }
             }));
@@ -9005,7 +9008,9 @@ fn cmd_run_lasm_backend(
                 dynamic_state.as_ref(),
                 db_records_adapter,
             ) {
-                eprintln!("warning: LASM backend worker failed: {message}");
+                if !is_lasm_expected_disconnect_error(message.as_str()) {
+                    eprintln!("warning: LASM backend worker failed: {message}");
+                }
             };
             break;
         }
@@ -9530,6 +9535,14 @@ fn process_lasm_connection_with_runtime(
         }
         responses_written = responses_written.saturating_add(1);
     }
+}
+
+fn is_lasm_expected_disconnect_error(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("broken pipe")
+        || normalized.contains("connection reset by peer")
+        || normalized.contains("not connected")
+        || normalized.contains("connection aborted")
 }
 
 fn resolve_lasm_max_in_flight(
@@ -12298,9 +12311,6 @@ fn write_lasm_http_response(
             .write_all(&response.body)
             .map_err(|err| format!("could not write response body: {err}"))?;
     }
-    stream
-        .flush()
-        .map_err(|err| format!("could not flush response stream: {err}"))?;
     Ok(())
 }
 

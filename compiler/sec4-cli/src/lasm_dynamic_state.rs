@@ -57,6 +57,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
     pub(crate) db_records_postgres_statement_cache_order: VecDeque<String>,
     pub(crate) db_postgres_placeholder_max_cache: HashMap<String, usize>,
+    #[allow(dead_code)]
     pub(crate) db_postgres_placeholder_max_cache_order: VecDeque<String>,
     pub(crate) db_postgres_statement_cache_max: usize,
     pub(crate) db_postgres_placeholder_cache_max: usize,

@@ -5,6 +5,15 @@ use crate::lasm_db_runtime_dispatch::{
     lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
     lasm_db_sql_template_max_bytes_limit,
 };
+use crate::lasm_db_runtime_postgres::{
+    lasm_postgres_shared_client_max_idle_per_key, lasm_postgres_shared_client_pool_idle_total,
+    lasm_postgres_shared_client_pool_key_count,
+};
+use crate::lasm_db_runtime_postgres_persist::{
+    lasm_postgres_persist_queue_backpressure_total,
+    lasm_postgres_persist_queue_capacity_configured, lasm_postgres_persist_workers_available,
+    lasm_postgres_persist_workers_configured,
+};
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
     LasmRunRequest,
@@ -716,6 +725,14 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let sql_template_max_bytes = lasm_db_sql_template_max_bytes_limit();
     let params_max_bytes = lasm_db_params_max_bytes_limit();
     let params_max_entries = lasm_db_params_max_entries_limit();
+    let postgres_persist_workers = lasm_postgres_persist_workers_configured();
+    let postgres_persist_queue_capacity = lasm_postgres_persist_queue_capacity_configured();
+    let postgres_persist_workers_ready = lasm_postgres_persist_workers_available();
+    let postgres_persist_queue_backpressure_total =
+        lasm_postgres_persist_queue_backpressure_total();
+    let postgres_shared_client_pool_key_count = lasm_postgres_shared_client_pool_key_count();
+    let postgres_shared_client_pool_idle_total = lasm_postgres_shared_client_pool_idle_total();
+    let postgres_shared_client_max_idle_per_key = lasm_postgres_shared_client_max_idle_per_key();
     set_lasm_json_response(
         response,
         200,
@@ -770,6 +787,9 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresPlaceholderCount": postgres_placeholder_cache_count,
                 "postgresPlaceholderCapacity": postgres_placeholder_cache_capacity,
                 "postgresPlaceholderEvictedTotal": postgres_placeholder_cache_evictions_total,
+                "postgresSharedClientPoolKeys": postgres_shared_client_pool_key_count,
+                "postgresSharedClientPoolIdleTotal": postgres_shared_client_pool_idle_total,
+                "postgresSharedClientMaxIdlePerKey": postgres_shared_client_max_idle_per_key,
             },
             "dbTimeoutsMs": {
                 "postgresStatement": postgres_statement_timeout_ms,
@@ -796,6 +816,10 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "paramsMaxEntries": params_max_entries,
                 "queryOneRowMaxBytes": query_one_row_max_bytes,
                 "queryOneRowMaxColumns": query_one_row_max_columns,
+                "postgresPersistWorkers": postgres_persist_workers,
+                "postgresPersistQueueCapacity": postgres_persist_queue_capacity,
+                "postgresPersistWorkersAvailable": postgres_persist_workers_ready,
+                "postgresPersistQueueBackpressureTotal": postgres_persist_queue_backpressure_total,
             },
             "records": if include_records {
                 records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>()
