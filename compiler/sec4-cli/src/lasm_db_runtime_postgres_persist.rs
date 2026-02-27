@@ -336,12 +336,18 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
         Err(TrySendError::Full(full_task)) => {
             let backpressure_total =
                 LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL.fetch_add(1, Ordering::Relaxed) + 1;
+            let full_mode = resolve_lasm_postgres_persist_queue_full_mode();
             if backpressure_total == 1 || backpressure_total.is_multiple_of(65_536) {
-                eprintln!(
-                    "warning: LASM dynamic postgres persist queue saturated; applying backpressure (total events={backpressure_total})"
-                );
+                match full_mode {
+                    LasmPostgresPersistQueueFullMode::Block => eprintln!(
+                        "warning: LASM dynamic postgres persist queue saturated; applying backpressure (total events={backpressure_total})"
+                    ),
+                    LasmPostgresPersistQueueFullMode::SyncFallback => eprintln!(
+                        "warning: LASM dynamic postgres persist queue saturated; using synchronous fallback (total events={backpressure_total})"
+                    ),
+                }
             }
-            match resolve_lasm_postgres_persist_queue_full_mode() {
+            match full_mode {
                 LasmPostgresPersistQueueFullMode::Block => match sender.send(full_task) {
                     Ok(()) => {}
                     Err(SendError(disconnected_task)) => {
