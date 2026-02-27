@@ -27,6 +27,7 @@ infra_scripts_dir="$infra_root/scripts"
 infra_up="$infra_scripts_dir/up.sh"
 infra_down="$infra_scripts_dir/down.sh"
 infra_reset="$infra_scripts_dir/reset.sh"
+infra_runtime_env="$infra_root/.runtime.env"
 base_suite_script="$script_dir/run_workbench_step_matrix.sh"
 
 if [ ! -x "$base_suite_script" ]; then
@@ -137,6 +138,14 @@ load_dsn_from_env_file() {
   printf '%s\n' "$dsn"
 }
 
+resolve_effective_dsn_env_file() {
+  if [ "$dry_run" != "true" ] && [ -f "$infra_runtime_env" ]; then
+    printf '%s\n' "$infra_runtime_env"
+    return
+  fi
+  printf '%s\n' "$infra_env_file"
+}
+
 started_infra="false"
 needs_cleanup="false"
 temp_dsn_file=""
@@ -170,7 +179,8 @@ else
   needs_cleanup="true"
 fi
 
-resolved_dsn="$(load_dsn_from_env_file "$infra_env_file")"
+dsn_env_file="$(resolve_effective_dsn_env_file)"
+resolved_dsn="$(load_dsn_from_env_file "$dsn_env_file")"
 
 temp_dsn_file="$(mktemp)"
 printf '%s\n' "$resolved_dsn" >"$temp_dsn_file"
