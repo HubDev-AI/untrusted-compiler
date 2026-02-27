@@ -138,6 +138,16 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_u64_run_arg(
         &mut cmd,
+        "--db-postgres-persist-workers",
+        config.db_postgres_persist_workers,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-persist-queue-capacity",
+        config.db_postgres_persist_queue_capacity,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
         "--db-postgres-persist-batch-max",
         config.db_postgres_persist_batch_max,
     );
