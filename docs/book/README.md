@@ -1511,5 +1511,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1539-m39-workbench-full-suite-repeats-stats-and-report-renderer.md`
 - `1540-m39-workbench-full-suite-ci-smoke-gates.md`
 - `1541-m39-workbench-full-suite-local-postgres-infra-wrappers.md`
+- `1542-m39-workbench-full-suite-local-bundle-wrapper.md`
 
 As milestones progress, chapters will be added and linked from this index.

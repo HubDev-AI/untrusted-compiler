@@ -188,8 +188,12 @@ Measure end-to-end service behavior across identical implementations:
      - `make -C benchmark-suite workbench-full-bench-local-repeats-dry WORKBENCH_REPEAT_RUNS=3`
    - full run:
      - `make -C benchmark-suite workbench-full-bench-local-repeats WORKBENCH_REPEAT_RUNS=3`
+   - one-command repeated-run + markdown render bundle:
+     - `make -C benchmark-suite workbench-full-bench-local-bundle-dry WORKBENCH_REPEAT_RUNS=3`
+     - `make -C benchmark-suite workbench-full-bench-local-bundle WORKBENCH_REPEAT_RUNS=3`
    - outputs are the same as non-local repeated wrapper:
      - `results/summaries/workbench-full-benchmark-repeats.json`
+     - `results/workbench-full-benchmark-repeats.md`
      - `results/summaries/workbench-full-benchmark-runs/`
 29. Stop DB:
    - `make -C benchmark-suite db-down`
@@ -252,6 +256,7 @@ Measure end-to-end service behavior across identical implementations:
   - includes aggregate `compareStats` and `stepStats` across runs.
 - `run_workbench_full_benchmark_suite_local.sh` orchestrates repo-local Postgres infra (`infra/local-postgres`) around the workbench full-suite runner and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
 - `run_workbench_full_benchmark_suite_local_repeats.sh` orchestrates repo-local Postgres infra around repeated workbench full-suite runs and auto-injects `--lasm-db-adapter postgres` + temporary DSN file.
+- `run_workbench_full_benchmark_suite_local_bundle.sh` runs local repeated-suite wrapper and renders markdown summary in one command (`workbench-full-benchmark-repeats.json` + `workbench-full-benchmark-repeats.md`).
 - `render_workbench_full_benchmark_suite_repeats_summary.sh` converts repeated-run summary JSON to markdown:
   - `results/workbench-full-benchmark-repeats.md`
 - `run_workbench_profile.sh` runs one workbench endpoint load profile and supports endpoint-specific targets:
