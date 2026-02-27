@@ -312,6 +312,16 @@ enum Commands {
         #[arg(long)]
         db_postgres_retryable_conflict_retry_max: Option<u64>,
         #[arg(long)]
+        db_sqlite_busy_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_sqlite_journal_mode: Option<String>,
+        #[arg(long)]
+        db_sqlite_synchronous: Option<String>,
+        #[arg(long)]
+        db_sqlite_lock_retry_max: Option<u64>,
+        #[arg(long)]
+        db_sqlite_lock_retry_delay_ms: Option<u64>,
+        #[arg(long)]
         db_postgres_shared_client_max_idle_per_key: Option<u64>,
         #[arg(long)]
         db_postgres_shared_client_max_total_idle: Option<u64>,
@@ -797,6 +807,11 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_postgres_retryable_conflict_retry_max,
+            db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode,
+            db_sqlite_synchronous,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
@@ -829,6 +844,11 @@ fn main() {
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_postgres_retryable_conflict_retry_max,
+            db_sqlite_busy_timeout_ms,
+            db_sqlite_journal_mode,
+            db_sqlite_synchronous,
+            db_sqlite_lock_retry_max,
+            db_sqlite_lock_retry_delay_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
             db_postgres_persist_workers,
@@ -920,6 +940,11 @@ fn cmd_lasm_smoke(
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_retryable_conflict_retry_max: Option<u64>,
+    db_sqlite_busy_timeout_ms: Option<u64>,
+    db_sqlite_journal_mode: Option<String>,
+    db_sqlite_synchronous: Option<String>,
+    db_sqlite_lock_retry_max: Option<u64>,
+    db_sqlite_lock_retry_delay_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
@@ -1059,6 +1084,10 @@ fn cmd_lasm_smoke(
         eprintln!("lasm-smoke failed: --db-postgres-connect-timeout-ms must be >= 1");
         return Err(2);
     }
+    if db_sqlite_busy_timeout_ms == Some(0) {
+        eprintln!("lasm-smoke failed: --db-sqlite-busy-timeout-ms must be >= 1");
+        return Err(2);
+    }
     let explicit_db_postgres_statement_cache_max = match db_postgres_statement_cache_max {
         Some(value) => {
             match usize::try_from(value) {
@@ -1092,6 +1121,16 @@ fn cmd_lasm_smoke(
             },
             None => None,
         };
+    let explicit_db_sqlite_lock_retry_max = match db_sqlite_lock_retry_max {
+        Some(value) => match usize::try_from(value) {
+            Ok(parsed) => Some(parsed),
+            Err(_) => {
+                eprintln!("lasm-smoke failed: --db-sqlite-lock-retry-max exceeds platform limits");
+                return Err(2);
+            }
+        },
+        None => None,
+    };
     let postgres_runtime_overrides = explicit_db_postgres_dsn.is_some()
         || db_postgres_tls_mode.is_some()
         || db_postgres_statement_cache_max.is_some()
@@ -1106,6 +1145,17 @@ fn cmd_lasm_smoke(
         || db_postgres_persist_queue_capacity.is_some()
         || db_postgres_persist_batch_max.is_some()
         || db_postgres_persist_queue_full_mode.is_some();
+    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
+        || db_sqlite_journal_mode.is_some()
+        || db_sqlite_synchronous.is_some()
+        || db_sqlite_lock_retry_max.is_some()
+        || db_sqlite_lock_retry_delay_ms.is_some();
+    if postgres_runtime_overrides && sqlite_runtime_overrides {
+        eprintln!(
+            "lasm-smoke failed: postgres and sqlite runtime overrides cannot be combined in the same run"
+        );
+        return Err(2);
+    }
     let effective_db_adapter = if postgres_runtime_overrides {
         match db_adapter {
             Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
@@ -1116,6 +1166,17 @@ fn cmd_lasm_smoke(
                 return Err(2);
             }
             None => Some(RunDbAdapter::Postgres),
+        }
+    } else if sqlite_runtime_overrides {
+        match db_adapter {
+            Some(RunDbAdapter::Sqlite) => Some(RunDbAdapter::Sqlite),
+            Some(_) => {
+                eprintln!(
+                    "lasm-smoke failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
+                );
+                return Err(2);
+            }
+            None => Some(RunDbAdapter::Sqlite),
         }
     } else {
         db_adapter
@@ -1321,12 +1382,12 @@ fn cmd_lasm_smoke(
         db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
-        None,
+        db_sqlite_busy_timeout_ms,
         explicit_db_postgres_retryable_conflict_retry_max,
-        None,
-        None,
-        None,
-        None,
+        explicit_db_sqlite_lock_retry_max,
+        db_sqlite_lock_retry_delay_ms,
+        db_sqlite_journal_mode.as_deref(),
+        db_sqlite_synchronous.as_deref(),
         None,
         None,
         explicit_db_postgres_statement_cache_max,
