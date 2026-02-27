@@ -79,8 +79,8 @@ use lasm_cluster_runtime_config::{
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{
-    push_optional_db_adapter_run_arg, push_optional_db_postgres_tls_mode_run_arg,
-    run_db_adapter_to_lasm_db_records_adapter,
+    push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
+    push_optional_db_postgres_tls_mode_run_arg, run_db_adapter_to_lasm_db_records_adapter,
     run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode, validate_and_resolve_run_db_cli_options,
 };
 pub(crate) use lasm_db_headers::{
@@ -191,6 +191,10 @@ enum Commands {
         db_postgres_lock_timeout_ms: Option<u64>,
         #[arg(long)]
         db_postgres_connect_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_persist_batch_max: Option<u64>,
+        #[arg(long, value_enum)]
+        db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
         #[arg(long)]
         db_sqlite_busy_timeout_ms: Option<u64>,
         #[arg(long)]
@@ -412,6 +416,21 @@ enum RunDbPostgresTlsMode {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum RunDbPostgresPersistQueueFullMode {
+    Block,
+    SyncFallback,
+}
+
+fn run_db_postgres_persist_queue_full_mode_to_env_value(
+    mode: RunDbPostgresPersistQueueFullMode,
+) -> &'static str {
+    match mode {
+        RunDbPostgresPersistQueueFullMode::Block => "block",
+        RunDbPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum EmitTarget {
     Ast,
     DiagnosticsJson,
@@ -621,6 +640,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
             db_sqlite_journal_mode,
             db_sqlite_synchronous,
@@ -676,6 +697,8 @@ fn main() {
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
             db_sqlite_journal_mode,
             db_sqlite_synchronous,
@@ -7285,6 +7308,8 @@ fn cmd_run(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<String>,
     db_sqlite_synchronous: Option<String>,
@@ -7444,6 +7469,8 @@ fn cmd_run(
         db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms,
+        db_postgres_persist_batch_max,
+        db_postgres_persist_queue_full_mode,
         db_sqlite_busy_timeout_ms,
         db_sqlite_journal_mode,
         db_sqlite_synchronous,
@@ -7648,6 +7675,8 @@ fn cmd_run(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
             explicit_db_sqlite_journal_mode,
             explicit_db_sqlite_synchronous,
@@ -8015,6 +8044,8 @@ struct LasmClusterConfig {
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<String>,
     db_sqlite_synchronous: Option<String>,
@@ -8343,6 +8374,8 @@ fn cmd_run_lasm_backend(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<String>,
     db_sqlite_synchronous: Option<String>,
@@ -8630,6 +8663,18 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    if let Some(value) = db_postgres_persist_batch_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(mode) = db_postgres_persist_queue_full_mode {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE",
+            run_db_postgres_persist_queue_full_mode_to_env_value(mode),
+        );
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -8712,6 +8757,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
             db_sqlite_journal_mode: db_sqlite_journal_mode.clone(),
             db_sqlite_synchronous: db_sqlite_synchronous.clone(),
@@ -8774,6 +8821,8 @@ fn cmd_run_lasm_backend(
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
+            db_postgres_persist_batch_max,
+            db_postgres_persist_queue_full_mode,
             db_sqlite_busy_timeout_ms,
             db_sqlite_journal_mode: db_sqlite_journal_mode.clone(),
             db_sqlite_synchronous: db_sqlite_synchronous.clone(),

@@ -18453,6 +18453,118 @@ fn run_command_rejects_zero_db_postgres_connect_timeout_override() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_persist_batch_max_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-persist-batch-max-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-persist-batch-max",
+        "128",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-persist-batch-max is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-persist-batch-max is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-persist-batch-max guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_persist_batch_max_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-persist-batch-max");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-persist-batch-max",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-persist-batch-max override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-persist-batch-max must be >= 1"),
+        "stderr should include deterministic db-postgres-persist-batch-max validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_persist_queue_full_mode_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-persist-queue-full-mode-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-persist-queue-full-mode",
+        "sync-fallback",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-persist-queue-full-mode is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-persist-queue-full-mode is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-persist-queue-full-mode guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_sqlite_busy_timeout_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-sqlite-busy-timeout-c-backend");
     let project_path = project_dir

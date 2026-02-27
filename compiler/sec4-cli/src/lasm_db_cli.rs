@@ -3,7 +3,10 @@ use crate::lasm_db_adapter_state::{
     normalize_lasm_db_sqlite_journal_mode, normalize_lasm_db_sqlite_synchronous,
 };
 use crate::lasm_db_config::load_lasm_db_postgres_dsn_from_file;
-use crate::{LasmDbRecordsAdapter, RunBackend, RunDbAdapter, RunDbPostgresTlsMode};
+use crate::{
+    LasmDbRecordsAdapter, RunBackend, RunDbAdapter, RunDbPostgresPersistQueueFullMode,
+    RunDbPostgresTlsMode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -59,6 +62,25 @@ pub(crate) fn push_optional_db_postgres_tls_mode_run_arg(
     }
 }
 
+fn run_db_postgres_persist_queue_full_mode_arg_value(
+    mode: RunDbPostgresPersistQueueFullMode,
+) -> &'static str {
+    match mode {
+        RunDbPostgresPersistQueueFullMode::Block => "block",
+        RunDbPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
+    }
+}
+
+pub(crate) fn push_optional_db_postgres_persist_queue_full_mode_run_arg(
+    cmd: &mut Command,
+    value: Option<RunDbPostgresPersistQueueFullMode>,
+) {
+    if let Some(value) = value {
+        cmd.arg("--db-postgres-persist-queue-full-mode")
+            .arg(run_db_postgres_persist_queue_full_mode_arg_value(value));
+    }
+}
+
 pub(crate) struct ResolvedRunDbCliOptions {
     pub(crate) effective_db_adapter: Option<RunDbAdapter>,
     pub(crate) explicit_db_postgres_dsn: Option<String>,
@@ -87,6 +109,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<String>,
     db_sqlite_synchronous: Option<String>,
@@ -161,6 +185,17 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
             "--db-postgres-connect-timeout-ms is only supported with --backend lasm".to_string(),
         );
     }
+    if backend != RunBackend::Lasm && db_postgres_persist_batch_max.is_some() {
+        return Err(
+            "--db-postgres-persist-batch-max is only supported with --backend lasm".to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_persist_queue_full_mode.is_some() {
+        return Err(
+            "--db-postgres-persist-queue-full-mode is only supported with --backend lasm"
+                .to_string(),
+        );
+    }
     if backend != RunBackend::Lasm && db_sqlite_busy_timeout_ms.is_some() {
         return Err(
             "--db-sqlite-busy-timeout-ms is only supported with --backend lasm".to_string(),
@@ -223,6 +258,9 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if db_postgres_connect_timeout_ms == Some(0) {
         return Err("--db-postgres-connect-timeout-ms must be >= 1".to_string());
     }
+    if db_postgres_persist_batch_max == Some(0) {
+        return Err("--db-postgres-persist-batch-max must be >= 1".to_string());
+    }
     if db_sqlite_busy_timeout_ms == Some(0) {
         return Err("--db-sqlite-busy-timeout-ms must be >= 1".to_string());
     }
@@ -258,6 +296,12 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         .unwrap_or(false)
     {
         return Err("--db-params-max-entries exceeds platform limits".to_string());
+    }
+    if db_postgres_persist_batch_max
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err("--db-postgres-persist-batch-max exceeds platform limits".to_string());
     }
 
     let explicit_db_sqlite_journal_mode = if let Some(mode) = db_sqlite_journal_mode {
@@ -301,6 +345,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         || db_postgres_statement_timeout_ms.is_some()
         || db_postgres_lock_timeout_ms.is_some()
         || db_postgres_connect_timeout_ms.is_some()
+        || db_postgres_persist_batch_max.is_some()
+        || db_postgres_persist_queue_full_mode.is_some()
         || db_postgres_retryable_conflict_retry_max.is_some();
     let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
         || explicit_db_sqlite_journal_mode.is_some()
