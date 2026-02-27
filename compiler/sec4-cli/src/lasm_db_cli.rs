@@ -109,6 +109,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -185,6 +187,18 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if backend != RunBackend::Lasm && db_postgres_connect_timeout_ms.is_some() {
         return Err(
             "--db-postgres-connect-timeout-ms is only supported with --backend lasm".to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_shared_client_max_idle_per_key.is_some() {
+        return Err(
+            "--db-postgres-shared-client-max-idle-per-key is only supported with --backend lasm"
+                .to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_shared_client_max_total_idle.is_some() {
+        return Err(
+            "--db-postgres-shared-client-max-total-idle is only supported with --backend lasm"
+                .to_string(),
         );
     }
     if backend != RunBackend::Lasm && db_postgres_persist_workers.is_some() {
@@ -271,6 +285,12 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if db_postgres_connect_timeout_ms == Some(0) {
         return Err("--db-postgres-connect-timeout-ms must be >= 1".to_string());
     }
+    if db_postgres_shared_client_max_idle_per_key == Some(0) {
+        return Err("--db-postgres-shared-client-max-idle-per-key must be >= 1".to_string());
+    }
+    if db_postgres_shared_client_max_total_idle == Some(0) {
+        return Err("--db-postgres-shared-client-max-total-idle must be >= 1".to_string());
+    }
     if db_postgres_persist_workers == Some(0) {
         return Err("--db-postgres-persist-workers must be >= 1".to_string());
     }
@@ -321,6 +341,22 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         .unwrap_or(false)
     {
         return Err("--db-postgres-persist-batch-max exceeds platform limits".to_string());
+    }
+    if db_postgres_shared_client_max_idle_per_key
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err(
+            "--db-postgres-shared-client-max-idle-per-key exceeds platform limits".to_string(),
+        );
+    }
+    if db_postgres_shared_client_max_total_idle
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err(
+            "--db-postgres-shared-client-max-total-idle exceeds platform limits".to_string(),
+        );
     }
     if db_postgres_persist_workers
         .map(|value| usize::try_from(value).is_err())
@@ -376,6 +412,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         || db_postgres_statement_timeout_ms.is_some()
         || db_postgres_lock_timeout_ms.is_some()
         || db_postgres_connect_timeout_ms.is_some()
+        || db_postgres_shared_client_max_idle_per_key.is_some()
+        || db_postgres_shared_client_max_total_idle.is_some()
         || db_postgres_persist_workers.is_some()
         || db_postgres_persist_queue_capacity.is_some()
         || db_postgres_persist_batch_max.is_some()
