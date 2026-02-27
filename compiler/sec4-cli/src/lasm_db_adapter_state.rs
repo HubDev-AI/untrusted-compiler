@@ -96,9 +96,7 @@ pub(crate) fn resolve_lasm_db_sqlite_journal_mode() -> &'static str {
     }
     eprintln!(
         "warning: invalid {} value `{}`; defaulting to {}",
-        LASM_DB_SQLITE_JOURNAL_MODE_ENV,
-        trimmed,
-        LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT
+        LASM_DB_SQLITE_JOURNAL_MODE_ENV, trimmed, LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT
     );
     LASM_DB_SQLITE_JOURNAL_MODE_DEFAULT
 }
@@ -116,9 +114,7 @@ pub(crate) fn resolve_lasm_db_sqlite_synchronous() -> &'static str {
     }
     eprintln!(
         "warning: invalid {} value `{}`; defaulting to {}",
-        LASM_DB_SQLITE_SYNCHRONOUS_ENV,
-        trimmed,
-        LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
+        LASM_DB_SQLITE_SYNCHRONOUS_ENV, trimmed, LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
     );
     LASM_DB_SQLITE_SYNCHRONOUS_DEFAULT
 }
@@ -535,8 +531,7 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
         .execute_batch(
             format!(
                 "PRAGMA foreign_keys = ON; PRAGMA journal_mode = {}; PRAGMA synchronous = {};",
-                sqlite_journal_mode,
-                sqlite_synchronous,
+                sqlite_journal_mode, sqlite_synchronous,
             )
             .as_str(),
         )
@@ -583,15 +578,14 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_lasm_postgres_connect_dsn, is_lasm_postgres_tls_required_error,
-        has_lasm_postgres_connect_timeout, is_lasm_postgres_url_dsn,
-        lasm_db_postgres_tls_mode_label,
-        lasm_postgres_connect_timeout_seconds_from_ms,
+        build_lasm_postgres_connect_dsn, has_lasm_postgres_connect_timeout,
+        is_lasm_postgres_tls_required_error, is_lasm_postgres_url_dsn,
+        lasm_db_postgres_tls_mode_label, lasm_postgres_connect_timeout_seconds_from_ms,
         normalize_lasm_db_record_loaded_params, parse_lasm_db_postgres_tls_mode,
         parse_lasm_db_sqlite_journal_mode, parse_lasm_db_sqlite_synchronous,
         redact_lasm_postgres_connect_error_message, redact_lasm_postgres_dsn_password,
-        redact_lasm_postgres_url_query_password,
-        split_lasm_postgres_dsn_fragment, LasmDbPostgresTlsMode,
+        redact_lasm_postgres_url_query_password, split_lasm_postgres_dsn_fragment,
+        LasmDbPostgresTlsMode,
     };
 
     #[test]
@@ -649,10 +643,8 @@ mod tests {
 
     #[test]
     fn postgres_connect_dsn_preserves_existing_connect_timeout_with_keyword_spacing() {
-        let rewritten = build_lasm_postgres_connect_dsn(
-            "host=localhost dbname=sec4 connect_timeout = 9",
-            2,
-        );
+        let rewritten =
+            build_lasm_postgres_connect_dsn("host=localhost dbname=sec4 connect_timeout = 9", 2);
         assert_eq!(rewritten, "host=localhost dbname=sec4 connect_timeout = 9");
     }
 
@@ -855,8 +847,14 @@ mod tests {
     fn parse_sqlite_journal_mode_supports_known_values() {
         assert_eq!(parse_lasm_db_sqlite_journal_mode("wal"), Some("WAL"));
         assert_eq!(parse_lasm_db_sqlite_journal_mode("delete"), Some("DELETE"));
-        assert_eq!(parse_lasm_db_sqlite_journal_mode("truncate"), Some("TRUNCATE"));
-        assert_eq!(parse_lasm_db_sqlite_journal_mode("persist"), Some("PERSIST"));
+        assert_eq!(
+            parse_lasm_db_sqlite_journal_mode("truncate"),
+            Some("TRUNCATE")
+        );
+        assert_eq!(
+            parse_lasm_db_sqlite_journal_mode("persist"),
+            Some("PERSIST")
+        );
         assert_eq!(parse_lasm_db_sqlite_journal_mode("memory"), Some("MEMORY"));
         assert_eq!(parse_lasm_db_sqlite_journal_mode("off"), Some("OFF"));
         assert_eq!(parse_lasm_db_sqlite_journal_mode("bogus"), None);

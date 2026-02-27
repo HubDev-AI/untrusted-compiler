@@ -151,7 +151,11 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
             )
         })?;
         let dsn = resolve_lasm_db_postgres_dsn_from_file_contents(
-            format!("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}`", file_path.display()).as_str(),
+            format!(
+                "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}`",
+                file_path.display()
+            )
+            .as_str(),
             dsn.as_str(),
         )?;
         return Ok(Some(dsn));

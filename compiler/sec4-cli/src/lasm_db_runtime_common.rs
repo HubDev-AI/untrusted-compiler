@@ -442,6 +442,7 @@ pub(crate) fn lasm_dynamic_postgres_client_mut(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn lasm_dynamic_postgres_prepared_statement(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -479,6 +480,7 @@ pub(crate) fn lasm_dynamic_postgres_prepared_statement(
     Ok(statement)
 }
 
+#[allow(dead_code)]
 pub(crate) fn insert_lasm_bounded_cache_entry<V>(
     cache: &mut HashMap<String, V>,
     order: &mut VecDeque<String>,
@@ -507,6 +509,7 @@ pub(crate) fn insert_lasm_bounded_cache_entry<V>(
     evicted
 }
 
+#[allow(dead_code)]
 pub(crate) fn touch_lasm_bounded_cache_entry(order: &mut VecDeque<String>, key: &str) {
     if order.back().map(|value| value.as_str()) == Some(key) {
         return;
