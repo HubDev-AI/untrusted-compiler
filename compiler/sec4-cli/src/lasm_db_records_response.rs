@@ -10,7 +10,7 @@ use crate::lasm_db_runtime_postgres::{
     lasm_postgres_shared_client_pool_idle_total, lasm_postgres_shared_client_pool_key_count,
 };
 use crate::lasm_db_runtime_postgres_persist::{
-    lasm_postgres_persist_queue_backpressure_total,
+    lasm_postgres_persist_batch_max_configured, lasm_postgres_persist_queue_backpressure_total,
     lasm_postgres_persist_queue_capacity_configured, lasm_postgres_persist_queue_depth,
     lasm_postgres_persist_sync_fallback_total, lasm_postgres_persist_workers_available,
     lasm_postgres_persist_workers_configured,
@@ -728,6 +728,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let params_max_entries = lasm_db_params_max_entries_limit();
     let postgres_persist_workers = lasm_postgres_persist_workers_configured();
     let postgres_persist_queue_capacity = lasm_postgres_persist_queue_capacity_configured();
+    let postgres_persist_batch_max = lasm_postgres_persist_batch_max_configured();
     let postgres_persist_workers_ready = lasm_postgres_persist_workers_available();
     let postgres_persist_queue_depth = lasm_postgres_persist_queue_depth();
     let postgres_persist_queue_backpressure_total =
@@ -823,6 +824,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "queryOneRowMaxColumns": query_one_row_max_columns,
                 "postgresPersistWorkers": postgres_persist_workers,
                 "postgresPersistQueueCapacity": postgres_persist_queue_capacity,
+                "postgresPersistBatchMax": postgres_persist_batch_max,
                 "postgresPersistWorkersAvailable": postgres_persist_workers_ready,
                 "postgresPersistQueueDepth": postgres_persist_queue_depth,
                 "postgresPersistQueueBackpressureTotal": postgres_persist_queue_backpressure_total,
