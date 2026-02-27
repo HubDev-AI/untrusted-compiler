@@ -5,8 +5,9 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::{
-    push_optional_db_adapter_run_arg, push_optional_db_postgres_tls_mode_run_arg,
-    LasmClusterConfig, LasmClusterState, LasmClusterWorker,
+    push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
+    push_optional_db_postgres_tls_mode_run_arg, LasmClusterConfig, LasmClusterState,
+    LasmClusterWorker,
 };
 
 pub(crate) fn compute_lasm_cluster_base_port(
@@ -134,6 +135,15 @@ fn spawn_lasm_cluster_worker(
         &mut cmd,
         "--db-postgres-connect-timeout-ms",
         config.db_postgres_connect_timeout_ms,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-persist-batch-max",
+        config.db_postgres_persist_batch_max,
+    );
+    push_optional_db_postgres_persist_queue_full_mode_run_arg(
+        &mut cmd,
+        config.db_postgres_persist_queue_full_mode,
     );
     push_optional_u64_run_arg(
         &mut cmd,
