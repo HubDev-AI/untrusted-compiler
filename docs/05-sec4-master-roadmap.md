@@ -2395,6 +2395,16 @@ Post-alpha track acceptance anchors:
       - added renderer script `benchmark-suite/scripts/render_workbench_full_benchmark_suite_repeats_summary.sh`,
       - added make target `workbench-full-bench-repeats-report` to emit `workbench-full-benchmark-repeats.md`.
       - documented in `docs/book/1539-m39-workbench-full-suite-repeats-stats-and-report-renderer.md`.
+   - [x] Added benchmark-smoke CI gate coverage for workbench full-suite runners:
+      - added script-level contract tests:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_repeats.sh`
+        - `benchmark-suite/scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - wired those tests into:
+        - `.github/workflows/benchmark-smoke.yml`
+        - `benchmark-suite/Makefile` (`test-scripts` target),
+      - extended makefile target contract coverage for workbench full-suite targets in `test_makefile_profile_targets.sh`.
+      - documented in `docs/book/1540-m39-workbench-full-suite-ci-smoke-gates.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

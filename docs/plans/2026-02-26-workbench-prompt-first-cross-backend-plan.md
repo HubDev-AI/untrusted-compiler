@@ -183,6 +183,12 @@ Required characteristics:
         - `make -C benchmark-suite workbench-full-bench-repeats-report`
       - markdown output:
         - `benchmark-suite/results/workbench-full-benchmark-repeats.md`
+   - benchmark-smoke CI guard coverage expanded for workbench full-suite lanes:
+      - added script tests:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_repeats.sh`
+        - `benchmark-suite/scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - added to benchmark smoke workflow and `make -C benchmark-suite test-scripts` run list.
 2. Current matrix state:
    - `sec4-lasm`: `implemented-alpha` and passing smoke.
    - `node`: `implemented-alpha` and passing smoke.
