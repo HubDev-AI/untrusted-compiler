@@ -11,13 +11,18 @@ use crate::lasm_cluster_runtime_config::{
     resolve_lasm_cluster_idle_spin_threshold,
 };
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
-use crate::lasm_db_config::resolve_lasm_dynamic_db_tx_max_handles;
+use crate::lasm_db_config::{
+    resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_tx_max_handles,
+};
 use crate::lasm_db_runtime_dispatch::{
     lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
     lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
     lasm_db_sql_template_max_bytes_limit,
 };
-use crate::{LasmClusterConfig, RunDbAdapter, RunDbPostgresTlsMode};
+use crate::{
+    LasmClusterConfig, LasmDbRecordsAdapter, RunDbAdapter, RunDbPostgresPersistQueueFullMode,
+    RunDbPostgresTlsMode,
+};
 
 pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) status_path: Option<PathBuf>,
@@ -68,6 +73,23 @@ fn lasm_cluster_status_db_postgres_tls_mode_label(
         RunDbPostgresTlsMode::Disable => "disable",
         RunDbPostgresTlsMode::Require => "require",
     })
+}
+
+fn lasm_cluster_status_db_postgres_persist_queue_full_mode_label(
+    mode: Option<RunDbPostgresPersistQueueFullMode>,
+) -> Option<&'static str> {
+    mode.map(|value| match value {
+        RunDbPostgresPersistQueueFullMode::Block => "block",
+        RunDbPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
+    })
+}
+
+fn lasm_cluster_status_db_records_adapter(adapter: Option<RunDbAdapter>) -> LasmDbRecordsAdapter {
+    match adapter {
+        Some(RunDbAdapter::RecordsLog) | None => LasmDbRecordsAdapter::RecordsLog,
+        Some(RunDbAdapter::Sqlite) => LasmDbRecordsAdapter::Sqlite,
+        Some(RunDbAdapter::Postgres) => LasmDbRecordsAdapter::Postgres,
+    }
 }
 
 fn lasm_cluster_status_effective_u64_limit(
@@ -172,6 +194,20 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
             shared_config.db_params_max_entries,
             lasm_db_params_max_entries_limit(),
         );
+        let db_records_adapter = lasm_cluster_status_db_records_adapter(shared_config.db_adapter);
+        let db_postgres_dsn_configured = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+            Some(
+                resolve_lasm_dynamic_db_postgres_dsn(
+                    db_records_adapter,
+                    shared_config.db_postgres_dsn.as_deref(),
+                    Some(shared_config.path.as_path()),
+                )
+                .map(|value| value.is_some())
+                .unwrap_or(false),
+            )
+        } else {
+            None
+        };
         loop {
             let sample_now = Instant::now();
             let saturation_total = relay_saturation_events_total.load(Ordering::Relaxed);
@@ -253,6 +289,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_fallback_connect_max_attempts,
                 db_adapter: lasm_cluster_status_db_adapter_label(shared_config.db_adapter)
                     .map(str::to_string),
+                db_postgres_dsn_configured,
                 db_postgres_tls_mode: lasm_cluster_status_db_postgres_tls_mode_label(
                     shared_config.db_postgres_tls_mode,
                 )
@@ -269,6 +306,19 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 db_postgres_statement_timeout_ms: shared_config.db_postgres_statement_timeout_ms,
                 db_postgres_lock_timeout_ms: shared_config.db_postgres_lock_timeout_ms,
                 db_postgres_connect_timeout_ms: shared_config.db_postgres_connect_timeout_ms,
+                db_postgres_shared_client_max_idle_per_key: shared_config
+                    .db_postgres_shared_client_max_idle_per_key,
+                db_postgres_shared_client_max_total_idle: shared_config
+                    .db_postgres_shared_client_max_total_idle,
+                db_postgres_persist_workers: shared_config.db_postgres_persist_workers,
+                db_postgres_persist_queue_capacity: shared_config
+                    .db_postgres_persist_queue_capacity,
+                db_postgres_persist_batch_max: shared_config.db_postgres_persist_batch_max,
+                db_postgres_persist_queue_full_mode:
+                    lasm_cluster_status_db_postgres_persist_queue_full_mode_label(
+                        shared_config.db_postgres_persist_queue_full_mode,
+                    )
+                    .map(str::to_string),
                 db_sqlite_busy_timeout_ms: shared_config.db_sqlite_busy_timeout_ms,
                 db_sqlite_journal_mode: shared_config.db_sqlite_journal_mode.clone(),
                 db_sqlite_synchronous: shared_config.db_sqlite_synchronous.clone(),

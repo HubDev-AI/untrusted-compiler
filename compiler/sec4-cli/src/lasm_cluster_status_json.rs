@@ -35,6 +35,7 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) relay_backend_connect_cooldown_ms: u64,
     pub(crate) relay_fallback_connect_max_attempts: usize,
     pub(crate) db_adapter: Option<String>,
+    pub(crate) db_postgres_dsn_configured: Option<bool>,
     pub(crate) db_postgres_tls_mode: Option<String>,
     pub(crate) db_max_tx_handles: Option<u64>,
     pub(crate) db_records_max: Option<u64>,
@@ -48,6 +49,12 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_postgres_statement_timeout_ms: Option<u64>,
     pub(crate) db_postgres_lock_timeout_ms: Option<u64>,
     pub(crate) db_postgres_connect_timeout_ms: Option<u64>,
+    pub(crate) db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    pub(crate) db_postgres_shared_client_max_total_idle: Option<u64>,
+    pub(crate) db_postgres_persist_workers: Option<u64>,
+    pub(crate) db_postgres_persist_queue_capacity: Option<u64>,
+    pub(crate) db_postgres_persist_batch_max: Option<u64>,
+    pub(crate) db_postgres_persist_queue_full_mode: Option<String>,
     pub(crate) db_sqlite_busy_timeout_ms: Option<u64>,
     pub(crate) db_sqlite_journal_mode: Option<String>,
     pub(crate) db_sqlite_synchronous: Option<String>,
@@ -104,6 +111,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
             && self.relay_fallback_connect_max_attempts == other.relay_fallback_connect_max_attempts
             && self.db_adapter == other.db_adapter
+            && self.db_postgres_dsn_configured == other.db_postgres_dsn_configured
             && self.db_postgres_tls_mode == other.db_postgres_tls_mode
             && self.db_max_tx_handles == other.db_max_tx_handles
             && self.db_records_max == other.db_records_max
@@ -117,6 +125,14 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_postgres_statement_timeout_ms == other.db_postgres_statement_timeout_ms
             && self.db_postgres_lock_timeout_ms == other.db_postgres_lock_timeout_ms
             && self.db_postgres_connect_timeout_ms == other.db_postgres_connect_timeout_ms
+            && self.db_postgres_shared_client_max_idle_per_key
+                == other.db_postgres_shared_client_max_idle_per_key
+            && self.db_postgres_shared_client_max_total_idle
+                == other.db_postgres_shared_client_max_total_idle
+            && self.db_postgres_persist_workers == other.db_postgres_persist_workers
+            && self.db_postgres_persist_queue_capacity == other.db_postgres_persist_queue_capacity
+            && self.db_postgres_persist_batch_max == other.db_postgres_persist_batch_max
+            && self.db_postgres_persist_queue_full_mode == other.db_postgres_persist_queue_full_mode
             && self.db_sqlite_busy_timeout_ms == other.db_sqlite_busy_timeout_ms
             && self.db_sqlite_journal_mode == other.db_sqlite_journal_mode
             && self.db_sqlite_synchronous == other.db_sqlite_synchronous
@@ -180,6 +196,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_backend_connect_cooldown_ms: u64,
     relay_fallback_connect_max_attempts: usize,
     db_adapter: Option<&'a str>,
+    db_postgres_dsn_configured: Option<bool>,
     db_postgres_tls_mode: Option<&'a str>,
     db_max_tx_handles: Option<u64>,
     db_records_max: Option<u64>,
@@ -193,6 +210,12 @@ struct LasmClusterStatusPayload<'a> {
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
     db_postgres_connect_timeout_ms: Option<u64>,
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<&'a str>,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<&'a str>,
     db_sqlite_synchronous: Option<&'a str>,
@@ -289,6 +312,7 @@ pub(crate) fn write_lasm_cluster_status_json(
         relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
         relay_fallback_connect_max_attempts: snapshot.relay_fallback_connect_max_attempts,
         db_adapter: snapshot.db_adapter.as_deref(),
+        db_postgres_dsn_configured: snapshot.db_postgres_dsn_configured,
         db_postgres_tls_mode: snapshot.db_postgres_tls_mode.as_deref(),
         db_max_tx_handles: snapshot.db_max_tx_handles,
         db_records_max: snapshot.db_records_max,
@@ -302,6 +326,15 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_postgres_statement_timeout_ms: snapshot.db_postgres_statement_timeout_ms,
         db_postgres_lock_timeout_ms: snapshot.db_postgres_lock_timeout_ms,
         db_postgres_connect_timeout_ms: snapshot.db_postgres_connect_timeout_ms,
+        db_postgres_shared_client_max_idle_per_key: snapshot
+            .db_postgres_shared_client_max_idle_per_key,
+        db_postgres_shared_client_max_total_idle: snapshot.db_postgres_shared_client_max_total_idle,
+        db_postgres_persist_workers: snapshot.db_postgres_persist_workers,
+        db_postgres_persist_queue_capacity: snapshot.db_postgres_persist_queue_capacity,
+        db_postgres_persist_batch_max: snapshot.db_postgres_persist_batch_max,
+        db_postgres_persist_queue_full_mode: snapshot
+            .db_postgres_persist_queue_full_mode
+            .as_deref(),
         db_sqlite_busy_timeout_ms: snapshot.db_sqlite_busy_timeout_ms,
         db_sqlite_journal_mode: snapshot.db_sqlite_journal_mode.as_deref(),
         db_sqlite_synchronous: snapshot.db_sqlite_synchronous.as_deref(),
