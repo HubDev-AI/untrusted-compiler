@@ -213,6 +213,7 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
     record: &LasmDbRecord,
     compaction_snapshot: Option<Vec<LasmDbRecord>>,
 ) {
+    let sender = lasm_postgres_persist_queue_sender();
     if !LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.load(Ordering::Relaxed) {
         run_lasm_postgres_persist_task_batch(vec![LasmPostgresPersistTask {
             config: config.clone(),
@@ -221,7 +222,6 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
         }]);
         return;
     }
-    let sender = lasm_postgres_persist_queue_sender();
     let task = LasmPostgresPersistTask {
         config: config.clone(),
         record: record.clone(),
@@ -240,11 +240,13 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
             match sender.send(full_task) {
                 Ok(()) => {}
                 Err(SendError(disconnected_task)) => {
+                    LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
                     run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
                 }
             }
         }
         Err(TrySendError::Disconnected(disconnected_task)) => {
+            LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
             run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
         }
     }
