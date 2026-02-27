@@ -137,29 +137,50 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
         }
     }
     for (_, (config, records, compaction_snapshot)) in grouped {
-        if records.len() == 1 {
+        let mut append_records = records;
+        let mut full_sync_failed = false;
+        if let Some(snapshot) = compaction_snapshot.as_deref() {
+            match persist_lasm_postgres_records_full_sync_thread_local(&config, snapshot) {
+                Ok(()) => {
+                    if let Some(snapshot_max_id) = snapshot.iter().map(|record| record.id).max() {
+                        append_records.retain(|record| record.id > snapshot_max_id);
+                    } else {
+                        append_records.clear();
+                    }
+                }
+                Err(message) => {
+                    full_sync_failed = true;
+                    eprintln!(
+                        "warning: LASM dynamic postgres records compaction full sync failed: {message}"
+                    );
+                }
+            }
+        }
+        if append_records.is_empty() {
+            continue;
+        }
+        if append_records.len() == 1 {
             if let Err(message) =
-                persist_lasm_postgres_record_append_thread_local(&config, &records[0])
+                persist_lasm_postgres_record_append_thread_local(&config, &append_records[0])
             {
                 eprintln!(
                     "warning: LASM dynamic postgres records append persistence failed: {message}"
                 );
             }
-        } else if let Err(message) =
-            persist_lasm_postgres_record_append_batch_thread_local(&config, records.as_slice())
-        {
+            continue;
+        }
+        if let Err(message) = persist_lasm_postgres_record_append_batch_thread_local(
+            &config,
+            append_records.as_slice(),
+        ) {
+            let message = if full_sync_failed {
+                format!("{message}; append fallback also failed after compaction sync failure")
+            } else {
+                message
+            };
             eprintln!(
                 "warning: LASM dynamic postgres records batch append persistence failed: {message}"
             );
-        }
-        if let Some(snapshot) = compaction_snapshot.as_deref() {
-            if let Err(message) =
-                persist_lasm_postgres_records_full_sync_thread_local(&config, snapshot)
-            {
-                eprintln!(
-                    "warning: LASM dynamic postgres records compaction full sync failed: {message}"
-                );
-            }
         }
     }
 }
