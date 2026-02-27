@@ -55,6 +55,12 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_postgres_persist_queue_capacity: Option<u64>,
     pub(crate) db_postgres_persist_batch_max: Option<u64>,
     pub(crate) db_postgres_persist_queue_full_mode: Option<String>,
+    pub(crate) db_postgres_shared_client_pool_keys: usize,
+    pub(crate) db_postgres_shared_client_pool_idle_total: usize,
+    pub(crate) db_postgres_persist_workers_available: bool,
+    pub(crate) db_postgres_persist_queue_depth: usize,
+    pub(crate) db_postgres_persist_queue_backpressure_total: usize,
+    pub(crate) db_postgres_persist_sync_fallback_total: usize,
     pub(crate) db_sqlite_busy_timeout_ms: Option<u64>,
     pub(crate) db_sqlite_journal_mode: Option<String>,
     pub(crate) db_sqlite_synchronous: Option<String>,
@@ -133,6 +139,16 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_postgres_persist_queue_capacity == other.db_postgres_persist_queue_capacity
             && self.db_postgres_persist_batch_max == other.db_postgres_persist_batch_max
             && self.db_postgres_persist_queue_full_mode == other.db_postgres_persist_queue_full_mode
+            && self.db_postgres_shared_client_pool_keys == other.db_postgres_shared_client_pool_keys
+            && self.db_postgres_shared_client_pool_idle_total
+                == other.db_postgres_shared_client_pool_idle_total
+            && self.db_postgres_persist_workers_available
+                == other.db_postgres_persist_workers_available
+            && self.db_postgres_persist_queue_depth == other.db_postgres_persist_queue_depth
+            && self.db_postgres_persist_queue_backpressure_total
+                == other.db_postgres_persist_queue_backpressure_total
+            && self.db_postgres_persist_sync_fallback_total
+                == other.db_postgres_persist_sync_fallback_total
             && self.db_sqlite_busy_timeout_ms == other.db_sqlite_busy_timeout_ms
             && self.db_sqlite_journal_mode == other.db_sqlite_journal_mode
             && self.db_sqlite_synchronous == other.db_sqlite_synchronous
@@ -216,6 +232,12 @@ struct LasmClusterStatusPayload<'a> {
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<&'a str>,
+    db_postgres_shared_client_pool_keys: usize,
+    db_postgres_shared_client_pool_idle_total: usize,
+    db_postgres_persist_workers_available: bool,
+    db_postgres_persist_queue_depth: usize,
+    db_postgres_persist_queue_backpressure_total: usize,
+    db_postgres_persist_sync_fallback_total: usize,
     db_sqlite_busy_timeout_ms: Option<u64>,
     db_sqlite_journal_mode: Option<&'a str>,
     db_sqlite_synchronous: Option<&'a str>,
@@ -335,6 +357,14 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_postgres_persist_queue_full_mode: snapshot
             .db_postgres_persist_queue_full_mode
             .as_deref(),
+        db_postgres_shared_client_pool_keys: snapshot.db_postgres_shared_client_pool_keys,
+        db_postgres_shared_client_pool_idle_total: snapshot
+            .db_postgres_shared_client_pool_idle_total,
+        db_postgres_persist_workers_available: snapshot.db_postgres_persist_workers_available,
+        db_postgres_persist_queue_depth: snapshot.db_postgres_persist_queue_depth,
+        db_postgres_persist_queue_backpressure_total: snapshot
+            .db_postgres_persist_queue_backpressure_total,
+        db_postgres_persist_sync_fallback_total: snapshot.db_postgres_persist_sync_fallback_total,
         db_sqlite_busy_timeout_ms: snapshot.db_sqlite_busy_timeout_ms,
         db_sqlite_journal_mode: snapshot.db_sqlite_journal_mode.as_deref(),
         db_sqlite_synchronous: snapshot.db_sqlite_synchronous.as_deref(),

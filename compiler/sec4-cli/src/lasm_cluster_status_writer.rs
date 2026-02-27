@@ -19,6 +19,13 @@ use crate::lasm_db_runtime_dispatch::{
     lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
     lasm_db_sql_template_max_bytes_limit,
 };
+use crate::lasm_db_runtime_postgres::{
+    lasm_postgres_shared_client_pool_idle_total, lasm_postgres_shared_client_pool_key_count,
+};
+use crate::lasm_db_runtime_postgres_persist::{
+    lasm_postgres_persist_queue_backpressure_total, lasm_postgres_persist_queue_depth,
+    lasm_postgres_persist_sync_fallback_total, lasm_postgres_persist_workers_available,
+};
 use crate::{
     LasmClusterConfig, LasmDbRecordsAdapter, RunDbAdapter, RunDbPostgresPersistQueueFullMode,
     RunDbPostgresTlsMode,
@@ -319,6 +326,15 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                         shared_config.db_postgres_persist_queue_full_mode,
                     )
                     .map(str::to_string),
+                db_postgres_shared_client_pool_keys: lasm_postgres_shared_client_pool_key_count(),
+                db_postgres_shared_client_pool_idle_total:
+                    lasm_postgres_shared_client_pool_idle_total(),
+                db_postgres_persist_workers_available: lasm_postgres_persist_workers_available(),
+                db_postgres_persist_queue_depth: lasm_postgres_persist_queue_depth(),
+                db_postgres_persist_queue_backpressure_total:
+                    lasm_postgres_persist_queue_backpressure_total(),
+                db_postgres_persist_sync_fallback_total: lasm_postgres_persist_sync_fallback_total(
+                ),
                 db_sqlite_busy_timeout_ms: shared_config.db_sqlite_busy_timeout_ms,
                 db_sqlite_journal_mode: shared_config.db_sqlite_journal_mode.clone(),
                 db_sqlite_synchronous: shared_config.db_sqlite_synchronous.clone(),
