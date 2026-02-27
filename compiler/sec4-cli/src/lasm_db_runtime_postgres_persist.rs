@@ -5,7 +5,7 @@ use crate::lasm_db_runtime_postgres::{
 };
 use crate::LasmDbRecord;
 use crossbeam_channel::{bounded, SendError, Sender, TryRecvError, TrySendError};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::env;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
@@ -113,14 +113,14 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
     if tasks.is_empty() {
         return;
     }
-    let mut grouped: HashMap<
+    let mut grouped: BTreeMap<
         String,
         (
             LasmPostgresThreadLocalConfig,
             Vec<LasmDbRecord>,
             Option<Vec<LasmDbRecord>>,
         ),
-    > = HashMap::new();
+    > = BTreeMap::new();
     for task in tasks {
         let LasmPostgresPersistTask {
             config,
