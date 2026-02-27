@@ -5,6 +5,7 @@
 /.entire/
 /.claude/settings.json
 infra/local-postgres/.env
+infra/local-postgres/.runtime.env
 infra/local-postgres/data/
 
 **/build/security_map.json
