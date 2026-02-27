@@ -24,14 +24,34 @@ const LASM_POSTGRES_PERSIST_BATCH_MAX_ENV: &str = "SEC4_RT_LASM_DB_POSTGRES_PERS
 const LASM_POSTGRES_PERSIST_BATCH_MAX_DEFAULT: usize = 256;
 const LASM_POSTGRES_PERSIST_BATCH_MAX_MIN: usize = 1;
 const LASM_POSTGRES_PERSIST_BATCH_MAX_MAX: usize = 4096;
+const LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_ENV: &str =
+    "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE";
 
 static LASM_POSTGRES_PERSIST_WORKERS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_BATCH_MAX_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_RESOLVED: OnceLock<LasmPostgresPersistQueueFullMode> =
+    OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE: OnceLock<Sender<LasmPostgresPersistTask>> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone, Copy)]
+enum LasmPostgresPersistQueueFullMode {
+    Block,
+    SyncFallback,
+}
+
+#[inline(always)]
+fn lasm_postgres_persist_queue_full_mode_label(
+    mode: LasmPostgresPersistQueueFullMode,
+) -> &'static str {
+    match mode {
+        LasmPostgresPersistQueueFullMode::Block => "block",
+        LasmPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
+    }
+}
 
 #[inline(always)]
 fn resolve_lasm_postgres_persist_workers() -> usize {
@@ -93,6 +113,22 @@ fn resolve_lasm_postgres_persist_batch_max() -> usize {
     })
 }
 
+#[inline(always)]
+fn resolve_lasm_postgres_persist_queue_full_mode() -> LasmPostgresPersistQueueFullMode {
+    *LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_RESOLVED.get_or_init(|| {
+        let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_ENV) else {
+            return LasmPostgresPersistQueueFullMode::Block;
+        };
+        let normalized = raw.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "sync-fallback" | "sync_fallback" | "sync" | "fallback" => {
+                LasmPostgresPersistQueueFullMode::SyncFallback
+            }
+            _ => LasmPostgresPersistQueueFullMode::Block,
+        }
+    })
+}
+
 pub(crate) fn lasm_postgres_persist_workers_configured() -> usize {
     resolve_lasm_postgres_persist_workers()
 }
@@ -103,6 +139,10 @@ pub(crate) fn lasm_postgres_persist_queue_capacity_configured() -> usize {
 
 pub(crate) fn lasm_postgres_persist_batch_max_configured() -> usize {
     resolve_lasm_postgres_persist_batch_max()
+}
+
+pub(crate) fn lasm_postgres_persist_queue_full_mode() -> &'static str {
+    lasm_postgres_persist_queue_full_mode_label(resolve_lasm_postgres_persist_queue_full_mode())
 }
 
 pub(crate) fn lasm_postgres_persist_workers_available() -> bool {
@@ -301,12 +341,18 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
                     "warning: LASM dynamic postgres persist queue saturated; applying backpressure (total events={backpressure_total})"
                 );
             }
-            match sender.send(full_task) {
-                Ok(()) => {}
-                Err(SendError(disconnected_task)) => {
-                    LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
+            match resolve_lasm_postgres_persist_queue_full_mode() {
+                LasmPostgresPersistQueueFullMode::Block => match sender.send(full_task) {
+                    Ok(()) => {}
+                    Err(SendError(disconnected_task)) => {
+                        LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
+                        LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
+                        run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+                    }
+                },
+                LasmPostgresPersistQueueFullMode::SyncFallback => {
                     LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-                    run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+                    run_lasm_postgres_persist_task_batch(vec![full_task]);
                 }
             }
         }
