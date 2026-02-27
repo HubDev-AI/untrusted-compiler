@@ -54,5 +54,7 @@ jobs:
           benchmark-suite/scripts/test_run_full_benchmark_suite.sh
           benchmark-suite/scripts/test_run_workbench_full_benchmark_suite.sh
           benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_repeats.sh
+          benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh
+          benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh
           benchmark-suite/scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh
           benchmark-suite/scripts/test_makefile_profile_targets.sh

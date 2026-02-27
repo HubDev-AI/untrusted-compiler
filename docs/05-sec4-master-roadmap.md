@@ -2405,6 +2405,22 @@ Post-alpha track acceptance anchors:
         - `benchmark-suite/Makefile` (`test-scripts` target),
       - extended makefile target contract coverage for workbench full-suite targets in `test_makefile_profile_targets.sh`.
       - documented in `docs/book/1540-m39-workbench-full-suite-ci-smoke-gates.md`.
+   - [x] Added repo-local Postgres infra wrappers for workbench full-suite runners:
+      - added wrappers:
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local.sh`
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_repeats.sh`
+      - wrappers auto-wire:
+        - `--lasm-db-adapter postgres`
+        - temporary `--lasm-postgres-dsn-file` from `infra/local-postgres` env defaults,
+      - added make targets:
+        - `workbench-full-bench-local`
+        - `workbench-full-bench-local-dry`
+        - `workbench-full-bench-local-repeats`
+        - `workbench-full-bench-local-repeats-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh`
+      - documented in `docs/book/1541-m39-workbench-full-suite-local-postgres-infra-wrappers.md`.
 5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,

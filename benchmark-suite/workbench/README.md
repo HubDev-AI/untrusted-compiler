@@ -75,6 +75,15 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
      - `benchmark-suite/results/summaries/workbench-full-benchmark-repeats.json`
      - `benchmark-suite/results/workbench-full-benchmark-repeats.md`
      - `benchmark-suite/results/summaries/workbench-full-benchmark-runs/`
+9. Run workbench full benchmark suite with repo-local Postgres infra orchestration:
+   - `make -C benchmark-suite workbench-full-bench-local-dry`
+   - `make -C benchmark-suite workbench-full-bench-local`
+   - repeated local-infra wrapper:
+     - `make -C benchmark-suite workbench-full-bench-local-repeats-dry WORKBENCH_REPEAT_RUNS=3`
+     - `make -C benchmark-suite workbench-full-bench-local-repeats WORKBENCH_REPEAT_RUNS=3`
+   - optional:
+     - keep local infra up: `BENCH_LOCAL_POSTGRES_KEEP_UP=true`
+     - reset local infra data before suite: `BENCH_LOCAL_POSTGRES_RESET=true`
 
 ## Current implementation lanes
 
