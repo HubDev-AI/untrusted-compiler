@@ -83,6 +83,13 @@ pub(crate) fn lasm_postgres_persist_queue_backpressure_total() -> usize {
     LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL.load(Ordering::Relaxed)
 }
 
+pub(crate) fn lasm_postgres_persist_queue_depth() -> usize {
+    LASM_POSTGRES_PERSIST_QUEUE
+        .get()
+        .map(Sender::len)
+        .unwrap_or(0)
+}
+
 #[derive(Clone)]
 struct LasmPostgresPersistTask {
     config: LasmPostgresThreadLocalConfig,

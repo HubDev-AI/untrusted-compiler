@@ -11,8 +11,8 @@ use crate::lasm_db_runtime_postgres::{
 };
 use crate::lasm_db_runtime_postgres_persist::{
     lasm_postgres_persist_queue_backpressure_total,
-    lasm_postgres_persist_queue_capacity_configured, lasm_postgres_persist_workers_available,
-    lasm_postgres_persist_workers_configured,
+    lasm_postgres_persist_queue_capacity_configured, lasm_postgres_persist_queue_depth,
+    lasm_postgres_persist_workers_available, lasm_postgres_persist_workers_configured,
 };
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, set_lasm_json_response, LasmDynamicResponseState,
@@ -728,6 +728,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let postgres_persist_workers = lasm_postgres_persist_workers_configured();
     let postgres_persist_queue_capacity = lasm_postgres_persist_queue_capacity_configured();
     let postgres_persist_workers_ready = lasm_postgres_persist_workers_available();
+    let postgres_persist_queue_depth = lasm_postgres_persist_queue_depth();
     let postgres_persist_queue_backpressure_total =
         lasm_postgres_persist_queue_backpressure_total();
     let postgres_shared_client_pool_key_count = lasm_postgres_shared_client_pool_key_count();
@@ -821,6 +822,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "postgresPersistWorkers": postgres_persist_workers,
                 "postgresPersistQueueCapacity": postgres_persist_queue_capacity,
                 "postgresPersistWorkersAvailable": postgres_persist_workers_ready,
+                "postgresPersistQueueDepth": postgres_persist_queue_depth,
                 "postgresPersistQueueBackpressureTotal": postgres_persist_queue_backpressure_total,
             },
             "records": if include_records {
