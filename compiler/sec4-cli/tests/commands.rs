@@ -2438,6 +2438,61 @@ fn lasm_smoke_command_rejects_both_db_postgres_dsn_and_file() {
 }
 
 #[test]
+fn lasm_smoke_command_resolves_relative_db_postgres_dsn_file_from_project_path() {
+    let root = temp_dir("sec4-lasm-smoke-postgres-dsn-file-relative-project");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-postgres-dsn-file-relative-project\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/health\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+    let dsn_file_name = "dsn-relative-project.txt";
+    fs::write(project_dir.join(dsn_file_name), "   \n").expect("dsn file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-dsn-file",
+        dsn_file_name,
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail after resolving project-relative dsn-file because file content is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "lasm-smoke should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("lasm-smoke failed: --db-postgres-dsn-file")
+            && stderr.contains("must contain a non-empty DSN"),
+        "stderr should include deterministic empty dsn-file guidance:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("could not read --db-postgres-dsn-file `dsn-relative-project.txt`"),
+        "stderr should not report unresolved cwd-relative path when project-relative dsn file exists:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_postgres_runtime_overrides_with_non_postgres_adapter() {
     let root = temp_dir("sec4-lasm-smoke-postgres-overrides-non-postgres-adapter");
     let project_dir = root.join("project");
