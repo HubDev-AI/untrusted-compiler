@@ -12,7 +12,8 @@ use crate::lasm_cluster_runtime_config::{
 };
 use crate::lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
 use crate::lasm_db_config::{
-    resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_tx_max_handles,
+    lasm_db_records_adapter_label, resolve_lasm_dynamic_db_postgres_dsn,
+    resolve_lasm_dynamic_db_records_adapter, resolve_lasm_dynamic_db_tx_max_handles,
 };
 use crate::lasm_db_runtime_dispatch::{
     lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
@@ -64,14 +65,6 @@ pub(crate) struct LasmClusterStatusWriterConfig {
     pub(crate) autoscale_scale_down_cooldown_remaining_ms: Arc<AtomicU64>,
 }
 
-fn lasm_cluster_status_db_adapter_label(adapter: Option<RunDbAdapter>) -> Option<&'static str> {
-    adapter.map(|value| match value {
-        RunDbAdapter::RecordsLog => "records-log",
-        RunDbAdapter::Sqlite => "sqlite",
-        RunDbAdapter::Postgres => "postgres",
-    })
-}
-
 fn lasm_cluster_status_db_postgres_tls_mode_label(
     mode: Option<RunDbPostgresTlsMode>,
 ) -> Option<&'static str> {
@@ -91,11 +84,14 @@ fn lasm_cluster_status_db_postgres_persist_queue_full_mode_label(
     })
 }
 
-fn lasm_cluster_status_db_records_adapter(adapter: Option<RunDbAdapter>) -> LasmDbRecordsAdapter {
+fn lasm_cluster_status_db_records_adapter(
+    adapter: Option<RunDbAdapter>,
+) -> Option<LasmDbRecordsAdapter> {
     match adapter {
-        Some(RunDbAdapter::RecordsLog) | None => LasmDbRecordsAdapter::RecordsLog,
-        Some(RunDbAdapter::Sqlite) => LasmDbRecordsAdapter::Sqlite,
-        Some(RunDbAdapter::Postgres) => LasmDbRecordsAdapter::Postgres,
+        Some(RunDbAdapter::RecordsLog) => Some(LasmDbRecordsAdapter::RecordsLog),
+        Some(RunDbAdapter::Sqlite) => Some(LasmDbRecordsAdapter::Sqlite),
+        Some(RunDbAdapter::Postgres) => Some(LasmDbRecordsAdapter::Postgres),
+        None => None,
     }
 }
 
@@ -201,7 +197,10 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
             shared_config.db_params_max_entries,
             lasm_db_params_max_entries_limit(),
         );
-        let db_records_adapter = lasm_cluster_status_db_records_adapter(shared_config.db_adapter);
+        let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(
+            lasm_cluster_status_db_records_adapter(shared_config.db_adapter),
+        );
+        let effective_db_adapter_label = lasm_db_records_adapter_label(db_records_adapter);
         let db_postgres_dsn_configured = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
             Some(
                 resolve_lasm_dynamic_db_postgres_dsn(
@@ -294,8 +293,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 relay_backend_connect_cooldown_ms: shared_config
                     .cluster_backend_connect_cooldown_ms,
                 relay_fallback_connect_max_attempts,
-                db_adapter: lasm_cluster_status_db_adapter_label(shared_config.db_adapter)
-                    .map(str::to_string),
+                db_adapter: Some(effective_db_adapter_label.to_string()),
                 db_postgres_dsn_configured,
                 db_postgres_tls_mode: lasm_cluster_status_db_postgres_tls_mode_label(
                     shared_config.db_postgres_tls_mode,
