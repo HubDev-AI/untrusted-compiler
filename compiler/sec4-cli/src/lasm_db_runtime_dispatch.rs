@@ -72,6 +72,16 @@ static LASM_DB_OP_SEQUENCE_MAX_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct LasmDbRuntimeLimitOverrides {
+    pub(crate) query_one_row_max_bytes: Option<usize>,
+    pub(crate) query_one_row_max_columns: Option<usize>,
+    pub(crate) sql_template_max_bytes: Option<usize>,
+    pub(crate) params_max_bytes: Option<usize>,
+    pub(crate) params_max_entries: Option<usize>,
+    pub(crate) op_sequence_max: Option<usize>,
+}
+
 #[inline(always)]
 fn resolve_lasm_db_sql_template_max_bytes() -> usize {
     let override_value = LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
@@ -422,6 +432,15 @@ pub(crate) fn lasm_db_query_one_row_max_columns_limit() -> usize {
 
 pub(crate) fn set_lasm_db_query_one_row_max_columns_override(value: Option<usize>) {
     LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+}
+
+pub(crate) fn apply_lasm_db_runtime_limit_overrides(overrides: LasmDbRuntimeLimitOverrides) {
+    set_lasm_db_query_one_row_max_bytes_override(overrides.query_one_row_max_bytes);
+    set_lasm_db_query_one_row_max_columns_override(overrides.query_one_row_max_columns);
+    set_lasm_db_sql_template_max_bytes_override(overrides.sql_template_max_bytes);
+    set_lasm_db_params_max_bytes_override(overrides.params_max_bytes);
+    set_lasm_db_params_max_entries_override(overrides.params_max_entries);
+    set_lasm_db_op_sequence_max_override(overrides.op_sequence_max);
 }
 
 #[inline(always)]
