@@ -44,6 +44,7 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_sql_template_max_bytes: Option<u64>,
     pub(crate) db_params_max_bytes: Option<u64>,
     pub(crate) db_params_max_entries: Option<u64>,
+    pub(crate) db_op_sequence_max: Option<u64>,
     pub(crate) db_postgres_statement_cache_max: Option<u64>,
     pub(crate) db_postgres_placeholder_cache_max: Option<u64>,
     pub(crate) db_postgres_statement_timeout_ms: Option<u64>,
@@ -126,6 +127,7 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_sql_template_max_bytes == other.db_sql_template_max_bytes
             && self.db_params_max_bytes == other.db_params_max_bytes
             && self.db_params_max_entries == other.db_params_max_entries
+            && self.db_op_sequence_max == other.db_op_sequence_max
             && self.db_postgres_statement_cache_max == other.db_postgres_statement_cache_max
             && self.db_postgres_placeholder_cache_max == other.db_postgres_placeholder_cache_max
             && self.db_postgres_statement_timeout_ms == other.db_postgres_statement_timeout_ms
@@ -221,6 +223,7 @@ struct LasmClusterStatusPayload<'a> {
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -343,6 +346,7 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_sql_template_max_bytes: snapshot.db_sql_template_max_bytes,
         db_params_max_bytes: snapshot.db_params_max_bytes,
         db_params_max_entries: snapshot.db_params_max_entries,
+        db_op_sequence_max: snapshot.db_op_sequence_max,
         db_postgres_statement_cache_max: snapshot.db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max: snapshot.db_postgres_placeholder_cache_max,
         db_postgres_statement_timeout_ms: snapshot.db_postgres_statement_timeout_ms,

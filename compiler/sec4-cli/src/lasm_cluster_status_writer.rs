@@ -16,6 +16,7 @@ use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_records_adapter, resolve_lasm_dynamic_db_tx_max_handles,
 };
 use crate::lasm_db_runtime_dispatch::{
+    lasm_db_op_sequence_max_limit,
     lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
     lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
     lasm_db_sql_template_max_bytes_limit,
@@ -197,6 +198,10 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
             shared_config.db_params_max_entries,
             lasm_db_params_max_entries_limit(),
         );
+        let effective_db_op_sequence_max = lasm_cluster_status_effective_u64_limit(
+            shared_config.db_op_sequence_max,
+            lasm_db_op_sequence_max_limit(),
+        );
         let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(
             lasm_cluster_status_db_records_adapter(shared_config.db_adapter),
         );
@@ -306,6 +311,7 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 db_sql_template_max_bytes: effective_db_sql_template_max_bytes,
                 db_params_max_bytes: effective_db_params_max_bytes,
                 db_params_max_entries: effective_db_params_max_entries,
+                db_op_sequence_max: effective_db_op_sequence_max,
                 db_postgres_statement_cache_max: shared_config.db_postgres_statement_cache_max,
                 db_postgres_placeholder_cache_max: shared_config.db_postgres_placeholder_cache_max,
                 db_postgres_statement_timeout_ms: shared_config.db_postgres_statement_timeout_ms,
