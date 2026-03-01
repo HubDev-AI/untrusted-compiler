@@ -1172,26 +1172,16 @@ fn cmd_lasm_smoke(
     };
     let explicit_db_max_tx_handles = resolved_lasm_db_usize.db_max_tx_handles;
     let explicit_db_records_max = resolved_lasm_db_usize.db_records_max;
-    let db_query_one_row_max_bytes_override = resolved_lasm_db_usize.db_query_one_row_max_bytes;
-    let db_query_one_row_max_columns_override = resolved_lasm_db_usize.db_query_one_row_max_columns;
-    let db_sql_template_max_bytes_override = resolved_lasm_db_usize.db_sql_template_max_bytes;
-    let db_params_max_bytes_override = resolved_lasm_db_usize.db_params_max_bytes;
-    let db_params_max_entries_override = resolved_lasm_db_usize.db_params_max_entries;
-    let db_op_sequence_max_override = resolved_lasm_db_usize.db_op_sequence_max;
-    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
-        db_query_one_row_max_bytes_override,
+    lasm_db_runtime_dispatch::apply_lasm_db_runtime_limit_overrides(
+        lasm_db_runtime_dispatch::LasmDbRuntimeLimitOverrides {
+            query_one_row_max_bytes: resolved_lasm_db_usize.db_query_one_row_max_bytes,
+            query_one_row_max_columns: resolved_lasm_db_usize.db_query_one_row_max_columns,
+            sql_template_max_bytes: resolved_lasm_db_usize.db_sql_template_max_bytes,
+            params_max_bytes: resolved_lasm_db_usize.db_params_max_bytes,
+            params_max_entries: resolved_lasm_db_usize.db_params_max_entries,
+            op_sequence_max: resolved_lasm_db_usize.db_op_sequence_max,
+        },
     );
-    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_columns_override(
-        db_query_one_row_max_columns_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_sql_template_max_bytes_override(
-        db_sql_template_max_bytes_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_params_max_bytes_override(db_params_max_bytes_override);
-    lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
-        db_params_max_entries_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_op_sequence_max_override(db_op_sequence_max_override);
     let explicit_db_postgres_statement_cache_max =
         resolved_lasm_db_usize.db_postgres_statement_cache_max;
     let explicit_db_postgres_placeholder_cache_max =
@@ -8872,26 +8862,16 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: {message}");
         2
     })?;
-    let db_query_one_row_max_bytes_override = resolved_lasm_db_usize.db_query_one_row_max_bytes;
-    let db_query_one_row_max_columns_override = resolved_lasm_db_usize.db_query_one_row_max_columns;
-    let db_sql_template_max_bytes_override = resolved_lasm_db_usize.db_sql_template_max_bytes;
-    let db_params_max_bytes_override = resolved_lasm_db_usize.db_params_max_bytes;
-    let db_params_max_entries_override = resolved_lasm_db_usize.db_params_max_entries;
-    let db_op_sequence_max_override = resolved_lasm_db_usize.db_op_sequence_max;
-    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
-        db_query_one_row_max_bytes_override,
+    lasm_db_runtime_dispatch::apply_lasm_db_runtime_limit_overrides(
+        lasm_db_runtime_dispatch::LasmDbRuntimeLimitOverrides {
+            query_one_row_max_bytes: resolved_lasm_db_usize.db_query_one_row_max_bytes,
+            query_one_row_max_columns: resolved_lasm_db_usize.db_query_one_row_max_columns,
+            sql_template_max_bytes: resolved_lasm_db_usize.db_sql_template_max_bytes,
+            params_max_bytes: resolved_lasm_db_usize.db_params_max_bytes,
+            params_max_entries: resolved_lasm_db_usize.db_params_max_entries,
+            op_sequence_max: resolved_lasm_db_usize.db_op_sequence_max,
+        },
     );
-    lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_columns_override(
-        db_query_one_row_max_columns_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_sql_template_max_bytes_override(
-        db_sql_template_max_bytes_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_params_max_bytes_override(db_params_max_bytes_override);
-    lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
-        db_params_max_entries_override,
-    );
-    lasm_db_runtime_dispatch::set_lasm_db_op_sequence_max_override(db_op_sequence_max_override);
 
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
