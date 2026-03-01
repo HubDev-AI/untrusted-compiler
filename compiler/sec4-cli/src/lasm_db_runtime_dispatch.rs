@@ -10,7 +10,7 @@ use crate::lasm_db_runtime_postgres::{
     parse_lasm_postgres_query_template_and_params,
     parse_lasm_postgres_query_template_and_params_value, run_lasm_postgres_exec_thread_local,
     run_lasm_postgres_exec_tx_thread_local, run_lasm_postgres_query_one_thread_local,
-    LasmPostgresThreadLocalConfig,
+    LasmPostgresParam, LasmPostgresThreadLocalConfig,
 };
 use crate::lasm_db_runtime_postgres_persist::persist_lasm_postgres_record_after_unlock;
 use crate::lasm_db_runtime_records_log::{
@@ -18,7 +18,7 @@ use crate::lasm_db_runtime_records_log::{
 };
 use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
-    run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
+    run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
@@ -490,6 +490,70 @@ fn append_lasm_db_record_in_memory_with_compaction_snapshot(
     (record, compaction_snapshot)
 }
 
+struct PreparedLasmDbOperationParams {
+    postgres: Option<(String, Vec<LasmPostgresParam>)>,
+    sqlite: Option<LasmSqliteQueryParams>,
+}
+
+fn prepare_lasm_db_operation_params(
+    db_records_adapter: LasmDbRecordsAdapter,
+    validation_code: &'static str,
+    template: &str,
+    params: &str,
+    parsed_params: Option<&serde_json::Value>,
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) -> Option<PreparedLasmDbOperationParams> {
+    let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+        Some(match parsed_params {
+            Some(parsed) => parse_lasm_postgres_query_template_and_params_value(template, parsed),
+            None => parse_lasm_postgres_query_template_and_params(template, params),
+        })
+    } else {
+        None
+    };
+    let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+        Some(match parsed_params {
+            Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
+            None => parse_lasm_sqlite_query_params(params),
+        })
+    } else {
+        None
+    };
+    if let Some(Err(message)) = sqlite_params {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                message.as_str(),
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    }
+    if let Some(Err(message)) = postgres_preparsed {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                message.as_str(),
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    }
+    Some(PreparedLasmDbOperationParams {
+        postgres: postgres_preparsed.and_then(Result::ok),
+        sqlite: sqlite_params.and_then(Result::ok),
+    })
+}
+
 fn is_lasm_internal_db_indexed_header_name(header_name: &str, base_name: &str) -> bool {
     if header_name.len() <= base_name.len() + 1 {
         return false;
@@ -954,62 +1018,23 @@ fn apply_lasm_internal_db_operation_materialization_single(
             ) {
                 return true;
             }
-            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
-                        template.as_str(),
-                        parsed,
-                    ),
-                    None => parse_lasm_postgres_query_template_and_params(
-                        template.as_str(),
-                        params.as_str(),
-                    ),
-                })
-            } else {
-                None
+            let prepared_params = match prepare_lasm_db_operation_params(
+                db_records_adapter,
+                "DB.EXEC_INVALID",
+                template.as_str(),
+                params.as_str(),
+                parsed_params.as_ref(),
+                response,
+                trace_id,
+            ) {
+                Some(value) => value,
+                None => return true,
             };
-            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
-                    None => parse_lasm_sqlite_query_params(params.as_str()),
-                })
-            } else {
-                None
-            };
-            if let Some(Err(message)) = sqlite_params.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            if let Some(Err(message)) = postgres_preparsed.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
             if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                let (postgres_template, postgres_params) = postgres_preparsed
+                let (postgres_template, postgres_params) = prepared_params
+                    .postgres
                     .as_ref()
-                    .expect("postgres preparse should exist for postgres adapter path")
-                    .as_ref()
-                    .expect("postgres params should be validated before runtime execution");
+                    .expect("postgres preparse should exist for postgres adapter path");
                 let postgres_config = match dynamic_state.lock() {
                     Ok(state) => {
                         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
@@ -1121,11 +1146,10 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     let mut affected_rows = 0u64;
                     if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_params = sqlite_params
+                        let sqlite_params = prepared_params
+                            .sqlite
                             .as_ref()
-                            .expect("sqlite params should exist for sqlite adapter path")
-                            .as_ref()
-                            .expect("sqlite params should be validated before runtime execution");
+                            .expect("sqlite params should exist for sqlite adapter path");
                         let sqlite_affected_rows = match run_lasm_sqlite_exec(
                             &mut state,
                             template.as_str(),
@@ -1367,62 +1391,23 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     return true;
                 }
             }
-            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
-                        template.as_str(),
-                        parsed,
-                    ),
-                    None => parse_lasm_postgres_query_template_and_params(
-                        template.as_str(),
-                        params.as_str(),
-                    ),
-                })
-            } else {
-                None
+            let prepared_params = match prepare_lasm_db_operation_params(
+                db_records_adapter,
+                "DB.EXEC_TX_INVALID",
+                template.as_str(),
+                params.as_str(),
+                parsed_params.as_ref(),
+                response,
+                trace_id,
+            ) {
+                Some(value) => value,
+                None => return true,
             };
-            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
-                    None => parse_lasm_sqlite_query_params(params.as_str()),
-                })
-            } else {
-                None
-            };
-            if let Some(Err(message)) = sqlite_params.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            if let Some(Err(message)) = postgres_preparsed.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
             if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                let (postgres_template, postgres_params) = postgres_preparsed
+                let (postgres_template, postgres_params) = prepared_params
+                    .postgres
                     .as_ref()
-                    .expect("postgres preparse should exist for postgres adapter path")
-                    .as_ref()
-                    .expect("postgres params should be validated before runtime execution");
+                    .expect("postgres preparse should exist for postgres adapter path");
                 let (postgres_config, db, tx, allocated_tx_handle) = match dynamic_state.lock() {
                     Ok(mut state) => {
                         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
@@ -1625,11 +1610,10 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     };
                     let mut affected_rows = 0u64;
                     if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_params = sqlite_params
+                        let sqlite_params = prepared_params
+                            .sqlite
                             .as_ref()
-                            .expect("sqlite params should exist for sqlite adapter path")
-                            .as_ref()
-                            .expect("sqlite params should be validated before runtime execution");
+                            .expect("sqlite params should exist for sqlite adapter path");
                         let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
                             &mut state,
                             template.as_str(),
@@ -1868,62 +1852,23 @@ fn apply_lasm_internal_db_operation_materialization_single(
             ) {
                 return true;
             }
-            let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_postgres_query_template_and_params_value(
-                        template.as_str(),
-                        parsed,
-                    ),
-                    None => parse_lasm_postgres_query_template_and_params(
-                        template.as_str(),
-                        params.as_str(),
-                    ),
-                })
-            } else {
-                None
+            let prepared_params = match prepare_lasm_db_operation_params(
+                db_records_adapter,
+                "DB.QUERY_ONE_INVALID",
+                template.as_str(),
+                params.as_str(),
+                parsed_params.as_ref(),
+                response,
+                trace_id,
+            ) {
+                Some(value) => value,
+                None => return true,
             };
-            let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                Some(match parsed_params.as_ref() {
-                    Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
-                    None => parse_lasm_sqlite_query_params(params.as_str()),
-                })
-            } else {
-                None
-            };
-            if let Some(Err(message)) = sqlite_params.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            if let Some(Err(message)) = postgres_preparsed.as_ref() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        message.as_str(),
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
             if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                let (postgres_template, postgres_params) = postgres_preparsed
+                let (postgres_template, postgres_params) = prepared_params
+                    .postgres
                     .as_ref()
-                    .expect("postgres preparse should exist for postgres adapter path")
-                    .as_ref()
-                    .expect("postgres params should be validated before runtime execution");
+                    .expect("postgres preparse should exist for postgres adapter path");
                 let postgres_config = match dynamic_state.lock() {
                     Ok(state) => {
                         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
@@ -2053,11 +1998,10 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
                     if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_params = sqlite_params
+                        let sqlite_params = prepared_params
+                            .sqlite
                             .as_ref()
-                            .expect("sqlite params should exist for sqlite adapter path")
-                            .as_ref()
-                            .expect("sqlite params should be validated before runtime execution");
+                            .expect("sqlite params should exist for sqlite adapter path");
                         let row_object = match run_lasm_sqlite_query_one(
                             &mut state,
                             template.as_str(),
