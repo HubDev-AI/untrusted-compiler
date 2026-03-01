@@ -45,6 +45,76 @@ pub(crate) fn resolve_lasm_db_usize_option(
         .transpose()
 }
 
+pub(crate) struct ResolvedLasmDbUsizeOptions {
+    pub(crate) db_max_tx_handles: Option<usize>,
+    pub(crate) db_records_max: Option<usize>,
+    pub(crate) db_query_one_row_max_bytes: Option<usize>,
+    pub(crate) db_query_one_row_max_columns: Option<usize>,
+    pub(crate) db_sql_template_max_bytes: Option<usize>,
+    pub(crate) db_params_max_bytes: Option<usize>,
+    pub(crate) db_params_max_entries: Option<usize>,
+    pub(crate) db_postgres_statement_cache_max: Option<usize>,
+    pub(crate) db_postgres_placeholder_cache_max: Option<usize>,
+    pub(crate) db_postgres_retryable_conflict_retry_max: Option<usize>,
+    pub(crate) db_sqlite_lock_retry_max: Option<usize>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_lasm_db_usize_options(
+    db_max_tx_handles: Option<u64>,
+    db_records_max: Option<u64>,
+    db_query_one_row_max_bytes: Option<u64>,
+    db_query_one_row_max_columns: Option<u64>,
+    db_sql_template_max_bytes: Option<u64>,
+    db_params_max_bytes: Option<u64>,
+    db_params_max_entries: Option<u64>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
+    db_postgres_retryable_conflict_retry_max: Option<u64>,
+    db_sqlite_lock_retry_max: Option<u64>,
+) -> Result<ResolvedLasmDbUsizeOptions, String> {
+    Ok(ResolvedLasmDbUsizeOptions {
+        db_max_tx_handles: resolve_lasm_db_usize_option(db_max_tx_handles, "--db-max-tx-handles")?,
+        db_records_max: resolve_lasm_db_usize_option(db_records_max, "--db-records-max")?,
+        db_query_one_row_max_bytes: resolve_lasm_db_usize_option(
+            db_query_one_row_max_bytes,
+            "--db-query-one-row-max-bytes",
+        )?,
+        db_query_one_row_max_columns: resolve_lasm_db_usize_option(
+            db_query_one_row_max_columns,
+            "--db-query-one-row-max-columns",
+        )?,
+        db_sql_template_max_bytes: resolve_lasm_db_usize_option(
+            db_sql_template_max_bytes,
+            "--db-sql-template-max-bytes",
+        )?,
+        db_params_max_bytes: resolve_lasm_db_usize_option(
+            db_params_max_bytes,
+            "--db-params-max-bytes",
+        )?,
+        db_params_max_entries: resolve_lasm_db_usize_option(
+            db_params_max_entries,
+            "--db-params-max-entries",
+        )?,
+        db_postgres_statement_cache_max: resolve_lasm_db_usize_option(
+            db_postgres_statement_cache_max,
+            "--db-postgres-statement-cache-max",
+        )?,
+        db_postgres_placeholder_cache_max: resolve_lasm_db_usize_option(
+            db_postgres_placeholder_cache_max,
+            "--db-postgres-placeholder-cache-max",
+        )?,
+        db_postgres_retryable_conflict_retry_max: resolve_lasm_db_usize_option(
+            db_postgres_retryable_conflict_retry_max,
+            "--db-postgres-retryable-conflict-retry-max",
+        )?,
+        db_sqlite_lock_retry_max: resolve_lasm_db_usize_option(
+            db_sqlite_lock_retry_max,
+            "--db-sqlite-lock-retry-max",
+        )?,
+    })
+}
+
 fn run_db_postgres_tls_mode_arg_value(mode: RunDbPostgresTlsMode) -> &'static str {
     match mode {
         RunDbPostgresTlsMode::Auto => "auto",
