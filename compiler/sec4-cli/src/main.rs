@@ -2225,6 +2225,7 @@ fn is_http_serve_call(callee: &sec4_core::ast::Expr) -> bool {
 
 fn validate_lasm_route_db_operation_sequence_limits(
     routes: &[LasmRunRoutePlan],
+    operation_sequence_max: usize,
 ) -> Result<(), String> {
     for route in routes {
         let operation_count = route
@@ -2232,10 +2233,10 @@ fn validate_lasm_route_db_operation_sequence_limits(
             .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
             .and_then(|value| value.trim().parse::<usize>().ok())
             .unwrap_or(0);
-        if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+        if operation_count > operation_sequence_max {
             return Err(format!(
                 "route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
-                route.method, route.path, operation_count, LASM_INTERNAL_DB_OP_SEQUENCE_MAX
+                route.method, route.path, operation_count, operation_sequence_max
             ));
         }
     }
@@ -9291,7 +9292,11 @@ fn cmd_run_lasm_backend(
         );
         return Err(1);
     }
-    if let Err(message) = validate_lasm_route_db_operation_sequence_limits(routes.as_slice()) {
+    let runtime_db_operation_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
+    if let Err(message) = validate_lasm_route_db_operation_sequence_limits(
+        routes.as_slice(),
+        runtime_db_operation_sequence_max,
+    ) {
         eprintln!("run failed: {message}");
         return Err(1);
     }
