@@ -1602,6 +1602,8 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
         "2",
         "--max-steps",
         "64",
+        "--db-op-sequence-max",
+        "88",
         "--format",
         "json",
     ]);
@@ -1672,6 +1674,14 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
             .and_then(serde_json::Value::as_str),
         Some("records.log"),
         "lasm-smoke json should include effective db adapter label"
+    );
+    assert_eq!(
+        parsed
+            .get("db")
+            .and_then(|db| db.get("opSequenceMax"))
+            .and_then(serde_json::Value::as_u64),
+        Some(88),
+        "lasm-smoke json should include effective db operation sequence max"
     );
     assert_eq!(
         parsed
