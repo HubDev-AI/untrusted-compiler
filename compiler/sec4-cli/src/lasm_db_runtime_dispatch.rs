@@ -882,6 +882,38 @@ fn stage_lasm_internal_db_sequence_operation_headers(
     }
 }
 
+fn cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
+) {
+    cleanup_lasm_internal_db_sequence_tx_handles(
+        dynamic_state,
+        sequence_tx_handles_by_source.values().copied(),
+    );
+}
+
+fn fail_lasm_internal_db_sequence_with_envelope(
+    response: &mut sec4_core::HttpResponse,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
+    code: &str,
+    kind: &str,
+    message: &str,
+    status: u16,
+    trace_id: &str,
+) -> bool {
+    set_lasm_json_response(
+        response,
+        status,
+        &lasm_error_envelope(code, kind, message, status, trace_id),
+    );
+    cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
+        dynamic_state,
+        sequence_tx_handles_by_source,
+    );
+    true
+}
+
 pub(crate) fn apply_lasm_internal_db_operation_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
@@ -995,22 +1027,16 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     index,
                 );
                 if raw_tx_db.is_some() && raw_tx_handle.is_some() {
-                    set_lasm_json_response(
+                    return fail_lasm_internal_db_sequence_with_envelope(
                         response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    cleanup_lasm_internal_db_sequence_tx_handles(
                         dynamic_state,
-                        sequence_tx_handles_by_source.values().copied(),
+                        &sequence_tx_handles_by_source,
+                        "DB.EXEC_TX_INVALID",
+                        "validation",
+                        "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
+                        400,
+                        trace_id,
                     );
-                    return true;
                 }
                 if let Some(raw_tx_db) = raw_tx_db {
                     let tx_db_source_raw = materialize_lasm_internal_header_value(
@@ -1020,40 +1046,28 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     );
                     let Some(tx_db_source) = parse_lasm_positive_i64(tx_db_source_raw.trim())
                     else {
-                        set_lasm_json_response(
+                        return fail_lasm_internal_db_sequence_with_envelope(
                             response,
-                            400,
-                            &lasm_error_envelope(
-                                "DB.EXEC_TX_INVALID",
-                                "validation",
-                                "db.execTx requires transaction and query handles",
-                                400,
-                                trace_id,
-                            ),
-                        );
-                        cleanup_lasm_internal_db_sequence_tx_handles(
                             dynamic_state,
-                            sequence_tx_handles_by_source.values().copied(),
+                            &sequence_tx_handles_by_source,
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires transaction and query handles",
+                            400,
+                            trace_id,
                         );
-                        return true;
                     };
                     if !is_lasm_valid_db_cap_handle(tx_db_source) {
-                        set_lasm_json_response(
+                        return fail_lasm_internal_db_sequence_with_envelope(
                             response,
-                            400,
-                            &lasm_error_envelope(
-                                "DB.EXEC_TX_INVALID",
-                                "validation",
-                                "db.execTx requires db.tx(dbCap) with valid db capability handle",
-                                400,
-                                trace_id,
-                            ),
-                        );
-                        cleanup_lasm_internal_db_sequence_tx_handles(
                             dynamic_state,
-                            sequence_tx_handles_by_source.values().copied(),
+                            &sequence_tx_handles_by_source,
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires db.tx(dbCap) with valid db capability handle",
+                            400,
+                            trace_id,
                         );
-                        return true;
                     }
                     if let Some(existing_tx_handle) =
                         sequence_tx_handles_by_source.get(&tx_db_source).copied()
@@ -1106,27 +1120,21 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 db_records_adapter,
                 trace_id,
             ) {
-                set_lasm_json_response(
+                return fail_lasm_internal_db_sequence_with_envelope(
                     response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.OPERATION_INVALID",
-                        "validation",
-                        "missing internal db operation marker",
-                        400,
-                        trace_id,
-                    ),
-                );
-                cleanup_lasm_internal_db_sequence_tx_handles(
                     dynamic_state,
-                    sequence_tx_handles_by_source.values().copied(),
+                    &sequence_tx_handles_by_source,
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    "missing internal db operation marker",
+                    400,
+                    trace_id,
                 );
-                return true;
             }
             if response.status >= 400 {
-                cleanup_lasm_internal_db_sequence_tx_handles(
+                cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
                     dynamic_state,
-                    sequence_tx_handles_by_source.values().copied(),
+                    &sequence_tx_handles_by_source,
                 );
                 return true;
             }
@@ -1134,47 +1142,35 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 let Some(tx_handle_raw) =
                     take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
                 else {
-                    set_lasm_json_response(
+                    return fail_lasm_internal_db_sequence_with_envelope(
                         response,
-                        500,
-                        &lasm_error_envelope(
-                            "DB.TX_INTERNAL",
-                            "internal",
-                            "db.execTx runtime did not publish transaction handle marker",
-                            500,
-                            trace_id,
-                        ),
-                    );
-                    cleanup_lasm_internal_db_sequence_tx_handles(
                         dynamic_state,
-                        sequence_tx_handles_by_source.values().copied(),
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.execTx runtime did not publish transaction handle marker",
+                        500,
+                        trace_id,
                     );
-                    return true;
                 };
                 let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
-                    set_lasm_json_response(
+                    return fail_lasm_internal_db_sequence_with_envelope(
                         response,
-                        500,
-                        &lasm_error_envelope(
-                            "DB.TX_INTERNAL",
-                            "internal",
-                            "db.tx runtime failure",
-                            500,
-                            trace_id,
-                        ),
-                    );
-                    cleanup_lasm_internal_db_sequence_tx_handles(
                         dynamic_state,
-                        sequence_tx_handles_by_source.values().copied(),
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime failure",
+                        500,
+                        trace_id,
                     );
-                    return true;
                 };
                 sequence_tx_handles_by_source.insert(tx_db_source, tx_handle);
             }
         }
-        cleanup_lasm_internal_db_sequence_tx_handles(
+        cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
             dynamic_state,
-            sequence_tx_handles_by_source.values().copied(),
+            &sequence_tx_handles_by_source,
         );
         return true;
     }
