@@ -34,6 +34,17 @@ pub(crate) fn push_optional_db_adapter_run_arg(cmd: &mut Command, value: Option<
     }
 }
 
+pub(crate) fn resolve_lasm_db_usize_option(
+    value: Option<u64>,
+    arg_name: &'static str,
+) -> Result<Option<usize>, String> {
+    value
+        .map(|value| {
+            usize::try_from(value).map_err(|_| format!("{arg_name} exceeds platform limits"))
+        })
+        .transpose()
+}
+
 fn run_db_postgres_tls_mode_arg_value(mode: RunDbPostgresTlsMode) -> &'static str {
     match mode {
         RunDbPostgresTlsMode::Auto => "auto",
@@ -460,13 +471,11 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         }
         Some(dsn.to_string())
     } else if let Some(path) = db_postgres_dsn_file {
-        let mut resolved_path = path.to_path_buf();
-        if path.is_relative() && !resolved_path.exists() {
-            let candidate = project_path.join(path);
-            if candidate.exists() {
-                resolved_path = candidate;
-            }
-        }
+        let resolved_path = if path.is_relative() {
+            project_path.join(path)
+        } else {
+            path.to_path_buf()
+        };
         Some(load_lasm_db_postgres_dsn_from_file(
             resolved_path.as_path(),
         )?)

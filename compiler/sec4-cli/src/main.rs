@@ -80,7 +80,8 @@ use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSu
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
-    push_optional_db_postgres_tls_mode_run_arg, run_db_adapter_to_lasm_db_records_adapter,
+    push_optional_db_postgres_tls_mode_run_arg, resolve_lasm_db_usize_option,
+    run_db_adapter_to_lasm_db_records_adapter,
     run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode, validate_and_resolve_run_db_cli_options,
 };
 pub(crate) use lasm_db_headers::{
@@ -1049,108 +1050,112 @@ fn cmd_lasm_smoke(
             }
         };
     let request_headers = finalize_lasm_smoke_request_headers(request_headers, request_body.len());
-    if db_max_tx_handles == Some(0) {
-        eprintln!("lasm-smoke failed: --db-max-tx-handles must be >= 1");
-        return Err(2);
-    }
-    if db_records_max == Some(0) {
-        eprintln!("lasm-smoke failed: --db-records-max must be >= 1");
-        return Err(2);
-    }
-    if db_query_one_row_max_bytes == Some(0) {
-        eprintln!("lasm-smoke failed: --db-query-one-row-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_query_one_row_max_columns == Some(0) {
-        eprintln!("lasm-smoke failed: --db-query-one-row-max-columns must be >= 1");
-        return Err(2);
-    }
-    if db_sql_template_max_bytes == Some(0) {
-        eprintln!("lasm-smoke failed: --db-sql-template-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_params_max_bytes == Some(0) {
-        eprintln!("lasm-smoke failed: --db-params-max-bytes must be >= 1");
-        return Err(2);
-    }
-    if db_params_max_entries == Some(0) {
-        eprintln!("lasm-smoke failed: --db-params-max-entries must be >= 1");
-        return Err(2);
-    }
-    let explicit_db_max_tx_handles = match db_max_tx_handles {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-max-tx-handles exceeds platform limits");
+    let resolved_db_cli = match validate_and_resolve_run_db_cli_options(
+        path,
+        RunBackend::Lasm,
+        db_base,
+        db_adapter,
+        db_postgres_dsn,
+        db_postgres_dsn_file,
+        db_postgres_tls_mode,
+        db_max_tx_handles,
+        db_records_max,
+        db_query_one_row_max_bytes,
+        db_query_one_row_max_columns,
+        db_sql_template_max_bytes,
+        db_params_max_bytes,
+        db_params_max_entries,
+        db_postgres_statement_cache_max,
+        db_postgres_placeholder_cache_max,
+        db_postgres_statement_timeout_ms,
+        db_postgres_lock_timeout_ms,
+        db_postgres_connect_timeout_ms,
+        db_postgres_shared_client_max_idle_per_key,
+        db_postgres_shared_client_max_total_idle,
+        db_postgres_persist_workers,
+        db_postgres_persist_queue_capacity,
+        db_postgres_persist_batch_max,
+        db_postgres_persist_queue_full_mode,
+        db_sqlite_busy_timeout_ms,
+        db_sqlite_journal_mode,
+        db_sqlite_synchronous,
+        db_postgres_retryable_conflict_retry_max,
+        db_sqlite_lock_retry_max,
+        db_sqlite_lock_retry_delay_ms,
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+    };
+    let effective_db_adapter = resolved_db_cli.effective_db_adapter;
+    let explicit_db_postgres_dsn = resolved_db_cli.explicit_db_postgres_dsn;
+    let explicit_db_sqlite_journal_mode = resolved_db_cli.explicit_db_sqlite_journal_mode;
+    let explicit_db_sqlite_synchronous = resolved_db_cli.explicit_db_sqlite_synchronous;
+
+    let explicit_db_max_tx_handles =
+        match resolve_lasm_db_usize_option(db_max_tx_handles, "--db-max-tx-handles") {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
                 return Err(2);
             }
-        },
-        None => None,
-    };
-    let explicit_db_records_max = match db_records_max {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-records-max exceeds platform limits");
+        };
+    let explicit_db_records_max =
+        match resolve_lasm_db_usize_option(db_records_max, "--db-records-max") {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
                 return Err(2);
             }
-        },
-        None => None,
+        };
+    let db_query_one_row_max_bytes_override = match resolve_lasm_db_usize_option(
+        db_query_one_row_max_bytes,
+        "--db-query-one-row-max-bytes",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
     };
-    let db_query_one_row_max_bytes_override = match db_query_one_row_max_bytes {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!(
-                    "lasm-smoke failed: --db-query-one-row-max-bytes exceeds platform limits"
-                );
+    let db_query_one_row_max_columns_override = match resolve_lasm_db_usize_option(
+        db_query_one_row_max_columns,
+        "--db-query-one-row-max-columns",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+    };
+    let db_sql_template_max_bytes_override = match resolve_lasm_db_usize_option(
+        db_sql_template_max_bytes,
+        "--db-sql-template-max-bytes",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+    };
+    let db_params_max_bytes_override =
+        match resolve_lasm_db_usize_option(db_params_max_bytes, "--db-params-max-bytes") {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
                 return Err(2);
             }
-        },
-        None => None,
-    };
-    let db_query_one_row_max_columns_override = match db_query_one_row_max_columns {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!(
-                    "lasm-smoke failed: --db-query-one-row-max-columns exceeds platform limits"
-                );
+        };
+    let db_params_max_entries_override =
+        match resolve_lasm_db_usize_option(db_params_max_entries, "--db-params-max-entries") {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
                 return Err(2);
             }
-        },
-        None => None,
-    };
-    let db_sql_template_max_bytes_override = match db_sql_template_max_bytes {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-sql-template-max-bytes exceeds platform limits");
-                return Err(2);
-            }
-        },
-        None => None,
-    };
-    let db_params_max_bytes_override = match db_params_max_bytes {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-params-max-bytes exceeds platform limits");
-                return Err(2);
-            }
-        },
-        None => None,
-    };
-    let db_params_max_entries_override = match db_params_max_entries {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-params-max-entries exceeds platform limits");
-                return Err(2);
-            }
-        },
-        None => None,
-    };
+        };
     lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
         db_query_one_row_max_bytes_override,
     );
@@ -1164,170 +1169,45 @@ fn cmd_lasm_smoke(
     lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
         db_params_max_entries_override,
     );
-
-    if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
-        eprintln!("lasm-smoke failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
-        return Err(2);
-    }
-    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
-        let trimmed = dsn.trim();
-        if trimmed.is_empty() {
-            eprintln!("lasm-smoke failed: --db-postgres-dsn must not be empty");
+    let explicit_db_postgres_statement_cache_max = match resolve_lasm_db_usize_option(
+        db_postgres_statement_cache_max,
+        "--db-postgres-statement-cache-max",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
             return Err(2);
         }
-        Some(trimmed.to_string())
-    } else if let Some(path_arg) = db_postgres_dsn_file {
-        let resolved_path = if path_arg.is_relative() {
-            path.join(path_arg)
-        } else {
-            path_arg.to_path_buf()
-        };
-        match lasm_db_config::load_lasm_db_postgres_dsn_from_file(resolved_path.as_path()) {
-            Ok(dsn) => Some(dsn),
-            Err(message) => {
-                eprintln!("lasm-smoke failed: {message}");
-                return Err(2);
-            }
-        }
-    } else {
-        None
     };
-    if db_postgres_shared_client_max_idle_per_key == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-shared-client-max-idle-per-key must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_shared_client_max_total_idle == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-shared-client-max-total-idle must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_persist_workers == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-persist-workers must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_persist_queue_capacity == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-persist-queue-capacity must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_persist_batch_max == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-persist-batch-max must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_statement_cache_max == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-statement-cache-max must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_placeholder_cache_max == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-placeholder-cache-max must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_statement_timeout_ms == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-statement-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_lock_timeout_ms == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-lock-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_postgres_connect_timeout_ms == Some(0) {
-        eprintln!("lasm-smoke failed: --db-postgres-connect-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    if db_sqlite_busy_timeout_ms == Some(0) {
-        eprintln!("lasm-smoke failed: --db-sqlite-busy-timeout-ms must be >= 1");
-        return Err(2);
-    }
-    let explicit_db_postgres_statement_cache_max = match db_postgres_statement_cache_max {
-        Some(value) => {
-            match usize::try_from(value) {
-                Ok(parsed) => Some(parsed),
-                Err(_) => {
-                    eprintln!("lasm-smoke failed: --db-postgres-statement-cache-max exceeds platform limits");
-                    return Err(2);
-                }
-            }
+    let explicit_db_postgres_placeholder_cache_max = match resolve_lasm_db_usize_option(
+        db_postgres_placeholder_cache_max,
+        "--db-postgres-placeholder-cache-max",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
         }
-        None => None,
     };
-    let explicit_db_postgres_placeholder_cache_max = match db_postgres_placeholder_cache_max {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-postgres-placeholder-cache-max exceeds platform limits");
-                return Err(2);
-            }
-        },
-        None => None,
-    };
-    let explicit_db_postgres_retryable_conflict_retry_max =
-        match db_postgres_retryable_conflict_retry_max {
-            Some(value) => match usize::try_from(value) {
-                Ok(parsed) => Some(parsed),
-                Err(_) => {
-                    eprintln!("lasm-smoke failed: --db-postgres-retryable-conflict-retry-max exceeds platform limits");
-                    return Err(2);
-                }
-            },
-            None => None,
-        };
-    let explicit_db_sqlite_lock_retry_max = match db_sqlite_lock_retry_max {
-        Some(value) => match usize::try_from(value) {
-            Ok(parsed) => Some(parsed),
-            Err(_) => {
-                eprintln!("lasm-smoke failed: --db-sqlite-lock-retry-max exceeds platform limits");
-                return Err(2);
-            }
-        },
-        None => None,
-    };
-    let postgres_runtime_overrides = explicit_db_postgres_dsn.is_some()
-        || db_postgres_tls_mode.is_some()
-        || db_postgres_statement_cache_max.is_some()
-        || db_postgres_placeholder_cache_max.is_some()
-        || db_postgres_statement_timeout_ms.is_some()
-        || db_postgres_lock_timeout_ms.is_some()
-        || db_postgres_connect_timeout_ms.is_some()
-        || db_postgres_retryable_conflict_retry_max.is_some()
-        || db_postgres_shared_client_max_idle_per_key.is_some()
-        || db_postgres_shared_client_max_total_idle.is_some()
-        || db_postgres_persist_workers.is_some()
-        || db_postgres_persist_queue_capacity.is_some()
-        || db_postgres_persist_batch_max.is_some()
-        || db_postgres_persist_queue_full_mode.is_some();
-    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some()
-        || db_sqlite_journal_mode.is_some()
-        || db_sqlite_synchronous.is_some()
-        || db_sqlite_lock_retry_max.is_some()
-        || db_sqlite_lock_retry_delay_ms.is_some();
-    if postgres_runtime_overrides && sqlite_runtime_overrides {
-        eprintln!(
-            "lasm-smoke failed: postgres and sqlite runtime overrides cannot be combined in the same run"
-        );
-        return Err(2);
-    }
-    let effective_db_adapter = if postgres_runtime_overrides {
-        match db_adapter {
-            Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
-            Some(_) => {
-                eprintln!(
-                    "lasm-smoke failed: postgres DSN/runtime overrides require --db-adapter postgres when adapter is set explicitly"
-                );
-                return Err(2);
-            }
-            None => Some(RunDbAdapter::Postgres),
+    let explicit_db_postgres_retryable_conflict_retry_max = match resolve_lasm_db_usize_option(
+        db_postgres_retryable_conflict_retry_max,
+        "--db-postgres-retryable-conflict-retry-max",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
         }
-    } else if sqlite_runtime_overrides {
-        match db_adapter {
-            Some(RunDbAdapter::Sqlite) => Some(RunDbAdapter::Sqlite),
-            Some(_) => {
-                eprintln!(
-                    "lasm-smoke failed: sqlite runtime overrides require --db-adapter sqlite when adapter is set explicitly"
-                );
-                return Err(2);
-            }
-            None => Some(RunDbAdapter::Sqlite),
+    };
+    let explicit_db_sqlite_lock_retry_max = match resolve_lasm_db_usize_option(
+        db_sqlite_lock_retry_max,
+        "--db-sqlite-lock-retry-max",
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
         }
-    } else {
-        db_adapter
     };
     if let Some(value) = db_postgres_shared_client_max_idle_per_key {
         std::env::set_var(
@@ -1534,8 +1414,8 @@ fn cmd_lasm_smoke(
         explicit_db_postgres_retryable_conflict_retry_max,
         explicit_db_sqlite_lock_retry_max,
         db_sqlite_lock_retry_delay_ms,
-        db_sqlite_journal_mode.as_deref(),
-        db_sqlite_synchronous.as_deref(),
+        explicit_db_sqlite_journal_mode.as_deref(),
+        explicit_db_sqlite_synchronous.as_deref(),
         explicit_db_max_tx_handles,
         explicit_db_records_max,
         explicit_db_postgres_statement_cache_max,
@@ -9005,41 +8885,40 @@ fn cmd_run_lasm_backend(
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
-    let db_query_one_row_max_bytes_override = db_query_one_row_max_bytes
-        .map(|value| usize::try_from(value))
-        .transpose()
-        .map_err(|_| {
-            eprintln!("run failed: --db-query-one-row-max-bytes exceeds platform limits");
-            2
-        })?;
-    let db_query_one_row_max_columns_override = db_query_one_row_max_columns
-        .map(|value| usize::try_from(value))
-        .transpose()
-        .map_err(|_| {
-            eprintln!("run failed: --db-query-one-row-max-columns exceeds platform limits");
-            2
-        })?;
-    let db_sql_template_max_bytes_override = db_sql_template_max_bytes
-        .map(|value| usize::try_from(value))
-        .transpose()
-        .map_err(|_| {
-            eprintln!("run failed: --db-sql-template-max-bytes exceeds platform limits");
-            2
-        })?;
-    let db_params_max_bytes_override = db_params_max_bytes
-        .map(|value| usize::try_from(value))
-        .transpose()
-        .map_err(|_| {
-            eprintln!("run failed: --db-params-max-bytes exceeds platform limits");
-            2
-        })?;
-    let db_params_max_entries_override = db_params_max_entries
-        .map(|value| usize::try_from(value))
-        .transpose()
-        .map_err(|_| {
-            eprintln!("run failed: --db-params-max-entries exceeds platform limits");
-            2
-        })?;
+    let db_query_one_row_max_bytes_override =
+        resolve_lasm_db_usize_option(db_query_one_row_max_bytes, "--db-query-one-row-max-bytes")
+            .map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?;
+    let db_query_one_row_max_columns_override = resolve_lasm_db_usize_option(
+        db_query_one_row_max_columns,
+        "--db-query-one-row-max-columns",
+    )
+    .map_err(|message| {
+        eprintln!("run failed: {message}");
+        2
+    })?;
+    let db_sql_template_max_bytes_override =
+        resolve_lasm_db_usize_option(db_sql_template_max_bytes, "--db-sql-template-max-bytes")
+            .map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?;
+    let db_params_max_bytes_override =
+        resolve_lasm_db_usize_option(db_params_max_bytes, "--db-params-max-bytes").map_err(
+            |message| {
+                eprintln!("run failed: {message}");
+                2
+            },
+        )?;
+    let db_params_max_entries_override =
+        resolve_lasm_db_usize_option(db_params_max_entries, "--db-params-max-entries").map_err(
+            |message| {
+                eprintln!("run failed: {message}");
+                2
+            },
+        )?;
     lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
         db_query_one_row_max_bytes_override,
     );
@@ -9523,57 +9402,50 @@ fn cmd_run_lasm_backend(
             db_postgres_lock_timeout_ms,
             db_postgres_connect_timeout_ms,
             db_sqlite_busy_timeout_ms,
-            db_postgres_retryable_conflict_retry_max
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!(
-                        "run failed: --db-postgres-retryable-conflict-retry-max exceeds platform limits"
-                    );
-                    2
-                })?,
-            db_sqlite_lock_retry_max
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!("run failed: --db-sqlite-lock-retry-max exceeds platform limits");
+            resolve_lasm_db_usize_option(
+                db_postgres_retryable_conflict_retry_max,
+                "--db-postgres-retryable-conflict-retry-max",
+            )
+            .map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?,
+            resolve_lasm_db_usize_option(db_sqlite_lock_retry_max, "--db-sqlite-lock-retry-max")
+                .map_err(|message| {
+                    eprintln!("run failed: {message}");
                     2
                 })?,
             db_sqlite_lock_retry_delay_ms,
             db_sqlite_journal_mode.as_deref(),
             db_sqlite_synchronous.as_deref(),
-            db_max_tx_handles
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!("run failed: --db-max-tx-handles exceeds platform limits");
+            resolve_lasm_db_usize_option(db_max_tx_handles, "--db-max-tx-handles").map_err(
+                |message| {
+                    eprintln!("run failed: {message}");
                     2
-                })?,
-            db_records_max
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!("run failed: --db-records-max exceeds platform limits");
+                },
+            )?,
+            resolve_lasm_db_usize_option(db_records_max, "--db-records-max").map_err(
+                |message| {
+                    eprintln!("run failed: {message}");
                     2
-                })?,
-            db_postgres_statement_cache_max
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!(
-                        "run failed: --db-postgres-statement-cache-max exceeds platform limits"
-                    );
-                    2
-                })?,
-            db_postgres_placeholder_cache_max
-                .map(|value| usize::try_from(value))
-                .transpose()
-                .map_err(|_| {
-                    eprintln!(
-                        "run failed: --db-postgres-placeholder-cache-max exceeds platform limits"
-                    );
-                    2
-                })?,
+                },
+            )?,
+            resolve_lasm_db_usize_option(
+                db_postgres_statement_cache_max,
+                "--db-postgres-statement-cache-max",
+            )
+            .map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?,
+            resolve_lasm_db_usize_option(
+                db_postgres_placeholder_cache_max,
+                "--db-postgres-placeholder-cache-max",
+            )
+            .map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?,
         )
         .map_err(|message| {
             eprintln!("run failed: {message}");
