@@ -32,7 +32,7 @@ use crate::{
 use std::collections::BTreeMap;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_MAX_BYTES";
 const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
@@ -554,6 +554,51 @@ fn prepare_lasm_db_operation_params(
     })
 }
 
+fn set_lasm_dynamic_state_unavailable_response(
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) {
+    set_lasm_json_response(
+        response,
+        500,
+        &lasm_error_envelope(
+            "HTTP.INTERNAL",
+            "internal",
+            "dynamic response state unavailable",
+            500,
+            trace_id,
+        ),
+    );
+}
+
+fn lock_lasm_dynamic_state_or_respond<'a>(
+    dynamic_state: &'a Mutex<LasmDynamicResponseState>,
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) -> Option<MutexGuard<'a, LasmDynamicResponseState>> {
+    match dynamic_state.lock() {
+        Ok(state) => Some(state),
+        Err(_) => {
+            set_lasm_dynamic_state_unavailable_response(response, trace_id);
+            None
+        }
+    }
+}
+
+fn set_lasm_db_runtime_error_response(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    message: &str,
+    trace_id: &str,
+) {
+    let (status, code, kind) = classify_lasm_db_runtime_error(operation, message);
+    set_lasm_json_response(
+        response,
+        status,
+        &lasm_error_envelope(code, kind, message, status, trace_id),
+    );
+}
+
 fn is_lasm_internal_db_indexed_header_name(header_name: &str, base_name: &str) -> bool {
     if header_name.len() <= base_name.len() + 1 {
         return false;
@@ -1035,42 +1080,25 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     .postgres
                     .as_ref()
                     .expect("postgres preparse should exist for postgres adapter path");
-                let postgres_config = match dynamic_state.lock() {
-                    Ok(state) => {
-                        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
-                        match build_lasm_postgres_thread_local_config(&state) {
-                            Ok(config) => config,
-                            Err(message) => {
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("exec", message.as_str());
-                                set_lasm_json_response(
-                                    response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
+                let postgres_config = {
+                    let state =
+                        match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
+                        {
+                            Some(state) => state,
+                            None => return true,
+                        };
+                    debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+                    match build_lasm_postgres_thread_local_config(&state) {
+                        Ok(config) => config,
+                        Err(message) => {
+                            set_lasm_db_runtime_error_response(
+                                response,
+                                "exec",
+                                message.as_str(),
                                 trace_id,
-                            ),
-                        );
-                        return true;
+                            );
+                            return true;
+                        }
                     }
                 };
                 let affected_rows = match run_lasm_postgres_exec_thread_local(
@@ -1080,45 +1108,34 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 ) {
                     Ok(value) => value,
                     Err(message) => {
-                        let (status, code, kind) =
-                            classify_lasm_db_runtime_error("exec", message.as_str());
-                        set_lasm_json_response(
+                        set_lasm_db_runtime_error_response(
                             response,
-                            status,
-                            &lasm_error_envelope(code, kind, message.as_str(), status, trace_id),
+                            "exec",
+                            message.as_str(),
+                            trace_id,
                         );
                         return true;
                     }
                 };
-                let (record, compaction_snapshot) = match dynamic_state.lock() {
-                    Ok(mut state) => {
-                        let record = LasmDbRecord {
-                            id: state.next_db_record_id,
-                            op: "exec".to_string(),
-                            db,
-                            template: template.clone(),
-                            params: params.clone(),
-                            tx: 0,
-                            affected_rows,
-                            created_at_ms: lasm_now_ms(),
+                let (record, compaction_snapshot) = {
+                    let mut state =
+                        match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
+                        {
+                            Some(state) => state,
+                            None => return true,
                         };
-                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
-                    }
-                    Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
-                                trace_id,
-                            ),
-                        );
-                        return true;
-                    }
+                    let record = LasmDbRecord {
+                        id: state.next_db_record_id,
+                        op: "exec".to_string(),
+                        db,
+                        template: template.clone(),
+                        params: params.clone(),
+                        tx: 0,
+                        affected_rows,
+                        created_at_ms: lasm_now_ms(),
+                    };
+                    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                    append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
                 };
                 persist_lasm_postgres_record_after_unlock(
                     &postgres_config,
@@ -1141,68 +1158,47 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 );
                 return true;
             }
-            let (record, affected_rows) = match dynamic_state.lock() {
-                Ok(mut state) => {
-                    debug_assert_eq!(state.db_records_adapter, db_records_adapter);
-                    let mut affected_rows = 0u64;
-                    if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_params = prepared_params
-                            .sqlite
-                            .as_ref()
-                            .expect("sqlite params should exist for sqlite adapter path");
-                        let sqlite_affected_rows = match run_lasm_sqlite_exec(
-                            &mut state,
-                            template.as_str(),
-                            sqlite_params,
-                        ) {
+            let (record, affected_rows) = {
+                let mut state =
+                    match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
+                        Some(state) => state,
+                        None => return true,
+                    };
+                debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+                let mut affected_rows = 0u64;
+                if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                    let sqlite_params = prepared_params
+                        .sqlite
+                        .as_ref()
+                        .expect("sqlite params should exist for sqlite adapter path");
+                    let sqlite_affected_rows =
+                        match run_lasm_sqlite_exec(&mut state, template.as_str(), sqlite_params) {
                             Ok(value) => value,
                             Err(message) => {
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("exec", message.as_str());
-                                set_lasm_json_response(
+                                set_lasm_db_runtime_error_response(
                                     response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
+                                    "exec",
+                                    message.as_str(),
+                                    trace_id,
                                 );
                                 return true;
                             }
                         };
-                        affected_rows = sqlite_affected_rows;
-                    }
-                    let record = LasmDbRecord {
-                        id: state.next_db_record_id,
-                        op: "exec".to_string(),
-                        db,
-                        template: template.clone(),
-                        params: params.clone(),
-                        tx: 0,
-                        affected_rows,
-                        created_at_ms: lasm_now_ms(),
-                    };
-                    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                    persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                    (record, affected_rows)
+                    affected_rows = sqlite_affected_rows;
                 }
-                Err(_) => {
-                    set_lasm_json_response(
-                        response,
-                        500,
-                        &lasm_error_envelope(
-                            "HTTP.INTERNAL",
-                            "internal",
-                            "dynamic response state unavailable",
-                            500,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                }
+                let record = LasmDbRecord {
+                    id: state.next_db_record_id,
+                    op: "exec".to_string(),
+                    db,
+                    template: template.clone(),
+                    params: params.clone(),
+                    tx: 0,
+                    affected_rows,
+                    created_at_ms: lasm_now_ms(),
+                };
+                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                (record, affected_rows)
             };
             set_lasm_json_response(
                 response,
@@ -1456,18 +1452,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
                                 if let Some(tx_handle) = allocated_tx_handle {
                                     state.db_tx_handles.remove(&tx_handle);
                                 }
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("execTx", message.as_str());
-                                set_lasm_json_response(
+                                set_lasm_db_runtime_error_response(
                                     response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
+                                    "execTx",
+                                    message.as_str(),
+                                    trace_id,
                                 );
                                 return true;
                             }
@@ -1475,17 +1464,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         (config, db, tx, allocated_tx_handle)
                     }
                     Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
-                                trace_id,
-                            ),
-                        );
+                        set_lasm_dynamic_state_unavailable_response(response, trace_id);
                         return true;
                     }
                 };
@@ -1501,12 +1480,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
                                 state.db_tx_handles.remove(&tx_handle);
                             }
                         }
-                        let (status, code, kind) =
-                            classify_lasm_db_runtime_error("execTx", message.as_str());
-                        set_lasm_json_response(
+                        set_lasm_db_runtime_error_response(
                             response,
-                            status,
-                            &lasm_error_envelope(code, kind, message.as_str(), status, trace_id),
+                            "execTx",
+                            message.as_str(),
+                            trace_id,
                         );
                         return true;
                     }
@@ -1532,17 +1510,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
                     }
                     Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
-                                trace_id,
-                            ),
-                        );
+                        set_lasm_dynamic_state_unavailable_response(response, trace_id);
                         return true;
                     }
                 };
@@ -1624,18 +1592,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
                                 if let Some(tx_handle) = allocated_tx_handle {
                                     state.db_tx_handles.remove(&tx_handle);
                                 }
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("execTx", message.as_str());
-                                set_lasm_json_response(
+                                set_lasm_db_runtime_error_response(
                                     response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
+                                    "execTx",
+                                    message.as_str(),
+                                    trace_id,
                                 );
                                 return true;
                             }
@@ -1662,17 +1623,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     (record, affected_rows)
                 }
                 Err(_) => {
-                    set_lasm_json_response(
-                        response,
-                        500,
-                        &lasm_error_envelope(
-                            "HTTP.INTERNAL",
-                            "internal",
-                            "dynamic response state unavailable",
-                            500,
-                            trace_id,
-                        ),
-                    );
+                    set_lasm_dynamic_state_unavailable_response(response, trace_id);
                     return true;
                 }
             };
@@ -1875,35 +1826,18 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         match build_lasm_postgres_thread_local_config(&state) {
                             Ok(config) => config,
                             Err(message) => {
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("queryOne", message.as_str());
-                                set_lasm_json_response(
+                                set_lasm_db_runtime_error_response(
                                     response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
+                                    "queryOne",
+                                    message.as_str(),
+                                    trace_id,
                                 );
                                 return true;
                             }
                         }
                     }
                     Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
-                                trace_id,
-                            ),
-                        );
+                        set_lasm_dynamic_state_unavailable_response(response, trace_id);
                         return true;
                     }
                 };
@@ -1928,12 +1862,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         return true;
                     }
                     Err(message) => {
-                        let (status, code, kind) =
-                            classify_lasm_db_runtime_error("queryOne", message.as_str());
-                        set_lasm_json_response(
+                        set_lasm_db_runtime_error_response(
                             response,
-                            status,
-                            &lasm_error_envelope(code, kind, message.as_str(), status, trace_id),
+                            "queryOne",
+                            message.as_str(),
+                            trace_id,
                         );
                         return true;
                     }
@@ -1961,17 +1894,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
                     }
                     Err(_) => {
-                        set_lasm_json_response(
-                            response,
-                            500,
-                            &lasm_error_envelope(
-                                "HTTP.INTERNAL",
-                                "internal",
-                                "dynamic response state unavailable",
-                                500,
-                                trace_id,
-                            ),
-                        );
+                        set_lasm_dynamic_state_unavailable_response(response, trace_id);
                         return true;
                     }
                 };
@@ -2023,18 +1946,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
                                 return true;
                             }
                             Err(message) => {
-                                let (status, code, kind) =
-                                    classify_lasm_db_runtime_error("queryOne", message.as_str());
-                                set_lasm_json_response(
+                                set_lasm_db_runtime_error_response(
                                     response,
-                                    status,
-                                    &lasm_error_envelope(
-                                        code,
-                                        kind,
-                                        message.as_str(),
-                                        status,
-                                        trace_id,
-                                    ),
+                                    "queryOne",
+                                    message.as_str(),
+                                    trace_id,
                                 );
                                 return true;
                             }
@@ -2106,17 +2022,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     }
                 }
                 Err(_) => {
-                    set_lasm_json_response(
-                        response,
-                        500,
-                        &lasm_error_envelope(
-                            "HTTP.INTERNAL",
-                            "internal",
-                            "dynamic response state unavailable",
-                            500,
-                            trace_id,
-                        ),
-                    );
+                    set_lasm_dynamic_state_unavailable_response(response, trace_id);
                     return true;
                 }
             };
