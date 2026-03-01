@@ -1555,7 +1555,7 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} errorCode={} errorKind={} firstDurationMs={} pathParams={} headerCount={} dbAdapter={} dbRecordsMax={} dbTxMaxHandles={} dbStorePath={} dbSqliteStorePath={} dbPostgresDsnConfigured={} dbPostgresTlsMode={} dbPostgresStatementTimeoutMs={} dbPostgresLockTimeoutMs={} dbPostgresConnectTimeoutMs={} dbPostgresRetryableConflictRetryMax={} dbPostgresStatementCacheMax={} dbPostgresPlaceholderCacheMax={} dbPostgresSharedClientPoolKeys={} dbPostgresSharedClientPoolIdleTotal={} dbPostgresSharedClientMaxIdlePerKey={} dbPostgresSharedClientMaxTotalIdle={} dbPostgresPersistWorkers={} dbPostgresPersistQueueCapacity={} dbPostgresPersistBatchMax={} dbPostgresPersistQueueFullMode={} dbPostgresPersistWorkersAvailable={} dbPostgresPersistQueueDepth={} dbPostgresPersistQueueBackpressureTotal={} dbPostgresPersistSyncFallbackTotal={} dbSqliteBusyTimeoutMs={} dbSqliteLockRetryMax={} dbSqliteLockRetryDelayMs={} dbSqliteJournalMode={} dbSqliteSynchronous={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} errorCode={} errorKind={} firstDurationMs={} pathParams={} headerCount={} dbAdapter={} dbRecordsMax={} dbTxMaxHandles={} dbOpSequenceMax={} dbStorePath={} dbSqliteStorePath={} dbPostgresDsnConfigured={} dbPostgresTlsMode={} dbPostgresStatementTimeoutMs={} dbPostgresLockTimeoutMs={} dbPostgresConnectTimeoutMs={} dbPostgresRetryableConflictRetryMax={} dbPostgresStatementCacheMax={} dbPostgresPlaceholderCacheMax={} dbPostgresSharedClientPoolKeys={} dbPostgresSharedClientPoolIdleTotal={} dbPostgresSharedClientMaxIdlePerKey={} dbPostgresSharedClientMaxTotalIdle={} dbPostgresPersistWorkers={} dbPostgresPersistQueueCapacity={} dbPostgresPersistBatchMax={} dbPostgresPersistQueueFullMode={} dbPostgresPersistWorkersAvailable={} dbPostgresPersistQueueDepth={} dbPostgresPersistQueueBackpressureTotal={} dbPostgresPersistSyncFallbackTotal={} dbSqliteBusyTimeoutMs={} dbSqliteLockRetryMax={} dbSqliteLockRetryDelayMs={} dbSqliteJournalMode={} dbSqliteSynchronous={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
@@ -1584,6 +1584,7 @@ fn cmd_lasm_smoke(
                 smoke_db_adapter_label,
                 smoke_db_records_max,
                 smoke_db_tx_max_handles,
+                smoke_db_op_sequence_max,
                 smoke_db_store_path_text,
                 smoke_db_sqlite_store_path_text,
                 smoke_db_postgres_dsn_configured,
