@@ -495,6 +495,11 @@ struct PreparedLasmDbOperationParams {
     sqlite: Option<LasmSqliteQueryParams>,
 }
 
+enum LasmExecTxSource {
+    AllocateFromDb(i64),
+    ExistingTx(i64),
+}
+
 fn prepare_lasm_db_operation_params(
     db_records_adapter: LasmDbRecordsAdapter,
     validation_code: &'static str,
@@ -597,6 +602,147 @@ fn set_lasm_db_runtime_error_response(
         status,
         &lasm_error_envelope(code, kind, message, status, trace_id),
     );
+}
+
+fn resolve_lasm_exec_tx_source(
+    tx_db_source: Option<&str>,
+    tx_handle_raw: Option<&str>,
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) -> Option<LasmExecTxSource> {
+    if tx_db_source.is_some() && tx_handle_raw.is_some() {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.EXEC_TX_INVALID",
+                "validation",
+                "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    }
+    let tx_source = if let Some(db_raw) = tx_db_source {
+        let Some(db_value) = parse_lasm_positive_i64(db_raw.trim()) else {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.EXEC_TX_INVALID",
+                    "validation",
+                    "db.execTx requires transaction and query handles",
+                    400,
+                    trace_id,
+                ),
+            );
+            return None;
+        };
+        LasmExecTxSource::AllocateFromDb(db_value)
+    } else {
+        let Some(tx_raw) = tx_handle_raw else {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.EXEC_TX_INVALID",
+                    "validation",
+                    "db.execTx requires transaction and query handles",
+                    400,
+                    trace_id,
+                ),
+            );
+            return None;
+        };
+        let Some(tx_value) = parse_lasm_positive_i64(tx_raw.trim()) else {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.EXEC_TX_INVALID",
+                    "validation",
+                    "db.execTx requires transaction and query handles",
+                    400,
+                    trace_id,
+                ),
+            );
+            return None;
+        };
+        LasmExecTxSource::ExistingTx(tx_value)
+    };
+    if let LasmExecTxSource::AllocateFromDb(db_value) = &tx_source {
+        if !is_lasm_valid_db_cap_handle(*db_value) {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.EXEC_TX_INVALID",
+                    "validation",
+                    "db.execTx requires db.tx(dbCap) with valid db capability handle",
+                    400,
+                    trace_id,
+                ),
+            );
+            return None;
+        }
+    }
+    Some(tx_source)
+}
+
+fn resolve_lasm_exec_tx_state_bindings(
+    state: &mut LasmDynamicResponseState,
+    tx_source: &LasmExecTxSource,
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) -> Option<(i64, i64, Option<i64>)> {
+    match tx_source {
+        LasmExecTxSource::AllocateFromDb(db_value) => {
+            let Some(tx_value) = allocate_lasm_db_tx_handle(state, *db_value) else {
+                set_lasm_json_response(
+                    response,
+                    500,
+                    &lasm_error_envelope(
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime failure",
+                        500,
+                        trace_id,
+                    ),
+                );
+                return None;
+            };
+            Some((*db_value, tx_value, Some(tx_value)))
+        }
+        LasmExecTxSource::ExistingTx(tx_value) => {
+            let Some(db_value) = state.db_tx_handles.get(tx_value).copied() else {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_TX_HANDLE_INVALID",
+                        "validation",
+                        "db.execTx transaction handle must come from db.tx",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return None;
+            };
+            Some((db_value, *tx_value, None))
+        }
+    }
+}
+
+fn cleanup_lasm_exec_tx_allocated_handle(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    tx_handle: Option<i64>,
+) {
+    if let Some(tx_handle) = tx_handle {
+        if let Ok(mut state) = dynamic_state.lock() {
+            state.db_tx_handles.remove(&tx_handle);
+        }
+    }
 }
 
 fn is_lasm_internal_db_indexed_header_name(header_name: &str, base_name: &str) -> bool {
@@ -1295,20 +1441,6 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
                 );
-            if tx_db_source.is_some() && tx_handle_raw.is_some() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
             let template = template.trim().to_string();
             let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
             if !enforce_lasm_db_params_max_entries(
@@ -1320,73 +1452,15 @@ fn apply_lasm_internal_db_operation_materialization_single(
             ) {
                 return true;
             }
-            enum ExecTxSource {
-                AllocateFromDb(i64),
-                ExistingTx(i64),
-            }
-            let tx_source = if let Some(db_raw) = tx_db_source {
-                let Some(db_value) = parse_lasm_positive_i64(db_raw.trim()) else {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires transaction and query handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                };
-                ExecTxSource::AllocateFromDb(db_value)
-            } else {
-                let Some(tx_raw) = tx_handle_raw.as_ref() else {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires transaction and query handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                };
-                let Some(tx_value) = parse_lasm_positive_i64(tx_raw.trim()) else {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires transaction and query handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                };
-                ExecTxSource::ExistingTx(tx_value)
+            let tx_source = match resolve_lasm_exec_tx_source(
+                tx_db_source.as_deref(),
+                tx_handle_raw.as_deref(),
+                response,
+                trace_id,
+            ) {
+                Some(value) => value,
+                None => return true,
             };
-            if let ExecTxSource::AllocateFromDb(db_value) = &tx_source {
-                if !is_lasm_valid_db_cap_handle(*db_value) {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires db.tx(dbCap) with valid db capability handle",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                }
-            }
             let prepared_params = match prepare_lasm_db_operation_params(
                 db_records_adapter,
                 "DB.EXEC_TX_INVALID",
@@ -1407,45 +1481,13 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 let (postgres_config, db, tx, allocated_tx_handle) = match dynamic_state.lock() {
                     Ok(mut state) => {
                         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
-                        let (db, tx, allocated_tx_handle) = match &tx_source {
-                            ExecTxSource::AllocateFromDb(db_value) => {
-                                let Some(tx_value) =
-                                    allocate_lasm_db_tx_handle(&mut state, *db_value)
-                                else {
-                                    set_lasm_json_response(
-                                        response,
-                                        500,
-                                        &lasm_error_envelope(
-                                            "DB.TX_INTERNAL",
-                                            "internal",
-                                            "db.tx runtime failure",
-                                            500,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                };
-                                (*db_value, tx_value, Some(tx_value))
-                            }
-                            ExecTxSource::ExistingTx(tx_value) => {
-                                let Some(db_value) = state.db_tx_handles.get(tx_value).copied()
-                                else {
-                                    set_lasm_json_response(
-                                        response,
-                                        400,
-                                        &lasm_error_envelope(
-                                            "DB.EXEC_TX_HANDLE_INVALID",
-                                            "validation",
-                                            "db.execTx transaction handle must come from db.tx",
-                                            400,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                };
-                                (db_value, *tx_value, None)
-                            }
-                        };
+                        let (db, tx, allocated_tx_handle) =
+                            match resolve_lasm_exec_tx_state_bindings(
+                                &mut state, &tx_source, response, trace_id,
+                            ) {
+                                Some(value) => value,
+                                None => return true,
+                            };
                         let config = match build_lasm_postgres_thread_local_config(&state) {
                             Ok(config) => config,
                             Err(message) => {
@@ -1475,11 +1517,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 ) {
                     Ok(value) => value,
                     Err(message) => {
-                        if let Some(tx_handle) = allocated_tx_handle {
-                            if let Ok(mut state) = dynamic_state.lock() {
-                                state.db_tx_handles.remove(&tx_handle);
-                            }
-                        }
+                        cleanup_lasm_exec_tx_allocated_handle(dynamic_state, allocated_tx_handle);
                         set_lasm_db_runtime_error_response(
                             response,
                             "execTx",
@@ -1539,42 +1577,11 @@ fn apply_lasm_internal_db_operation_materialization_single(
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
                     debug_assert_eq!(state.db_records_adapter, db_records_adapter);
-                    let (db, tx, allocated_tx_handle) = match tx_source {
-                        ExecTxSource::AllocateFromDb(db_value) => {
-                            let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, db_value)
-                            else {
-                                set_lasm_json_response(
-                                    response,
-                                    500,
-                                    &lasm_error_envelope(
-                                        "DB.TX_INTERNAL",
-                                        "internal",
-                                        "db.tx runtime failure",
-                                        500,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            };
-                            (db_value, tx_value, Some(tx_value))
-                        }
-                        ExecTxSource::ExistingTx(tx_value) => {
-                            let Some(db_value) = state.db_tx_handles.get(&tx_value).copied() else {
-                                set_lasm_json_response(
-                                    response,
-                                    400,
-                                    &lasm_error_envelope(
-                                        "DB.EXEC_TX_HANDLE_INVALID",
-                                        "validation",
-                                        "db.execTx transaction handle must come from db.tx",
-                                        400,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            };
-                            (db_value, tx_value, None)
-                        }
+                    let (db, tx, allocated_tx_handle) = match resolve_lasm_exec_tx_state_bindings(
+                        &mut state, &tx_source, response, trace_id,
+                    ) {
+                        Some(value) => value,
+                        None => return true,
                     };
                     let mut affected_rows = 0u64;
                     if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
