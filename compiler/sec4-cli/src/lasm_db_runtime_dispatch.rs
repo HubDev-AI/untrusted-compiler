@@ -829,6 +829,59 @@ fn response_has_lasm_internal_db_indexed_headers(response: &sec4_core::HttpRespo
     false
 }
 
+fn clear_lasm_internal_db_materialization_headers(response: &mut sec4_core::HttpResponse) {
+    response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TX_RESULT_HEADER);
+    response
+        .headers
+        .remove(LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+}
+
+fn stage_lasm_internal_db_sequence_operation_headers(
+    response: &mut sec4_core::HttpResponse,
+    index: usize,
+    raw_operation: String,
+) {
+    clear_lasm_internal_db_materialization_headers(response);
+    response
+        .headers
+        .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), raw_operation);
+    if let Some(value) =
+        take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_HANDLE_HEADER, index)
+    {
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), value);
+    }
+    if let Some(value) =
+        take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
+    {
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(), value);
+    }
+    if let Some(value) =
+        take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_PARAMS_HEADER, index)
+    {
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), value);
+    }
+    if let Some(value) =
+        take_lasm_internal_header_value_indexed(response, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, index)
+    {
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(), value);
+    }
+}
+
 pub(crate) fn apply_lasm_internal_db_operation_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
@@ -928,47 +981,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let operation = raw_operation.trim().to_string();
 
-            response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_TX_RESULT_HEADER);
-            response
-                .headers
-                .remove(LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER);
-            response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
-            response
-                .headers
-                .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), raw_operation);
-            if let Some(value) = take_lasm_internal_header_value_indexed(
-                response,
-                LASM_INTERNAL_DB_HANDLE_HEADER,
-                index,
-            ) {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), value);
-            }
-            if let Some(value) = take_lasm_internal_header_value_indexed(
-                response,
-                LASM_INTERNAL_DB_TEMPLATE_HEADER,
-                index,
-            ) {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(), value);
-            }
-            if let Some(value) = take_lasm_internal_header_value_indexed(
-                response,
-                LASM_INTERNAL_DB_PARAMS_HEADER,
-                index,
-            ) {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), value);
-            }
+            stage_lasm_internal_db_sequence_operation_headers(response, index, raw_operation);
             let mut sequence_allocated_tx_source: Option<i64> = None;
             if operation == "execTx" {
                 let raw_tx_db = take_lasm_internal_header_value_indexed(
@@ -1083,15 +1096,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         .headers
                         .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
                 }
-            }
-            if let Some(value) = take_lasm_internal_header_value_indexed(
-                response,
-                LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-                index,
-            ) {
-                response
-                    .headers
-                    .insert(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(), value);
             }
 
             if !apply_lasm_internal_db_operation_materialization_single(
