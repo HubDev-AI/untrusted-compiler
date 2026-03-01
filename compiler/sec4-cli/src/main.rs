@@ -1242,6 +1242,7 @@ fn cmd_lasm_smoke(
     let mut runtime_route_method = method.trim().to_ascii_uppercase();
     let mut runtime_route_path = route.to_string();
     let mut route_registrations = Vec::<(String, String, sec4_core::HttpResponse)>::new();
+    let runtime_db_operation_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     let response_origin = match resolve_lasm_smoke_route_plan(
         &program,
         entry.name.as_str(),
@@ -1249,18 +1250,14 @@ fn cmd_lasm_smoke(
         route,
     ) {
         Some(route_plan) => {
-            let operation_count = route_plan
-                .headers
-                .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
-                .and_then(|value| value.trim().parse::<usize>().ok())
-                .unwrap_or(0);
-            if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+            let operation_count = parse_lasm_db_operation_sequence_count(&route_plan.headers);
+            if operation_count > runtime_db_operation_sequence_max {
                 eprintln!(
                         "lasm-smoke failed: route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
                         route_plan.route_method,
                         route_plan.route_path,
                         operation_count,
-                        LASM_INTERNAL_DB_OP_SEQUENCE_MAX
+                        runtime_db_operation_sequence_max
                     );
                 return Err(1);
             }
@@ -2228,11 +2225,7 @@ fn validate_lasm_route_db_operation_sequence_limits(
     operation_sequence_max: usize,
 ) -> Result<(), String> {
     for route in routes {
-        let operation_count = route
-            .headers
-            .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
-            .and_then(|value| value.trim().parse::<usize>().ok())
-            .unwrap_or(0);
+        let operation_count = parse_lasm_db_operation_sequence_count(&route.headers);
         if operation_count > operation_sequence_max {
             return Err(format!(
                 "route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
@@ -2241,6 +2234,13 @@ fn validate_lasm_route_db_operation_sequence_limits(
         }
     }
     Ok(())
+}
+
+fn parse_lasm_db_operation_sequence_count(headers: &BTreeMap<String, String>) -> usize {
+    headers
+        .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(0)
 }
 
 fn resolve_lasm_smoke_route_plan(
