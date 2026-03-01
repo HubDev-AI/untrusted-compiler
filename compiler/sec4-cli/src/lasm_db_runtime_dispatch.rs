@@ -286,6 +286,11 @@ fn resolve_lasm_db_op_sequence_max() -> usize {
 }
 
 #[inline(always)]
+pub(crate) fn lasm_db_op_sequence_max_limit() -> usize {
+    resolve_lasm_db_op_sequence_max()
+}
+
+#[inline(always)]
 fn enforce_lasm_db_params_max_entries(
     response: &mut sec4_core::HttpResponse,
     operation: &str,
