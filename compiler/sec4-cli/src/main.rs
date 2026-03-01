@@ -1418,6 +1418,7 @@ fn cmd_lasm_smoke(
     let smoke_db_sqlite_busy_timeout_ms = smoke_dynamic_state.db_sqlite_busy_timeout_ms;
     let smoke_db_sqlite_lock_retry_max = smoke_dynamic_state.db_sqlite_lock_retry_max;
     let smoke_db_sqlite_lock_retry_delay_ms = smoke_dynamic_state.db_sqlite_lock_retry_delay_ms;
+    let smoke_db_op_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     let smoke_db_sqlite_journal_mode = smoke_dynamic_state.db_sqlite_journal_mode.clone();
     let smoke_db_sqlite_synchronous = smoke_dynamic_state.db_sqlite_synchronous.clone();
     let smoke_db_postgres_shared_client_pool_keys =
@@ -1628,6 +1629,7 @@ fn cmd_lasm_smoke(
                 "adapter": smoke_db_adapter_label,
                 "recordsMax": smoke_db_records_max,
                 "txMaxHandles": smoke_db_tx_max_handles,
+                "opSequenceMax": smoke_db_op_sequence_max,
                 "storePath": smoke_db_store_path,
                 "sqliteStorePath": smoke_db_sqlite_store_path,
                 "postgres": {
