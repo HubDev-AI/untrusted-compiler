@@ -177,6 +177,8 @@ enum Commands {
         #[arg(long)]
         db_params_max_entries: Option<u64>,
         #[arg(long)]
+        db_op_sequence_max: Option<u64>,
+        #[arg(long)]
         db_postgres_dsn: Option<String>,
         #[arg(long)]
         db_postgres_dsn_file: Option<PathBuf>,
@@ -308,6 +310,8 @@ enum Commands {
         db_params_max_bytes: Option<u64>,
         #[arg(long)]
         db_params_max_entries: Option<u64>,
+        #[arg(long)]
+        db_op_sequence_max: Option<u64>,
         #[arg(long)]
         db_postgres_dsn: Option<String>,
         #[arg(long)]
@@ -740,6 +744,7 @@ fn main() {
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -801,6 +806,7 @@ fn main() {
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -866,6 +872,7 @@ fn main() {
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_postgres_tls_mode,
@@ -910,6 +917,7 @@ fn main() {
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_postgres_tls_mode,
@@ -1013,6 +1021,7 @@ fn cmd_lasm_smoke(
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_postgres_tls_mode: Option<RunDbPostgresTlsMode>,
@@ -1111,6 +1120,7 @@ fn cmd_lasm_smoke(
         db_sql_template_max_bytes,
         db_params_max_bytes,
         db_params_max_entries,
+        db_op_sequence_max,
         db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max,
         db_postgres_statement_timeout_ms,
@@ -1148,6 +1158,7 @@ fn cmd_lasm_smoke(
         db_sql_template_max_bytes,
         db_params_max_bytes,
         db_params_max_entries,
+        db_op_sequence_max,
         db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max,
         db_postgres_retryable_conflict_retry_max,
@@ -1166,6 +1177,7 @@ fn cmd_lasm_smoke(
     let db_sql_template_max_bytes_override = resolved_lasm_db_usize.db_sql_template_max_bytes;
     let db_params_max_bytes_override = resolved_lasm_db_usize.db_params_max_bytes;
     let db_params_max_entries_override = resolved_lasm_db_usize.db_params_max_entries;
+    let db_op_sequence_max_override = resolved_lasm_db_usize.db_op_sequence_max;
     lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
         db_query_one_row_max_bytes_override,
     );
@@ -1179,6 +1191,7 @@ fn cmd_lasm_smoke(
     lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
         db_params_max_entries_override,
     );
+    lasm_db_runtime_dispatch::set_lasm_db_op_sequence_max_override(db_op_sequence_max_override);
     let explicit_db_postgres_statement_cache_max =
         resolved_lasm_db_usize.db_postgres_statement_cache_max;
     let explicit_db_postgres_placeholder_cache_max =
@@ -7716,6 +7729,7 @@ fn cmd_run(
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -7881,6 +7895,7 @@ fn cmd_run(
         db_sql_template_max_bytes,
         db_params_max_bytes,
         db_params_max_entries,
+        db_op_sequence_max,
         db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max,
         db_postgres_statement_timeout_ms,
@@ -8091,6 +8106,7 @@ fn cmd_run(
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -8464,6 +8480,7 @@ struct LasmClusterConfig {
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -8798,6 +8815,7 @@ fn cmd_run_lasm_backend(
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -8842,6 +8860,7 @@ fn cmd_run_lasm_backend(
         db_sql_template_max_bytes,
         db_params_max_bytes,
         db_params_max_entries,
+        db_op_sequence_max,
         db_postgres_statement_cache_max,
         db_postgres_placeholder_cache_max,
         db_postgres_retryable_conflict_retry_max,
@@ -8856,6 +8875,7 @@ fn cmd_run_lasm_backend(
     let db_sql_template_max_bytes_override = resolved_lasm_db_usize.db_sql_template_max_bytes;
     let db_params_max_bytes_override = resolved_lasm_db_usize.db_params_max_bytes;
     let db_params_max_entries_override = resolved_lasm_db_usize.db_params_max_entries;
+    let db_op_sequence_max_override = resolved_lasm_db_usize.db_op_sequence_max;
     lasm_db_runtime_dispatch::set_lasm_db_query_one_row_max_bytes_override(
         db_query_one_row_max_bytes_override,
     );
@@ -8869,6 +8889,7 @@ fn cmd_run_lasm_backend(
     lasm_db_runtime_dispatch::set_lasm_db_params_max_entries_override(
         db_params_max_entries_override,
     );
+    lasm_db_runtime_dispatch::set_lasm_db_op_sequence_max_override(db_op_sequence_max_override);
 
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -9168,6 +9189,7 @@ fn cmd_run_lasm_backend(
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,
@@ -9236,6 +9258,7 @@ fn cmd_run_lasm_backend(
             db_sql_template_max_bytes,
             db_params_max_bytes,
             db_params_max_entries,
+            db_op_sequence_max,
             db_postgres_statement_cache_max,
             db_postgres_placeholder_cache_max,
             db_postgres_statement_timeout_ms,

@@ -68,6 +68,7 @@ static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::n
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_PARAMS_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
+static LASM_DB_OP_SEQUENCE_MAX_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 
@@ -276,6 +277,10 @@ fn lasm_db_params_entry_count(
 
 #[inline(always)]
 fn resolve_lasm_db_op_sequence_max() -> usize {
+    let override_value = LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.load(Ordering::Relaxed);
+    if override_value != 0 {
+        return override_value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX);
+    }
     *LASM_DB_OP_SEQUENCE_MAX_RESOLVED.get_or_init(|| {
         std::env::var(LASM_DB_OP_SEQUENCE_MAX_ENV)
             .ok()
@@ -288,6 +293,11 @@ fn resolve_lasm_db_op_sequence_max() -> usize {
 #[inline(always)]
 pub(crate) fn lasm_db_op_sequence_max_limit() -> usize {
     resolve_lasm_db_op_sequence_max()
+}
+
+#[inline(always)]
+pub(crate) fn set_lasm_db_op_sequence_max_override(value: Option<usize>) {
+    LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
 }
 
 #[inline(always)]
