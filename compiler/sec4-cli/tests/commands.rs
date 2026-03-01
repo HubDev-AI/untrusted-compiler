@@ -30108,6 +30108,8 @@ fn main() effects { net } -> Int {
             "16384",
             "--db-params-max-entries",
             "99",
+            "--db-op-sequence-max",
+            "77",
             "--db-sqlite-busy-timeout-ms",
             "2500",
             "--db-sqlite-journal-mode",
@@ -30339,6 +30341,13 @@ fn main() effects { net } -> Int {
             .and_then(serde_json::Value::as_u64),
         Some(99),
         "first status json should include dbParamsMaxEntries runtime tuning"
+    );
+    assert_eq!(
+        first_status
+            .get("dbOpSequenceMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(77),
+        "first status json should include dbOpSequenceMax runtime tuning"
     );
     assert_eq!(
         first_status
