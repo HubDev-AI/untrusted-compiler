@@ -1,9 +1,9 @@
 use crate::lasm_db_adapter_state::lasm_db_postgres_tls_mode_label;
 use crate::lasm_db_config::lasm_db_records_adapter_label;
 use crate::lasm_db_runtime_dispatch::{
-    lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
-    lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
-    lasm_db_sql_template_max_bytes_limit,
+    lasm_db_op_sequence_max_limit, lasm_db_params_max_bytes_limit,
+    lasm_db_params_max_entries_limit, lasm_db_query_one_row_max_bytes_limit,
+    lasm_db_query_one_row_max_columns_limit, lasm_db_sql_template_max_bytes_limit,
 };
 use crate::lasm_db_runtime_postgres::{
     lasm_postgres_shared_client_max_idle_per_key, lasm_postgres_shared_client_max_total_idle,
@@ -726,6 +726,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
     let sql_template_max_bytes = lasm_db_sql_template_max_bytes_limit();
     let params_max_bytes = lasm_db_params_max_bytes_limit();
     let params_max_entries = lasm_db_params_max_entries_limit();
+    let operation_sequence_max = lasm_db_op_sequence_max_limit();
     let postgres_persist_workers = lasm_postgres_persist_workers_configured();
     let postgres_persist_queue_capacity = lasm_postgres_persist_queue_capacity_configured();
     let postgres_persist_batch_max = lasm_postgres_persist_batch_max_configured();
@@ -821,6 +822,7 @@ pub(crate) fn apply_lasm_db_list_records_response_materialization(
                 "sqlTemplateMaxBytes": sql_template_max_bytes,
                 "paramsMaxBytes": params_max_bytes,
                 "paramsMaxEntries": params_max_entries,
+                "operationSequenceMax": operation_sequence_max,
                 "queryOneRowMaxBytes": query_one_row_max_bytes,
                 "queryOneRowMaxColumns": query_one_row_max_columns,
                 "postgresPersistWorkers": postgres_persist_workers,
