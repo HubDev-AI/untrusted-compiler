@@ -53,6 +53,7 @@ pub(crate) struct ResolvedLasmDbUsizeOptions {
     pub(crate) db_sql_template_max_bytes: Option<usize>,
     pub(crate) db_params_max_bytes: Option<usize>,
     pub(crate) db_params_max_entries: Option<usize>,
+    pub(crate) db_op_sequence_max: Option<usize>,
     pub(crate) db_postgres_statement_cache_max: Option<usize>,
     pub(crate) db_postgres_placeholder_cache_max: Option<usize>,
     pub(crate) db_postgres_retryable_conflict_retry_max: Option<usize>,
@@ -68,6 +69,7 @@ pub(crate) fn resolve_lasm_db_usize_options(
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_retryable_conflict_retry_max: Option<u64>,
@@ -95,6 +97,10 @@ pub(crate) fn resolve_lasm_db_usize_options(
         db_params_max_entries: resolve_lasm_db_usize_option(
             db_params_max_entries,
             "--db-params-max-entries",
+        )?,
+        db_op_sequence_max: resolve_lasm_db_usize_option(
+            db_op_sequence_max,
+            "--db-op-sequence-max",
         )?,
         db_postgres_statement_cache_max: resolve_lasm_db_usize_option(
             db_postgres_statement_cache_max,
@@ -185,6 +191,7 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     db_sql_template_max_bytes: Option<u64>,
     db_params_max_bytes: Option<u64>,
     db_params_max_entries: Option<u64>,
+    db_op_sequence_max: Option<u64>,
     db_postgres_statement_cache_max: Option<u64>,
     db_postgres_placeholder_cache_max: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
@@ -244,6 +251,9 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     }
     if backend != RunBackend::Lasm && db_params_max_entries.is_some() {
         return Err("--db-params-max-entries is only supported with --backend lasm".to_string());
+    }
+    if backend != RunBackend::Lasm && db_op_sequence_max.is_some() {
+        return Err("--db-op-sequence-max is only supported with --backend lasm".to_string());
     }
     if backend != RunBackend::Lasm && db_postgres_statement_cache_max.is_some() {
         return Err(
@@ -351,6 +361,9 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if db_params_max_entries == Some(0) {
         return Err("--db-params-max-entries must be >= 1".to_string());
     }
+    if db_op_sequence_max == Some(0) {
+        return Err("--db-op-sequence-max must be >= 1".to_string());
+    }
     if db_postgres_statement_cache_max == Some(0) {
         return Err("--db-postgres-statement-cache-max must be >= 1".to_string());
     }
@@ -416,6 +429,12 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         .unwrap_or(false)
     {
         return Err("--db-params-max-entries exceeds platform limits".to_string());
+    }
+    if db_op_sequence_max
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err("--db-op-sequence-max exceeds platform limits".to_string());
     }
     if db_postgres_persist_batch_max
         .map(|value| usize::try_from(value).is_err())

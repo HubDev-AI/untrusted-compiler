@@ -111,6 +111,7 @@ fn spawn_lasm_cluster_worker(
         "--db-params-max-entries",
         config.db_params_max_entries,
     );
+    push_optional_u64_run_arg(&mut cmd, "--db-op-sequence-max", config.db_op_sequence_max);
     push_optional_u64_run_arg(
         &mut cmd,
         "--db-postgres-statement-cache-max",
