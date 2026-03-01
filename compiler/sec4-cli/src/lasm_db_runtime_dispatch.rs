@@ -27,7 +27,7 @@ use crate::{
     LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX,
     LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
-    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+    LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -880,6 +880,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
             response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+            response.headers.remove(LASM_INTERNAL_DB_TX_RESULT_HEADER);
             response
                 .headers
                 .remove(LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER);
@@ -1020,9 +1021,27 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 return true;
             }
             if let Some(tx_db_source) = sequence_allocated_tx_source {
-                let Some(tx_handle) =
-                    parse_lasm_internal_db_exec_tx_handle_from_response_body(response)
+                let Some(tx_handle_raw) =
+                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
                 else {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.TX_INTERNAL",
+                            "internal",
+                            "db.execTx runtime did not publish transaction handle marker",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    cleanup_lasm_internal_db_sequence_tx_handles(
+                        dynamic_state,
+                        sequence_tx_handles_by_source.values().copied(),
+                    );
+                    return true;
+                };
+                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
                     set_lasm_json_response(
                         response,
                         500,
@@ -1567,6 +1586,10 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         "affectedRows": affected_rows,
                     }),
                 );
+                response.headers.insert(
+                    LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
+                    record.tx.to_string(),
+                );
                 return true;
             }
 
@@ -1640,6 +1663,10 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     "tx": record.tx,
                     "affectedRows": affected_rows,
                 }),
+            );
+            response.headers.insert(
+                LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
+                record.tx.to_string(),
             );
             true
         }
@@ -2067,16 +2094,6 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
     }
-}
-
-fn parse_lasm_internal_db_exec_tx_handle_from_response_body(
-    response: &sec4_core::HttpResponse,
-) -> Option<i64> {
-    if response.status >= 400 || response.body.is_empty() {
-        return None;
-    }
-    let value: serde_json::Value = serde_json::from_slice(&response.body).ok()?;
-    value.get("tx")?.as_i64().filter(|value| *value > 0)
 }
 
 fn cleanup_lasm_internal_db_sequence_tx_handles(
