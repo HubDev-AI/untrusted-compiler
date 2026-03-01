@@ -17061,6 +17061,74 @@ entry = "src/main.ut"
 }
 
 #[test]
+fn run_command_lasm_backend_rejects_db_operation_sequence_over_runtime_override_limit() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-op-sequence-runtime-limit");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbopsequenceruntimelimitcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    let mut source =
+        String::from("fn dbMany() effects { net, db.write } -> Int {\n  let db = DbCap();\n");
+    for index in 0..3usize {
+        source.push_str(
+            format!(
+                "  let q{index} = sql.q(\"SELECT {} LIMIT 1\", \"[{}]\");\n",
+                index + 1,
+                index + 1
+            )
+            .as_str(),
+        );
+        source.push_str(format!("  db.exec(db, q{index});\n").as_str());
+    }
+    source.push_str(
+        "  res.json(200, \"DbExecRuntimeResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.post(router, \"/db/many\", dbMany);\n  http.serve(8080, router);\n  0\n}\n",
+    );
+    fs::write(project_dir.join("src/main.ut"), source).expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port = find_available_tcp_port();
+    let port_value = port.to_string();
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--oneshot",
+        "--port",
+        &port_value,
+        "--serve-timeout-ms",
+        "20000",
+        "--db-op-sequence-max",
+        "2",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when DB operation sequence exceeds explicit runtime override"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("route POST /db/many resolves 3 DB intrinsic operations")
+            && stderr.contains("maximum supported per handler is 2"),
+        "run command should emit deterministic DB operation sequence override diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_persists_sqlite_records_and_query_one_when_db_intrinsics_are_used() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-sqlite");
     let db_base = project_dir.join("lasm-db");
