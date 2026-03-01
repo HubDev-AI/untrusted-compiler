@@ -1191,6 +1191,10 @@ fn lasm_smoke_command_runs_in_memory_runtime_with_compiled_entrypoint() {
         stdout.contains("body=smoke body"),
         "lasm-smoke output should include extracted handler response body:\n{stdout}"
     );
+    assert!(
+        stdout.contains("dbOpSequenceMax="),
+        "lasm-smoke output should include db operation sequence max summary field:\n{stdout}"
+    );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
 }
