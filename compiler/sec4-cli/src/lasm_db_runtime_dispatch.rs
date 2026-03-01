@@ -46,6 +46,10 @@ const LASM_DB_PARAMS_MAX_ENTRIES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_ENTRIES
 const LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT: usize = 2048;
 const LASM_DB_PARAMS_MAX_ENTRIES_MIN: usize = 1;
 const LASM_DB_PARAMS_MAX_ENTRIES_MAX: usize = 65_536;
+const LASM_DB_OP_SEQUENCE_MAX_ENV: &str = "SEC4_RT_LASM_DB_OP_SEQUENCE_MAX";
+const LASM_DB_OP_SEQUENCE_MAX_DEFAULT: usize = LASM_INTERNAL_DB_OP_SEQUENCE_MAX;
+const LASM_DB_OP_SEQUENCE_MAX_MIN: usize = 2;
+const LASM_DB_OP_SEQUENCE_MAX_MAX: usize = 4096;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_BYTES";
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
@@ -58,6 +62,7 @@ const LASM_DB_RECORDS_COMPACTION_SYNC_DROPS_INTERVAL: u64 = 1024;
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_DB_OP_SEQUENCE_MAX_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
@@ -267,6 +272,17 @@ fn lasm_db_params_entry_count(
             }
         }
     }
+}
+
+#[inline(always)]
+fn resolve_lasm_db_op_sequence_max() -> usize {
+    *LASM_DB_OP_SEQUENCE_MAX_RESOLVED.get_or_init(|| {
+        std::env::var(LASM_DB_OP_SEQUENCE_MAX_ENV)
+            .ok()
+            .and_then(|raw| raw.trim().parse::<usize>().ok())
+            .map(|value| value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX))
+            .unwrap_or(LASM_DB_OP_SEQUENCE_MAX_DEFAULT)
+    })
 }
 
 #[inline(always)]
@@ -837,14 +853,18 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         );
         return true;
     }
-    if operation_count > LASM_INTERNAL_DB_OP_SEQUENCE_MAX {
+    let operation_sequence_max = resolve_lasm_db_op_sequence_max();
+    if operation_count > operation_sequence_max {
+        let message = format!(
+            "db operation sequence exceeds maximum supported operations per handler ({operation_sequence_max})"
+        );
         set_lasm_json_response(
             response,
             400,
             &lasm_error_envelope(
                 "DB.OPERATION_INVALID",
                 "validation",
-                "db operation sequence exceeds maximum supported operations per handler",
+                message.as_str(),
                 400,
                 trace_id,
             ),
