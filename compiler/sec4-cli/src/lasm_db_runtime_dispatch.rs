@@ -852,7 +852,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         return true;
     }
     if operation_count > 1 {
-        let mut sequence_tx_handles_by_source = BTreeMap::<String, i64>::new();
+        let mut sequence_tx_handles_by_source = BTreeMap::<i64, i64>::new();
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(
                 response,
@@ -915,7 +915,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     .headers
                     .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), value);
             }
-            let mut sequence_allocated_tx_source: Option<String> = None;
+            let mut sequence_allocated_tx_source: Option<i64> = None;
             if operation == "execTx" {
                 let raw_tx_db = take_lasm_internal_header_value_indexed(
                     response,
@@ -928,16 +928,50 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     index,
                 );
                 if let Some(raw_tx_db) = raw_tx_db {
-                    let tx_db_source = materialize_lasm_internal_header_value(
+                    let tx_db_source_raw = materialize_lasm_internal_header_value(
                         raw_tx_db.clone(),
                         request,
                         path_params,
-                    )
-                    .trim()
-                    .to_string();
-                    if let Some(existing_tx_handle) = sequence_tx_handles_by_source
-                        .get(tx_db_source.as_str())
-                        .copied()
+                    );
+                    let Some(tx_db_source) = parse_lasm_positive_i64(tx_db_source_raw.trim())
+                    else {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.EXEC_TX_INVALID",
+                                "validation",
+                                "db.execTx requires transaction and query handles",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        cleanup_lasm_internal_db_sequence_tx_handles(
+                            dynamic_state,
+                            sequence_tx_handles_by_source.values().copied(),
+                        );
+                        return true;
+                    };
+                    if !is_lasm_valid_db_cap_handle(tx_db_source) {
+                        set_lasm_json_response(
+                            response,
+                            400,
+                            &lasm_error_envelope(
+                                "DB.EXEC_TX_INVALID",
+                                "validation",
+                                "db.execTx requires db.tx(dbCap) with valid db capability handle",
+                                400,
+                                trace_id,
+                            ),
+                        );
+                        cleanup_lasm_internal_db_sequence_tx_handles(
+                            dynamic_state,
+                            sequence_tx_handles_by_source.values().copied(),
+                        );
+                        return true;
+                    }
+                    if let Some(existing_tx_handle) =
+                        sequence_tx_handles_by_source.get(&tx_db_source).copied()
                     {
                         response.headers.insert(
                             LASM_INTERNAL_DB_TX_HEADER.to_string(),
