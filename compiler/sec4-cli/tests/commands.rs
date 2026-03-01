@@ -2438,6 +2438,57 @@ fn lasm_smoke_command_rejects_zero_db_op_sequence_max() {
 }
 
 #[test]
+fn lasm_smoke_command_rejects_route_db_operation_sequence_over_runtime_override_limit() {
+    let root = temp_dir("sec4-lasm-smoke-db-op-sequence-runtime-limit");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-db-op-sequence-runtime-limit\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn dbMany() effects { net, db.write } -> Int {\n  let db = DbCap();\n  let q1 = sql.q(\"SELECT 1 LIMIT 1\", \"[1]\");\n  let q2 = sql.q(\"SELECT 2 LIMIT 1\", \"[2]\");\n  let q3 = sql.q(\"SELECT 3 LIMIT 1\", \"[3]\");\n  db.exec(db, q1);\n  db.exec(db, q2);\n  db.exec(db, q3);\n  res.json(200, \"DbExecRuntimeResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.post(router, \"/db/many\", dbMany);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "POST",
+        "--route",
+        "/db/many",
+        "--db-op-sequence-max",
+        "2",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail when route DB operation sequence exceeds runtime override limit"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "lasm-smoke should exit with deterministic route-validation failure status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("lasm-smoke failed: route POST /db/many resolves 3 DB intrinsic operations")
+            && stderr.contains("maximum supported per handler is 2"),
+        "lasm-smoke should emit deterministic DB sequence override diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_both_db_postgres_dsn_and_file() {
     let root = temp_dir("sec4-lasm-smoke-postgres-dsn-conflict");
     let project_dir = root.join("project");
