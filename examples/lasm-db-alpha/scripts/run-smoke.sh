@@ -467,12 +467,14 @@ dispatch db-list "/db/records"
 
 if [ "$DB_ADAPTER" = "records" ] || [ "$DB_ADAPTER" = "records.log" ]; then
   if [ ! -f "$DB_BASE/records.log" ]; then
-    echo "records adapter expected $DB_BASE/records.log" >&2
+    echo "records adapter expected $DB_BASE/records.log immediately after startup" >&2
     exit 1
+  fi
+  if [ "$ASSERT" = "1" ]; then
+    echo "[ok] records log bootstrap: $DB_BASE/records.log"
   fi
 
   if [ "$ASSERT" = "1" ]; then
-    echo "[ok] records log exists: $DB_BASE/records.log"
     echo "records.tail:"
     tail -n 3 "$DB_BASE/records.log"
   fi
