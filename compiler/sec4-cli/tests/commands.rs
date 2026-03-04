@@ -1267,7 +1267,7 @@ fn lasm_smoke_command_materializes_db_tx_response() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn dbTx() effects { net } -> Int {\n  let opName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let opValue = headers.value(\"tx\");\n  let dbName = headers.name(\"X-Sec4-Internal-Db\");\n  let dbValue = headers.value(\"1\");\n  res.setHeader(opName, opValue);\n  res.setHeader(dbName, dbValue);\n  res.json(200, \"DbExecTxRuntimeResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/tx\", dbTx);\n  0\n}\n",
+        "fn dbTx() effects { net, db.tx } -> Int {\n  let db = DbCap();\n  db.tx(db);\n  res.text(200, \"tx placeholder\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/tx\", dbTx);\n  0\n}\n",
     )
     .expect("entry should be written");
 
