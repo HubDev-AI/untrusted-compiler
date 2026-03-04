@@ -18,11 +18,13 @@ WORKBENCH_ARGS=(
 
 case "$DB_ADAPTER" in
   records|records.log)
+    mkdir -p "$DB_BASE"
     echo "LASM workbench: records adapter (persistence: records.log)"
     echo "DB base: $DB_BASE"
     WORKBENCH_ARGS+=(--db-base "$DB_BASE")
     ;;
   sqlite)
+    mkdir -p "$DB_BASE"
     echo "LASM workbench: sqlite adapter (persistence: records.sqlite3)"
     echo "DB base: $DB_BASE"
     WORKBENCH_ARGS+=(--db-base "$DB_BASE" --db-adapter sqlite)
