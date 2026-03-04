@@ -900,6 +900,29 @@ fn set_lasm_db_preparse_mismatch_response(
     );
 }
 
+fn ensure_lasm_db_adapter_state_match(
+    response: &mut sec4_core::HttpResponse,
+    state: &LasmDynamicResponseState,
+    expected: LasmDbRecordsAdapter,
+    trace_id: &str,
+) -> bool {
+    if state.db_records_adapter == expected {
+        return true;
+    }
+    set_lasm_json_response(
+        response,
+        500,
+        &lasm_error_envelope(
+            "DB.ADAPTER_MISMATCH",
+            "internal",
+            "internal db adapter state mismatch",
+            500,
+            trace_id,
+        ),
+    );
+    false
+}
+
 fn resolve_lasm_exec_tx_source(
     tx_db_source: Option<&str>,
     tx_handle_raw: Option<&str>,
@@ -1548,7 +1571,9 @@ fn handle_lasm_internal_db_exec_operation(
                 Some(state) => state,
                 None => return true,
             };
-            debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+            if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+                return true;
+            }
             match build_lasm_postgres_thread_local_config(&state) {
                 Ok(config) => config,
                 Err(message) => {
@@ -1602,7 +1627,9 @@ fn handle_lasm_internal_db_exec_operation(
             Some(state) => state,
             None => return true,
         };
-        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
         let mut affected_rows = 0u64;
         if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
             let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
@@ -1700,7 +1727,9 @@ fn handle_lasm_internal_db_exec_tx_operation(
             Some(state) => state,
             None => return true,
         };
-        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
         let (db, tx, allocated_tx_handle) =
             match resolve_lasm_exec_tx_state_bindings(&mut state, &tx_source, response, trace_id) {
                 Some(value) => value,
@@ -1768,7 +1797,9 @@ fn handle_lasm_internal_db_exec_tx_operation(
             Some(state) => state,
             None => return true,
         };
-        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
         let (db, tx, allocated_tx_handle) =
             match resolve_lasm_exec_tx_state_bindings(&mut state, &tx_source, response, trace_id) {
                 Some(value) => value,
@@ -1885,7 +1916,9 @@ fn handle_lasm_internal_db_query_one_operation(
             Some(state) => state,
             None => return true,
         };
-        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
         let postgres_config = match build_lasm_postgres_thread_local_config(&state) {
             Ok(config) => config,
             Err(message) => {
@@ -1971,7 +2004,9 @@ fn handle_lasm_internal_db_query_one_operation(
             Some(state) => state,
             None => return true,
         };
-        debug_assert_eq!(state.db_records_adapter, db_records_adapter);
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
         if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
             let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
                 set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
@@ -2150,6 +2185,47 @@ mod tests {
             headers: BTreeMap::new(),
             body: Vec::new(),
         }
+    }
+
+    #[test]
+    fn rejects_internal_db_operation_when_runtime_adapter_state_mismatches_dispatch_adapter() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState {
+            db_records_adapter: LasmDbRecordsAdapter::Sqlite,
+            ..LasmDynamicResponseState::default()
+        });
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "select 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "0".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "adapter mismatch should be handled deterministically"
+        );
+        assert_eq!(response.status, 500);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.ADAPTER_MISMATCH\""));
     }
 
     #[test]
