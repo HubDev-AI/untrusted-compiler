@@ -27,6 +27,117 @@ normalize_request_timeout() {
   fi
 }
 
+trim_whitespace() {
+  printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+read_env_value() {
+  local file="$1"
+  local key="$2"
+  local line
+  local name
+  local value
+
+  while IFS= read -r line; do
+    line="$(trim_whitespace "${line%%$'\r'}")"
+    [ -z "$line" ] && continue
+    case "$line" in
+      \#*) continue ;;
+    esac
+
+    if [[ "$line" == export\ * ]]; then
+      line="$(trim_whitespace "${line#export }")"
+    fi
+
+    [[ "$line" != *"="* ]] && continue
+    name="$(trim_whitespace "${line%%=*}")"
+    [ "$name" != "$key" ] && continue
+
+    value="${line#*=}"
+    value="$(trim_whitespace "$value")"
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+
+    printf '%s' "$value"
+    return 0
+  done < "$file"
+
+  return 1
+}
+
+resolve_candidate_file() {
+  local path="$1"
+  if [ -z "$path" ]; then
+    return 1
+  fi
+  if [ -f "$path" ]; then
+    printf '%s' "$path"
+    return 0
+  fi
+  if [ -f "$EXAMPLE_DIR/$path" ]; then
+    printf '%s' "$EXAMPLE_DIR/$path"
+    return 0
+  fi
+  return 1
+}
+
+resolve_postgres_dsn_from_env_file() {
+  local file="$1"
+  local dsn
+  dsn="$(read_env_value "$file" SEC4_RT_LASM_DB_POSTGRES_DSN || true)"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s' "$dsn"
+}
+
+resolve_postgres_runtime_file() {
+  local candidate_file
+  local resolved_file
+  local candidates=(
+    "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE:-}"
+    "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE:-}"
+    "$SCRIPT_DIR/../../infra/local-postgres/.runtime.env"
+    "$EXAMPLE_DIR/../../infra/local-postgres/.runtime.env"
+  )
+
+  for candidate_file in "${candidates[@]}"; do
+    [ -z "$candidate_file" ] && continue
+    resolved_file="$(resolve_candidate_file "$candidate_file" || true)"
+    if [ -n "$resolved_file" ] && resolve_postgres_dsn_from_env_file "$resolved_file"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+resolve_postgres_dsn_file() {
+  local candidate_file
+  local resolved_file
+
+  candidate_file="${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}}"
+  if [ -n "$candidate_file" ]; then
+    resolved_file="$(resolve_candidate_file "$candidate_file" || true)"
+    if [ -n "$resolved_file" ]; then
+      printf '%s' "$resolved_file"
+      return 0
+    fi
+  fi
+
+  candidate_file="${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}}"
+  if [ -n "$candidate_file" ]; then
+    resolved_file="$(resolve_candidate_file "$candidate_file" || true)"
+    if [ -n "$resolved_file" ]; then
+      printf '%s' "$resolved_file"
+      return 0
+    fi
+  fi
+
+  return 1
+}
 SEC4_PID=""
 TMP_DIR="$(mktemp -d)"
 LOG_FILE="$TMP_DIR/sec4-db-alpha-smoke.log"
@@ -68,9 +179,11 @@ Environment:
   # compatibility fallbacks:
   SEC4_RT_LASM_DB_PORT/SEC4_RT_LASM_DB_ADAPTER/SEC4_RT_LASM_DB_BASE
   SEC4_RT_LASM_DB_SERVE_TIMEOUT_MS/SEC4_RT_LASM_DB_TIMEOUT_MS
-  SEC4_RT_LASM_DB_POSTGRES_DSN           required when db-adapter=postgres
-  SEC4_RT_LASM_DB_POSTGRES_DSN_FILE      alternative when db-adapter=postgres
-  SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH  alternative when db-adapter=postgres
+  SEC4_DB_ALPHA_DB_POSTGRES_DSN          optional DSN literal for postgres
+  SEC4_DB_ALPHA_POSTGRES_DSN_FILE        optional DSN file for postgres
+  SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH   optional legacy DSN file path for postgres
+  SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE optional runtime env path
+  (fallback to SEC4_RT_LASM_DB_POSTGRES_DSN/FILE/FILE_PATH)
 USAGE
 }
 
@@ -221,12 +334,29 @@ case "$DB_ADAPTER" in
     ;;
   postgres)
     run_args+=(--db-adapter postgres)
-    if [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" ]; then
-      run_args+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
-    elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
+    if [ -n "${SEC4_DB_ALPHA_DB_POSTGRES_DSN-}" ]; then
+      run_args+=(--db-postgres-dsn "$SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+    elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN-}" ]; then
       run_args+=(--db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN")
-    elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}" ]; then
-      run_args+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+    elif [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH-}" ]; then
+      dsn_file="$(resolve_postgres_dsn_file)" || true
+      if [ -z "${dsn_file-}" ] || [ ! -f "$dsn_file" ]; then
+        echo "postgres adapter selected but provided DSN file is missing: ${dsn_file:-<none>}" >&2
+        usage
+        exit 1
+      fi
+      run_args+=(--db-postgres-dsn-file "$(resolve_postgres_dsn_file)")
+    elif [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE-}" ]; then
+      runtime_dsn="$(resolve_postgres_runtime_file)" || true
+      if [ -n "${runtime_dsn-}" ]; then
+        run_args+=(--db-postgres-dsn "$runtime_dsn")
+      else
+        echo "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE is set but no DSN was read" >&2
+        usage
+        exit 1
+      fi
+    elif runtime_dsn="$(resolve_postgres_runtime_file)"; then
+      run_args+=(--db-postgres-dsn "$runtime_dsn")
     else
       echo "postgres adapter selected but no DSN was provided" >&2
       usage

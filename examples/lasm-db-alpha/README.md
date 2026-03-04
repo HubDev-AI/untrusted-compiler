@@ -60,7 +60,7 @@ Postgres:
 ```bash
 DB_BASE="$(pwd)/examples/lasm-db-alpha/.lasm-db"
 export SEC4_DB_ALPHA_DB_ADAPTER=postgres
-export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
+export SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
 cargo run -p sec4 -- run \
   --path examples/lasm-db-alpha \
   --backend lasm \
@@ -103,14 +103,23 @@ SEC4_DB_ALPHA_DB_ADAPTER=sqlite ./examples/lasm-db-alpha/scripts/run-smoke.sh
 For Postgres, set a DSN and run:
 
 ```bash
-export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
+export SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
 SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
 ```
 
 If your DSN must stay out of shell history, prefer DSN file mode:
 
 ```bash
-export SEC4_RT_LASM_DB_POSTGRES_DSN_FILE=~/.config/sec4/lasm-postgres-dsn
+export SEC4_DB_ALPHA_POSTGRES_DSN_FILE=~/.config/sec4/lasm-postgres-dsn
+SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
+```
+
+If you are using `infra/local-postgres`, you can let the smoke script pick up
+`infra/local-postgres/.runtime.env` automatically:
+
+```bash
+cd /path/to/AILang
+infra/local-postgres/scripts/up.sh
 SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
 ```
 
@@ -123,10 +132,16 @@ Script knobs:
 - `SEC4_DB_ALPHA_QUERY_PARAMS` (URL-encoded JSON params, default `%5B%5D`)
 - `SEC4_DB_ALPHA_QUERY_ONE_ROW_SCHEMA` (row schema id for `query-one`, default `7`)
 - `SEC4_DB_ALPHA_TIMEOUT_MS` (request timeout in milliseconds, default `5000`)
+- `SEC4_DB_ALPHA_DB_POSTGRES_DSN`
+- `SEC4_DB_ALPHA_POSTGRES_DSN_FILE`
+- `SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH`
+- `SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE`
 - Script flag equivalents: `--port`, `--db-base`, `--db-adapter`, `--query-template`, `--query-params`, `--query-one-row-schema`, `--serve-timeout-ms`, `--request-timeout-ms`.
 - Legacy compatibility knobs are also accepted by script:
   - `SEC4_RT_LASM_DB_ADAPTER`, `SEC4_RT_LASM_DB_BASE`, `SEC4_RT_LASM_DB_PORT`,
-    `SEC4_RT_LASM_DB_SERVE_TIMEOUT_MS`, `SEC4_RT_LASM_DB_TIMEOUT_MS`.
+    `SEC4_RT_LASM_DB_SERVE_TIMEOUT_MS`, `SEC4_RT_LASM_DB_TIMEOUT_MS`,
+    `SEC4_RT_LASM_DB_POSTGRES_DSN`, `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`,
+    `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`.
 
 ## Test flow (manual)
 
