@@ -50,6 +50,7 @@ mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_postgres_persist;
 mod lasm_db_runtime_records_log;
 mod lasm_db_runtime_sqlite;
+mod lasm_db_smoke_summary;
 mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
@@ -79,7 +80,6 @@ use lasm_cluster_runtime_config::{
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
-use lasm_db_config::lasm_db_records_adapter_label;
 use lasm_db_cli::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, resolve_lasm_db_usize_options,
@@ -95,6 +95,7 @@ pub(crate) use lasm_db_headers::{
     LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
+use lasm_db_smoke_summary::build_lasm_smoke_db_summary;
 pub(crate) use lasm_dynamic_state::{
     append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
     persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
@@ -1395,61 +1396,7 @@ fn cmd_lasm_smoke(
         }
     };
     let smoke_db_records_adapter = smoke_dynamic_state.db_records_adapter;
-    let smoke_db_adapter_label =
-        lasm_db_config::lasm_db_records_adapter_label(smoke_db_records_adapter);
-    let smoke_db_records_max = smoke_dynamic_state.db_records_max;
-    let smoke_db_tx_max_handles = smoke_dynamic_state.db_tx_max_handles;
-    let smoke_db_store_path = smoke_dynamic_state
-        .db_records_store_path
-        .as_ref()
-        .map(|path| path.display().to_string());
-    let smoke_db_sqlite_store_path = smoke_dynamic_state
-        .db_records_sqlite_store_path
-        .as_ref()
-        .map(|path| path.display().to_string());
-    let smoke_db_postgres_dsn_configured = smoke_dynamic_state.db_records_postgres_dsn.is_some();
-    let smoke_db_postgres_tls_mode = lasm_db_adapter_state::lasm_db_postgres_tls_mode_label(
-        smoke_dynamic_state.db_postgres_tls_mode,
-    );
-    let smoke_db_postgres_statement_timeout_ms =
-        smoke_dynamic_state.db_postgres_statement_timeout_ms;
-    let smoke_db_postgres_lock_timeout_ms = smoke_dynamic_state.db_postgres_lock_timeout_ms;
-    let smoke_db_postgres_connect_timeout_ms = smoke_dynamic_state.db_postgres_connect_timeout_ms;
-    let smoke_db_postgres_retryable_conflict_retry_max =
-        smoke_dynamic_state.db_postgres_retryable_conflict_retry_max;
-    let smoke_db_postgres_statement_cache_max = smoke_dynamic_state.db_postgres_statement_cache_max;
-    let smoke_db_postgres_placeholder_cache_max =
-        smoke_dynamic_state.db_postgres_placeholder_cache_max;
-    let smoke_db_sqlite_busy_timeout_ms = smoke_dynamic_state.db_sqlite_busy_timeout_ms;
-    let smoke_db_sqlite_lock_retry_max = smoke_dynamic_state.db_sqlite_lock_retry_max;
-    let smoke_db_sqlite_lock_retry_delay_ms = smoke_dynamic_state.db_sqlite_lock_retry_delay_ms;
-    let smoke_db_op_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
-    let smoke_db_sqlite_journal_mode = smoke_dynamic_state.db_sqlite_journal_mode.clone();
-    let smoke_db_sqlite_synchronous = smoke_dynamic_state.db_sqlite_synchronous.clone();
-    let smoke_db_postgres_shared_client_pool_keys =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_key_count();
-    let smoke_db_postgres_shared_client_pool_idle_total =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_idle_total();
-    let smoke_db_postgres_shared_client_max_idle_per_key =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_max_idle_per_key();
-    let smoke_db_postgres_shared_client_max_total_idle =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_max_total_idle();
-    let smoke_db_postgres_persist_workers =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_workers_configured();
-    let smoke_db_postgres_persist_queue_capacity =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_capacity_configured();
-    let smoke_db_postgres_persist_batch_max =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_batch_max_configured();
-    let smoke_db_postgres_persist_queue_full_mode =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_full_mode();
-    let smoke_db_postgres_persist_workers_available =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_workers_available();
-    let smoke_db_postgres_persist_queue_depth =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_depth();
-    let smoke_db_postgres_persist_queue_backpressure_total =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_backpressure_total();
-    let smoke_db_postgres_persist_sync_fallback_total =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_sync_fallback_total();
+    let smoke_db_summary = build_lasm_smoke_db_summary(&smoke_dynamic_state);
     let smoke_dynamic_state = Mutex::new(smoke_dynamic_state);
     while let Some(mut exchange) = runtime.pop_response() {
         if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
@@ -1551,8 +1498,7 @@ fn cmd_lasm_smoke(
     let first_body = first_body.unwrap_or_default();
     let first_error_code_text = first_error_code.as_deref().unwrap_or("-");
     let first_error_kind_text = first_error_kind.as_deref().unwrap_or("-");
-    let smoke_db_store_path_text = smoke_db_store_path.as_deref().unwrap_or("-");
-    let smoke_db_sqlite_store_path_text = smoke_db_sqlite_store_path.as_deref().unwrap_or("-");
+    let smoke_db_payload = smoke_db_summary.clone().into_json_payload();
     match format {
         LasmSmokeOutputFormat::Text => {
             let max_in_flight_text = effective_max_in_flight
@@ -1596,82 +1542,41 @@ fn cmd_lasm_smoke(
                 first_duration_ms.unwrap_or(0),
                 first_path_params_text,
                 first_headers.len(),
-                smoke_db_adapter_label,
-                smoke_db_records_max,
-                smoke_db_tx_max_handles,
-                smoke_db_op_sequence_max,
-                smoke_db_store_path_text,
-                smoke_db_sqlite_store_path_text,
-                smoke_db_postgres_dsn_configured,
-                smoke_db_postgres_tls_mode,
-                smoke_db_postgres_statement_timeout_ms,
-                smoke_db_postgres_lock_timeout_ms,
-                smoke_db_postgres_connect_timeout_ms,
-                smoke_db_postgres_retryable_conflict_retry_max,
-                smoke_db_postgres_statement_cache_max,
-                smoke_db_postgres_placeholder_cache_max,
-                smoke_db_postgres_shared_client_pool_keys,
-                smoke_db_postgres_shared_client_pool_idle_total,
-                smoke_db_postgres_shared_client_max_idle_per_key,
-                smoke_db_postgres_shared_client_max_total_idle,
-                smoke_db_postgres_persist_workers,
-                smoke_db_postgres_persist_queue_capacity,
-                smoke_db_postgres_persist_batch_max,
-                smoke_db_postgres_persist_queue_full_mode,
-                smoke_db_postgres_persist_workers_available,
-                smoke_db_postgres_persist_queue_depth,
-                smoke_db_postgres_persist_queue_backpressure_total,
-                smoke_db_postgres_persist_sync_fallback_total,
-                smoke_db_sqlite_busy_timeout_ms,
-                smoke_db_sqlite_lock_retry_max,
-                smoke_db_sqlite_lock_retry_delay_ms,
-                smoke_db_sqlite_journal_mode,
-                smoke_db_sqlite_synchronous,
+                smoke_db_summary.adapter_label.as_str(),
+                smoke_db_summary.records_max,
+                smoke_db_summary.tx_max_handles,
+                smoke_db_summary.op_sequence_max,
+                smoke_db_summary.as_text_store_path(),
+                smoke_db_summary.as_text_sqlite_store_path(),
+                smoke_db_summary.postgres_dsn_configured,
+                smoke_db_summary.postgres_tls_mode.as_str(),
+                smoke_db_summary.postgres_statement_timeout_ms,
+                smoke_db_summary.postgres_lock_timeout_ms,
+                smoke_db_summary.postgres_connect_timeout_ms,
+                smoke_db_summary.postgres_retryable_conflict_retry_max,
+                smoke_db_summary.postgres_statement_cache_max,
+                smoke_db_summary.postgres_placeholder_cache_max,
+                smoke_db_summary.postgres_shared_client_pool_keys,
+                smoke_db_summary.postgres_shared_client_pool_idle_total,
+                smoke_db_summary.postgres_shared_client_max_idle_per_key,
+                smoke_db_summary.postgres_shared_client_max_total_idle,
+                smoke_db_summary.postgres_persist_workers,
+                smoke_db_summary.postgres_persist_queue_capacity,
+                smoke_db_summary.postgres_persist_batch_max,
+                smoke_db_summary.postgres_persist_queue_full_mode.as_str(),
+                smoke_db_summary.postgres_persist_workers_available,
+                smoke_db_summary.postgres_persist_queue_depth,
+                smoke_db_summary.postgres_persist_queue_backpressure_total,
+                smoke_db_summary.postgres_persist_sync_fallback_total,
+                smoke_db_summary.sqlite_busy_timeout_ms,
+                smoke_db_summary.sqlite_lock_retry_max,
+                smoke_db_summary.sqlite_lock_retry_delay_ms,
+                smoke_db_summary.sqlite_journal_mode.as_str(),
+                smoke_db_summary.sqlite_synchronous.as_str(),
                 first_body
             );
         }
         LasmSmokeOutputFormat::Json => {
-            let db_payload = serde_json::json!({
-                "adapter": smoke_db_adapter_label,
-                "recordsMax": smoke_db_records_max,
-                "txMaxHandles": smoke_db_tx_max_handles,
-                "opSequenceMax": smoke_db_op_sequence_max,
-                "storePath": smoke_db_store_path,
-                "sqliteStorePath": smoke_db_sqlite_store_path,
-                "postgres": {
-                    "dsnConfigured": smoke_db_postgres_dsn_configured,
-                    "tlsMode": smoke_db_postgres_tls_mode,
-                    "statementTimeoutMs": smoke_db_postgres_statement_timeout_ms,
-                    "lockTimeoutMs": smoke_db_postgres_lock_timeout_ms,
-                    "connectTimeoutMs": smoke_db_postgres_connect_timeout_ms,
-                    "retryableConflictRetryMax": smoke_db_postgres_retryable_conflict_retry_max,
-                    "statementCacheMax": smoke_db_postgres_statement_cache_max,
-                    "placeholderCacheMax": smoke_db_postgres_placeholder_cache_max,
-                    "sharedClient": {
-                        "poolKeys": smoke_db_postgres_shared_client_pool_keys,
-                        "poolIdleTotal": smoke_db_postgres_shared_client_pool_idle_total,
-                        "maxIdlePerKey": smoke_db_postgres_shared_client_max_idle_per_key,
-                        "maxTotalIdle": smoke_db_postgres_shared_client_max_total_idle
-                    },
-                    "persist": {
-                        "workers": smoke_db_postgres_persist_workers,
-                        "queueCapacity": smoke_db_postgres_persist_queue_capacity,
-                        "batchMax": smoke_db_postgres_persist_batch_max,
-                        "queueFullMode": smoke_db_postgres_persist_queue_full_mode,
-                        "workersAvailable": smoke_db_postgres_persist_workers_available,
-                        "queueDepth": smoke_db_postgres_persist_queue_depth,
-                        "queueBackpressureTotal": smoke_db_postgres_persist_queue_backpressure_total,
-                        "syncFallbackTotal": smoke_db_postgres_persist_sync_fallback_total
-                    }
-                },
-                "sqlite": {
-                    "busyTimeoutMs": smoke_db_sqlite_busy_timeout_ms,
-                    "lockRetryMax": smoke_db_sqlite_lock_retry_max,
-                    "lockRetryDelayMs": smoke_db_sqlite_lock_retry_delay_ms,
-                    "journalMode": smoke_db_sqlite_journal_mode,
-                    "synchronous": smoke_db_sqlite_synchronous
-                }
-            });
             let payload = serde_json::json!({
                 "ok": true,
                 "requestId": first_request_id.unwrap_or(0),
@@ -1707,7 +1612,7 @@ fn cmd_lasm_smoke(
                 "firstDurationMs": first_duration_ms.unwrap_or(0),
                 "pathParams": first_path_params,
                 "headers": first_headers,
-                "db": db_payload,
+                "db": smoke_db_payload,
                 "body": first_body,
             });
             println!(
@@ -9964,7 +9869,8 @@ fn print_lasm_db_startup_summary(
     state: &LasmDynamicResponseState,
     db_records_op_sequence_max: usize,
 ) {
-    let adapter = lasm_db_records_adapter_label(state.db_records_adapter);
+    let db_summary = build_lasm_smoke_db_summary(state);
+    let adapter = db_summary.adapter_label.as_str();
     let active_db_store = match state.db_records_adapter {
         LasmDbRecordsAdapter::RecordsLog => format!(
             "records.log at {}",
@@ -9984,17 +9890,9 @@ fn print_lasm_db_startup_summary(
         ),
         LasmDbRecordsAdapter::Postgres => "postgres connection pool".to_string(),
     };
-    let records_log_path = state
-        .db_records_store_path
-        .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "-".to_string());
-    let sqlite_store_path = state
-        .db_records_sqlite_store_path
-        .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "-".to_string());
-    let postgres_dsn = if state.db_records_postgres_dsn.is_some() {
+    let records_log_path = db_summary.as_text_store_path();
+    let sqlite_store_path = db_summary.as_text_sqlite_store_path();
+    let postgres_dsn = if db_summary.postgres_dsn_configured {
         "configured"
     } else {
         "not configured"
@@ -10002,27 +9900,21 @@ fn print_lasm_db_startup_summary(
 
     println!(
         "LASM DB: adapter={} recordsMax={} txHandlesMax={} opSequenceMax={}",
-        adapter,
-        state.db_records_max,
-        state.db_tx_max_handles,
-        db_records_op_sequence_max,
+        adapter, db_summary.records_max, db_summary.tx_max_handles, db_records_op_sequence_max,
     );
     println!("LASM DB active store: {active_db_store}");
-    println!(
-        "LASM DB paths: records.log={records_log_path} records.sqlite3={sqlite_store_path}",
-    );
+    println!("LASM DB paths: records.log={records_log_path} records.sqlite3={sqlite_store_path}",);
     println!(
         "LASM DB postgres: dsn={postgres_dsn} statementCacheMax={} placeholderCacheMax={}",
-        state.db_postgres_statement_cache_max,
-        state.db_postgres_placeholder_cache_max,
+        db_summary.postgres_statement_cache_max, db_summary.postgres_placeholder_cache_max,
     );
     println!(
         "LASM DB sqlite: busyTimeoutMs={} lockRetryMax={} lockRetryDelayMs={} journalMode={} synchronous={}",
-        state.db_sqlite_busy_timeout_ms,
-        state.db_sqlite_lock_retry_max,
-        state.db_sqlite_lock_retry_delay_ms,
-        state.db_sqlite_journal_mode,
-        state.db_sqlite_synchronous,
+        db_summary.sqlite_busy_timeout_ms,
+        db_summary.sqlite_lock_retry_max,
+        db_summary.sqlite_lock_retry_delay_ms,
+        db_summary.sqlite_journal_mode,
+        db_summary.sqlite_synchronous,
     );
 }
 
