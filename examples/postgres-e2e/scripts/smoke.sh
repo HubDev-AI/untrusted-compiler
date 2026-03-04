@@ -13,6 +13,23 @@ fail() {
   exit 1
 }
 
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
 assert_contains() {
   local haystack="$1"
   local needle="$2"
@@ -35,10 +52,27 @@ source "$ENV_FILE"
 set +a
 
 export SEC4_RT_LASM_DB_ADAPTER=postgres
-if [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
-  SEC4_RT_LASM_DB_POSTGRES_DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT:-5432}/${POSTGRES_DB}?sslmode=disable"
-  export SEC4_RT_LASM_DB_POSTGRES_DSN
+resolved_dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
+if [ -z "$resolved_dsn" ]; then
+  for dsn_file in \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+  do
+    resolved_dsn="$(resolve_postgres_dsn_file "$dsn_file" || true)"
+    if [ -n "$resolved_dsn" ]; then
+      break
+    fi
+  done
 fi
+if [ -z "$resolved_dsn" ]; then
+  resolved_dsn="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT:-5432}/${POSTGRES_DB}?sslmode=disable"
+fi
+SEC4_DB_ALPHA_DB_POSTGRES_DSN="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-$resolved_dsn}"
+SEC4_RT_LASM_DB_POSTGRES_DSN="${SEC4_RT_LASM_DB_POSTGRES_DSN:-$resolved_dsn}"
+export SEC4_DB_ALPHA_DB_POSTGRES_DSN
+export SEC4_RT_LASM_DB_POSTGRES_DSN
 
 TMP_DIR="$(mktemp -d)"
 LOG_FILE="$TMP_DIR/sec4-postgres-e2e.log"

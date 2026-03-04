@@ -86,13 +86,13 @@ resolve_candidate_file() {
 resolve_postgres_dsn_from_env_file() {
   local file="$1"
   local dsn
-  dsn="$(read_env_value "$file" SEC4_RT_LASM_DB_POSTGRES_DSN || true)"
+  dsn="$(read_env_value "$file" SEC4_DB_ALPHA_DB_POSTGRES_DSN || true)"
   if [ -n "$dsn" ]; then
     printf '%s' "$dsn"
     return 0
   fi
 
-  dsn="$(read_env_value "$file" SEC4_DB_ALPHA_DB_POSTGRES_DSN || true)"
+  dsn="$(read_env_value "$file" SEC4_RT_LASM_DB_POSTGRES_DSN || true)"
   if [ -z "$dsn" ]; then
     return 1
   fi
@@ -105,6 +105,8 @@ resolve_postgres_runtime_file() {
   local candidates=(
     "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE:-}"
     "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE:-}"
+    "${SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE:-}"
+    "${SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE:-}"
     "$SCRIPT_DIR/../../infra/local-postgres/.runtime.env"
     "$EXAMPLE_DIR/../../infra/local-postgres/.runtime.env"
   )
@@ -190,7 +192,11 @@ Environment:
   SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH   optional legacy DSN file path for postgres
   SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE
   SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE optional runtime env path
-  (fallback to SEC4_RT_LASM_DB_POSTGRES_DSN/FILE/FILE_PATH)
+  SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE
+  SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE optional runtime env fallback paths
+  (fallback order: SEC4_DB_ALPHA_DB_POSTGRES_DSN / SEC4_DB_ALPHA_POSTGRES_DSN_FILE
+   / SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH / SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE /
+   SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE, then legacy SEC4_RT_LASM_* aliases)
 USAGE
 }
 
@@ -353,7 +359,7 @@ case "$DB_ADAPTER" in
         exit 1
       fi
       run_args+=(--db-postgres-dsn-file "$dsn_file")
-    elif [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE-}" ]; then
+    elif [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE-}" ]; then
       runtime_dsn="$(resolve_postgres_runtime_file)" || true
       if [ -n "${runtime_dsn-}" ]; then
         run_args+=(--db-postgres-dsn "$runtime_dsn")

@@ -45,8 +45,8 @@ Responsibilities:
 ## Runtime/Data Flow
 1. Bring up Postgres with compose from `infra/local-postgres/`.
 2. Export runtime env for LASM process:
-   - `SEC4_RT_LASM_DB_ADAPTER=postgres`
-   - `SEC4_RT_LASM_DB_POSTGRES_DSN=<infra dsn>`
+  - `SEC4_DB_ALPHA_DB_POSTGRES_DSN=<infra dsn>` (preferred) or
+    `SEC4_RT_LASM_DB_POSTGRES_DSN=<infra dsn>`
 3. Run example with LASM backend:
    - `sec4 run --backend lasm --path examples/postgres-e2e --oneshot --port <port>`
 4. Exercise routes:

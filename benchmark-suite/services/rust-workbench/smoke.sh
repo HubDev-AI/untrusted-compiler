@@ -3,7 +3,41 @@ set -euo pipefail
 
 service_dir="$(cd "$(dirname "$0")" && pwd)"
 port="${BENCH_SMOKE_PORT:-18091}"
-dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgresql://127.0.0.1:5432/postgres?sslmode=disable}}"
+
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
+dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}}"
+if [ -z "$dsn" ]; then
+  for dsn_file in \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+  do
+    dsn="$(resolve_postgres_dsn_file "$dsn_file" || true)"
+    if [ -n "$dsn" ]; then
+      break
+    fi
+  done
+fi
+if [ -z "$dsn" ]; then
+  dsn="postgresql://127.0.0.1:5432/postgres?sslmode=disable"
+fi
 
 (cd "$service_dir" && BENCH_WORKBENCH_PG_DSN="$dsn" PORT="$port" cargo run --quiet) >"$service_dir/.smoke.log" 2>&1 &
 pid="$!"

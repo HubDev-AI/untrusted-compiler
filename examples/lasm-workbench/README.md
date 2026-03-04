@@ -40,7 +40,7 @@ For PostgreSQL-backed smoke, set one of:
 
 ```bash
 SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
-# or SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
+# or legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
 ./scripts/run-smoke.sh --db-adapter postgres
 ```
 
@@ -55,7 +55,7 @@ The script sets adapter behavior via `SEC4_LASM_WORKBENCH_DB_ADAPTER`:
 
 - `records` (default): file-backed adapter storing `records.log`
 - `sqlite`: sqlite adapter storing `records.sqlite3`
-- `postgres`: Postgres adapter using DSN in `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN` (or file variants)
+- `postgres`: Postgres adapter using DSN in `SEC4_DB_ALPHA_DB_POSTGRES_DSN` (legacy `SEC4_RT_LASM_DB_POSTGRES_DSN`) or file variants
 
 ```bash
 SEC4_LASM_WORKBENCH_DB_ADAPTER=records ./scripts/run-workbench.sh

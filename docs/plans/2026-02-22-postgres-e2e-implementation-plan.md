@@ -43,7 +43,8 @@ Create `.env.example`:
 - `POSTGRES_DB=sec4_local`
 - `POSTGRES_USER=sec4`
 - `POSTGRES_PASSWORD=sec4dev`
-- `SEC4_RT_LASM_DB_POSTGRES_DSN=postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable`
+- `SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable`
+  (or `SEC4_RT_LASM_DB_POSTGRES_DSN=...` as legacy-compatible alias)
 
 **Step 3: Add scripts with fail-fast UX**
 
