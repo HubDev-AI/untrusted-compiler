@@ -2632,8 +2632,56 @@ fn lasm_smoke_command_rejects_db_tx_marker_without_db_handle() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains("lasm-smoke failed: route GET /bad-tx has invalid DB tx marker contract")
-            && stderr.contains("(requires db header)"),
+            && stderr.contains("positive integer value"),
         "lasm-smoke should emit deterministic tx-marker contract diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_db_tx_marker_with_non_numeric_db_handle() {
+    let root = temp_dir("sec4-lasm-smoke-invalid-db-tx-marker-non-numeric-db");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-invalid-db-tx-marker-non-numeric-db\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let opName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let opValue = headers.value(\"tx\");\n  let dbName = headers.name(\"X-Sec4-Internal-Db\");\n  let dbValue = headers.value(\"abc\");\n  res.setHeader(opName, opValue);\n  res.setHeader(dbName, dbValue);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad-tx-nonnumeric\", bad);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad-tx-nonnumeric",
+        "--requests",
+        "1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject DB tx marker contract when db header is non-numeric"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad-tx-nonnumeric has invalid DB tx marker contract"
+        ) && stderr.contains("positive integer value"),
+        "lasm-smoke should emit deterministic tx-marker numeric contract diagnostics:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
