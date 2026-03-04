@@ -31503,6 +31503,302 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_cluster_mode_forwards_db_postgres_dsn_file_env_alias_to_workers() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!("skipping cluster postgres DSN-file alias test: SEC4_TEST_POSTGRES_DSN not set");
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!("skipping cluster postgres DSN-file alias test: SEC4_TEST_POSTGRES_DSN is empty");
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!(
+            "skipping cluster postgres DSN-file alias test: could not connect to postgres DSN"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-postgres-dsn-file-alias");
+    let dsn_file_name = "cluster-postgres-dsn.txt";
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterpostgresdsnfilealiascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    fs::write(project_dir.join(dsn_file_name), dsn.as_str())
+        .expect("postgres dsn file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "2",
+            "--db-adapter",
+            "postgres",
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", dsn_file_name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run cluster command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer token123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM cluster test could not connect to proxy listener");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected success status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_cluster_mode_forwards_db_postgres_runtime_env_alias_to_workers() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: SEC4_TEST_POSTGRES_DSN not set"
+        );
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: SEC4_TEST_POSTGRES_DSN is empty"
+        );
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: could not connect to postgres DSN"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-postgres-runtime-env-alias");
+    let runtime_env_file_name = "cluster-postgres-runtime-env.txt";
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterpostgresruntimeenvaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    fs::write(
+        project_dir.join(runtime_env_file_name),
+        format!("SEC4_RT_LASM_DB_POSTGRES_DSN={dsn}\n"),
+    )
+    .expect("postgres runtime env file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "2",
+            "--db-adapter",
+            "postgres",
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
+            runtime_env_file_name,
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run cluster command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer token123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM cluster test could not connect to proxy listener");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected success status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_cluster_status_json_skips_unchanged_snapshots() {
     let project_dir = temp_dir("sec4-run-command-lasm-cluster-status-json");
     let status_json_path = project_dir.join("status/cluster-status.json");

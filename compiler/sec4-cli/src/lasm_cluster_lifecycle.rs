@@ -10,6 +10,44 @@ use crate::{
     LasmClusterWorker,
 };
 
+const LASM_DB_POSTGRES_DSN_KEYS: [&str; 2] = [
+    "SEC4_DB_ALPHA_DB_POSTGRES_DSN",
+    "SEC4_RT_LASM_DB_POSTGRES_DSN",
+];
+const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 4] = [
+    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
+    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH",
+    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
+];
+const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
+    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE",
+    "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
+    "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE",
+];
+
+fn forward_env_if_set(cmd: &mut Command, env_key: &str) {
+    if let Ok(value) = std::env::var(env_key) {
+        let value = value.trim();
+        if !value.is_empty() {
+            cmd.env(env_key, value);
+        }
+    }
+}
+
+fn forward_db_alias_env_vars_to_worker(cmd: &mut Command) {
+    LASM_DB_POSTGRES_DSN_KEYS
+        .iter()
+        .for_each(|env_key| forward_env_if_set(cmd, env_key));
+    LASM_DB_POSTGRES_DSN_FILE_KEYS
+        .iter()
+        .for_each(|env_key| forward_env_if_set(cmd, env_key));
+    LASM_DB_POSTGRES_RUNTIME_ENV_KEYS
+        .iter()
+        .for_each(|env_key| forward_env_if_set(cmd, env_key));
+}
+
 pub(crate) fn compute_lasm_cluster_base_port(
     listen_port: u16,
     max_instances: usize,
@@ -218,6 +256,8 @@ fn spawn_lasm_cluster_worker(
         cmd.env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", &dsn);
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", &dsn);
     }
+
+    forward_db_alias_env_vars_to_worker(&mut cmd);
 
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
