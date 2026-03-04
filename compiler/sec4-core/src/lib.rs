@@ -2,8 +2,8 @@ pub mod ast;
 pub mod audit;
 pub mod backend;
 pub mod build_metadata;
-pub mod composition;
 pub mod c_backend;
+pub mod composition;
 pub mod diagnostics;
 pub mod lasm_backend;
 pub mod lasm_http_runtime;
@@ -37,11 +37,14 @@ pub use audit::{
     summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity, AuditTrend,
 };
 pub use backend::{emit_program_with_backend, BackendEmitOutput, BackendKind, RuntimeAssets};
-pub use composition::{collect_promote_binding_references, PromoteBindingReference};
 pub use build_metadata::{
     compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
 };
 pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
+pub use composition::{
+    collect_promote_binding_references, collect_promote_contract_violations,
+    PromoteBindingReference, PromoteContractViolation,
+};
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use lasm_backend::{emit_lasm_program, emit_lasm_program_json, lower_mir_to_lasm, LasmProgram};
 pub use lasm_http_runtime::{HttpExchange, HttpRequest, HttpResponse, LasmHttpRuntime};

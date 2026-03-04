@@ -5,7 +5,7 @@ use crossbeam_channel::{bounded, TrySendError};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
     build_security_map_with_allows, collect_promote_binding_references,
-    emit_program_with_backend, parse_source,
+    collect_promote_contract_violations, emit_program_with_backend, parse_source,
     render_security_audit_text, run_security_audit_with_baseline, should_fail,
     strip_allow_annotations, summarize_history_window, validate_lockfile_stub,
     write_build_metadata, write_lockfile_stub, write_sbom, write_security_map,
@@ -13410,12 +13410,12 @@ fn cmd_promote(
             return Err(2);
         }
     }
-        .into_iter()
-        .map(|reference| PromoteBindingReference {
-            file: project_relative_path(path, &reference.file),
-            line: reference.line,
-        })
-        .collect::<Vec<_>>();
+    .into_iter()
+    .map(|reference| PromoteBindingReference {
+        file: project_relative_path(path, &reference.file),
+        line: reference.line,
+    })
+    .collect::<Vec<_>>();
     let mut preconditions = Vec::new();
 
     if source_files.is_empty() {
@@ -13452,6 +13452,25 @@ fn cmd_promote(
         if let Err(diagnostics) = analyze_entry(path, manifest) {
             for diagnostic in diagnostics {
                 preconditions.push(precondition_from_diagnostic(path, &diagnostic, false));
+            }
+        }
+
+        match collect_promote_contract_violations(path, manifest) {
+            Ok(violations) => {
+                for violation in violations {
+                    preconditions.push(PromotePrecondition {
+                        code: violation.code,
+                        severity: violation.severity,
+                        message: violation.message,
+                        file: Some(project_relative_path(path, &violation.file)),
+                        line: Some(violation.line),
+                    });
+                }
+            }
+            Err(diagnostics) => {
+                for diagnostic in diagnostics {
+                    preconditions.push(precondition_from_diagnostic(path, &diagnostic, true));
+                }
             }
         }
     }

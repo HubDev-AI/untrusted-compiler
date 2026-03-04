@@ -732,6 +732,164 @@ fn promote_dry_run_treats_semantic_diagnostics_as_non_blocking_warnings() {
 }
 
 #[test]
+fn promote_dry_run_blocks_domain_import_of_repo_from_non_root_module() {
+    let root = temp_dir("sec4-promote-direct-repo-import");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::create_dir_all(project_dir.join("src/feature")).expect("feature dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-direct-repo-import\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use feature.boundary;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/feature/boundary.ut"),
+        "use repo.adapter;\n\nfn boundary() -> Int {\n  0\n}\n",
+    )
+    .expect("boundary module should be written");
+    fs::write(
+        project_dir.join("src/repo/adapter.ut"),
+        "fn get_item() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when module outside composition root imports repo adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when contract violations exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9401")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                    && item
+                        .get("file")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|file| file == "src/feature/boundary.ut")
+            })),
+        "contract preconditions should include blocked repo import from non-root module"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_repo_adapter_parity_mismatch() {
+    let root = temp_dir("sec4-promote-repo-parity-mismatch");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo/browser"))
+        .expect("browser repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-repo-parity-mismatch\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use repo.browser;\nuse repo.server;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/repo/browser.ut"),
+        "fn browser_fetch_user() -> Int {\n  0\n}\n",
+    )
+    .expect("browser repo module should be written");
+    fs::write(
+        project_dir.join("src/repo/server.ut"),
+        "fn server_fetch_user() -> Int {\n  0\n}\nfn server_store_user() -> Int {\n  0\n}\n",
+    )
+    .expect("server repo module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when repo adapter parity mismatch exists"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when parity issues exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9403")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| message.contains("server_ method"))
+            })),
+        "contract preconditions should include parity mismatch code for missing browser_ counterpart"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_succeeds_for_multi_file_module_project() {
     let root = temp_dir("sec4-check-multi-file-pass");
     let project_dir = root.join("project");
@@ -17978,7 +18136,9 @@ fn main() effects { net } -> Int {
                 .try_wait()
                 .expect("run command wait should succeed while connecting")
             {
-                panic!("run command LASM db let helper exec flow exited early with status: {status}");
+                panic!(
+                    "run command LASM db let helper exec flow exited early with status: {status}"
+                );
             }
             match TcpStream::connect(("127.0.0.1", exec_port)) {
                 Ok(mut stream) => {
@@ -18104,7 +18264,9 @@ fn main() effects { net } -> Int {
             None => {
                 let _ = child.kill();
                 let _ = child.wait();
-                panic!("run command LASM db let helper queryOne flow did not exit in expected window");
+                panic!(
+                    "run command LASM db let helper queryOne flow did not exit in expected window"
+                );
             }
         };
         assert!(
