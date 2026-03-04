@@ -7,6 +7,7 @@ Full LASM alpha example app that combines:
 - auth helper enforcement
 - dynamic user-store flows (`users.json`)
 - dynamic DB record flows (`records.log`, `sqlite`, `postgres`)
+- DB batch and read-after-write composition (`db.exec-batch`, `db.write-and-query`)
 
 Use this app to test LASM + DB behavior end-to-end.
 
@@ -35,6 +36,19 @@ cargo run -p sec4 -- run \
   --db-base "$DB_BASE" \
   --db-adapter postgres \
   --port 8080
+```
+
+If you prefer the convenience lanes, use the local Makefile:
+
+```bash
+cd examples/lasm-alpha-full
+make check
+make run-records      # default records adapter
+make run-sqlite
+make run-postgres     # requires DSN env
+make smoke            # full DB alpha smoke + persistence check
+make smoke-sqlite
+make smoke-postgres   # requires DSN env
 ```
 
 ## 2) Quick smoke
@@ -130,7 +144,7 @@ Write non-tx record:
 ```bash
 curl -i -X POST \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/exec?template=SELECT%20$1::int&params=%5B1%5D'
+  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=%5B%5D'
 ```
 
 Write tx record:
@@ -138,7 +152,22 @@ Write tx record:
 ```bash
 curl -i -X POST \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha'
+  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=%5B%22alpha%22%5D'
+```
+
+Execute two tx writes in one transaction:
+
+```bash
+curl -i -H 'Authorization: Bearer token123' \
+  'http://127.0.0.1:8080/db/exec-batch?template_a=SELECT%201&params_a=%5B%22alpha%22%5D&template_b=SELECT%202&params_b=%5B%22beta%22%5D'
+```
+
+Execute write+query in one request:
+
+```bash
+curl -i -X POST \
+  -H 'Authorization: Bearer token123' \
+  'http://127.0.0.1:8080/db/write-and-query?write_template=SELECT%201&write_params=%5B1%5D&query_template=SELECT%201&query_params=%5B1%5D&row_schema=7'
 ```
 
 Query latest matching record:
@@ -146,7 +175,7 @@ Query latest matching record:
 ```bash
 curl -i \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&row_schema=7'
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=%5B%5D&row_schema=7'
 ```
 
 Postgres parameterized query demo (`$N` placeholders + JSON-array params):
@@ -182,4 +211,39 @@ cat "$DB_BASE/records.log"
 ```bash
 cargo run -p sec4 -- check --path examples/lasm-alpha-full
 cargo run -p sec4 -- build --path examples/lasm-alpha-full --emit lasm
+```
+For `records` adapter, inspect local persistence artifacts:
+
+```bash
+cat "$DB_BASE/records.log"
+```
+
+When using SQLite or Postgres, inspect storage with adapter tools/CLI instead of `records.log`.
+
+## 8) Full smoke check
+
+Run one command smoke flow:
+
+```bash
+cd examples/lasm-alpha-full
+./scripts/run-smoke.sh
+```
+
+Smoke options:
+
+- `SEC4_ALPHA_FULL_PORT` (default `8088`)
+- `SEC4_ALPHA_FULL_DB_ADAPTER` (`records`, `sqlite`, `postgres`)
+- `SEC4_ALPHA_FULL_DB_BASE` (default `<project>/.lasm-db`)
+- `SEC4_ALPHA_FULL_QUERY_TEMPLATE` (default `SELECT%201`)
+- `SEC4_ALPHA_FULL_QUERY_PARAMS` (default `%5B%5D`)
+- `SEC4_ALPHA_FULL_QUERY_ONE_ROW_SCHEMA` (default `7`)
+- `SEC4_ALPHA_FULL_TIMEOUT_MS` (request timeout, default `5000`)
+- `SEC4_ALPHA_FULL_POSTGRES_DSN` or `SEC4_DB_ALPHA_DB_POSTGRES_DSN` (compatible alias)
+
+For postgres tests:
+
+```bash
+export SEC4_ALPHA_FULL_DB_ADAPTER=postgres
+export SEC4_ALPHA_FULL_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
+./scripts/run-smoke.sh
 ```

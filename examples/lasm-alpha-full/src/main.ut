@@ -7,6 +7,7 @@
 // - auth helper enforcement (require + requireRole)
 // - schema-tagged dynamic user-store flows (users.json)
 // - schema-tagged dynamic DB record flows (records.log / sqlite / postgres)
+// - db batch + write/read composition (execBatch, writeAndQuery)
 //
 // Run with:
 // sec4 run --path examples/lasm-alpha-full --backend lasm --db-base <dir> --db-adapter <records-log|sqlite|postgres> --port 8080
@@ -139,6 +140,26 @@ fn dbExec() effects { net, db.write } -> Int {
   0
 }
 
+fn dbExecBatch() effects { net, db.write, db.tx } -> Int {
+  // Request query parameters:
+  //   template_a=<sql template text>  (required)
+  //   params_a=<json payload>        (required)
+  //   template_b=<sql template text>  (required)
+  //   params_b=<json payload>        (required)
+  // Both statements execute in one transaction.
+  let db = DbCap();
+  let tx = db.tx(db);
+  let templateA = validate.nonEmpty(req.query("template_a"));
+  let paramsA = validate.nonEmpty(req.query("params_a"));
+  let templateB = validate.nonEmpty(req.query("template_b"));
+  let paramsB = validate.nonEmpty(req.query("params_b"));
+
+  db.execTx(tx, sql.q(templateA, paramsA));
+  db.execTx(tx, sql.q(templateB, paramsB));
+  res.text(200, "db batch tx executed");
+  0
+}
+
 fn dbExecTx() effects { net, db.write, db.tx } -> Int {
   // Dynamic DB adapter tx write path via intrinsic DB execution.
   let db = DbCap();
@@ -148,6 +169,27 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
   let tx = db.tx(db);
   db.execTx(tx, query);
   res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbWriteAndQuery() effects { net, db.write, db.read } -> Int {
+  // Request query parameters:
+  //   write_template=<sql template text> (required)
+  //   write_params=<json payload>       (required)
+  //   query_template=<sql template text> (required)
+  //   query_params=<json payload>       (required)
+  //   row_schema=<schema handle id>     (required, numeric)
+  // Writes one record and immediately reads matching latest row.
+  let db = DbCap();
+  let writeTemplate = validate.nonEmpty(req.query("write_template"));
+  let writeParams = validate.nonEmpty(req.query("write_params"));
+  let queryTemplate = validate.nonEmpty(req.query("query_template"));
+  let queryParams = validate.nonEmpty(req.query("query_params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.exec(db, sql.q(writeTemplate, writeParams));
+  db.queryOne(db, sql.q(queryTemplate, queryParams), rowSchema);
+  res.json(200, "DbWriteAndQueryResponse", 0);
   0
 }
 
@@ -201,7 +243,9 @@ fn main() effects { net } -> Int {
   http.get(router, "/users", listUsers);
 
   http.post(router, "/db/exec", dbExec);
+  http.get(router, "/db/exec-batch", dbExecBatch);
   http.post(router, "/db/exec-tx", dbExecTx);
+  http.post(router, "/db/write-and-query", dbWriteAndQuery);
   http.get(router, "/db/query-one", dbQueryOne);
   http.get(router, "/db/records", dbListRecords);
 
