@@ -1370,7 +1370,7 @@ fn lasm_smoke_command_materializes_db_list_records_response() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn dbListRecords() effects { net } -> Int {\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
+        "fn dbListRecords() effects { net } -> Int {\n  res.setHeader(headers.name(\"X-Sec4-Internal-Db-Op\"), headers.value(\"listRecords\"));\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -1477,7 +1477,7 @@ fn lasm_smoke_command_supports_sqlite_db_adapter_flags() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn dbListRecords() effects { net } -> Int {\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
+        "fn dbListRecords() effects { net } -> Int {\n  res.setHeader(headers.name(\"X-Sec4-Internal-Db-Op\"), headers.value(\"listRecords\"));\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -16566,6 +16566,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18481,6 +18482,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18953,6 +18955,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -19120,6 +19123,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -19297,6 +19301,7 @@ fn staleExecTx() effects { net } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -19476,6 +19481,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -21156,6 +21162,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -21350,6 +21357,7 @@ fn invalidParamsExec() effects { net } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -21560,6 +21568,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }

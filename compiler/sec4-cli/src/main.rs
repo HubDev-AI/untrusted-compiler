@@ -1971,14 +1971,6 @@ fn collect_lasm_route_plans(
                 &mut headers,
                 db_operations.as_slice(),
             );
-        } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str())
-            .as_deref()
-            == Some("DbListRecordsResponse")
-        {
-            headers.insert(
-                LASM_INTERNAL_DB_OP_HEADER.to_string(),
-                "listRecords".to_string(),
-            );
         }
         if let Some(content_type) = response_plan.default_content_type {
             headers
@@ -2648,13 +2640,6 @@ fn resolve_lasm_smoke_route_plan(
         lasm_db_plan::apply_lasm_db_operation_plan_sequence_headers(
             &mut headers,
             db_operations.as_slice(),
-        );
-    } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str()).as_deref()
-        == Some("DbListRecordsResponse")
-    {
-        headers.insert(
-            LASM_INTERNAL_DB_OP_HEADER.to_string(),
-            "listRecords".to_string(),
         );
     }
     if let Some(content_type) = response_plan.default_content_type {
@@ -11710,14 +11695,6 @@ fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
 
 fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {
     let parsed = parse_lasm_json_payload(&response.body)?;
-    parsed
-        .get("schema")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
-fn extract_lasm_schema_hint_from_response_body(body: &str) -> Option<String> {
-    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
     parsed
         .get("schema")
         .and_then(serde_json::Value::as_str)
