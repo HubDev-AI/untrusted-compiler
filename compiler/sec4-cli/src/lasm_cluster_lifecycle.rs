@@ -84,10 +84,12 @@ mod tests {
             );
         }
         assert!(
-            !envs
-                .iter()
-                .any(|key| key == "SEC4_DB_ALPHA_DB_POSTGRES_DSN"),
+            !envs.iter().any(|key| key == "SEC4_DB_ALPHA_DB_POSTGRES_DSN"),
             "resolved DSN key should not be forwarded by alias forwarder"
+        );
+        assert!(
+            !envs.iter().any(|key| key == "SEC4_RT_LASM_DB_POSTGRES_DSN"),
+            "resolved LASM DSN key should not be forwarded by alias forwarder"
         );
 
         for (key, snapshot) in snapshots {
