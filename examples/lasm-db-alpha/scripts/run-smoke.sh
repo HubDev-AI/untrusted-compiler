@@ -15,16 +15,17 @@ SERVE_TIMEOUT_MS="${SEC4_DB_ALPHA_SERVE_TIMEOUT_MS:-${SEC4_RT_LASM_DB_SERVE_TIME
 REQUEST_TIMEOUT_MS="${SEC4_DB_ALPHA_TIMEOUT_MS:-${SEC4_RT_LASM_DB_TIMEOUT_MS:-5000}}"
 ASSERT="${ASSERT:-1}"
 
-if ! [[ "$REQUEST_TIMEOUT_MS" =~ ^[0-9]+$ ]] || [ "$REQUEST_TIMEOUT_MS" -eq 0 ]; then
-  echo "SEC4_DB_ALPHA_TIMEOUT_MS must be a positive integer (milliseconds): '$REQUEST_TIMEOUT_MS'" >&2
-  exit 1
-fi
+normalize_request_timeout() {
+  if ! [[ "$REQUEST_TIMEOUT_MS" =~ ^[0-9]+$ ]] || [ "$REQUEST_TIMEOUT_MS" -eq 0 ]; then
+    echo "SEC4_DB_ALPHA_TIMEOUT_MS must be a positive integer (milliseconds): '$REQUEST_TIMEOUT_MS'" >&2
+    exit 1
+  fi
 
-REQUEST_TIMEOUT_SECONDS=$(( (REQUEST_TIMEOUT_MS + 999) / 1000 ))
-
-if [ "$REQUEST_TIMEOUT_SECONDS" -lt 1 ]; then
-  REQUEST_TIMEOUT_SECONDS=1
-fi
+  REQUEST_TIMEOUT_SECONDS=$(( (REQUEST_TIMEOUT_MS + 999) / 1000 ))
+  if [ "$REQUEST_TIMEOUT_SECONDS" -lt 1 ]; then
+    REQUEST_TIMEOUT_SECONDS=1
+  fi
+}
 
 SEC4_PID=""
 TMP_DIR="$(mktemp -d)"
@@ -42,7 +43,16 @@ trap cleanup EXIT
 
 usage() {
   cat <<'USAGE'
-usage: run-smoke.sh [--port <port>] [--db-adapter <records|sqlite|postgres>] [--skip-assert]
+usage: run-smoke.sh \
+  [--port <port>] \
+  [--db-base <path>] \
+  [--db-adapter <records|sqlite|postgres>] \
+  [--query-template <url-encoded-sql>] \
+  [--query-params <url-encoded-json>] \
+  [--query-one-row-schema <schema_id>] \
+  [--serve-timeout-ms <ms>] \
+  [--request-timeout-ms <ms>] \
+  [--skip-assert]
 
 Runs a tiny LASM DB smoke flow (exec, exec-tx, query-one, list).
 
@@ -98,6 +108,80 @@ while [ "$#" -gt 0 ]; do
       DB_ADAPTER="${1#--db-adapter=}"
       shift
       ;;
+    --db-base)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      DB_BASE="$2"
+      shift 2
+      ;;
+    --db-base=*)
+      DB_BASE="${1#--db-base=}"
+      shift
+      ;;
+    --query-template)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      DB_QUERY_TEMPLATE="$2"
+      shift 2
+      ;;
+    --query-template=*)
+      DB_QUERY_TEMPLATE="${1#--query-template=}"
+      shift
+      ;;
+    --query-params)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      DB_QUERY_PARAMS="$2"
+      shift 2
+      ;;
+    --query-params=*)
+      DB_QUERY_PARAMS="${1#--query-params=}"
+      shift
+      ;;
+    --query-one-row-schema)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      DB_QUERY_ONE_ROW_SCHEMA="$2"
+      shift 2
+      ;;
+    --query-one-row-schema=*)
+      DB_QUERY_ONE_ROW_SCHEMA="${1#--query-one-row-schema=}"
+      shift
+      ;;
+    --serve-timeout-ms)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      SERVE_TIMEOUT_MS="$2"
+      shift 2
+      ;;
+    --serve-timeout-ms=*)
+      SERVE_TIMEOUT_MS="${1#--serve-timeout-ms=}"
+      shift
+      ;;
+    --request-timeout-ms)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      REQUEST_TIMEOUT_MS="$2"
+      normalize_request_timeout
+      shift 2
+      ;;
+    --request-timeout-ms=*)
+      REQUEST_TIMEOUT_MS="${1#--request-timeout-ms=}"
+      normalize_request_timeout
+      shift
+      ;;
     --skip-assert)
       ASSERT="0"
       shift
@@ -113,6 +197,8 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+normalize_request_timeout
 
 require_cmd cargo
 require_cmd curl

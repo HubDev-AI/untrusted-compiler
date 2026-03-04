@@ -106,6 +106,7 @@ Script knobs:
 - `SEC4_DB_ALPHA_QUERY_PARAMS` (URL-encoded JSON params, default `%5B%5D`)
 - `SEC4_DB_ALPHA_QUERY_ONE_ROW_SCHEMA` (row schema id for `query-one`, default `7`)
 - `SEC4_DB_ALPHA_TIMEOUT_MS` (request timeout in milliseconds, default `5000`)
+- Script flag equivalents: `--port`, `--db-base`, `--db-adapter`, `--query-template`, `--query-params`, `--query-one-row-schema`, `--serve-timeout-ms`, `--request-timeout-ms`.
 - Legacy compatibility knobs are also accepted by script:
   - `SEC4_RT_LASM_DB_ADAPTER`, `SEC4_RT_LASM_DB_BASE`, `SEC4_RT_LASM_DB_PORT`,
     `SEC4_RT_LASM_DB_SERVE_TIMEOUT_MS`, `SEC4_RT_LASM_DB_TIMEOUT_MS`.
