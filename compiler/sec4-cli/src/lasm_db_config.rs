@@ -39,6 +39,62 @@ fn resolve_env_value(keys: &[&str]) -> Option<String> {
     })
 }
 
+fn resolve_unique_env_value(
+    keys: &[&'static str],
+    source_name: &str,
+) -> Result<Option<String>, String> {
+    let mut found = Vec::<(&'static str, String)>::new();
+
+    for &name in keys {
+        if let Ok(raw) = std::env::var(name) {
+            let value = raw.trim();
+            if !value.is_empty() {
+                found.push((name, value.to_string()));
+            }
+        }
+    }
+
+    if found.len() > 1 {
+        let names = found
+            .iter()
+            .map(|(name, _)| format!("{name}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "{source_name} is ambiguous: multiple values were configured: {names}"
+        ));
+    }
+
+    Ok(found.into_iter().next().map(|(_, value)| value))
+}
+
+fn resolve_unique_env_file_path_with_candidates(
+    keys: &[&'static str],
+    project_path: Option<&Path>,
+    source_name: &str,
+) -> Result<Option<(&'static str, PathBuf)>, String> {
+    let mut found = Vec::<(&'static str, PathBuf)>::new();
+
+    for &name in keys {
+        if let Some(file_path) = resolve_env_file_path(name, project_path) {
+            found.push((name, file_path));
+        }
+    }
+
+    if found.len() > 1 {
+        let names = found
+            .iter()
+            .map(|(name, _)| format!("{name}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "{source_name} is ambiguous: multiple files were configured: {names}"
+        ));
+    }
+
+    Ok(found.into_iter().next())
+}
+
 fn resolve_env_file_path(name: &str, project_path: Option<&Path>) -> Option<PathBuf> {
     let raw = std::env::var(name).ok()?;
     let candidate = raw.trim();
@@ -59,14 +115,6 @@ fn resolve_env_file_path(name: &str, project_path: Option<&Path>) -> Option<Path
     } else {
         None
     }
-}
-
-fn resolve_env_file_path_with_candidates(
-    keys: &[&'static str],
-    project_path: Option<&Path>,
-) -> Option<(&'static str, PathBuf)> {
-    keys.iter()
-        .find_map(|name| resolve_env_file_path(name, project_path).map(|path| (*name, path)))
 }
 
 fn parse_env_file_value(
@@ -250,19 +298,26 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
         }
         return Ok(Some(dsn.to_string()));
     }
-    if let Some(raw) = resolve_env_value(&LASM_DB_POSTGRES_DSN_KEYS) {
+    if let Some(raw) = resolve_unique_env_value(
+        &LASM_DB_POSTGRES_DSN_KEYS,
+        "db adapter postgres DSN environment variables",
+    )? {
         return Ok(Some(raw));
     }
 
-    if let Some((file_env_name, file_path)) =
-        resolve_env_file_path_with_candidates(&LASM_DB_POSTGRES_DSN_FILE_KEYS, project_path)
-    {
+    if let Some((file_env_name, file_path)) = resolve_unique_env_file_path_with_candidates(
+        &LASM_DB_POSTGRES_DSN_FILE_KEYS,
+        project_path,
+        "db adapter postgres DSN file sources",
+    )? {
         return parse_first_existing_postgres_dsn_file(file_path, file_env_name).map(Some);
     }
 
-    if let Some((runtime_env_name, env_file_path)) =
-        resolve_env_file_path_with_candidates(&LASM_DB_POSTGRES_RUNTIME_ENV_KEYS, project_path)
-    {
+    if let Some((runtime_env_name, env_file_path)) = resolve_unique_env_file_path_with_candidates(
+        &LASM_DB_POSTGRES_RUNTIME_ENV_KEYS,
+        project_path,
+        "db adapter postgres runtime env file sources",
+    )? {
         let dsn = parse_runtime_env_file_for_postgres_dsn(
             env_file_path,
             &LASM_DB_POSTGRES_DSN_KEYS,
@@ -286,6 +341,111 @@ pub(crate) fn lasm_db_records_adapter_label(adapter: LasmDbRecordsAdapter) -> &'
 #[cfg(test)]
 mod tests {
     use super::resolve_lasm_db_postgres_dsn_from_file_contents;
+
+    use std::env;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_env_vars<R>(vars: &[(&str, Option<&str>)], action: impl FnOnce() -> R) -> R {
+        let _env_lock = TEST_ENV_LOCK
+            .lock()
+            .expect("test environment lock should be available");
+        let originals: Vec<(String, Option<String>)> = vars
+            .iter()
+            .map(|(name, _value)| {
+                (
+                    (*name).to_string(),
+                    env::var(name).ok().map(|old| old.to_string()),
+                )
+            })
+            .collect();
+
+        for (name, value) in vars {
+            match value {
+                Some(value) => env::set_var(name, value),
+                None => env::remove_var(name),
+            }
+        }
+
+        let result = action();
+
+        for (name, old) in originals {
+            match old {
+                Some(old) => env::set_var(&name, old),
+                None => env::remove_var(name),
+            }
+        }
+
+        result
+    }
+
+    #[test]
+    fn postgres_dsn_env_ambiguous_between_aliases_fails() {
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", Some("postgres://alpha")),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", Some("postgres://lasm")),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, None)
+                    .expect_err("DSN aliases must not be set simultaneously");
+                assert!(
+                    err.contains("db adapter postgres DSN environment variables is ambiguous"),
+                    "wrong error: {err}"
+                );
+            },
+        );
+    }
+
+    fn write_dsn_file(path: &PathBuf, raw: &str) {
+        let mut file = File::create(path).expect("test DSN file must be writable");
+        file.write_all(raw.as_bytes())
+            .expect("test DSN file content write must succeed");
+    }
+
+    #[test]
+    fn postgres_dsn_file_sources_ambiguous_between_aliases_fails() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-dsn-conflict");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let first = dir.join("alpha.env");
+        let second = dir.join("lasm.env");
+        write_dsn_file(&first, "postgres://alpha\n");
+        write_dsn_file(&second, "postgres://lasm\n");
+
+        let alpha_path = first.to_string_lossy().to_string();
+        let lasm_path = second.to_string_lossy().to_string();
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", Some(alpha_path.as_str())),
+                (
+                    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+                    Some(lasm_path.as_str()),
+                ),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                    .expect_err("conflicting DSN files must fail");
+                assert!(
+                    err.contains("DSN file sources is ambiguous"),
+                    "wrong error: {err}"
+                );
+            },
+        );
+
+        let _ = fs::remove_file(&first);
+        let _ = fs::remove_file(&second);
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn postgres_dsn_file_contents_allow_comments_and_blank_lines() {
