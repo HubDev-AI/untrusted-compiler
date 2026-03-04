@@ -29,6 +29,25 @@ Run locally:
 ./scripts/run-workbench.sh
 ```
 
+## Smoke checks
+
+```bash
+./scripts/run-smoke.sh --db-adapter records
+./scripts/run-smoke.sh --skip-network --db-adapter records
+```
+
+For PostgreSQL-backed smoke, set one of:
+
+```bash
+SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
+./scripts/run-smoke.sh --db-adapter postgres
+```
+
+Network endpoints in smoke mode are local to the script:
+
+- public/internal routes target a local helper server on `SEC4_LASM_WORKBENCH_NETWORK_PORT` (default `19090`).
+- set `--skip-network` if local HTTP helper is not available.
+
 ## DB adapters
 
 The script sets adapter behavior via `SEC4_LASM_WORKBENCH_DB_ADAPTER`:
