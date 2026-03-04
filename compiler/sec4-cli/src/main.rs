@@ -1244,59 +1244,54 @@ fn cmd_lasm_smoke(
     let mut route_registrations = Vec::<(String, String, sec4_core::HttpResponse)>::new();
     let runtime_db_operation_sequence_max =
         lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
-    let response_origin = match resolve_lasm_smoke_route_plan(
-        &program,
-        entry.name.as_str(),
-        method,
-        route,
-    ) {
-        Some(route_plan) => {
-            let operation_count = parse_lasm_db_operation_sequence_count(&route_plan.headers);
-            if operation_count > runtime_db_operation_sequence_max {
-                eprintln!(
-                        "lasm-smoke failed: route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
-                        route_plan.route_method,
-                        route_plan.route_path,
-                        operation_count,
-                        runtime_db_operation_sequence_max
-                    );
-                return Err(1);
+    let response_origin =
+        match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
+            Some(route_plan) => {
+                if let Err(message) = validate_lasm_db_operation_sequence_limits_for_headers(
+                    route_plan.route_method.as_str(),
+                    route_plan.route_path.as_str(),
+                    &route_plan.headers,
+                    runtime_db_operation_sequence_max,
+                ) {
+                    eprintln!("lasm-smoke failed: {message}");
+                    return Err(1);
+                }
+                runtime_route_method = route_plan.route_method.clone();
+                runtime_route_path = route_plan.route_path.clone();
+                let mut response =
+                    sec4_core::HttpResponse::text(route_plan.status, route_plan.body);
+                response.headers = route_plan.headers;
+                route_registrations.push((
+                    runtime_route_method.clone(),
+                    runtime_route_path.clone(),
+                    response,
+                ));
+                format!("handler:{}", route_plan.handler_name)
             }
-            runtime_route_method = route_plan.route_method.clone();
-            runtime_route_path = route_plan.route_path.clone();
-            let mut response = sec4_core::HttpResponse::text(route_plan.status, route_plan.body);
-            response.headers = route_plan.headers;
-            route_registrations.push((
-                runtime_route_method.clone(),
-                runtime_route_path.clone(),
-                response,
-            ));
-            format!("handler:{}", route_plan.handler_name)
-        }
-        None => {
-            let allowed_methods =
-                resolve_lasm_smoke_allowed_methods(&program, entry.name.as_str(), route);
-            if let Some(allowed_methods) = allowed_methods {
-                let selected_has_match = allowed_methods
-                    .iter()
-                    .any(|candidate| candidate == &runtime_route_method);
-                if !selected_has_match {
-                    for allowed_method in allowed_methods {
-                        route_registrations.push((
-                            allowed_method,
-                            route.to_string(),
-                            sec4_core::HttpResponse::text(200, ""),
-                        ));
+            None => {
+                let allowed_methods =
+                    resolve_lasm_smoke_allowed_methods(&program, entry.name.as_str(), route);
+                if let Some(allowed_methods) = allowed_methods {
+                    let selected_has_match = allowed_methods
+                        .iter()
+                        .any(|candidate| candidate == &runtime_route_method);
+                    if !selected_has_match {
+                        for allowed_method in allowed_methods {
+                            route_registrations.push((
+                                allowed_method,
+                                route.to_string(),
+                                sec4_core::HttpResponse::text(200, ""),
+                            ));
+                        }
+                        "method-mismatch".to_string()
+                    } else {
+                        "route-miss".to_string()
                     }
-                    "method-mismatch".to_string()
                 } else {
                     "route-miss".to_string()
                 }
-            } else {
-                "route-miss".to_string()
             }
-        }
-    };
+        };
     for (registration_method, registration_path, registration_response) in route_registrations {
         if let Err(message) = runtime.register_route(
             registration_method.as_str(),
@@ -2226,48 +2221,65 @@ fn validate_lasm_route_db_operation_sequence_limits(
     operation_sequence_max: usize,
 ) -> Result<(), String> {
     for route in routes {
-        let operation_count = parse_lasm_db_operation_sequence_count(&route.headers);
-        if operation_count > operation_sequence_max {
-            return Err(format!(
-                "route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
-                route.method, route.path, operation_count, operation_sequence_max
-            ));
-        }
-        if operation_count == 0 {
-            if let Some(operation) =
-                lasm_route_db_header_value(&route.headers, LASM_INTERNAL_DB_OP_HEADER, None)
-            {
-                validate_lasm_route_db_operation_header_contract(
-                    route,
-                    &route.headers,
-                    operation,
-                    None,
-                )?;
-            }
-            continue;
-        }
-        if operation_count < 2 {
-            return Err(format!(
-                "route {} {} has invalid DB operation sequence marker value {}; expected >= 2",
-                route.method, route.path, operation_count
-            ));
-        }
-        for index in 0..operation_count {
-            let Some(operation) =
-                lasm_route_db_header_value(&route.headers, LASM_INTERNAL_DB_OP_HEADER, Some(index))
-            else {
-                return Err(format!(
-                    "route {} {} is missing internal DB operation marker for sequence index {}",
-                    route.method, route.path, index
-                ));
-            };
+        validate_lasm_db_operation_sequence_limits_for_headers(
+            route.method.as_str(),
+            route.path.as_str(),
+            &route.headers,
+            operation_sequence_max,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_lasm_db_operation_sequence_limits_for_headers(
+    route_method: &str,
+    route_path: &str,
+    headers: &BTreeMap<String, String>,
+    operation_sequence_max: usize,
+) -> Result<(), String> {
+    let operation_count = parse_lasm_db_operation_sequence_count(headers);
+    if operation_count > operation_sequence_max {
+        return Err(format!(
+            "route {} {} resolves {} DB intrinsic operations; maximum supported per handler is {}",
+            route_method, route_path, operation_count, operation_sequence_max
+        ));
+    }
+    if operation_count == 0 {
+        if let Some(operation) =
+            lasm_route_db_header_value(headers, LASM_INTERNAL_DB_OP_HEADER, None)
+        {
             validate_lasm_route_db_operation_header_contract(
-                route,
-                &route.headers,
+                route_method,
+                route_path,
+                headers,
                 operation,
-                Some(index),
+                None,
             )?;
         }
+        return Ok(());
+    }
+    if operation_count < 2 {
+        return Err(format!(
+            "route {} {} has invalid DB operation sequence marker value {}; expected >= 2",
+            route_method, route_path, operation_count
+        ));
+    }
+    for index in 0..operation_count {
+        let Some(operation) =
+            lasm_route_db_header_value(headers, LASM_INTERNAL_DB_OP_HEADER, Some(index))
+        else {
+            return Err(format!(
+                "route {} {} is missing internal DB operation marker for sequence index {}",
+                route_method, route_path, index
+            ));
+        };
+        validate_lasm_route_db_operation_header_contract(
+            route_method,
+            route_path,
+            headers,
+            operation,
+            Some(index),
+        )?;
     }
     Ok(())
 }
@@ -2297,7 +2309,8 @@ fn lasm_route_db_header_value<'a>(
 }
 
 fn validate_lasm_route_db_operation_header_contract(
-    route: &LasmRunRoutePlan,
+    route_method: &str,
+    route_path: &str,
     headers: &BTreeMap<String, String>,
     operation: &str,
     index: Option<usize>,
@@ -2317,7 +2330,7 @@ fn validate_lasm_route_db_operation_header_contract(
             {
                 return Err(format!(
                     "route {} {} has invalid DB exec marker contract at {} (requires db/template/params headers)",
-                    route.method, route.path, context
+                    route_method, route_path, context
                 ));
             }
             Ok(())
@@ -2334,7 +2347,7 @@ fn validate_lasm_route_db_operation_header_contract(
             {
                 return Err(format!(
                     "route {} {} has invalid DB execTx marker contract at {} (requires template/params and exactly one tx source header)",
-                    route.method, route.path, context
+                    route_method, route_path, context
                 ));
             }
             Ok(())
@@ -2350,14 +2363,14 @@ fn validate_lasm_route_db_operation_header_contract(
             {
                 return Err(format!(
                     "route {} {} has invalid DB queryOne marker contract at {} (requires db/template/params/rowSchema headers)",
-                    route.method, route.path, context
+                    route_method, route_path, context
                 ));
             }
             Ok(())
         }
         _ => Err(format!(
             "route {} {} has unsupported DB operation marker `{}` at {}",
-            route.method, route.path, operation, context
+            route_method, route_path, operation, context
         )),
     }
 }
