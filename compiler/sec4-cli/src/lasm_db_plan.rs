@@ -24,6 +24,9 @@ pub(crate) enum LasmDbTxPlan {
 
 #[derive(Debug, Clone)]
 pub(crate) enum LasmDbOperationPlan {
+    Tx {
+        db: String,
+    },
     Exec {
         db: String,
         query: LasmSqlQueryPlan,
@@ -44,6 +47,15 @@ pub(crate) fn apply_lasm_db_operation_plan_headers(
     operation: &LasmDbOperationPlan,
 ) {
     match operation {
+        LasmDbOperationPlan::Tx { db } => {
+            headers.insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "tx".to_string());
+            headers.insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), db.clone());
+            headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
+            headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
+            headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+            headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+            headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+        }
         LasmDbOperationPlan::Exec { db, query } => {
             headers.insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
             headers.insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), db.clone());
@@ -147,6 +159,16 @@ fn apply_lasm_db_operation_plan_headers_indexed(
     index: usize,
 ) {
     match operation {
+        LasmDbOperationPlan::Tx { db } => {
+            headers.insert(
+                lasm_internal_db_indexed_header(LASM_INTERNAL_DB_OP_HEADER, index),
+                "tx".to_string(),
+            );
+            headers.insert(
+                lasm_internal_db_indexed_header(LASM_INTERNAL_DB_HANDLE_HEADER, index),
+                db.clone(),
+            );
+        }
         LasmDbOperationPlan::Exec { db, query } => {
             headers.insert(
                 lasm_internal_db_indexed_header(LASM_INTERNAL_DB_OP_HEADER, index),
@@ -325,6 +347,10 @@ fn extract_lasm_db_operation_in_expr(
             let mut operation = None;
             let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
                 .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(next) = match_lasm_db_operation_call(&resolved_callee, args, bindings) {
+                operations.push(next.clone());
+                return Some(next);
+            }
             if let Some(next) =
                 extract_lasm_db_operation_in_expr(functions, callee, visited, operations, bindings)
             {
@@ -336,10 +362,6 @@ fn extract_lasm_db_operation_in_expr(
                 ) {
                     operation = Some(next);
                 }
-            }
-            if let Some(next) = match_lasm_db_operation_call(&resolved_callee, args, bindings) {
-                operations.push(next.clone());
-                operation = Some(next);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let call_bindings = collect_lasm_db_operation_call_bindings(
@@ -463,6 +485,16 @@ fn match_lasm_db_operation_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmDbOperationPlan> {
+    if is_lasm_db_tx_call(callee) {
+        let db_index = match args.len() {
+            1 => 0,
+            2 => 1,
+            _ => return None,
+        };
+        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+            .unwrap_or_else(|| "1".to_string());
+        return Some(LasmDbOperationPlan::Tx { db });
+    }
     if is_lasm_db_exec_call(callee) {
         let (db_index, query_index) = match args.len() {
             2 => (0, 1),
