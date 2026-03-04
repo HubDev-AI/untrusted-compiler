@@ -469,4 +469,40 @@ mod tests {
         .expect_err("multiple DSN lines should fail");
         assert!(error.contains("must contain exactly one DSN line"));
     }
+
+    #[test]
+    fn postgres_dsn_runtime_env_file_rejects_multiple_aliases() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-runtime-env-conflict");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let path = dir.join("runtime.env");
+        let mut file = File::create(&path).expect("runtime env file must be writable");
+        file.write_all(
+            b"SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://alpha\nSEC4_RT_LASM_DB_POSTGRES_DSN=postgres://lasm\n",
+        )
+        .expect("runtime env file write should succeed");
+
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+                (
+                    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+                    Some(path.to_string_lossy().as_ref()),
+                ),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                    .expect_err("multiple runtime env DSN aliases should fail");
+                assert!(err.contains("runtime env file `"), "wrong error: {err}");
+            },
+        );
+
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
