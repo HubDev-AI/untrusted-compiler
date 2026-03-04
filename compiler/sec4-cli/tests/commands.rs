@@ -2480,9 +2480,60 @@ fn lasm_smoke_command_rejects_route_db_operation_sequence_over_runtime_override_
     );
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("lasm-smoke failed: route POST /db/many resolves 3 DB intrinsic operations")
+        stderr
+            .contains("lasm-smoke failed: route POST /db/many resolves 3 DB intrinsic operations")
             && stderr.contains("maximum supported per handler is 2"),
         "lasm-smoke should emit deterministic DB sequence override diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_unsupported_internal_db_operation_marker_header() {
+    let root = temp_dir("sec4-lasm-smoke-unsupported-internal-db-op-marker");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-unsupported-internal-db-op-marker\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let internalName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let marker = headers.value(\"bogus\");\n  res.setHeader(internalName, marker);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad\", bad);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject unsupported internal DB operation markers"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "lasm-smoke should exit with deterministic route-validation failure status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad has unsupported DB operation marker `bogus`"
+        ),
+        "lasm-smoke should emit deterministic unsupported-marker diagnostics:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");

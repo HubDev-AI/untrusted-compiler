@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-04 | self | I ran `rustfmt compiler/sec4-cli/src/main.rs` and it also reformatted a child module (`lasm_cluster_status_writer.rs`), creating unrelated tracked drift. | For focused slices, avoid single-file rustfmt on module roots; run targeted format only on leaf files and stage explicit file paths before commit. |
+| 2026-03-04 | self | I wrote a smoke regression fixture using raw `res.setHeader(\"name\", \"value\")` strings and hit typed-sink compile errors before the runtime validation path. | In `.ut` command tests, always build header inputs via `headers.name(...)` and `headers.value(...)` when exercising header-path behavior. |
 | 2026-03-04 | self | I committed the DB startup marker-contract slice directly on local `dev` before creating a `codex/*` branch. | Enforce a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, create/switch to `codex/*` before staging/commit. |
 | 2026-03-04 | self | I started this continuation by running a parallel command bundle (status + skill + napkin + file read) instead of enforcing the strict standalone first-command napkin gate. | On every continuation, run `cat .claude/napkin.md` as the only first command; only after that run status/search/skill/context commands. |
 | 2026-02-27 | self | I repeated the branch-gate sequencing miss by launching `git checkout -b ...` in a parallel tool call alongside file reads while starting the worker-forwarding audit slice. | Run branch create/switch commands as standalone steps, then start parallel read/search commands only after branch state is settled. |
