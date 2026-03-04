@@ -69,7 +69,13 @@ for branch in default max-body; do
   "${repo_root}/scripts/check-runtime-smoke-artifacts.sh" --artifacts-dir "${branch_dir}"
 done
 
-for branch in lasm-db-records-log lasm-db-sqlite; do
+require_postgres_db_adapter="${LASM_SMOKE_REQUIRE_POSTGRES_DB_ADAPTER:-0}"
+db_branches=(lasm-db-records-log lasm-db-sqlite)
+if [ "${require_postgres_db_adapter}" = "1" ] || [ "${require_postgres_db_adapter}" = "true" ] || [ "${require_postgres_db_adapter}" = "TRUE" ]; then
+  db_branches+=(lasm-db-postgres)
+fi
+
+for branch in "${db_branches[@]}"; do
   branch_dir="${artifacts_root}/${branch}"
   if [ ! -d "${branch_dir}" ]; then
     echo "runtime-smoke bundle missing branch directory: ${branch}" >&2

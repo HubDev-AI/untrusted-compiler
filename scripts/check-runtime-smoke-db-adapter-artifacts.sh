@@ -230,7 +230,7 @@ if ! rg -Fq '"recordId":2' "${artifacts_dir}/db-query-one.body" \
   exit 1
 fi
 
-if ! jq -e --arg adapter "${db_adapter_label}" '.count == 2 and .adapter == $adapter and (.records | type == "array" and length == 2) and (.records[0].op == "exec") and (.records[1].op == "execTx")' "${artifacts_dir}/db-records.body" >/dev/null; then
+if ! jq -e --arg adapter "${db_adapter_label}" '.count == 3 and .adapter == $adapter and (.records | type == "array" and length == 3) and (.records[0].op == "exec") and (.records[1].op == "execTx") and (.records[2].op == "queryOne")' "${artifacts_dir}/db-records.body" >/dev/null; then
   echo "db-records.body does not match expected payload contract" >&2
   exit 1
 fi
@@ -258,6 +258,10 @@ elif [ "${db_adapter}" = "records-log" ]; then
   fi
   if ! rg -Fq '"op":"exec"' "${records_log_path}" || ! rg -Fq '"op":"execTx"' "${records_log_path}"; then
     echo "records.log does not contain expected deterministic entries" >&2
+    exit 1
+  fi
+  if ! rg -Fq '"op":"queryOne"' "${records_log_path}"; then
+    echo "records.log does not contain queryOne persistence entry" >&2
     exit 1
   fi
 else

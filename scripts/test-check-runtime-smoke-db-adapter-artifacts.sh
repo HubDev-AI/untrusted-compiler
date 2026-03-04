@@ -83,7 +83,7 @@ Content-Type: application/json; charset=utf-8
 X-Trace-Id: ${trace_id}
 TXT
   cat > "${branch_dir}/db-records.body" <<TXT
-{"count":2,"adapter":"${db_adapter_label}","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"}]}
+{"count":3,"adapter":"${db_adapter_label}","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"},{"recordId":3,"op":"queryOne"}]}
 TXT
 
   local run_cmd="Running \`target/debug/sec4 run --path /tmp/lasm-alpha-full --backend lasm --db-base ${db_base} --db-adapter ${db_adapter} --oneshot --port ${port} --serve-timeout-ms ${serve_timeout_ms}"
@@ -104,6 +104,7 @@ TXT
     cat > "${branch_dir}/records.log" <<'TXT'
 {"op":"exec","recordId":1}
 {"op":"execTx","recordId":2}
+{"op":"queryOne","recordId":3}
 TXT
   fi
 }
@@ -201,7 +202,7 @@ fi
 payload_bad_dir="${tmp_dir}/bad-records-payload"
 cp -R "${sqlite_ok_dir}" "${payload_bad_dir}"
 cat > "${payload_bad_dir}/db-records.body" <<'TXT'
-{"count":2,"adapter":"records.log","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"}]}
+{"count":3,"adapter":"records.log","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"},{"recordId":3,"op":"queryOne"}]}
 TXT
 
 if "${checker}" --artifacts-dir "${payload_bad_dir}" >"${tmp_dir}/payload-bad.log" 2>&1; then
