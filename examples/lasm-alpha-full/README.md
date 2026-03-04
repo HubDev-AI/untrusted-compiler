@@ -28,12 +28,12 @@ Postgres adapter:
 
 ```bash
 DB_BASE="$(pwd)/examples/lasm-alpha-full/.lasm-db"
-export SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
-# (legacy alias: SEC4_RT_LASM_DB_POSTGRES_DSN)
+POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
 cargo run -p sec4 -- run \
   --path examples/lasm-alpha-full \
   --backend lasm \
   --db-base "$DB_BASE" \
+  --db-postgres-dsn "$POSTGRES_DSN" \
   --db-adapter postgres \
   --port 8080
 ```
@@ -200,10 +200,16 @@ List records:
 curl -i -H 'Authorization: Bearer token123' http://127.0.0.1:8080/db/records
 ```
 
-Inspect persisted records file:
+Inspect persisted records file for the records adapter:
 
 ```bash
 cat "$DB_BASE/records.log"
+```
+
+For sqlite:
+
+```bash
+ls -l "$DB_BASE/records.sqlite3"
 ```
 
 ## 7) Validate/Build
@@ -239,9 +245,9 @@ Smoke options:
 - `SEC4_ALPHA_FULL_QUERY_PARAMS` (default `%5B%5D`)
 - `SEC4_ALPHA_FULL_QUERY_ONE_ROW_SCHEMA` (default `7`)
 - `SEC4_ALPHA_FULL_TIMEOUT_MS` (request timeout, default `5000`)
-- `SEC4_ALPHA_FULL_POSTGRES_DSN` (or `SEC4_DB_ALPHA_DB_POSTGRES_DSN`, `SEC4_DB_ALPHA_POSTGRES_DSN`, `SEC4_RT_LASM_DB_POSTGRES_DSN`)
-- `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE` (or `SEC4_DB_ALPHA_POSTGRES_DSN_FILE`, `SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH`, `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`, `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`)
-- `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE` (or `SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE`, `SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE`, `SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE`, `SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE`)
+- `SEC4_ALPHA_FULL_POSTGRES_DSN` (or `SEC4_RT_LASM_DB_POSTGRES_DSN`)
+- `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE` / `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE_PATH` (or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE` / `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`)
+- `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE` (or `SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE` / `SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE`)
 
 For postgres tests:
 
