@@ -1242,7 +1242,8 @@ fn cmd_lasm_smoke(
     let mut runtime_route_method = method.trim().to_ascii_uppercase();
     let mut runtime_route_path = route.to_string();
     let mut route_registrations = Vec::<(String, String, sec4_core::HttpResponse)>::new();
-    let runtime_db_operation_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
+    let runtime_db_operation_sequence_max =
+        lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     let response_origin = match resolve_lasm_smoke_route_plan(
         &program,
         entry.name.as_str(),
@@ -2232,6 +2233,41 @@ fn validate_lasm_route_db_operation_sequence_limits(
                 route.method, route.path, operation_count, operation_sequence_max
             ));
         }
+        if operation_count == 0 {
+            if let Some(operation) =
+                lasm_route_db_header_value(&route.headers, LASM_INTERNAL_DB_OP_HEADER, None)
+            {
+                validate_lasm_route_db_operation_header_contract(
+                    route,
+                    &route.headers,
+                    operation,
+                    None,
+                )?;
+            }
+            continue;
+        }
+        if operation_count < 2 {
+            return Err(format!(
+                "route {} {} has invalid DB operation sequence marker value {}; expected >= 2",
+                route.method, route.path, operation_count
+            ));
+        }
+        for index in 0..operation_count {
+            let Some(operation) =
+                lasm_route_db_header_value(&route.headers, LASM_INTERNAL_DB_OP_HEADER, Some(index))
+            else {
+                return Err(format!(
+                    "route {} {} is missing internal DB operation marker for sequence index {}",
+                    route.method, route.path, index
+                ));
+            };
+            validate_lasm_route_db_operation_header_contract(
+                route,
+                &route.headers,
+                operation,
+                Some(index),
+            )?;
+        }
     }
     Ok(())
 }
@@ -2241,6 +2277,89 @@ fn parse_lasm_db_operation_sequence_count(headers: &BTreeMap<String, String>) ->
         .get(LASM_INTERNAL_DB_OP_COUNT_HEADER)
         .and_then(|value| value.trim().parse::<usize>().ok())
         .unwrap_or(0)
+}
+
+fn lasm_route_db_header_value<'a>(
+    headers: &'a BTreeMap<String, String>,
+    header_name: &str,
+    index: Option<usize>,
+) -> Option<&'a str> {
+    let value = match index {
+        Some(index) => headers.get(lasm_internal_db_indexed_header(header_name, index).as_str())?,
+        None => headers.get(header_name)?,
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn validate_lasm_route_db_operation_header_contract(
+    route: &LasmRunRoutePlan,
+    headers: &BTreeMap<String, String>,
+    operation: &str,
+    index: Option<usize>,
+) -> Result<(), String> {
+    let context = match index {
+        Some(index) => format!("sequence index {index}"),
+        None => "single-operation marker".to_string(),
+    };
+    match operation {
+        "listRecords" => Ok(()),
+        "exec" => {
+            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
+                    .is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_PARAMS_HEADER, index)
+                    .is_none()
+            {
+                return Err(format!(
+                    "route {} {} has invalid DB exec marker contract at {} (requires db/template/params headers)",
+                    route.method, route.path, context
+                ));
+            }
+            Ok(())
+        }
+        "execTx" => {
+            let tx = lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TX_HEADER, index);
+            let tx_db = lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TX_DB_HEADER, index);
+            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
+                .is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_PARAMS_HEADER, index)
+                    .is_none()
+                || (tx.is_none() && tx_db.is_none())
+                || (tx.is_some() && tx_db.is_some())
+            {
+                return Err(format!(
+                    "route {} {} has invalid DB execTx marker contract at {} (requires template/params and exactly one tx source header)",
+                    route.method, route.path, context
+                ));
+            }
+            Ok(())
+        }
+        "queryOne" => {
+            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
+                    .is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_PARAMS_HEADER, index)
+                    .is_none()
+                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, index)
+                    .is_none()
+            {
+                return Err(format!(
+                    "route {} {} has invalid DB queryOne marker contract at {} (requires db/template/params/rowSchema headers)",
+                    route.method, route.path, context
+                ));
+            }
+            Ok(())
+        }
+        _ => Err(format!(
+            "route {} {} has unsupported DB operation marker `{}` at {}",
+            route.method, route.path, operation, context
+        )),
+    }
 }
 
 fn resolve_lasm_smoke_route_plan(
@@ -9292,7 +9411,8 @@ fn cmd_run_lasm_backend(
         );
         return Err(1);
     }
-    let runtime_db_operation_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
+    let runtime_db_operation_sequence_max =
+        lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     if let Err(message) = validate_lasm_route_db_operation_sequence_limits(
         routes.as_slice(),
         runtime_db_operation_sequence_max,
