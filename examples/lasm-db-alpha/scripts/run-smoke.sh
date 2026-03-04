@@ -173,7 +173,7 @@ usage: run-smoke.sh \
   [--request-timeout-ms <ms>] \
   [--skip-assert]
 
-Runs a tiny LASM DB smoke flow (exec, exec-tx, query-one, list).
+Runs a tiny LASM DB smoke flow (exec, exec-tx, exec-batch, write-and-query, query-one, list, restart).
 
 Environment:
   SEC4_DB_ALPHA_PORT                    default 8088
@@ -440,30 +440,157 @@ post() {
   cat "$body_file"
 }
 
-echo "LASM DB alpha smoke: adapter=${DB_ADAPTER} port=${PORT} db-base=${DB_BASE}"
+start_service() {
+  {
+    cargo run -p sec4 -- run "${run_args[@]}" >"$LOG_FILE" 2>&1
+  } &
+  SEC4_PID=$!
 
-{
-  cargo run -p sec4 -- run "${run_args[@]}" >"$LOG_FILE" 2>&1
-} &
-SEC4_PID=$!
+  for _ in $(seq 1 120); do
+    if ! kill -0 "$SEC4_PID" >/dev/null 2>&1; then
+      echo "sec4 process exited before ready" >&2
+      cat "$LOG_FILE" >&2
+      exit 1
+    fi
 
-for _ in $(seq 1 120); do
-  if ! kill -0 "$SEC4_PID" >/dev/null 2>&1; then
-    echo "sec4 process exited before ready" >&2
+    if curl --silent --show-error --output /dev/null --max-time 1 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  echo "sec4 process did not become ready" >&2
+  cat "$LOG_FILE" >&2
+  exit 1
+}
+
+stop_service() {
+  if [ -n "${SEC4_PID-}" ] && kill -0 "${SEC4_PID}" >/dev/null 2>&1; then
+    kill "${SEC4_PID}" >/dev/null 2>&1 || true
+    wait "${SEC4_PID}" >/dev/null 2>&1 || true
+  fi
+  SEC4_PID=""
+}
+
+extract_records_count() {
+  local body="$1"
+  local compact
+  compact="$(printf '%s' "$body" | tr -d '\n\r')"
+  local count
+
+  if [[ "$compact" =~ \"count\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  echo ""
+  return 1
+}
+
+assert_status() {
+  local response_body="$1"
+  local expected_rows="$2"
+  local request_label="$3"
+
+  if [[ "$response_body" != *"\"rowSchema\":${expected_rows}"* ]]; then
+    echo "${request_label}: expected response rowSchema=${expected_rows}" >&2
+    echo "--- response body" >&2
+    cat <<< "$response_body" >&2
+    echo "--- service log" >&2
     cat "$LOG_FILE" >&2
     exit 1
   fi
+}
 
-  if curl --silent --show-error --output /dev/null --max-time 1 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    break
+assert_equal_numbers() {
+  local left="$1"
+  local right="$2"
+  local message="$3"
+
+  if [ "$left" -ne "$right" ]; then
+    echo "${message}: expected ${left} to equal ${right}" >&2
+    exit 1
   fi
-  sleep 0.2
-done
+}
+
+assert_at_least_numbers() {
+  local observed="$1"
+  local minimum="$2"
+  local message="$3"
+
+  if [ "$observed" -lt "$minimum" ]; then
+    echo "${message}: expected ${observed} to be >= ${minimum}" >&2
+    exit 1
+  fi
+}
+
+echo "LASM DB alpha smoke: adapter=${DB_ADAPTER} port=${PORT} db-base=${DB_BASE}"
+
+start_service
 
 post db-exec "/db/exec?template=${DB_QUERY_TEMPLATE}&params=${DB_QUERY_PARAMS}"
 post db-exec-tx "/db/exec-tx?template=${DB_QUERY_TEMPLATE}&params=${DB_QUERY_PARAMS}"
-dispatch db-query "/db/query-one?template=${DB_QUERY_TEMPLATE}&params=${DB_QUERY_PARAMS}&row_schema=${DB_QUERY_ONE_ROW_SCHEMA}"
-dispatch db-list "/db/records"
+records_after_exec_tx="$(dispatch db-list-before-batch "/db/records")"
+count_after_exec_tx="$(extract_records_count "$records_after_exec_tx")"
+if [ -z "$count_after_exec_tx" ]; then
+  echo "missing records count after exec+tx request in /db/records response" >&2
+  echo "--- response body" >&2
+  echo "$records_after_exec_tx" >&2
+  exit 1
+fi
+
+dispatch db-exec-batch "/db/exec-batch?template_a=${DB_QUERY_TEMPLATE}&params_a=${DB_QUERY_PARAMS}&template_b=${DB_QUERY_TEMPLATE}&params_b=${DB_QUERY_PARAMS}"
+records_after_exec_batch="$(dispatch db-list-after-batch "/db/records")"
+count_after_exec_batch="$(extract_records_count "$records_after_exec_batch")"
+if [ -z "$count_after_exec_batch" ]; then
+  echo "missing records count after exec-batch request in /db/records response" >&2
+  echo "--- response body" >&2
+  echo "$records_after_exec_batch" >&2
+  exit 1
+fi
+
+assert_equal_numbers "$count_after_exec_batch" "$((count_after_exec_tx + 2))" "exec-batch should append exactly two records"
+
+write_and_query_response="$(post db-write-and-query "/db/write-and-query?write_template=${DB_QUERY_TEMPLATE}&write_params=${DB_QUERY_PARAMS}&query_template=${DB_QUERY_TEMPLATE}&query_params=${DB_QUERY_PARAMS}&row_schema=${DB_QUERY_ONE_ROW_SCHEMA}")"
+records_after_write_and_query="$(dispatch db-list-after-write-and-query "/db/records")"
+count_after_write_and_query="$(extract_records_count "$records_after_write_and_query")"
+if [ -z "$count_after_write_and_query" ]; then
+  echo "missing records count after write-and-query request in /db/records response" >&2
+  echo "--- response body" >&2
+  echo "$records_after_write_and_query" >&2
+  exit 1
+fi
+
+assert_status "$write_and_query_response" "$DB_QUERY_ONE_ROW_SCHEMA" "db-write-and-query"
+assert_at_least_numbers "$count_after_write_and_query" "$((count_after_exec_batch + 1))" "write-and-query should append at least one record"
+
+query_body="$(dispatch db-query "/db/query-one?template=${DB_QUERY_TEMPLATE}&params=${DB_QUERY_PARAMS}&row_schema=${DB_QUERY_ONE_ROW_SCHEMA}")"
+assert_status "$query_body" "$DB_QUERY_ONE_ROW_SCHEMA" "db-query"
+records_after_query="$(dispatch db-list "/db/records")"
+count_after_query="$(extract_records_count "$records_after_query")"
+if [ -z "$count_after_query" ]; then
+  echo "missing records count before restart in /db/records response" >&2
+  echo "--- response body" >&2
+  echo "$records_after_query" >&2
+  exit 1
+fi
+echo "[ok] records count before restart: ${count_after_query}"
+
+echo "restarting service for persistence check"
+stop_service
+start_service
+
+query_body_after="$(dispatch db-query-after-restart "/db/query-one?template=${DB_QUERY_TEMPLATE}&params=${DB_QUERY_PARAMS}&row_schema=${DB_QUERY_ONE_ROW_SCHEMA}")"
+assert_status "$query_body_after" "$DB_QUERY_ONE_ROW_SCHEMA" "db-query-after-restart"
+records_after_restart="$(dispatch db-list-after-restart "/db/records")"
+count_after_restart="$(extract_records_count "$records_after_restart")"
+if [ -z "$count_after_restart" ]; then
+  echo "missing records count after restart in /db/records response" >&2
+  echo "--- response body" >&2
+  echo "$records_after_restart" >&2
+  exit 1
+fi
+assert_at_least_numbers "$count_after_restart" "$count_after_query" "persisted records count should not decrease after restart"
 
 if [ "$DB_ADAPTER" = "records" ] || [ "$DB_ADAPTER" = "records.log" ]; then
   if [ ! -f "$DB_BASE/records.log" ]; then

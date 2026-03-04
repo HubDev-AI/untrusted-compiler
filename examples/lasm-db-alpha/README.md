@@ -21,7 +21,7 @@ Larger alpha example for validating LASM server mode with real disk-backed DB be
   - comments explain each route and expected query parameters.
 - `sec4.toml`: project manifest.
 - `sec4.policy`: minimal policy for local alpha runs.
-- `scripts/run-smoke.sh`: deterministic operator smoke that performs writes, tx writes, query-one, and list checks.
+- `scripts/run-smoke.sh`: deterministic operator smoke that performs writes, tx writes, exec-batch, write-and-query, query-one, list checks, and persistence verification.
 
 ## Run
 
@@ -81,6 +81,9 @@ Run one-command smoke from this folder:
 cd examples/lasm-db-alpha
 make smoke
 ```
+
+The smoke script now verifies end-to-end DB behavior in one pass:
+`exec` → `exec-tx` → `exec-batch` (tx sequence) → `write-and-query` → `query-one` → `records` → service restart → `query-one` → `records` (persistence check).
 
 Available make lanes:
 
