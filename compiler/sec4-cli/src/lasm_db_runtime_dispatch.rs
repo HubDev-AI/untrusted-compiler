@@ -609,6 +609,186 @@ fn prepare_lasm_db_operation_params(
     })
 }
 
+fn resolve_lasm_db_operation_template_and_params(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    operation: &str,
+    validation_code: &'static str,
+    missing_handles_message: &'static str,
+    trace_id: &str,
+) -> Option<(String, String, Option<serde_json::Value>)> {
+    let Some(raw_template_header) =
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
+    else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    let template =
+        materialize_lasm_internal_header_value(raw_template_header, request, path_params);
+    if !enforce_lasm_db_sql_template_max_bytes(response, operation, template.as_str(), trace_id) {
+        return None;
+    }
+    if template.trim().is_empty() {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.SQL_TEMPLATE_INVALID",
+                "validation",
+                "sql.q query template is required",
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    }
+    let Some(raw_params_header) =
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
+    else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    let params = materialize_lasm_internal_header_value(raw_params_header, request, path_params);
+    if !enforce_lasm_db_params_required(response, operation, params.as_str(), trace_id) {
+        return None;
+    }
+    if !enforce_lasm_db_params_max_bytes(response, operation, params.as_str(), trace_id) {
+        return None;
+    }
+    let template = template.trim().to_string();
+    let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
+    if !enforce_lasm_db_params_max_entries(
+        response,
+        operation,
+        parsed_params.as_ref(),
+        params.as_str(),
+        trace_id,
+    ) {
+        return None;
+    }
+    Some((template, params, parsed_params))
+}
+
+fn resolve_lasm_db_operation_db_cap_handle(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    validation_code: &'static str,
+    missing_handles_message: &'static str,
+    trace_id: &str,
+) -> Option<i64> {
+    let Some(raw_db_header) =
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
+    else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    let db_raw = materialize_lasm_internal_header_value(raw_db_header, request, path_params);
+    let Some(db) = parse_lasm_positive_i64(db_raw.trim()) else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    if !is_lasm_valid_db_cap_handle(db) {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    }
+    Some(db)
+}
+
+fn resolve_lasm_db_operation_row_schema_handle(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    validation_code: &'static str,
+    missing_handles_message: &'static str,
+    trace_id: &str,
+) -> Option<i64> {
+    let Some(raw_row_schema_header) =
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER)
+    else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    let row_schema_raw =
+        materialize_lasm_internal_header_value(raw_row_schema_header, request, path_params);
+    let Some(row_schema) = parse_lasm_positive_i64(row_schema_raw.trim()) else {
+        set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                validation_code,
+                "validation",
+                missing_handles_message,
+                400,
+                trace_id,
+            ),
+        );
+        return None;
+    };
+    Some(row_schema)
+}
+
 fn set_lasm_dynamic_state_unavailable_response(
     response: &mut sec4_core::HttpResponse,
     trace_id: &str,
@@ -651,6 +831,48 @@ fn set_lasm_db_runtime_error_response(
         response,
         status,
         &lasm_error_envelope(code, kind, message, status, trace_id),
+    );
+}
+
+fn set_lasm_db_exec_like_success_response(
+    response: &mut sec4_core::HttpResponse,
+    record: &LasmDbRecord,
+    affected_rows: u64,
+) {
+    set_lasm_json_response(
+        response,
+        200,
+        &serde_json::json!({
+            "ok": true,
+            "recordId": record.id,
+            "db": record.db,
+            "op": record.op,
+            "template": record.template,
+            "params": record.params,
+            "tx": record.tx,
+            "affectedRows": affected_rows,
+        }),
+    );
+}
+
+fn set_lasm_db_query_one_success_response(
+    response: &mut sec4_core::HttpResponse,
+    record: &LasmDbRecord,
+    row_schema: i64,
+    row: &str,
+    row_object: &serde_json::Value,
+) {
+    set_lasm_json_response(
+        response,
+        200,
+        &serde_json::json!({
+            "ok": true,
+            "recordId": record.id,
+            "rowSchema": row_schema,
+            "row": row,
+            "rowObject": row_object,
+            "record": lasm_db_record_to_json(record),
+        }),
     );
 }
 
@@ -1210,130 +1432,29 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
         "exec" => {
-            let Some(raw_template_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-            else {
-                set_lasm_json_response(
+            let Some((template, params, parsed_params)) =
+                resolve_lasm_db_operation_template_and_params(
                     response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        "db.exec requires db capability and query handle",
-                        400,
-                        trace_id,
-                    ),
-                );
+                    request,
+                    path_params,
+                    "exec",
+                    "DB.EXEC_INVALID",
+                    "db.exec requires db capability and query handle",
+                    trace_id,
+                )
+            else {
                 return true;
             };
-            let template =
-                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
-            if !enforce_lasm_db_sql_template_max_bytes(
+            let Some(db) = resolve_lasm_db_operation_db_cap_handle(
                 response,
-                "exec",
-                template.as_str(),
+                request,
+                path_params,
+                "DB.EXEC_INVALID",
+                "db.exec requires db capability and query handle",
                 trace_id,
-            ) {
-                return true;
-            }
-            if template.trim().is_empty() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.SQL_TEMPLATE_INVALID",
-                        "validation",
-                        "sql.q query template is required",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            let Some(raw_params_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        "db.exec requires db capability and query handle",
-                        400,
-                        trace_id,
-                    ),
-                );
+            ) else {
                 return true;
             };
-            let params =
-                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
-            if !enforce_lasm_db_params_required(response, "exec", params.as_str(), trace_id) {
-                return true;
-            }
-            if !enforce_lasm_db_params_max_bytes(response, "exec", params.as_str(), trace_id) {
-                return true;
-            }
-            let Some(raw_db_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        "db.exec requires db capability and query handle",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            };
-            let db_raw =
-                materialize_lasm_internal_header_value(raw_db_header, request, path_params);
-            let db = match parse_lasm_positive_i64(db_raw.trim()) {
-                Some(value) => value,
-                None => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.EXEC_INVALID",
-                            "validation",
-                            "db.exec requires db capability and query handle",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                }
-            };
-            if !is_lasm_valid_db_cap_handle(db) {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_INVALID",
-                        "validation",
-                        "db.exec requires db capability and query handle",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            let template = template.trim().to_string();
-            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
-            if !enforce_lasm_db_params_max_entries(
-                response,
-                "exec",
-                parsed_params.as_ref(),
-                params.as_str(),
-                trace_id,
-            ) {
-                return true;
-            }
             let prepared_params = match prepare_lasm_db_operation_params(
                 db_records_adapter,
                 "DB.EXEC_INVALID",
@@ -1413,20 +1534,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     &record,
                     compaction_snapshot,
                 );
-                set_lasm_json_response(
-                    response,
-                    200,
-                    &serde_json::json!({
-                        "ok": true,
-                        "recordId": record.id,
-                        "db": record.db,
-                        "op": record.op,
-                        "template": record.template,
-                        "params": record.params,
-                        "tx": record.tx,
-                        "affectedRows": affected_rows,
-                    }),
-                );
+                set_lasm_db_exec_like_success_response(response, &record, affected_rows);
                 return true;
             }
             let (record, affected_rows) = {
@@ -1471,87 +1579,23 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                 (record, affected_rows)
             };
-            set_lasm_json_response(
-                response,
-                200,
-                &serde_json::json!({
-                    "ok": true,
-                    "recordId": record.id,
-                    "db": record.db,
-                    "op": record.op,
-                    "template": record.template,
-                    "params": record.params,
-                    "tx": record.tx,
-                    "affectedRows": affected_rows,
-                }),
-            );
+            set_lasm_db_exec_like_success_response(response, &record, affected_rows);
             true
         }
         "execTx" => {
-            let Some(raw_template_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-            else {
-                set_lasm_json_response(
+            let Some((template, params, parsed_params)) =
+                resolve_lasm_db_operation_template_and_params(
                     response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        "db.execTx requires transaction and query handles",
-                        400,
-                        trace_id,
-                    ),
-                );
+                    request,
+                    path_params,
+                    "execTx",
+                    "DB.EXEC_TX_INVALID",
+                    "db.execTx requires transaction and query handles",
+                    trace_id,
+                )
+            else {
                 return true;
             };
-            let template =
-                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
-            if !enforce_lasm_db_sql_template_max_bytes(
-                response,
-                "execTx",
-                template.as_str(),
-                trace_id,
-            ) {
-                return true;
-            }
-            if template.trim().is_empty() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.SQL_TEMPLATE_INVALID",
-                        "validation",
-                        "sql.q query template is required",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            let Some(raw_params_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        "db.execTx requires transaction and query handles",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            };
-            let params =
-                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
-            if !enforce_lasm_db_params_required(response, "execTx", params.as_str(), trace_id) {
-                return true;
-            }
-            if !enforce_lasm_db_params_max_bytes(response, "execTx", params.as_str(), trace_id) {
-                return true;
-            }
             let keep_allocated_tx_handle = take_lasm_internal_header_value(
                 response,
                 LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
@@ -1566,17 +1610,6 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
                 );
-            let template = template.trim().to_string();
-            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
-            if !enforce_lasm_db_params_max_entries(
-                response,
-                "execTx",
-                parsed_params.as_ref(),
-                params.as_str(),
-                trace_id,
-            ) {
-                return true;
-            }
             let tx_source = match resolve_lasm_exec_tx_source(
                 tx_db_source.as_deref(),
                 tx_handle_raw.as_deref(),
@@ -1678,20 +1711,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     &record,
                     compaction_snapshot,
                 );
-                set_lasm_json_response(
-                    response,
-                    200,
-                    &serde_json::json!({
-                        "ok": true,
-                        "recordId": record.id,
-                        "db": record.db,
-                        "op": record.op,
-                        "template": record.template,
-                        "params": record.params,
-                        "tx": record.tx,
-                        "affectedRows": affected_rows,
-                    }),
-                );
+                set_lasm_db_exec_like_success_response(response, &record, affected_rows);
                 response.headers.insert(
                     LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
                     record.tx.to_string(),
@@ -1756,20 +1776,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                 (record, affected_rows)
             };
-            set_lasm_json_response(
-                response,
-                200,
-                &serde_json::json!({
-                    "ok": true,
-                    "recordId": record.id,
-                    "db": record.db,
-                    "op": record.op,
-                    "template": record.template,
-                    "params": record.params,
-                    "tx": record.tx,
-                    "affectedRows": affected_rows,
-                }),
-            );
+            set_lasm_db_exec_like_success_response(response, &record, affected_rows);
             response.headers.insert(
                 LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
                 record.tx.to_string(),
@@ -1777,165 +1784,39 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
         "queryOne" => {
-            let Some(raw_template_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
-            else {
-                set_lasm_json_response(
+            let Some((template, params, parsed_params)) =
+                resolve_lasm_db_operation_template_and_params(
                     response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        "db.queryOne requires db capability, query, and row schema handles",
-                        400,
-                        trace_id,
-                    ),
-                );
+                    request,
+                    path_params,
+                    "queryOne",
+                    "DB.QUERY_ONE_INVALID",
+                    "db.queryOne requires db capability, query, and row schema handles",
+                    trace_id,
+                )
+            else {
                 return true;
             };
-            let template =
-                materialize_lasm_internal_header_value(raw_template_header, request, path_params);
-            if !enforce_lasm_db_sql_template_max_bytes(
+            let Some(db) = resolve_lasm_db_operation_db_cap_handle(
                 response,
-                "queryOne",
-                template.as_str(),
+                request,
+                path_params,
+                "DB.QUERY_ONE_INVALID",
+                "db.queryOne requires db capability, query, and row schema handles",
                 trace_id,
-            ) {
-                return true;
-            }
-            if template.trim().is_empty() {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.SQL_TEMPLATE_INVALID",
-                        "validation",
-                        "sql.q query template is required",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            let Some(raw_params_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        "db.queryOne requires db capability, query, and row schema handles",
-                        400,
-                        trace_id,
-                    ),
-                );
+            ) else {
                 return true;
             };
-            let params =
-                materialize_lasm_internal_header_value(raw_params_header, request, path_params);
-            if !enforce_lasm_db_params_required(response, "queryOne", params.as_str(), trace_id) {
-                return true;
-            }
-            if !enforce_lasm_db_params_max_bytes(response, "queryOne", params.as_str(), trace_id) {
-                return true;
-            }
-            let Some(raw_db_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        "db.queryOne requires db capability, query, and row schema handles",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            };
-            let db_raw =
-                materialize_lasm_internal_header_value(raw_db_header, request, path_params);
-            let db = match parse_lasm_positive_i64(db_raw.trim()) {
-                Some(value) => value,
-                None => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.QUERY_ONE_INVALID",
-                            "validation",
-                            "db.queryOne requires db capability, query, and row schema handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                }
-            };
-            if !is_lasm_valid_db_cap_handle(db) {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        "db.queryOne requires db capability, query, and row schema handles",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            let Some(raw_row_schema_header) =
-                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER)
-            else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_INVALID",
-                        "validation",
-                        "db.queryOne requires db capability, query, and row schema handles",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return true;
-            };
-            let row_schema_raw =
-                materialize_lasm_internal_header_value(raw_row_schema_header, request, path_params);
-            let row_schema = match parse_lasm_positive_i64(row_schema_raw.trim()) {
-                Some(value) => value,
-                None => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.QUERY_ONE_INVALID",
-                            "validation",
-                            "db.queryOne requires db capability, query, and row schema handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return true;
-                }
-            };
-            let template = template.trim().to_string();
-            let (params, parsed_params) = normalize_lasm_db_params_and_value(params.as_str());
-            if !enforce_lasm_db_params_max_entries(
+            let Some(row_schema) = resolve_lasm_db_operation_row_schema_handle(
                 response,
-                "queryOne",
-                parsed_params.as_ref(),
-                params.as_str(),
+                request,
+                path_params,
+                "DB.QUERY_ONE_INVALID",
+                "db.queryOne requires db capability, query, and row schema handles",
                 trace_id,
-            ) {
+            ) else {
                 return true;
-            }
+            };
             let prepared_params = match prepare_lasm_db_operation_params(
                 db_records_adapter,
                 "DB.QUERY_ONE_INVALID",
@@ -2034,17 +1915,12 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     &record,
                     compaction_snapshot,
                 );
-                set_lasm_json_response(
+                set_lasm_db_query_one_success_response(
                     response,
-                    200,
-                    &serde_json::json!({
-                        "ok": true,
-                        "recordId": record.id,
-                        "rowSchema": row_schema,
-                        "row": row,
-                        "rowObject": row_object,
-                        "record": lasm_db_record_to_json(&record),
-                    }),
+                    &record,
+                    row_schema,
+                    row.as_str(),
+                    &row_object,
                 );
                 return true;
             }
@@ -2110,17 +1986,12 @@ fn apply_lasm_internal_db_operation_materialization_single(
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                     persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                    set_lasm_json_response(
+                    set_lasm_db_query_one_success_response(
                         response,
-                        200,
-                        &serde_json::json!({
-                            "ok": true,
-                            "recordId": record.id,
-                            "rowSchema": row_schema,
-                            "row": row,
-                            "rowObject": row_object,
-                            "record": lasm_db_record_to_json(&record),
-                        }),
+                        &record,
+                        row_schema,
+                        row.as_str(),
+                        &row_object,
                     );
                     return true;
                 }
@@ -2171,17 +2042,12 @@ fn apply_lasm_internal_db_operation_materialization_single(
             if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
                 return true;
             }
-            set_lasm_json_response(
+            set_lasm_db_query_one_success_response(
                 response,
-                200,
-                &serde_json::json!({
-                    "ok": true,
-                    "recordId": record.id,
-                    "rowSchema": row_schema,
-                    "row": row,
-                    "rowObject": row_object,
-                    "record": lasm_db_record_to_json(&record),
-                }),
+                &record,
+                row_schema,
+                row.as_str(),
+                &row_object,
             );
             true
         }
