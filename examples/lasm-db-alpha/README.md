@@ -8,6 +8,7 @@ Larger alpha example for validating LASM server mode with real disk-backed DB be
 - DB writes survive process restarts when `--db-base` (or `SEC4_RT_LASM_DB_BASE`) is set.
 - `db.queryOne` style behavior returns the latest matching record.
 - You can inspect full persisted state through `/db/records`.
+- `db` adapter can be switched between `records`, `sqlite`, and `postgres` without changing handlers.
 
 ## Files
 
@@ -16,6 +17,7 @@ Larger alpha example for validating LASM server mode with real disk-backed DB be
   - comments explain each route and expected query parameters.
 - `sec4.toml`: project manifest.
 - `sec4.policy`: minimal policy for local alpha runs.
+- `scripts/run-smoke.sh`: deterministic operator smoke that performs writes, tx writes, query-one, and list checks.
 
 ## Run
 
@@ -29,6 +31,7 @@ cargo run -p sec4 -- check --path examples/lasm-db-alpha
 
 ```bash
 DB_BASE="$(pwd)/examples/lasm-db-alpha/.lasm-db"
+export SEC4_DB_ALPHA_TIMEOUT_MS=5000
 cargo run -p sec4 -- run \
   --path examples/lasm-db-alpha \
   --backend lasm \
@@ -36,27 +39,100 @@ cargo run -p sec4 -- run \
   --port 8080
 ```
 
+If your app uses a different DB base directory name, set `--db-base` (or `SEC4_RT_LASM_DB_BASE`) consistently.
+
+Adapter example:
+
+```bash
+DB_BASE="$(pwd)/examples/lasm-db-alpha/.lasm-db"
+export SEC4_DB_ALPHA_DB_ADAPTER=sqlite
+export SEC4_DB_ALPHA_DB_BASE="$DB_BASE"
+cargo run -p sec4 -- run \
+  --path examples/lasm-db-alpha \
+  --backend lasm \
+  --db-base "$DB_BASE" \
+  --db-adapter sqlite \
+  --port 8080
+```
+
+Postgres:
+
+```bash
+DB_BASE="$(pwd)/examples/lasm-db-alpha/.lasm-db"
+export SEC4_DB_ALPHA_DB_ADAPTER=postgres
+export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
+cargo run -p sec4 -- run \
+  --path examples/lasm-db-alpha \
+  --backend lasm \
+  --db-base "$DB_BASE" \
+  --db-adapter postgres \
+  --port 8080
+```
+
+## Automated smoke check
+
+Run the new script for deterministic DB verification:
+
+```bash
+./examples/lasm-db-alpha/scripts/run-smoke.sh
+```
+
+Run with SQLite adapter:
+
+```bash
+SEC4_DB_ALPHA_DB_ADAPTER=sqlite ./examples/lasm-db-alpha/scripts/run-smoke.sh
+```
+
+For Postgres, set a DSN and run:
+
+```bash
+export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4'
+SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
+```
+
+If your DSN must stay out of shell history, prefer DSN file mode:
+
+```bash
+export SEC4_RT_LASM_DB_POSTGRES_DSN_FILE=~/.config/sec4/lasm-postgres-dsn
+SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
+```
+
+Script knobs:
+
+- `SEC4_DB_ALPHA_PORT` (default `8088`)
+- `SEC4_DB_ALPHA_DB_ADAPTER` (`records`, `sqlite`, `postgres`)
+- `SEC4_DB_ALPHA_DB_BASE` (default `<project>/.lasm-db`)
+- `SEC4_DB_ALPHA_QUERY_TEMPLATE` (URL-encoded SQL template, default `SELECT%201`)
+- `SEC4_DB_ALPHA_QUERY_PARAMS` (URL-encoded JSON params, default `%5B%5D`)
+- `SEC4_DB_ALPHA_QUERY_ONE_ROW_SCHEMA` (row schema id for `query-one`, default `7`)
+- `SEC4_DB_ALPHA_TIMEOUT_MS` (request timeout in milliseconds, default `5000`)
+- Legacy compatibility knobs are also accepted by script:
+  - `SEC4_RT_LASM_DB_ADAPTER`, `SEC4_RT_LASM_DB_BASE`, `SEC4_RT_LASM_DB_PORT`,
+    `SEC4_RT_LASM_DB_SERVE_TIMEOUT_MS`, `SEC4_RT_LASM_DB_TIMEOUT_MS`.
+
 ## Test flow (manual)
+
+Before you run manual checks that list persisted records, send at least one write route first.
 
 1. Append non-transactional record:
 
 ```bash
 curl -i -X POST \
-  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha'
+  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=%5B%5D'
 ```
 
 2. Append transactional record:
 
 ```bash
 curl -i -X POST \
-  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha'
+  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=%5B%5D'
 ```
 
-3. Query latest matching record:
+3. Query latest matching record (same template/params as writes):
 
 ```bash
 curl -i \
-  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&row_schema=7'
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=%5B%5D&row_schema=7'
 ```
 
 4. List all persisted records:
@@ -71,6 +147,8 @@ curl -i 'http://127.0.0.1:8080/db/records'
 cat "$DB_BASE/records.log"
 ```
 
+If `records.log` does not exist yet, either DB writes were not executed or the adapter is not `records`.
+
 ## Expected shape
 
 - `/db/exec` and `/db/exec-tx` return JSON with `recordId`, `op`, `db`, `template`, `params`, `tx`.
@@ -82,3 +160,5 @@ cat "$DB_BASE/records.log"
 - `template`/`params` are required for intrinsic DB routes.
 - `/db/query-one` also requires numeric `row_schema`.
 - Without `--db-base`/`SEC4_RT_LASM_DB_BASE`, records stay in-process only.
+- For `records` adapter, `/db/records` and `records.log` are created only after write operations.
+- `SEC4_DB_ALPHA_TIMEOUT_MS` is interpreted as milliseconds in script docs and converted to `curl --max-time` seconds internally.
