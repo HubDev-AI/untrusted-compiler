@@ -105,3 +105,6 @@ curl -i 'http://127.0.0.1:8080/net/internal?url=http://127.0.0.1:18080/internal'
 
 - Internal net calls may be blocked by policy unless `SEC4_RT_ALLOW_INTERNAL_NET=1`.
 - If you change working data, restart is optional; adapters persist through the selected base directory.
+- In `records` mode you should see `.lasm-workbench-db/records.log`.
+- In `sqlite` mode you should see `.lasm-workbench-db/records.sqlite3`.
+- In `postgres` mode there is no local persisted record file (metadata is in DB).
