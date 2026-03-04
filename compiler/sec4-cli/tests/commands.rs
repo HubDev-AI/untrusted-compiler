@@ -1255,6 +1255,57 @@ fn lasm_smoke_command_materializes_db_list_records_response() {
 }
 
 #[test]
+fn lasm_smoke_command_materializes_db_tx_response() {
+    let root = temp_dir("sec4-lasm-smoke-db-tx");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-db-tx\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn dbTx() effects { net } -> Int {\n  let opName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let opValue = headers.value(\"tx\");\n  let dbName = headers.name(\"X-Sec4-Internal-Db\");\n  let dbValue = headers.value(\"1\");\n  res.setHeader(opName, opValue);\n  res.setHeader(dbName, dbValue);\n  res.json(200, \"DbExecTxRuntimeResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/tx\", dbTx);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/db/tx",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:dbTx"),
+        "lasm-smoke output should include DB tx handler origin:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"op\":\"tx\"")
+            && stdout.contains("\"db\":1")
+            && stdout.contains("\"tx\":1"),
+        "lasm-smoke output should include materialized DB tx payload:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_supports_sqlite_db_adapter_flags() {
     let root = temp_dir("sec4-lasm-smoke-db-list-records-sqlite");
     let project_dir = root.join("project");
@@ -2534,6 +2585,55 @@ fn lasm_smoke_command_rejects_unsupported_internal_db_operation_marker_header() 
             "lasm-smoke failed: route GET /bad has unsupported DB operation marker `bogus`"
         ),
         "lasm-smoke should emit deterministic unsupported-marker diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_db_tx_marker_without_db_handle() {
+    let root = temp_dir("sec4-lasm-smoke-db-tx-missing-db-handle");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-db-tx-missing-db-handle\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let markerName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let markerValue = headers.value(\"tx\");\n  res.setHeader(markerName, markerValue);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad-tx\", bad);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad-tx",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject DB tx marker contract when db handle header is missing"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "lasm-smoke should exit with deterministic route-validation failure status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("lasm-smoke failed: route GET /bad-tx has invalid DB tx marker contract")
+            && stderr.contains("(requires db header)"),
+        "lasm-smoke should emit deterministic tx-marker contract diagnostics:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
