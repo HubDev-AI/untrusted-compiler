@@ -26,6 +26,27 @@ pub(crate) const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
 pub(crate) const LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE: &str =
     "db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN, SEC4_RT_LASM_DB_POSTGRES_DSN, SEC4_DB_ALPHA_POSTGRES_DSN_FILE/_PATH, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH, SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE/SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE, or SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE/SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE";
 
+fn expand_tilde_in_path(raw: &str) -> PathBuf {
+    if !raw.starts_with('~') {
+        return PathBuf::from(raw);
+    }
+
+    let rest = match raw.strip_prefix("~/") {
+        Some(rest) => rest,
+        None => return PathBuf::from(raw),
+    };
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok();
+
+    match home {
+        Some(home_path) => home_path.join(rest),
+        None => PathBuf::from(raw),
+    }
+}
+
 fn resolve_env_value(keys: &[&str]) -> Option<String> {
     keys.iter().find_map(|name| {
         std::env::var(name).ok().and_then(|raw| {
@@ -76,9 +97,30 @@ fn resolve_unique_env_file_path_with_candidates(
     let mut found = Vec::<(&'static str, PathBuf)>::new();
 
     for &name in keys {
-        if let Some(file_path) = resolve_env_file_path(name, project_path) {
-            found.push((name, file_path));
+        let raw = match std::env::var(name) {
+            Ok(raw) => raw,
+            Err(_) => continue,
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
         }
+        let mut file_path = expand_tilde_in_path(trimmed);
+        if file_path.is_relative() && !file_path.exists() {
+            if let Some(project_path) = project_path {
+                let candidate = project_path.join(file_path.as_path());
+                if candidate.exists() {
+                    file_path = candidate;
+                }
+            }
+        }
+        if !file_path.exists() {
+            return Err(format!(
+                "{source_name} configured via `{name}` points to missing file `{}`",
+                trimmed
+            ));
+        }
+        found.push((name, file_path));
     }
 
     if found.len() > 1 {
@@ -93,28 +135,6 @@ fn resolve_unique_env_file_path_with_candidates(
     }
 
     Ok(found.into_iter().next())
-}
-
-fn resolve_env_file_path(name: &str, project_path: Option<&Path>) -> Option<PathBuf> {
-    let raw = std::env::var(name).ok()?;
-    let candidate = raw.trim();
-    if candidate.is_empty() {
-        return None;
-    }
-    let mut file_path = PathBuf::from(candidate);
-    if file_path.is_relative() && !file_path.exists() {
-        if let Some(project_path) = project_path {
-            let candidate = project_path.join(file_path.as_path());
-            if candidate.exists() {
-                file_path = candidate;
-            }
-        }
-    }
-    if file_path.exists() {
-        Some(file_path)
-    } else {
-        None
-    }
 }
 
 fn parse_env_file_value(
@@ -137,7 +157,7 @@ fn parse_env_file_value(
             if !keys.iter().any(|key| key == &name) {
                 continue;
             }
-            let value = rest[sep + 1..].trim().trim_matches('"').trim_matches('\'');
+            let value = parse_env_value(&rest[sep + 1..]);
             if value.is_empty() {
                 return Err(format!("{source} value for `{}` must be non-empty", name));
             }
@@ -150,6 +170,100 @@ fn parse_env_file_value(
         }
     }
     Ok(found)
+}
+
+fn strip_unquoted_comment(raw_value: &str) -> &str {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (index, ch) in raw_value.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_double => {
+                escaped = true;
+            }
+            '\'' if !in_double => {
+                in_single = !in_single;
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+            }
+            '#' if !in_single && !in_double => {
+                return raw_value[..index].trim_end();
+            }
+            _ => {}
+        }
+    }
+
+    raw_value.trim_end()
+}
+
+fn parse_env_value(raw_value: &str) -> String {
+    let unquoted = strip_unquoted_comment(raw_value.trim());
+    if unquoted.starts_with('"') {
+        return parse_quoted_env_value(unquoted, '"');
+    }
+    if unquoted.starts_with('\'') {
+        return parse_quoted_env_value(unquoted, '\'');
+    }
+    unquoted.to_string()
+}
+
+fn parse_quoted_env_value(raw_value: &str, quote: char) -> String {
+    let mut parsed = String::new();
+    let mut escaped = false;
+    let mut in_value = false;
+
+    for (idx, ch) in raw_value.char_indices() {
+        if !in_value {
+            if ch == quote {
+                in_value = true;
+                continue;
+            }
+            return raw_value.to_string();
+        }
+
+        if escaped {
+            match quote {
+                '"' if ch == 'n' => {
+                    parsed.push('\n');
+                }
+                '"' if ch == 'r' => {
+                    parsed.push('\r');
+                }
+                '"' if ch == 't' => {
+                    parsed.push('\t');
+                }
+                _ if quote == '"' && ch == '"' => parsed.push('"'),
+                _ if quote == '"' && ch == '\\' => parsed.push('\\'),
+                _ => parsed.push(ch),
+            }
+            escaped = false;
+            continue;
+        }
+
+        if quote == '"' && ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == quote {
+            let after = raw_value[idx + ch.len_utf8()..].trim_end();
+            if after.is_empty() {
+                return parsed;
+            }
+            return raw_value.to_string();
+        }
+
+        parsed.push(ch);
+    }
+
+    raw_value.to_string()
 }
 
 fn parse_first_existing_postgres_dsn_file(
@@ -180,15 +294,18 @@ fn parse_runtime_env_file_for_postgres_dsn(
     )
 }
 
-pub(crate) fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<PathBuf> {
+pub(crate) fn resolve_lasm_dynamic_store_base(
+    project_path: Option<&Path>,
+    explicit_db_base: Option<&Path>,
+) -> Option<PathBuf> {
     if let Some(base) = explicit_db_base {
         return Some(base.to_path_buf());
     }
     let Some(value) = resolve_env_value(&LASM_DB_DYNAMIC_STORE_BASE_ENV_KEYS) else {
-        return None;
+        return project_path.map(|path| path.join(".lasm-db"));
     };
     if value.is_empty() {
-        return None;
+        return project_path.map(|path| path.join(".lasm-db"));
     }
     Some(PathBuf::from(value))
 }
@@ -258,12 +375,16 @@ fn resolve_lasm_db_postgres_dsn_from_file_contents(
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
+        let parsed = parse_env_value(trimmed);
+        if parsed.is_empty() {
+            continue;
+        }
         if dsn.is_some() {
             return Err(format!(
                 "{source} must contain exactly one DSN line (excluding comments/blank lines)"
             ));
         }
-        dsn = Some(trimmed.to_string());
+        dsn = Some(parsed);
     }
     dsn.ok_or_else(|| format!("{source} must contain a non-empty DSN"))
 }
@@ -384,6 +505,46 @@ mod tests {
     }
 
     #[test]
+    fn lasm_dynamic_store_base_defaults_to_dot_lasm_db_under_project() {
+        let project_path = std::env::temp_dir().join("sec4-lasm-store-base-defaults");
+        let resolved = super::resolve_lasm_dynamic_store_base(Some(project_path.as_path()), None)
+            .expect("project path should yield a default store base");
+        assert_eq!(resolved, project_path.join(".lasm-db"));
+    }
+
+    #[test]
+    fn lasm_dynamic_store_base_prefers_explicit_and_env_over_default() {
+        let project_path = std::env::temp_dir().join("sec4-lasm-store-base-overrides");
+        let explicit = std::env::temp_dir().join("sec4-lasm-store-base-explicit");
+        let env_value = std::env::temp_dir().join("sec4-lasm-store-base-env");
+        let env_value = env_value.to_string_lossy().to_string();
+
+        let env_default =
+            super::resolve_lasm_dynamic_store_base(Some(project_path.as_path()), None);
+        assert_eq!(env_default, Some(project_path.join(".lasm-db")));
+
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_BASE", Some(env_value.as_str())),
+                ("SEC4_RT_LASM_DB_BASE", None),
+            ],
+            || {
+                let resolved =
+                    super::resolve_lasm_dynamic_store_base(Some(project_path.as_path()), None)
+                        .expect("env DB base should resolve");
+                assert_eq!(resolved, PathBuf::from(env_value.as_str()));
+            },
+        );
+
+        let explicit_resolved = super::resolve_lasm_dynamic_store_base(
+            Some(project_path.as_path()),
+            Some(explicit.as_path()),
+        )
+        .expect("explicit DB base should resolve");
+        assert_eq!(explicit_resolved, explicit);
+    }
+
+    #[test]
     fn postgres_dsn_env_ambiguous_between_aliases_fails() {
         with_env_vars(
             &[
@@ -448,6 +609,105 @@ mod tests {
     }
 
     #[test]
+    fn postgres_dsn_file_source_tilde_path_expands_home() {
+        let home = std::env::temp_dir().join("sec4-lasm-postgres-home");
+        fs::create_dir_all(&home).expect("temp home directory should be created");
+        let home_path = home.to_string_lossy().to_string();
+        let dsn_path = home.join(".sec4-postgres.env");
+        write_dsn_file(&dsn_path, "postgres://tilde-home\n");
+        let tilde_ref = "~/.sec4-postgres.env";
+
+        with_env_vars(
+            &[
+                ("HOME", Some(home_path.as_str())),
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", Some(tilde_ref)),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let resolved = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, None)
+                    .expect("tilde DSN path should resolve");
+                assert_eq!(resolved, Some("postgres://tilde-home".to_string()));
+            },
+        );
+
+        let _ = fs::remove_file(&dsn_path);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn postgres_dsn_file_source_missing_file_fails_fast() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-dsn-missing-file");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let missing_path = dir.join("missing-postgres.env");
+        if fs::metadata(&missing_path).is_ok() {
+            let _ = fs::remove_file(&missing_path);
+        }
+        let missing = missing_path.to_string_lossy().to_string();
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", Some(missing.as_str())),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                    .expect_err("missing DSN file must fail");
+                assert!(
+                    err.contains(
+                        "configured via `SEC4_DB_ALPHA_POSTGRES_DSN_FILE` points to missing file"
+                    ),
+                    "wrong error: {err}"
+                );
+            },
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn postgres_runtime_env_file_source_missing_file_fails_fast() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-runtime-env-missing-file");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let missing_path = dir.join("missing-runtime-postgres.env");
+        let missing = missing_path.to_string_lossy().to_string();
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+                (
+                    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+                    Some(missing.as_str()),
+                ),
+                ("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE", None),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                    .expect_err("missing runtime env file must fail");
+                assert!(
+                    err.contains(
+                        "configured via `SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE` points to missing file"
+                    ),
+                    "wrong error: {err}"
+                );
+            },
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn postgres_dsn_file_contents_allow_comments_and_blank_lines() {
         let parsed = resolve_lasm_db_postgres_dsn_from_file_contents(
             "dsn-source",
@@ -457,6 +717,19 @@ mod tests {
         assert_eq!(
             parsed,
             "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn postgres_dsn_file_contents_supports_inline_comments_and_quoted_hash_values() {
+        let parsed = resolve_lasm_db_postgres_dsn_from_file_contents(
+            "dsn-source",
+            " \"postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable#frag\" # trailing comment\n",
+        )
+        .expect("dsn file contents should parse");
+        assert_eq!(
+            parsed,
+            "postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable#frag"
         );
     }
 
@@ -504,5 +777,49 @@ mod tests {
 
         let _ = fs::remove_file(&path);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_env_value_supports_inline_comments_and_quoted_values() {
+        let parsed = super::parse_env_file_value(
+            r#"SEC4_DB_ALPHA_DB_POSTGRES_DSN="postgres://alpha:secret@127.0.0.1:5432/sec4" # production
+EXAMPLE_UNUSED_ENV=postgres://ignored
+"#,
+            &super::LASM_DB_POSTGRES_DSN_KEYS,
+            "inline comment source",
+        )
+        .expect("env parser should return a DSN value");
+        assert_eq!(
+            parsed,
+            Some("postgres://alpha:secret@127.0.0.1:5432/sec4".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_env_value_keeps_hash_symbols_inside_quotes() {
+        let parsed = super::parse_env_file_value(
+            "SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://alpha:secret@127.0.0.1:5432/db#frag'\n",
+            &super::LASM_DB_POSTGRES_DSN_KEYS,
+            "hash in value source",
+        )
+        .expect("env parser should preserve hash in quoted DSN");
+        assert_eq!(
+            parsed,
+            Some("postgres://alpha:secret@127.0.0.1:5432/db#frag".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_env_value_supports_escaped_characters_in_double_quotes() {
+        let parsed = super::parse_env_file_value(
+            r#"SEC4_DB_ALPHA_DB_POSTGRES_DSN="postgres://alpha:\"secret\"@127.0.0.1:5432/db\n\t""#,
+            &super::LASM_DB_POSTGRES_DSN_KEYS,
+            "escaped env source",
+        )
+        .expect("env parser should unescape quoted DSN values");
+        assert_eq!(
+            parsed,
+            Some("postgres://alpha:\"secret\"@127.0.0.1:5432/db\n\t".to_string())
+        );
     }
 }

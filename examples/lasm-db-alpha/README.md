@@ -180,7 +180,7 @@ curl -i 'http://127.0.0.1:8080/db/records'
 cat "$DB_BASE/records.log"
 ```
 
-If `records.log` does not exist yet, either DB writes were not executed or the adapter is not `records`.
+If `records.log` does not exist yet, either DB writes were not executed, startup failed, or the adapter is not `records`.
 
 ## Expected shape
 
@@ -193,5 +193,5 @@ If `records.log` does not exist yet, either DB writes were not executed or the a
 - `template`/`params` are required for intrinsic DB routes.
 - `/db/query-one` also requires numeric `row_schema`.
 - Without `--db-base`/`SEC4_RT_LASM_DB_BASE`, records stay in-process only.
-- For `records` adapter, `/db/records` and `records.log` are created only after write operations.
+- For `records` adapter, `records.log` is created on server startup when the adapter is active, so it can be inspected even before writes.
 - `SEC4_DB_ALPHA_TIMEOUT_MS` is interpreted as milliseconds in script docs and converted to `curl --max-time` seconds internally.
