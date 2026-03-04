@@ -2726,8 +2726,9 @@ fn lasm_smoke_command_rejects_db_tx_marker_with_template_header() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("lasm-smoke failed: route GET /bad-tx-extra has invalid DB tx marker contract")
-            && stderr.contains("must not include template/params/tx/txDb/rowSchema headers"),
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad-tx-extra has invalid DB tx marker contract"
+        ) && stderr.contains("must not include template/params/tx/txDb/rowSchema headers"),
         "lasm-smoke should emit deterministic tx-marker extra-header diagnostics:\n{stderr}"
     );
 
@@ -17486,6 +17487,641 @@ fn main() effects { net } -> Int {
     assert_eq!(
         tx_values[0], tx_values[1],
         "multi-op execTx sequence should reuse one tx handle across sequence operations:\n{records_log}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_exec_tx_accepts_tx_from_helper_function() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-exec-tx-helper");
+    let db_base = project_dir.join("lasm-db");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbexectxhelpercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn buildTx(db: DbCap) effects { db.tx } -> TxCap {
+  db.tx(db)
+}
+
+fn dbWithHelperTx() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let tx = buildTx(db);
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/helper", dbWithHelperTx);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--oneshot",
+            "--port",
+            &port_value,
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let request =
+        "POST /db/helper?template=INSERT%20INTO%20items%20%28name%29%20VALUES%20%28%3F%29&params=%5B%22alpha%22%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper execTx flow could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper execTx process did not exit in expected window");
+        }
+    };
+    assert!(
+        status.success(),
+        "run command LASM db helper execTx process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK")
+            && response.contains("\"op\":\"execTx\"")
+            && response.contains("\"recordId\":1")
+            && response.contains("\"tx\":"),
+        "helper execTx response should materialize deterministic execTx payload:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_exec_and_query_one_accept_helpers_for_db_query_and_row_schema() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-helpers-in-args");
+    let db_base = project_dir.join("lasm-db");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbhelperscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn build_db() -> DbCap {
+  DbCap()
+}
+
+fn build_query(template: String, params: String) -> SqlQuery {
+  sql.q(template, params)
+}
+
+fn build_row_schema(raw: Untrusted<String>) -> Schema<Int> {
+  schema.row(validate.int64(raw))
+}
+
+fn exec_with_helper_inputs() effects { net, db.write } -> Int {
+  let db = build_db();
+  let query = build_query(
+    validate.nonEmpty(req.query("template")),
+    validate.nonEmpty(req.query("params"))
+  );
+  db.exec(db, query);
+  res.json(200, "DbExecWithHelpers", 0);
+  0
+}
+
+fn query_one_with_helper_inputs() effects { net, db.read } -> Int {
+  let db = build_db();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let row_schema = build_row_schema(req.query("row_schema"));
+  let query = build_query(template, params);
+  db.queryOne(db, query, row_schema);
+  res.json(200, "DbQueryOneWithHelpers", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", exec_with_helper_inputs);
+  http.get(router, "/db/query-one", query_one_with_helper_inputs);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let exec_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+    let exec_response = {
+        let port = exec_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command LASM db helper exec flow exited early with status: {status}");
+            }
+            match TcpStream::connect(("127.0.0.1", exec_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = response.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper exec flow could not connect to server");
+        });
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = status.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper exec flow did not exit in expected window");
+        });
+        assert!(
+            status.success(),
+            "run command LASM db helper exec flow should exit successfully"
+        );
+        response
+    };
+
+    let query_one_response = {
+        let port = query_one_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!(
+                    "run command LASM db helper queryOne flow exited early with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", query_one_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = response.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper queryOne flow could not connect to server");
+        });
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = status.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper queryOne flow did not exit in expected window");
+        });
+        assert!(
+            status.success(),
+            "run command LASM db helper queryOne flow should exit successfully"
+        );
+        response
+    };
+
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK")
+            && exec_response.contains("\"op\":\"exec\""),
+        "helper-driven db.exec flow should route db args through helper extraction:\n{exec_response}"
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK")
+            && query_one_response.contains("\"op\":\"queryOne\""),
+        "helper-driven db.queryOne flow should route db/query/rowSchema through helper extraction:\n{query_one_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_accepts_db_helpers_with_local_let_bindings() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-helpers-local-lets");
+    let db_base = project_dir.join("lasm-db");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdblethelperscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn build_query(raw_template: Untrusted<String>, raw_params: Untrusted<String>) -> SqlQuery {
+  let validated_template = validate.nonEmpty(raw_template);
+  let validated_params = validate.nonEmpty(raw_params);
+  let query = sql.q(validated_template, validated_params);
+  query
+}
+
+fn build_row_schema(raw_schema: Untrusted<String>) -> Schema<Int> {
+  schema.row(validate.int64(raw_schema))
+}
+
+fn exec_with_local_let_helpers() effects { net, db.write } -> Int {
+  let db = DbCap();
+  let template = req.query("template");
+  let params = req.query("params");
+  let query = build_query(template, params);
+  db.exec(db, query);
+  res.json(200, "DbExecWithLocalLetHelpers", 0);
+  0
+}
+
+fn query_one_with_local_let_helpers() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let template = req.query("template");
+  let params = req.query("params");
+  let row_schema = build_row_schema(req.query("row_schema"));
+  let query = build_query(template, params);
+  db.queryOne(db, query, row_schema);
+  res.json(200, "DbQueryOneWithLocalLetHelpers", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", exec_with_local_let_helpers);
+  http.get(router, "/db/query-one", query_one_with_local_let_helpers);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let exec_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+
+    let exec_response = {
+        let port = exec_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command LASM db let helper exec flow exited early with status: {status}");
+            }
+            match TcpStream::connect(("127.0.0.1", exec_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper exec flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper exec flow did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db let helper exec flow should exit successfully"
+        );
+        response
+    };
+
+    let query_one_response = {
+        let port = query_one_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!(
+                    "run command LASM db let helper queryOne flow exited early with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", query_one_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper queryOne flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper queryOne flow did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db let helper queryOne flow should exit successfully"
+        );
+        response
+    };
+
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK") && exec_response.contains("\"op\":\"exec\""),
+        "db helper with local lets should route exec query through helper extraction:\n{exec_response}"
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK")
+            && query_one_response.contains("\"op\":\"queryOne\""),
+        "db helper with local lets should route queryOne query/schema through helper extraction:\n{query_one_response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

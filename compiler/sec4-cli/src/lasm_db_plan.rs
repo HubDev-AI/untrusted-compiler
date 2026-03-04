@@ -347,7 +347,9 @@ fn extract_lasm_db_operation_in_expr(
             let mut operation = None;
             let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
                 .unwrap_or_else(|| callee.as_ref().clone());
-            if let Some(next) = match_lasm_db_operation_call(&resolved_callee, args, bindings) {
+            if let Some(next) =
+                match_lasm_db_operation_call(functions, &resolved_callee, args, bindings)
+            {
                 operations.push(next.clone());
                 return Some(next);
             }
@@ -477,10 +479,21 @@ fn collect_lasm_db_operation_call_bindings(
             resolve_route_registration_expr(arg, bindings, 0).unwrap_or_else(|| arg.clone());
         call_bindings.insert(param.name.clone(), resolved);
     }
+
+    for statement in &function.body.statements {
+        if let sec4_core::ast::StmtKind::Let { name, value, .. } = &statement.kind {
+            let resolved =
+                resolve_route_registration_expr(value, &call_bindings, 0)
+                    .unwrap_or_else(|| value.clone());
+            call_bindings.insert(name.clone(), resolved);
+        }
+    }
+
     call_bindings
 }
 
 fn match_lasm_db_operation_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
@@ -491,7 +504,7 @@ fn match_lasm_db_operation_call(
             2 => 1,
             _ => return None,
         };
-        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+        let db = extract_lasm_db_value_template(&args[db_index], functions, bindings, 0)
             .unwrap_or_else(|| "1".to_string());
         return Some(LasmDbOperationPlan::Tx { db });
     }
@@ -501,9 +514,9 @@ fn match_lasm_db_operation_call(
             3 => (1, 2),
             _ => return None,
         };
-        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+        let db = extract_lasm_db_value_template(&args[db_index], functions, bindings, 0)
             .unwrap_or_else(|| "1".to_string());
-        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        let query = extract_lasm_sql_query_plan(&args[query_index], functions, bindings, 0)?;
         return Some(LasmDbOperationPlan::Exec { db, query });
     }
     if is_lasm_db_exec_tx_call(callee) {
@@ -512,8 +525,8 @@ fn match_lasm_db_operation_call(
             3 => (1, 2),
             _ => return None,
         };
-        let tx = extract_lasm_db_tx_plan(&args[tx_index], bindings, 0)?;
-        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        let tx = extract_lasm_db_tx_plan(functions, &args[tx_index], bindings, 0)?;
+        let query = extract_lasm_sql_query_plan(&args[query_index], functions, bindings, 0)?;
         return Some(LasmDbOperationPlan::ExecTx { tx, query });
     }
     if is_lasm_db_query_one_call(callee) {
@@ -522,11 +535,12 @@ fn match_lasm_db_operation_call(
             4 => (1, 2, 3),
             _ => return None,
         };
-        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+        let db = extract_lasm_db_value_template(&args[db_index], functions, bindings, 0)
             .unwrap_or_else(|| "1".to_string());
-        let row_schema = extract_lasm_db_value_template(&args[row_schema_index], bindings, 0)
-            .unwrap_or_else(|| "1".to_string());
-        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        let row_schema =
+            extract_lasm_db_value_template(&args[row_schema_index], functions, bindings, 0)
+                .unwrap_or_else(|| "1".to_string());
+        let query = extract_lasm_sql_query_plan(&args[query_index], functions, bindings, 0)?;
         return Some(LasmDbOperationPlan::QueryOne {
             db,
             row_schema,
@@ -537,6 +551,7 @@ fn match_lasm_db_operation_call(
 }
 
 fn extract_lasm_db_tx_plan(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
     depth: usize,
@@ -554,17 +569,72 @@ fn extract_lasm_db_tx_plan(
                 2 => 1,
                 _ => return None,
             };
-            let db = extract_lasm_db_value_template(&args[db_index], bindings, depth + 1)
-                .unwrap_or_else(|| "1".to_string());
+            let db =
+                extract_lasm_db_value_template(&args[db_index], functions, bindings, depth + 1)
+                    .unwrap_or_else(|| "1".to_string());
             return Some(LasmDbTxPlan::FromDb { db });
         }
+        if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+            if let Some(plan) = extract_lasm_db_tx_plan_from_function_call(
+                functions,
+                function_name.as_str(),
+                args,
+                bindings,
+                depth + 1,
+            ) {
+                return Some(plan);
+            }
+        }
     }
-    let tx = extract_lasm_db_value_template(&resolved, bindings, depth + 1)?;
+    let tx = extract_lasm_db_value_template(&resolved, functions, bindings, depth + 1)?;
     Some(LasmDbTxPlan::Handle { tx })
+}
+
+fn extract_lasm_db_tx_plan_from_function_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<LasmDbTxPlan> {
+    if depth > 32 {
+        return None;
+    }
+    let call_bindings =
+        collect_lasm_db_operation_call_bindings(functions, function_name, args, bindings);
+    let mut visited = HashSet::new();
+    let mut operations = Vec::new();
+    let function = functions.get(function_name)?;
+    let operation = extract_lasm_db_operation_in_function(
+        functions,
+        function_name,
+        &mut visited,
+        &mut operations,
+        Some(call_bindings.clone()),
+    )?;
+    match operation {
+        LasmDbOperationPlan::Tx { db } => Some(LasmDbTxPlan::FromDb { db }),
+        _ => {
+            let return_expr = function
+                .body
+                .statements
+                .iter()
+                .rev()
+                .filter_map(|statement| match &statement.kind {
+                    sec4_core::ast::StmtKind::Return { value: Some(value) } => Some(value),
+                    _ => None,
+                })
+                .next()
+                .or(function.body.tail.as_deref());
+            let return_expr = return_expr?;
+            extract_lasm_db_tx_plan(functions, return_expr, &call_bindings, depth + 1)
+        }
+    }
 }
 
 fn extract_lasm_sql_query_plan(
     expr: &sec4_core::ast::Expr,
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
     depth: usize,
 ) -> Option<LasmSqlQueryPlan> {
@@ -578,19 +648,46 @@ fn extract_lasm_sql_query_plan(
     let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
         .unwrap_or_else(|| callee.as_ref().clone());
     if !is_lasm_sql_q_call(&resolved_callee) || args.len() < 2 {
+        if let sec4_core::ast::ExprKind::Call {
+            callee,
+            args: helper_args,
+        } = &resolved.kind
+        {
+            let helper_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &helper_callee.kind {
+                return extract_lasm_sql_query_plan_from_function_call(
+                    functions,
+                    function_name.as_str(),
+                    helper_args,
+                    bindings,
+                    depth + 1,
+                );
+            }
+        }
+        if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved.kind {
+            return extract_lasm_sql_query_plan_from_function_call(
+                functions,
+                function_name.as_str(),
+                &[],
+                bindings,
+                depth + 1,
+            );
+        }
         return None;
     }
-    let template = extract_lasm_db_value_template(&args[0], bindings, depth + 1)?;
+    let template = extract_lasm_db_value_template(&args[0], functions, bindings, depth + 1)?;
     if template.trim().is_empty() {
         return None;
     }
-    let params = extract_lasm_db_value_template(&args[1], bindings, depth + 1)
+    let params = extract_lasm_db_value_template(&args[1], functions, bindings, depth + 1)
         .unwrap_or_else(|| "0".to_string());
     Some(LasmSqlQueryPlan { template, params })
 }
 
 fn extract_lasm_db_value_template(
     expr: &sec4_core::ast::Expr,
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
     depth: usize,
 ) -> Option<String> {
@@ -619,31 +716,96 @@ fn extract_lasm_db_value_template(
                 || is_lasm_validate_int64_call(&resolved_callee)
                 || is_lasm_schema_row_call(&resolved_callee)
             {
-                return args
-                    .first()
-                    .and_then(|value| extract_lasm_db_value_template(value, bindings, depth + 1));
+                return args.first().and_then(|value| {
+                    extract_lasm_db_value_template(value, functions, bindings, depth + 1)
+                });
             }
             if is_lasm_headers_name_call(&resolved_callee)
                 || is_lasm_headers_value_call(&resolved_callee)
             {
-                return args
-                    .first()
-                    .and_then(|value| extract_lasm_db_value_template(value, bindings, depth + 1));
+                return args.first().and_then(|value| {
+                    extract_lasm_db_value_template(value, functions, bindings, depth + 1)
+                });
             }
             if is_lasm_db_cap_constructor_call(&resolved_callee) {
                 return Some("1".to_string());
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+                if let Some(value) = extract_lasm_db_value_template_from_function_call(
+                    functions,
+                    function_name.as_str(),
+                    args,
+                    bindings,
+                    depth + 1,
+                ) {
+                    return Some(value);
+                }
             }
             parse_lasm_res_text_template(&resolved, bindings, depth + 1)
         }
         sec4_core::ast::ExprKind::Binary { op, left, right }
             if *op == sec4_core::ast::BinaryOp::Add =>
         {
-            let lhs = extract_lasm_db_value_template(left, bindings, depth + 1)?;
-            let rhs = extract_lasm_db_value_template(right, bindings, depth + 1)?;
+            let lhs = extract_lasm_db_value_template(left, functions, bindings, depth + 1)?;
+            let rhs = extract_lasm_db_value_template(right, functions, bindings, depth + 1)?;
             Some(format!("{lhs}{rhs}"))
         }
         _ => parse_lasm_res_text_template(&resolved, bindings, depth + 1),
     }
+}
+
+fn extract_lasm_db_value_template_from_function_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    let call_bindings =
+        collect_lasm_db_operation_call_bindings(functions, function_name, args, bindings);
+    let function = functions.get(function_name)?;
+    let return_expr = function
+        .body
+        .statements
+        .iter()
+        .rev()
+        .filter_map(|statement| match &statement.kind {
+            sec4_core::ast::StmtKind::Return { value: Some(value) } => Some(value),
+            _ => None,
+        })
+        .next()
+        .or(function.body.tail.as_deref())?;
+    extract_lasm_db_value_template(return_expr, functions, &call_bindings, depth + 1)
+}
+
+fn extract_lasm_sql_query_plan_from_function_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<LasmSqlQueryPlan> {
+    if depth > 32 {
+        return None;
+    }
+    let call_bindings =
+        collect_lasm_db_operation_call_bindings(functions, function_name, args, bindings);
+    let function = functions.get(function_name)?;
+    let return_expr = function
+        .body
+        .statements
+        .iter()
+        .rev()
+        .filter_map(|statement| match &statement.kind {
+            sec4_core::ast::StmtKind::Return { value: Some(value) } => Some(value),
+            _ => None,
+        })
+        .next()
+        .or(function.body.tail.as_deref())?;
+    extract_lasm_sql_query_plan(return_expr, functions, &call_bindings, depth + 1)
 }
 
 fn is_lasm_sql_q_call(callee: &sec4_core::ast::Expr) -> bool {
