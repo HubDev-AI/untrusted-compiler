@@ -87,6 +87,12 @@ resolve_postgres_dsn_from_env_file() {
   local file="$1"
   local dsn
   dsn="$(read_env_value "$file" SEC4_RT_LASM_DB_POSTGRES_DSN || true)"
+  if [ -n "$dsn" ]; then
+    printf '%s' "$dsn"
+    return 0
+  fi
+
+  dsn="$(read_env_value "$file" SEC4_DB_ALPHA_DB_POSTGRES_DSN || true)"
   if [ -z "$dsn" ]; then
     return 1
   fi
@@ -182,7 +188,8 @@ Environment:
   SEC4_DB_ALPHA_DB_POSTGRES_DSN          optional DSN literal for postgres
   SEC4_DB_ALPHA_POSTGRES_DSN_FILE        optional DSN file for postgres
   SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH   optional legacy DSN file path for postgres
-  SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE optional runtime env path
+  SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE
+  SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE optional runtime env path
   (fallback to SEC4_RT_LASM_DB_POSTGRES_DSN/FILE/FILE_PATH)
 USAGE
 }
@@ -339,19 +346,19 @@ case "$DB_ADAPTER" in
     elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN-}" ]; then
       run_args+=(--db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN")
     elif [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH-}" ] || [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH-}" ]; then
-      dsn_file="$(resolve_postgres_dsn_file)" || true
+      dsn_file="$(resolve_postgres_dsn_file || true)"
       if [ -z "${dsn_file-}" ] || [ ! -f "$dsn_file" ]; then
         echo "postgres adapter selected but provided DSN file is missing: ${dsn_file:-<none>}" >&2
         usage
         exit 1
       fi
-      run_args+=(--db-postgres-dsn-file "$(resolve_postgres_dsn_file)")
+      run_args+=(--db-postgres-dsn-file "$dsn_file")
     elif [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE-}" ] || [ -n "${SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE-}" ]; then
       runtime_dsn="$(resolve_postgres_runtime_file)" || true
       if [ -n "${runtime_dsn-}" ]; then
         run_args+=(--db-postgres-dsn "$runtime_dsn")
       else
-        echo "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE is set but no DSN was read" >&2
+        echo "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE/SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE is set but no DSN was read" >&2
         usage
         exit 1
       fi
