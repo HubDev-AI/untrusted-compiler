@@ -7,17 +7,17 @@ const LASM_DB_DYNAMIC_ADAPTER_ENV_KEYS: [&str; 2] =
     ["SEC4_DB_ALPHA_DB_ADAPTER", "SEC4_RT_LASM_DB_ADAPTER"];
 const LASM_DB_DYNAMIC_STORE_BASE_ENV_KEYS: [&str; 2] =
     ["SEC4_DB_ALPHA_DB_BASE", "SEC4_RT_LASM_DB_BASE"];
-const LASM_DB_POSTGRES_DSN_KEYS: [&str; 2] = [
+pub(crate) const LASM_DB_POSTGRES_DSN_KEYS: [&str; 2] = [
     "SEC4_DB_ALPHA_DB_POSTGRES_DSN",
     "SEC4_RT_LASM_DB_POSTGRES_DSN",
 ];
-const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 4] = [
+pub(crate) const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 4] = [
     "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
     "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
     "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH",
     "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
 ];
-const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
+pub(crate) const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
     "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
     "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE",
     "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
@@ -257,11 +257,7 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
     if let Some((file_env_name, file_path)) =
         resolve_env_file_path_with_candidates(&LASM_DB_POSTGRES_DSN_FILE_KEYS, project_path)
     {
-        return parse_first_existing_postgres_dsn_file(
-            file_path,
-            file_env_name,
-        )
-        .map(Some);
+        return parse_first_existing_postgres_dsn_file(file_path, file_env_name).map(Some);
     }
 
     if let Some((runtime_env_name, env_file_path)) =
