@@ -876,6 +876,30 @@ fn set_lasm_db_query_one_success_response(
     );
 }
 
+fn set_lasm_db_preparse_mismatch_response(
+    response: &mut sec4_core::HttpResponse,
+    operation: &str,
+    trace_id: &str,
+) {
+    let code = match operation {
+        "exec" => "DB.EXEC_INTERNAL",
+        "execTx" => "DB.EXEC_TX_INTERNAL",
+        "queryOne" => "DB.QUERY_ONE_INTERNAL",
+        _ => "DB.OPERATION_INTERNAL",
+    };
+    set_lasm_json_response(
+        response,
+        500,
+        &lasm_error_envelope(
+            code,
+            "internal",
+            "internal db operation preparation mismatch",
+            500,
+            trace_id,
+        ),
+    );
+}
+
 fn resolve_lasm_exec_tx_source(
     tx_db_source: Option<&str>,
     tx_handle_raw: Option<&str>,
@@ -1514,10 +1538,10 @@ fn handle_lasm_internal_db_exec_operation(
         None => return true,
     };
     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let (postgres_template, postgres_params) = prepared_params
-            .postgres
-            .as_ref()
-            .expect("postgres preparse should exist for postgres adapter path");
+        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
+            set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
+            return true;
+        };
         let postgres_config = {
             let state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
             {
@@ -1581,10 +1605,10 @@ fn handle_lasm_internal_db_exec_operation(
         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
         let mut affected_rows = 0u64;
         if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let sqlite_params = prepared_params
-                .sqlite
-                .as_ref()
-                .expect("sqlite params should exist for sqlite adapter path");
+            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
+                set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
+                return true;
+            };
             let sqlite_affected_rows =
                 match run_lasm_sqlite_exec(&mut state, template.as_str(), sqlite_params) {
                     Ok(value) => value,
@@ -1667,10 +1691,10 @@ fn handle_lasm_internal_db_exec_tx_operation(
         None => return true,
     };
     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let (postgres_template, postgres_params) = prepared_params
-            .postgres
-            .as_ref()
-            .expect("postgres preparse should exist for postgres adapter path");
+        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
+            set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
+            return true;
+        };
         let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
         {
             Some(state) => state,
@@ -1752,10 +1776,10 @@ fn handle_lasm_internal_db_exec_tx_operation(
             };
         let mut affected_rows = 0u64;
         if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let sqlite_params = prepared_params
-                .sqlite
-                .as_ref()
-                .expect("sqlite params should exist for sqlite adapter path");
+            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
+                set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
+                return true;
+            };
             let sqlite_affected_rows =
                 match run_lasm_sqlite_exec_tx(&mut state, template.as_str(), sqlite_params) {
                     Ok(value) => value,
@@ -1853,10 +1877,10 @@ fn handle_lasm_internal_db_query_one_operation(
         None => return true,
     };
     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let (postgres_template, postgres_params) = prepared_params
-            .postgres
-            .as_ref()
-            .expect("postgres preparse should exist for postgres adapter path");
+        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
+            set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
+            return true;
+        };
         let state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
             Some(state) => state,
             None => return true,
@@ -1949,10 +1973,10 @@ fn handle_lasm_internal_db_query_one_operation(
         };
         debug_assert_eq!(state.db_records_adapter, db_records_adapter);
         if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let sqlite_params = prepared_params
-                .sqlite
-                .as_ref()
-                .expect("sqlite params should exist for sqlite adapter path");
+            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
+                set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
+                return true;
+            };
             let row_object =
                 match run_lasm_sqlite_query_one(&mut state, template.as_str(), sqlite_params) {
                     Ok(Some(value)) => value,
