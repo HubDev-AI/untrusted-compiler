@@ -501,6 +501,8 @@ fn apply_lasm_postgres_runtime_env_overrides(
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
 ) {
     if let Some(value) = db_postgres_shared_client_max_idle_per_key {
         std::env::set_var(
@@ -529,6 +531,18 @@ fn apply_lasm_postgres_runtime_env_overrides(
     if let Some(value) = db_postgres_persist_batch_max {
         std::env::set_var(
             "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_statement_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_placeholder_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
             value.to_string(),
         );
     }
@@ -1183,10 +1197,14 @@ fn cmd_lasm_smoke(
             op_sequence_max: resolved_lasm_db_usize.db_op_sequence_max,
         },
     );
-    let explicit_db_postgres_statement_cache_max =
-        resolved_lasm_db_usize.db_postgres_statement_cache_max;
-    let explicit_db_postgres_placeholder_cache_max =
-        resolved_lasm_db_usize.db_postgres_placeholder_cache_max;
+    let explicit_db_postgres_statement_cache_max = resolved_lasm_db_usize
+        .db_postgres_statement_cache_max;
+    let explicit_db_postgres_placeholder_cache_max = resolved_lasm_db_usize
+        .db_postgres_placeholder_cache_max;
+    let explicit_db_postgres_statement_cache_max_u64 = explicit_db_postgres_statement_cache_max
+        .map(|value| value as u64);
+    let explicit_db_postgres_placeholder_cache_max_u64 = explicit_db_postgres_placeholder_cache_max
+        .map(|value| value as u64);
     let explicit_db_postgres_retryable_conflict_retry_max =
         resolved_lasm_db_usize.db_postgres_retryable_conflict_retry_max;
     let explicit_db_sqlite_lock_retry_max = resolved_lasm_db_usize.db_sqlite_lock_retry_max;
@@ -1197,6 +1215,8 @@ fn cmd_lasm_smoke(
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
         db_postgres_persist_queue_full_mode,
+        explicit_db_postgres_statement_cache_max_u64,
+        explicit_db_postgres_placeholder_cache_max_u64,
     );
 
     let runtime_actions = if let Some(script) = runtime_script {
@@ -9453,6 +9473,12 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    let explicit_db_postgres_statement_cache_max = resolved_lasm_db_usize
+        .db_postgres_statement_cache_max
+        .map(|value| value as u64);
+    let explicit_db_postgres_placeholder_cache_max = resolved_lasm_db_usize
+        .db_postgres_placeholder_cache_max
+        .map(|value| value as u64);
     apply_lasm_postgres_runtime_env_overrides(
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
@@ -9460,6 +9486,8 @@ fn cmd_run_lasm_backend(
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
         db_postgres_persist_queue_full_mode,
+        explicit_db_postgres_statement_cache_max,
+        explicit_db_postgres_placeholder_cache_max,
     );
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");

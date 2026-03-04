@@ -518,6 +518,8 @@ fn build_lasm_postgres_thread_local_config(
         statement_timeout_ms: state.db_postgres_statement_timeout_ms.max(1),
         lock_timeout_ms: state.db_postgres_lock_timeout_ms.max(1),
         connect_timeout_ms: state.db_postgres_connect_timeout_ms.max(1),
+        db_postgres_statement_cache_max: state.db_postgres_statement_cache_max,
+        db_postgres_placeholder_cache_max: state.db_postgres_placeholder_cache_max,
         retryable_conflict_retry_max: state.db_postgres_retryable_conflict_retry_max,
     })
 }
