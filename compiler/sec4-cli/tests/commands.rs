@@ -32517,7 +32517,7 @@ fn main() effects { net } -> Int {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
+            "run failed: db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN, SEC4_RT_LASM_DB_POSTGRES_DSN, SEC4_DB_ALPHA_POSTGRES_DSN_FILE/_PATH, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH, or SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE/SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE"
         ),
         "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
     );
