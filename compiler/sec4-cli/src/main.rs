@@ -2436,6 +2436,24 @@ fn lasm_route_db_has_any_headers(
         .any(|name| lasm_route_db_header_value(headers, name, index).is_some())
 }
 
+fn lasm_route_db_numeric_header_valid(
+    headers: &BTreeMap<String, String>,
+    header_name: &str,
+    index: Option<usize>,
+) -> bool {
+    let Some(value) = lasm_route_db_header_value(headers, header_name, index) else {
+        return false;
+    };
+    if contains_lasm_request_placeholder_tokens(value) {
+        return true;
+    }
+    value
+        .parse::<i64>()
+        .ok()
+        .filter(|candidate| *candidate > 0)
+        .is_some()
+}
+
 fn validate_lasm_route_db_operation_header_contract(
     route_method: &str,
     route_path: &str,
@@ -2469,9 +2487,9 @@ fn validate_lasm_route_db_operation_header_contract(
             Ok(())
         }
         "tx" => {
-            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none() {
+            if !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index) {
                 return Err(format!(
-                    "route {} {} has invalid DB tx marker contract at {} (requires db header)",
+                    "route {} {} has invalid DB tx marker contract at {} (requires db header with positive integer value)",
                     route_method, route_path, context
                 ));
             }
@@ -2494,14 +2512,14 @@ fn validate_lasm_route_db_operation_header_contract(
             Ok(())
         }
         "exec" => {
-            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none()
+            if !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index)
                 || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
                     .is_none()
                 || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_PARAMS_HEADER, index)
                     .is_none()
             {
                 return Err(format!(
-                    "route {} {} has invalid DB exec marker contract at {} (requires db/template/params headers)",
+                    "route {} {} has invalid DB exec marker contract at {} (requires db/template/params headers with positive integer db handle)",
                     route_method, route_path, context
                 ));
             }
@@ -2530,9 +2548,17 @@ fn validate_lasm_route_db_operation_header_contract(
                     .is_none()
                 || (tx.is_none() && tx_db.is_none())
                 || (tx.is_some() && tx_db.is_some())
+                || (tx.is_some()
+                    && !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_TX_HEADER, index))
+                || (tx_db.is_some()
+                    && !lasm_route_db_numeric_header_valid(
+                        headers,
+                        LASM_INTERNAL_DB_TX_DB_HEADER,
+                        index,
+                    ))
             {
                 return Err(format!(
-                    "route {} {} has invalid DB execTx marker contract at {} (requires template/params and exactly one tx source header)",
+                    "route {} {} has invalid DB execTx marker contract at {} (requires template/params and exactly one positive integer tx source header)",
                     route_method, route_path, context
                 ));
             }
@@ -2549,16 +2575,19 @@ fn validate_lasm_route_db_operation_header_contract(
             Ok(())
         }
         "queryOne" => {
-            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none()
+            if !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index)
                 || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)
                     .is_none()
                 || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_PARAMS_HEADER, index)
                     .is_none()
-                || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, index)
-                    .is_none()
+                || !lasm_route_db_numeric_header_valid(
+                    headers,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                    index,
+                )
             {
                 return Err(format!(
-                    "route {} {} has invalid DB queryOne marker contract at {} (requires db/template/params/rowSchema headers)",
+                    "route {} {} has invalid DB queryOne marker contract at {} (requires db/template/params/rowSchema headers with positive integer db/rowSchema handles)",
                     route_method, route_path, context
                 ));
             }
