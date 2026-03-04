@@ -71,6 +71,23 @@ cargo run -p sec4 -- run \
 
 ## Automated smoke check
 
+Run one-command smoke from this folder:
+
+```bash
+cd examples/lasm-db-alpha
+make smoke
+```
+
+Available make lanes:
+
+- `make check` – run `sec4 check`
+- `make run-records` – run with `records` adapter
+- `make run-sqlite` – run with `sqlite` adapter
+- `make run-postgres` – run with `postgres` adapter (requires DSN env)
+- `make smoke`, `make smoke-records`, `make smoke-sqlite`, `make smoke-postgres`
+- `make smoke-help` – print full script options
+- `make clean-artifacts` – remove local DB artifacts under `DB_BASE`
+
 Run the new script for deterministic DB verification:
 
 ```bash
