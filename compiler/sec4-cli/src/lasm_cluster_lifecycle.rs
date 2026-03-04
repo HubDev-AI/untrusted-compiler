@@ -196,9 +196,27 @@ fn spawn_lasm_cluster_worker(
         "--db-sqlite-lock-retry-delay-ms",
         config.db_sqlite_lock_retry_delay_ms,
     );
-    if let Some(dsn) = config.db_postgres_dsn.as_deref() {
-        cmd.env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", dsn);
-        cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
+    if let Some(dsn) = config
+        .db_postgres_dsn
+        .as_deref()
+        .map(|dsn| dsn.trim())
+        .filter(|dsn| !dsn.is_empty())
+        .map(|dsn| dsn.to_string())
+        .or_else(|| {
+            std::env::var("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+                .ok()
+                .map(|dsn| dsn.trim().to_string())
+                .filter(|dsn| !dsn.is_empty())
+        })
+        .or_else(|| {
+            std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN")
+                .ok()
+                .map(|dsn| dsn.trim().to_string())
+                .filter(|dsn| !dsn.is_empty())
+        })
+    {
+        cmd.env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", &dsn);
+        cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", &dsn);
     }
 
     cmd.stdout(Stdio::inherit());

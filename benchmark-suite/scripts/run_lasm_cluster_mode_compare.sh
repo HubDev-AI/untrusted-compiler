@@ -308,16 +308,14 @@ resolve_postgres_dsn_file() {
 
 resolve_postgres_dsn_file_env() {
   local dsn_file
-  local dsn
   for dsn_file in \
     "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
     "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
     "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
     "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
   do
-    dsn="$(resolve_postgres_dsn_file "$dsn_file" || true)"
-    if [ -n "$dsn" ]; then
-      printf '%s\n' "$dsn"
+    if resolve_postgres_dsn_file "$dsn_file" >/dev/null; then
+      printf '%s\n' "$dsn_file"
       return 0
     fi
   done

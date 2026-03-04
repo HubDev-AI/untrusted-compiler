@@ -124,6 +124,39 @@ format_latency_ms() {
   awk -v x="$value_ms" 'BEGIN { printf "%.3fms", x + 0 }'
 }
 
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
+resolve_postgres_dsn_file_env() {
+  local dsn_file
+  for dsn_file in \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+  do
+    if resolve_postgres_dsn_file "$dsn_file" >/dev/null; then
+      printf '%s\n' "$dsn_file"
+      return 0
+    fi
+  done
+  return 1
+}
+
 profile="${LASM_CAPACITY_PROFILE:-ping}"
 project_path="${LASM_CAPACITY_PROJECT_PATH:-}"
 project_path_explicit="false"
@@ -581,6 +614,9 @@ if [ "$profile" != "ping" ] && [ -z "$db_adapter" ]; then
 fi
 if [ "$profile" != "ping" ] && [ -z "$db_base" ]; then
   db_base="${root_dir}/results/raw/sec4-lasm-cluster-db"
+fi
+if [ "$profile" != "ping" ] && [ -z "$db_postgres_dsn_file" ] && [ "$db_adapter" = "postgres" ]; then
+  db_postgres_dsn_file="$(resolve_postgres_dsn_file_env || true)"
 fi
 if [ "$db_adapter" = "postgres" ] \
   && [ -z "$db_postgres_dsn_file" ] \
