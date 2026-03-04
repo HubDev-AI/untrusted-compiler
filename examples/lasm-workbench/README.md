@@ -39,7 +39,8 @@ Run locally:
 For PostgreSQL-backed smoke, set one of:
 
 ```bash
-SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
+SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
+# or SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm'
 ./scripts/run-smoke.sh --db-adapter postgres
 ```
 
@@ -54,18 +55,19 @@ The script sets adapter behavior via `SEC4_LASM_WORKBENCH_DB_ADAPTER`:
 
 - `records` (default): file-backed adapter storing `records.log`
 - `sqlite`: sqlite adapter storing `records.sqlite3`
-- `postgres`: Postgres adapter using DSN in `SEC4_RT_LASM_DB_POSTGRES_DSN` (or `_FILE`)
+- `postgres`: Postgres adapter using DSN in `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN` (or file variants)
 
 ```bash
 SEC4_LASM_WORKBENCH_DB_ADAPTER=records ./scripts/run-workbench.sh
 SEC4_LASM_WORKBENCH_DB_ADAPTER=sqlite  SEC4_LASM_WORKBENCH_DB_BASE=/tmp/lasm-workbench-db ./scripts/run-workbench.sh
-SEC4_LASM_WORKBENCH_DB_ADAPTER=postgres SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm' ./scripts/run-workbench.sh
+SEC4_LASM_WORKBENCH_DB_ADAPTER=postgres SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm' ./scripts/run-workbench.sh
 ```
 
 Optional env:
 
 - `SEC4_LASM_WORKBENCH_PORT` (default `8080`)
 - `SEC4_LASM_WORKBENCH_DB_BASE` (default `$PROJECT/.lasm-workbench-db`)
+- `SEC4_DB_ALPHA_POSTGRES_DSN_FILE` or `SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH`
 - `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE` or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`
 
 ## Example checks

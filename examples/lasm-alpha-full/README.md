@@ -27,7 +27,8 @@ Postgres adapter:
 
 ```bash
 DB_BASE="$(pwd)/examples/lasm-alpha-full/.lasm-db"
-export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
+export SEC4_DB_ALPHA_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
+# (alias: SEC4_RT_LASM_DB_POSTGRES_DSN)
 cargo run -p sec4 -- run \
   --path examples/lasm-alpha-full \
   --backend lasm \

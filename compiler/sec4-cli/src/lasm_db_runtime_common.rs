@@ -107,7 +107,8 @@ pub(crate) fn classify_lasm_db_runtime_error(
     message: &str,
 ) -> (u16, &'static str, &'static str) {
     let normalized = message.to_ascii_lowercase();
-    if normalized.contains("requires sec4_rt_lasm_db_postgres_dsn")
+    if normalized.contains("requires sec4_db_alpha_db_postgres_dsn")
+        || normalized.contains("requires sec4_rt_lasm_db_postgres_dsn")
         || normalized.contains("sqlite records store path unavailable")
         || normalized.contains("sqlite records store connection unavailable")
         || normalized.contains("could not connect lasm dynamic postgres records store")

@@ -122,7 +122,7 @@ load_dsn_from_env_file() {
   # shellcheck source=/dev/null
   source "$env_file"
   set +a
-  local dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN:-}"
+  local dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
   if [ -z "$dsn" ]; then
     local user="${POSTGRES_USER:-sec4}"
     local pass="${POSTGRES_PASSWORD:-sec4dev}"

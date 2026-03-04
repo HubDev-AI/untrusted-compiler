@@ -1,18 +1,18 @@
 # 1085 M39 Slice: LASM Postgres DSN File Env Fallback
 
-This slice extends LASM Postgres DSN resolution to support secret-file env fallback via `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`.
+This slice extends LASM Postgres DSN resolution to support secret-file env fallback via `SEC4_DB_ALPHA_POSTGRES_DSN_FILE`, `SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH`, `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`, and `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`.
 
 ## What changed
 
 1. Extended Postgres DSN resolution precedence:
    1. explicit run flag (`--db-postgres-dsn`)
-   2. `SEC4_RT_LASM_DB_POSTGRES_DSN`
-   3. `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`
+   2. `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`
+   3. `SEC4_DB_ALPHA_POSTGRES_DSN_FILE`, `SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH`, `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`, or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`
 2. Added deterministic env-file diagnostics:
-   - empty `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE` path is rejected
+   - empty file-path DSN vars (`SEC4_DB_ALPHA_POSTGRES_DSN_FILE(_PATH)` / `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE(_PATH)`) are rejected
    - unreadable DSN file path is rejected with explicit path diagnostics
    - empty DSN file content is rejected (`must contain a non-empty DSN`)
-3. Updated missing-DSN command test to clear both DSN env sources (`SEC4_RT_LASM_DB_POSTGRES_DSN` and `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE`).
+3. Updated missing-DSN command test to clear both DSN env source families (`SEC4_DB_ALPHA_DB_POSTGRES_DSN` / `SEC4_RT_LASM_DB_POSTGRES_DSN`, and `SEC4_DB_ALPHA_POSTGRES_DSN_FILE(_PATH)` / `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE(_PATH)`).
 4. Added dedicated command coverage for invalid empty DSN file env content.
 
 ## Why

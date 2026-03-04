@@ -100,6 +100,7 @@ impl RouteResponse {
 fn main() {
     let port = env::var("PORT").unwrap_or_else(|_| "18091".to_string());
     let pg_dsn = env::var("BENCH_WORKBENCH_PG_DSN")
+        .or_else(|_| env::var("SEC4_DB_ALPHA_DB_POSTGRES_DSN"))
         .or_else(|_| env::var("SEC4_RT_LASM_DB_POSTGRES_DSN"))
         .unwrap_or_else(|_| "postgresql://127.0.0.1:5432/postgres?sslmode=disable".to_string());
     let auth_token =

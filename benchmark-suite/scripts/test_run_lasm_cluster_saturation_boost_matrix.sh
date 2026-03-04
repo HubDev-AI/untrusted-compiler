@@ -176,14 +176,14 @@ if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_postgres_query_profile"; the
   echo "saturation boost matrix dry-run missing db postgres query profile default warmup path" >&2
   exit 1
 fi
-if env -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+if env -u SEC4_DB_ALPHA_DB_POSTGRES_DSN -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --dry-run \
   --profile db-hot-postgres-query-one \
   --boost-steps 2 >/tmp/lasm-sat-boost-matrix-missing-postgres-dsn.log 2>&1; then
   echo "saturation boost matrix accepted db-hot-postgres-query-one profile without DSN" >&2
   exit 1
 fi
-if ! grep -q 'postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN' /tmp/lasm-sat-boost-matrix-missing-postgres-dsn.log; then
+if ! grep -q 'postgres adapter requires --db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN' /tmp/lasm-sat-boost-matrix-missing-postgres-dsn.log; then
   echo "saturation boost matrix missing postgres profile DSN diagnostic" >&2
   exit 1
 fi

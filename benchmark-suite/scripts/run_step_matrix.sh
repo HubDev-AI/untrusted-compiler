@@ -146,10 +146,10 @@ if [ "$lasm_db_adapter" = "postgres" ]; then
     lasm_postgres_dsn="$(<"$lasm_db_postgres_dsn_file")"
     lasm_postgres_dsn="${lasm_postgres_dsn//$'\r'/}"
     lasm_postgres_dsn="${lasm_postgres_dsn//$'\n'/}"
-  elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
-    lasm_postgres_dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN}"
+  elif [ -n "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]; then
+    lasm_postgres_dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
   else
-    echo "postgres adapter requires --lasm-db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+    echo "postgres adapter requires --lasm-db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
     exit 2
   fi
 fi
@@ -185,7 +185,9 @@ start_service() {
           sec4_lasm_cmd+=(--db-adapter "$lasm_db_adapter")
         fi
         if [ -n "$lasm_postgres_dsn" ]; then
-          SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" "${sec4_lasm_cmd[@]}"
+          SEC4_DB_ALPHA_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
+            SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
+            "${sec4_lasm_cmd[@]}"
         else
           "${sec4_lasm_cmd[@]}"
         fi

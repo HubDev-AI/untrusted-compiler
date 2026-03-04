@@ -10,7 +10,7 @@ This slice adds explicit CLI DSN wiring for LASM Postgres adapter mode so operat
    - fixed-cluster reuse-port mode
    - autoscaled proxy-cluster worker spawn mode
 4. Preserved fallback behavior:
-   - when `--db-postgres-dsn` is omitted, runtime still reads `SEC4_RT_LASM_DB_POSTGRES_DSN`.
+   - when `--db-postgres-dsn` is omitted, runtime still reads `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`.
 5. Added deterministic validation/guard diagnostics:
    - `--db-postgres-dsn` is LASM-only (`--backend c` fails with status 2)
    - empty `--db-postgres-dsn` values fail deterministically (`must not be empty`)

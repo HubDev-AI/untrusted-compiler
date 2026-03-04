@@ -298,7 +298,7 @@ else
 fi
 
 base_url="http://127.0.0.1:${bench_port}"
-pg_dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgresql://127.0.0.1:5432/postgres?sslmode=disable}}"
+pg_dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgresql://127.0.0.1:5432/postgres?sslmode=disable}}}"
 lasm_postgres_dsn=""
 if [ "$lasm_db_adapter" = "postgres" ]; then
   if [ -n "$lasm_postgres_dsn_file" ]; then
@@ -377,6 +377,7 @@ start_impl_service() {
       else
         (
           cd "$repo_root"
+          SEC4_DB_ALPHA_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \

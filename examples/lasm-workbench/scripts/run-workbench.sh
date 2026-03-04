@@ -32,16 +32,17 @@ case "$DB_ADAPTER" in
   postgres)
     echo "LASM workbench: postgres adapter"
     WORKBENCH_ARGS+=(--db-adapter postgres)
-    if [[ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" ]]; then
-      WORKBENCH_ARGS+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
-    elif [[ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]]; then
-      WORKBENCH_ARGS+=(--db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN")
-    elif [[ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}" ]]; then
-      WORKBENCH_ARGS+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+    if [[ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}}" ]]; then
+      WORKBENCH_ARGS+=(--db-postgres-dsn-file "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}}")
+    elif [[ -n "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]]; then
+      WORKBENCH_ARGS+=(--db-postgres-dsn "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}")
+    elif [[ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}}" ]]; then
+      WORKBENCH_ARGS+=(--db-postgres-dsn-file "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}}")
     else
       echo "postgres adapter selected but no DSN provided" >&2
-      echo "set one of SEC4_RT_LASM_DB_POSTGRES_DSN or "
-      echo "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE to continue." >&2
+      echo "set one of SEC4_DB_ALPHA_DB_POSTGRES_DSN, SEC4_RT_LASM_DB_POSTGRES_DSN,"
+      echo "or SEC4_DB_ALPHA_POSTGRES_DSN_FILE, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE,"
+      echo "or SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH" >&2
       exit 1
     fi
     ;;

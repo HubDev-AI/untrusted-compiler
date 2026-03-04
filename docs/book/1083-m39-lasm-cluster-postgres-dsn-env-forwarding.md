@@ -5,7 +5,7 @@ This slice hardens LASM cluster DSN propagation by forwarding Postgres DSNs to w
 ## What changed
 
 1. Updated LASM cluster worker spawn path to forward explicit Postgres DSN via:
-   - `SEC4_RT_LASM_DB_POSTGRES_DSN` environment variable
+   - `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN` environment variable
 2. Removed worker command-line `--db-postgres-dsn` forwarding from cluster spawn path.
 3. Kept parent entrypoint behavior unchanged:
    - operators can still pass `sec4 run --db-postgres-dsn <dsn>`

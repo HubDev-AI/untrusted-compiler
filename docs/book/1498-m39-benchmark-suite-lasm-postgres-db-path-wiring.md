@@ -32,7 +32,7 @@ Milestone: M39 (LASM DB client completion lane)
 - Benchmark matrix/step/full dry-runs now emit explicit sec4-lasm adapter markers when LASM DB mode is configured.
 - Postgres adapter mode requires a DSN source:
   - `--lasm-db-postgres-dsn-file`, or
-  - `SEC4_RT_LASM_DB_POSTGRES_DSN`.
+  - `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`.
 - DB hot-path endpoints are first-class benchmark endpoints across profile and step runners.
 
 ## Validation

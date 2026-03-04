@@ -159,8 +159,8 @@ if [ -n "$lasm_db_postgres_dsn_file" ] && [ ! -f "$lasm_db_postgres_dsn_file" ];
   exit 2
 fi
 
-if [ -z "$lasm_db_postgres_dsn_file" ] && [ -z "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
-  echo "postgres suite requires --lasm-db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+if [ -z "$lasm_db_postgres_dsn_file" ] && [ -z "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]; then
+  echo "postgres suite requires --lasm-db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
   exit 2
 fi
 
@@ -171,7 +171,7 @@ resolve_postgres_dsn_value() {
     printf '%s' "$from_file" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
     return
   fi
-  printf '%s' "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+  printf '%s' "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 postgres_dsn_value="$(resolve_postgres_dsn_value)"

@@ -39,9 +39,12 @@ Environment:
   SEC4_LASM_WORKBENCH_NETWORK_PORT        default 19090
   SEC4_LASM_WORKBENCH_SERVE_TIMEOUT_MS    default 120000
   SEC4_LASM_WORKBENCH_TIMEOUT_MS          default 5000
-  SEC4_RT_LASM_DB_POSTGRES_DSN           required when adapter=postgres
-  SEC4_RT_LASM_DB_POSTGRES_DSN_FILE      alternative when adapter=postgres
-  SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH  alternative when adapter=postgres
+  SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN
+                                       required when adapter=postgres
+  SEC4_DB_ALPHA_POSTGRES_DSN_FILE or SEC4_RT_LASM_DB_POSTGRES_DSN_FILE
+                                       alternative when adapter=postgres
+  SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH or SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH
+                                       alternative when adapter=postgres
 USAGE
 }
 
@@ -127,12 +130,12 @@ case "$DB_ADAPTER" in
     ;;
   postgres)
     run_args+=(--db-adapter postgres)
-    if [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" ]; then
-      run_args+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
-    elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN:-}" ]; then
-      run_args+=(--db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN")
-    elif [ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}" ]; then
-      run_args+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+    if [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}}" ]; then
+      run_args+=(--db-postgres-dsn-file "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}}")
+    elif [ -n "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]; then
+      run_args+=(--db-postgres-dsn "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}")
+    elif [ -n "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}}" ]; then
+      run_args+=(--db-postgres-dsn-file "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}}")
     else
       echo "postgres adapter selected but no DSN was provided" >&2
       usage

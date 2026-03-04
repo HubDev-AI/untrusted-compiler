@@ -7,17 +7,24 @@ const LASM_DB_DYNAMIC_ADAPTER_ENV_KEYS: [&str; 2] =
     ["SEC4_DB_ALPHA_DB_ADAPTER", "SEC4_RT_LASM_DB_ADAPTER"];
 const LASM_DB_DYNAMIC_STORE_BASE_ENV_KEYS: [&str; 2] =
     ["SEC4_DB_ALPHA_DB_BASE", "SEC4_RT_LASM_DB_BASE"];
-const LASM_DB_POSTGRES_DSN_KEYS: [&str; 1] = ["SEC4_RT_LASM_DB_POSTGRES_DSN"];
-const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 2] = [
+const LASM_DB_POSTGRES_DSN_KEYS: [&str; 2] = [
+    "SEC4_DB_ALPHA_DB_POSTGRES_DSN",
+    "SEC4_RT_LASM_DB_POSTGRES_DSN",
+];
+const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 4] = [
+    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
     "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH",
     "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
 ];
-const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 2] = [
+const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
+    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE",
     "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
     "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE",
 ];
 pub(crate) const LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE: &str =
-    "db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_RT_LASM_DB_POSTGRES_DSN, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH, or SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE/SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE";
+    "db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN, SEC4_RT_LASM_DB_POSTGRES_DSN, SEC4_DB_ALPHA_POSTGRES_DSN_FILE/_PATH, SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH, SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE/SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE, or SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE/SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE";
 
 fn resolve_env_value(keys: &[&str]) -> Option<String> {
     keys.iter().find_map(|name| {
@@ -106,18 +113,17 @@ fn parse_first_existing_postgres_dsn_file(
     resolve_lasm_db_postgres_dsn_from_file_contents(file_label, raw.as_str())
 }
 
-fn parse_runtime_env_file_for_postgres_dsn(path: PathBuf) -> Result<Option<String>, String> {
+fn parse_runtime_env_file_for_postgres_dsn(
+    path: PathBuf,
+    keys: &[&str],
+) -> Result<Option<String>, String> {
     let raw = fs::read_to_string(&path).map_err(|err| {
         format!(
             "could not read runtime env file `{}`: {err}",
             path.display()
         )
     })?;
-    parse_env_file_value(
-        raw.as_str(),
-        &["SEC4_RT_LASM_DB_POSTGRES_DSN"],
-        &format!("runtime env file `{}`", path.display()),
-    )
+    parse_env_file_value(raw.as_str(), keys, &format!("runtime env file `{}`", path.display()))
 }
 
 pub(crate) fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<PathBuf> {
@@ -247,7 +253,7 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
     {
         return parse_first_existing_postgres_dsn_file(
             file_path,
-            "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE or SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
+            "SEC4_DB_ALPHA_POSTGRES_DSN_FILE/_PATH or SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH",
         )
         .map(Some);
     }
@@ -255,7 +261,10 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
     if let Some(env_file_path) =
         resolve_env_value_with_candidates(&LASM_DB_POSTGRES_RUNTIME_ENV_KEYS, project_path)
     {
-        let dsn = parse_runtime_env_file_for_postgres_dsn(env_file_path)?;
+        let dsn = parse_runtime_env_file_for_postgres_dsn(
+            env_file_path,
+            &LASM_DB_POSTGRES_DSN_KEYS,
+        )?;
         if let Some(dsn_value) = dsn {
             return Ok(Some(dsn_value));
         }

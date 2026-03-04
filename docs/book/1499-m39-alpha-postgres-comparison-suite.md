@@ -27,7 +27,7 @@ Milestone: M39 (benchmark execution lane)
 
 - Suite requires Postgres DSN source:
   - `--lasm-db-postgres-dsn-file`, or
-  - `SEC4_RT_LASM_DB_POSTGRES_DSN`.
+  - `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`.
 - `--dry-run` executes both delegated plans and prints snapshot actions without mutating benchmark artifacts.
 - Non-dry runs execute both phases sequentially and write deterministic snapshot artifact paths plus summary JSON.
 

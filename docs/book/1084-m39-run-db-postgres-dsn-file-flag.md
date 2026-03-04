@@ -12,7 +12,7 @@ This slice adds file-based Postgres DSN loading for LASM run mode so operators c
 3. Added runtime file-loading helper with deterministic read/error diagnostics.
 4. Wired loaded DSN value through LASM runtime bootstrap and existing Postgres adapter resolution path.
 5. Kept env fallback compatibility:
-   - if neither explicit DSN flag is provided, runtime still uses `SEC4_RT_LASM_DB_POSTGRES_DSN`.
+   - if neither explicit DSN flag is provided, runtime still uses `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`.
 
 ## Why
 

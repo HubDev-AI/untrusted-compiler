@@ -197,6 +197,7 @@ fn spawn_lasm_cluster_worker(
         config.db_sqlite_lock_retry_delay_ms,
     );
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
+        cmd.env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", dsn);
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
     }
 
