@@ -1,0 +1,57 @@
+// workbench_db
+//
+// These handlers exercise LASM DB intrinsics through query-route materialization.
+// All SQL and params are supplied as request query values so you can probe
+// multiple query shapes quickly.
+
+fn writeProbe() effects { net, db.write } -> Int {
+  // Required query args:
+  // - template=<text>
+  // - params=<json array>
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+
+  db.exec(db, query);
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn writeTxProbe() effects { net, db.write, db.tx } -> Int {
+  // Required query args:
+  // - template=<text>
+  // - params=<json array>
+  let db = DbCap();
+  let tx = db.tx(db);
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn queryOneProbe() effects { net, db.read } -> Int {
+  // Required query args:
+  // - template=<text>
+  // - params=<json array>
+  // - row_schema=<schema-id int>
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn listProbe() effects { net } -> Int {
+  // Returns currently recorded DB records in the active LASM DB adapter state.
+  res.setHeader(headers.name("X-Sec4-Db-Probe"), headers.value("listRecords"));
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}

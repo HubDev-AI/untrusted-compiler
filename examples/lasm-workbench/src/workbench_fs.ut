@@ -1,0 +1,26 @@
+// workbench_fs
+//
+// Demonstrates tracked FS paths through policy/validator gates and live
+// write/read roundtrip behavior.
+
+fn roundtripProbe() effects { net, fs.read, fs.write } -> Int {
+  // Required query args:
+  // - file=<relative file name, validated by path.under>
+  // - value=<raw payload value>
+  let fileName = req.query("file");
+  let value = validate.nonEmpty(req.query("value"));
+
+  let root = path.base("/tmp/sec4-lasm-workbench");
+  let safePath = path.under(root, fileName);
+  let fs = FsCap();
+
+  fs.write(fs, safePath, value);
+  let loaded = fs.read(fs, safePath);
+  if loaded == 0 {
+    res.text(500, "fs read returned null handle");
+    return 0;
+  };
+
+  res.text(200, "fs roundtrip completed");
+  0
+}

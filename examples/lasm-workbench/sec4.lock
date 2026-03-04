@@ -1,0 +1,14 @@
+# Untrusted<T> lockfile v1 (deterministic)
+lock_version = 1
+
+[package]
+name = "lasm-workbench"
+version = "0.1.0"
+edition = "2026"
+hash = "pkg_80a8a025fb06634f"
+
+[build]
+entry = "src/main.ut"
+profile = "server"
+hash = "bld_c560535abda06e76"
+manifest_hash = "man_1eea851ca9ceddf0"

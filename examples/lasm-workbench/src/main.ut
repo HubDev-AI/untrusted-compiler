@@ -1,0 +1,85 @@
+// lasm-workbench
+//
+// Multi-route reference app for LASM operator review and feature validation.
+// Includes:
+// - request tracing + middleware-compatible metadata
+// - live DB intrinsic calls
+// - live FS write/read roundtrip
+// - outbound public + internal net calls
+// - multi-file module usage via `use`
+
+use workbench_db;
+use workbench_fs;
+use workbench_net;
+
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn metadata() effects { net } -> Int {
+  let name = headers.name("X-Lasm-Workbench");
+  let value = headers.value("active");
+  let cookie = cookie.build("workbench-session", "demo-token");
+
+  res.setHeader(name, value);
+  res.addCookie(cookie);
+  res.text(200, "metadata response with header + cookie");
+  0
+}
+
+fn echo() effects { net } -> Int {
+  let trace = req.header("x-request-id");
+  let user = validate.nonEmpty(req.query("user"));
+
+  let responseText = "user={{user}} trace={{trace}}";
+  // Keep behavior obvious for request interpolation and metadata propagation.
+  let traceValue = validate.nonEmpty(trace);
+  res.setHeader(headers.name("X-Trace-Observed"), headers.value(traceValue));
+  res.text(200, responseText);
+  0
+}
+
+fn gates() effects { net } -> Int {
+  // Compile-time + runtime gates in one route:
+  // - absolute path containment
+  // - outbound URL policy
+  // - typed input guards
+  let rawFile = req.query("file");
+  let rawPort = req.query("port_hint");
+  let rawRequestId = req.query("request_id");
+  let publicRaw = req.query("public_url");
+  let internalRaw = req.query("internal_url");
+
+  let base = path.base("/tmp/sec4-lasm-workbench");
+  path.under(base, rawFile);
+  url.public(publicRaw);
+  url.internal(internalRaw);
+  validate.int64(rawPort);
+  validate.uuid(rawRequestId);
+
+  res.text(200, "typed gates completed");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/", health);
+  http.get(router, "/meta", metadata);
+  http.get(router, "/echo/:user", echo);
+  http.get(router, "/gates", gates);
+
+  http.get(router, "/db/write", writeProbe);
+  http.get(router, "/db/write-tx", writeTxProbe);
+  http.get(router, "/db/query", queryOneProbe);
+  http.get(router, "/db/list", listProbe);
+
+  http.get(router, "/fs/roundtrip", roundtripProbe);
+
+  http.get(router, "/net/public", publicGetProbe);
+  http.get(router, "/net/internal", internalGetProbe);
+
+  http.serve(8080, router);
+  0
+}
