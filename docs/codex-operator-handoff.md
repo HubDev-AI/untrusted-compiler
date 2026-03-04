@@ -13,7 +13,7 @@ Use it to keep speed high without losing architecture direction.
 
 1. Multi-file modules are done (`M39-S2A` complete).
 2. LASM async runtime is heavily implemented (`M39-S2B` advanced and benchmarked).
-3. LASM DB parity for active intrinsics is done on file-backed adapter v1 (`records.log`).
+3. LASM DB parity for active intrinsics is real for `records.log`, `sqlite`, and `postgres` adapters.
 4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
 5. Fixed-cluster fast path is available through shared-port workers (reuse-port mode when `instances == autoscale-max-instances`).
 6. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
@@ -26,12 +26,12 @@ Use it to keep speed high without losing architecture direction.
 2. Remove remaining compatibility-only branches on alpha-critical paths where real deterministic behavior is required.
 3. Keep implementation-first cadence: targeted checks for touched functionality, broad runs only near merge confidence.
 
-### P1: Full LASM DB client after P0
+### P1: Full LASM DB client package cleanup after P0
 
 1. Replace LASM DB compatibility-bridge handling with full intrinsic runtime client dispatch (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`, `sql.q`).
-2. Keep file adapter (`records.log`) and SQLite under one intrinsic surface with deterministic parity contracts.
+2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
 3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
-4. Extract adapter layers into packages/modules only after full client path is complete and stable.
+4. Extract adapter layers into packages/modules now that runtime execution is stable.
 
 ### P2: Composition Contract Analyzer (`M39-S2`) after P1
 
@@ -45,13 +45,14 @@ Use it to keep speed high without losing architecture direction.
 
 ## 4) DB Status (Explicit)
 
-Current LASM DB is **not** a full DB client yet.
+LASM DB runtime execution paths are now implemented across adapters (`records.log`, `sqlite`, `postgres`).
 
 Current runtime status:
 
 - Dynamic state + persistence:
   - `compiler/sec4-cli/src/main.rs`
-- Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE`.
+- Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE` for records adapter,
+  `records.sqlite3` under the same base for sqlite, and metadata table in Postgres for postgres adapter.
 - Active DB intrinsic runtime dispatch is real for:
   - `sql.q`
   - `db.exec`

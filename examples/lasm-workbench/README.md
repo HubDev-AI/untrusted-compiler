@@ -23,11 +23,31 @@ sec4 check
 sec4 build --emit c-bin
 ```
 
-Run locally with records-log adapter (default):
+Run locally:
 
 ```bash
-cargo run -p sec4 -- run --path . --backend lasm --port 8080
+./scripts/run-workbench.sh
 ```
+
+## DB adapters
+
+The script sets adapter behavior via `SEC4_LASM_WORKBENCH_DB_ADAPTER`:
+
+- `records` (default): file-backed adapter storing `records.log`
+- `sqlite`: sqlite adapter storing `records.sqlite3`
+- `postgres`: Postgres adapter using DSN in `SEC4_RT_LASM_DB_POSTGRES_DSN` (or `_FILE`)
+
+```bash
+SEC4_LASM_WORKBENCH_DB_ADAPTER=records ./scripts/run-workbench.sh
+SEC4_LASM_WORKBENCH_DB_ADAPTER=sqlite  SEC4_LASM_WORKBENCH_DB_BASE=/tmp/lasm-workbench-db ./scripts/run-workbench.sh
+SEC4_LASM_WORKBENCH_DB_ADAPTER=postgres SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/sec4_lasm' ./scripts/run-workbench.sh
+```
+
+Optional env:
+
+- `SEC4_LASM_WORKBENCH_PORT` (default `8080`)
+- `SEC4_LASM_WORKBENCH_DB_BASE` (default `$PROJECT/.lasm-workbench-db`)
+- `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE` or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH`
 
 ## Example checks
 
@@ -39,7 +59,7 @@ curl -i -H 'Authorization: Bearer token123' 'http://127.0.0.1:8080/meta'
 curl -i -H 'X-Request-Id: req-42' 'http://127.0.0.1:8080/echo/jane?user=jane'
 ```
 
-### DB checks (records.log adapter)
+### DB checks (records adapter default)
 
 ```bash
 curl -i 'http://127.0.0.1:8080/db/write?template=SELECT%201&params=[]'
@@ -76,8 +96,7 @@ curl -i 'http://127.0.0.1:8080/net/public?url=https://example.com'
 Internal net requires `SEC4_RT_ALLOW_INTERNAL_NET=1` in runtime env:
 
 ```bash
-SEC4_RT_ALLOW_INTERNAL_NET=1 cargo run -p sec4 -- run \
-  --path . --backend lasm --port 8080
+SEC4_RT_ALLOW_INTERNAL_NET=1 ./scripts/run-workbench.sh
 
 curl -i 'http://127.0.0.1:8080/net/internal?url=http://127.0.0.1:18080/internal'
 ```
@@ -85,4 +104,4 @@ curl -i 'http://127.0.0.1:8080/net/internal?url=http://127.0.0.1:18080/internal'
 ## Notes
 
 - Internal net calls may be blocked by policy unless `SEC4_RT_ALLOW_INTERNAL_NET=1`.
-- If you change `/tmp/sec4-lasm-workbench` contents, restart is optional for `records.log` and `fs` paths.
+- If you change working data, restart is optional; adapters persist through the selected base directory.
