@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-04 | self | In LASM helper test fixture, `validate.nonEmpty` expects `Untrusted`, so local-let helper functions must accept untrusted inputs directly or be fed untrusted args. Using `String` plus local validation in helper caused compile failures and early test exits. | Keep trust-gate inputs as `Untrusted` at the helper boundary, and feed `req.query` directly into helper functions before local `let`-validated coercion inside helper. |
 | 2026-03-04 | self | I ran `rustfmt compiler/sec4-cli/src/main.rs` and it also reformatted a child module (`lasm_cluster_status_writer.rs`), creating unrelated tracked drift. | For focused slices, avoid single-file rustfmt on module roots; run targeted format only on leaf files and stage explicit file paths before commit. |
 | 2026-03-04 | self | I wrote a smoke regression fixture using raw `res.setHeader(\"name\", \"value\")` strings and hit typed-sink compile errors before the runtime validation path. | In `.ut` command tests, always build header inputs via `headers.name(...)` and `headers.value(...)` when exercising header-path behavior. |
 | 2026-03-04 | self | I committed the DB startup marker-contract slice directly on local `dev` before creating a `codex/*` branch. | Enforce a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, create/switch to `codex/*` before staging/commit. |
