@@ -1,8 +1,8 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-02-25  
+Updated: 2026-03-04  
 Primary branch: `dev`  
-Current baseline commit: `4de2d06`
+Current baseline commit: `a5792a05`
 
 ## 1) Purpose
 
@@ -16,7 +16,7 @@ Use it to keep speed high without losing architecture direction.
 3. LASM DB parity for active intrinsics is real for `records.log`, `sqlite`, and `postgres` adapters.
 4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
 5. Fixed-cluster fast path is available through shared-port workers (reuse-port mode when `instances == autoscale-max-instances`).
-6. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
+6. Composition Contract Analyzer (`M39-S2`) is completed, and the docs+perf-sequencing lock is now lifted.
 
 ## 3) Backlog Priority (Immediate)
 
@@ -53,6 +53,8 @@ Current runtime status:
   - `compiler/sec4-cli/src/main.rs`
 - Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE` for records adapter,
   `records.sqlite3` under the same base for sqlite, and metadata table in Postgres for postgres adapter.
+- Operator docs/runs now include explicit example-runner compatibility:
+  - `examples/lasm-alpha-full/README.md` and `examples/lasm-alpha-full/scripts/run-smoke.sh` document and support `SEC4_ALPHA_FULL_POSTGRES_DSN`, `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE`, `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE` aliases plus `SEC4_ALPHA_FULL_AUTH_HEADER` for smoke runs.
 - Active DB intrinsic runtime dispatch is real for:
   - `sql.q`
   - `db.exec`

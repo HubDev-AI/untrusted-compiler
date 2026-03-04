@@ -37,8 +37,8 @@ Outputs:
 - deterministic DB write envelopes and persisted `records.log` entries via intrinsic path only.
 
 Constraints:
-- query/list compatibility branches (`DbQueryOneResponse`, `DbListRecordsResponse`) remain in place in this slice,
-- this slice does not yet complete `db.queryOne` intrinsic parity for route-facing handlers.
+- `DbQueryOneResponse` schema-switch fallback was already removed in this path; query-one execution now requires intrinsic `db.queryOne` dispatch.
+- `DbListRecordsResponse` remains a response schema contract, while execution uses intrinsic `listRecords` dispatch.
 
 ## Failure Modes and Diagnostics
 
@@ -71,6 +71,6 @@ Tradeoffs:
 - behavior is now cleaner and parity-focused, but schema-hint-only DB write stubs no longer provide compatibility writes.
 
 Next steps:
-1. finish route-facing `db.queryOne` intrinsic parity,
-2. retire remaining DB schema-hint compatibility branches once equivalent intrinsic coverage is complete,
-3. continue toward LASM-default `sec4 run` backend after DB parity closure.
+1. continue LASM-default `sec4 run` rollout once intrinsic parity is stable,
+2. verify adapter-agnostic parity for DB path under SQLite/Postgres records persistence,
+3. keep expanding high-load runtime hardening without reintroducing schema-switch write branches.

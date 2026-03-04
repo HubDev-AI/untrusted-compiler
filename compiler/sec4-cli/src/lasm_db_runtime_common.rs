@@ -1,7 +1,9 @@
 use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
+    load_lasm_dynamic_db_records_from_postgres,
 };
 use crate::lasm_db_config::LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE;
+use crate::lasm_dynamic_state::{LasmDbRecord, LasmDbTxState};
 use crate::LasmDynamicResponseState;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -414,6 +416,71 @@ fn canonicalize_lasm_db_params_value(value: serde_json::Value) -> serde_json::Va
     }
 }
 
+fn rebuild_lasm_db_records_tracking(state: &mut LasmDynamicResponseState) {
+    state.db_record_signatures.clear();
+    state.db_latest_record_by_signature.clear();
+    for record in state.db_records.iter() {
+        let signature = crate::lasm_dynamic_state::lasm_db_record_signature_key(
+            record.db,
+            &record.template,
+            &record.params,
+        );
+        *state
+            .db_record_signatures
+            .entry(signature.clone())
+            .or_insert(0) += 1;
+        state
+            .db_latest_record_by_signature
+            .insert(signature, record.clone());
+    }
+    let next_db_record_id = state
+        .db_records
+        .iter()
+        .map(|record| record.id)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    state.next_db_record_id = next_db_record_id;
+}
+
+fn truncate_lasm_db_records_for_capacity(
+    state: &mut LasmDynamicResponseState,
+) -> Vec<LasmDbRecord> {
+    let bounded_capacity = state.db_records_max.max(1);
+    if state.db_records.len() <= bounded_capacity {
+        return Vec::new();
+    }
+    let overflow = state.db_records.len() - bounded_capacity;
+    state.db_records.drain(0..overflow).collect()
+}
+
+fn bootstrap_lasm_dynamic_db_records_from_postgres(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    if state.db_records_postgres_bootstrapped {
+        return Ok(());
+    }
+    if state.db_records.is_empty() {
+        let records = {
+            let client = state
+                .db_records_postgres_client
+                .as_mut()
+                .ok_or_else(|| LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string())?;
+            load_lasm_dynamic_db_records_from_postgres(client)?
+        };
+        state.db_records = records;
+    }
+    let dropped_records = truncate_lasm_db_records_for_capacity(state);
+    if !dropped_records.is_empty() {
+        state.db_records_dropped_total = state
+            .db_records_dropped_total
+            .saturating_add(dropped_records.len() as u64);
+    }
+    rebuild_lasm_db_records_tracking(state);
+    state.db_records_postgres_bootstrapped = true;
+    Ok(())
+}
+
 pub(crate) fn allocate_lasm_db_tx_handle(
     state: &mut LasmDynamicResponseState,
     db: i64,
@@ -425,7 +492,7 @@ pub(crate) fn allocate_lasm_db_tx_handle(
     let start_tx = tx;
     loop {
         if let std::collections::hash_map::Entry::Vacant(entry) = state.db_tx_handles.entry(tx) {
-            entry.insert(db);
+            entry.insert(LasmDbTxState { db, active: false });
             state.next_db_tx_handle = if tx == i64::MAX { 1 } else { tx + 1 };
             return Some(tx);
         }
@@ -439,9 +506,16 @@ pub(crate) fn allocate_lasm_db_tx_handle(
 pub(crate) fn lasm_dynamic_postgres_client_mut(
     state: &mut LasmDynamicResponseState,
 ) -> Result<&mut PostgresClient, String> {
-    state.db_records_postgres_client.as_mut().ok_or_else(|| {
-        LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
-    })
+    if state.db_records_postgres_client.is_none() {
+        reconnect_lasm_dynamic_postgres_client(state)?;
+    }
+    if !state.db_records_postgres_bootstrapped {
+        bootstrap_lasm_dynamic_db_records_from_postgres(state)?;
+    }
+    state
+        .db_records_postgres_client
+        .as_mut()
+        .ok_or_else(|| LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string())
 }
 
 #[allow(dead_code)]
@@ -525,9 +599,10 @@ pub(crate) fn touch_lasm_bounded_cache_entry(order: &mut VecDeque<String>, key: 
 pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
-    let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
-        LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
-    })?;
+    let dsn = state
+        .db_records_postgres_dsn
+        .as_deref()
+        .ok_or_else(|| LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string())?;
     let mut client = connect_lasm_dynamic_db_records_postgres(
         dsn,
         state.db_postgres_tls_mode,
@@ -537,6 +612,7 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     )?;
     ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
     state.db_records_postgres_client = Some(client);
+    state.db_records_postgres_bootstrapped = false;
     state.db_records_postgres_statement_cache.clear();
     state.db_records_postgres_statement_cache_order.clear();
     Ok(())

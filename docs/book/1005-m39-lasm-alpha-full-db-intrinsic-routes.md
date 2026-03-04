@@ -33,7 +33,7 @@ Outputs:
 - persisted `records.log` entries.
 
 Constraints:
-- `db.queryOne` and list-record query bridging remain schema-hint-based in this slice,
+- `db.queryOne` and list-record query paths are now intrinsic-backed in current LASM `lasm-alpha-full` flow.
 - tx handles are deterministic but process-local runtime state.
 
 ## Failure Modes and Diagnostics
@@ -73,9 +73,9 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
 ## Tradeoffs and Next Steps
 
 Tradeoffs:
-- the sample now reflects intrinsic DB write behavior, but read/query bridge parity is still mixed while `db.queryOne` remains in schema-hint compatibility mode for route handlers.
+- the sample now reflects intrinsic DB write/read behavior through explicit handlers and marker-based runtime dispatch.
 
 Next steps:
-1. complete `db.queryOne` intrinsic parity for route-facing LASM handlers,
-2. retire remaining schema-name DB write branch paths once all operator routes are intrinsic-backed,
-3. keep tightening deterministic DB handle lifecycle parity against C runtime behavior.
+1. keep tightening deterministic DB handle lifecycle parity against C runtime behavior,
+2. validate multi-op ordering/diagnostic parity across adapters,
+3. continue post-DB default-runtime rollout and load hardening tasks.

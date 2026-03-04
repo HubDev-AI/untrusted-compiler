@@ -32381,15 +32381,17 @@ fn main() effects { net } -> Int {
     thread::sleep(Duration::from_millis(250));
     let status_json = fs::read_to_string(&status_json_path)
         .expect("cluster status json snapshot should be readable");
-    let status: serde_json::Value = serde_json::from_str(&status_json)
-        .expect("cluster status json should parse");
+    let status: serde_json::Value =
+        serde_json::from_str(&status_json).expect("cluster status json should parse");
     assert_eq!(
         status.get("dbAdapter").and_then(serde_json::Value::as_str),
         Some("postgres"),
         "cluster status json should show postgres dbAdapter when postgres is selected"
     );
     assert_eq!(
-        status.get("dbPostgresDsnConfigured").and_then(serde_json::Value::as_bool),
+        status
+            .get("dbPostgresDsnConfigured")
+            .and_then(serde_json::Value::as_bool),
         Some(true),
         "cluster status json should mark postgres DSN configured"
     );
@@ -32976,6 +32978,299 @@ fn main() effects { net } -> Int {
             "run failed: db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN"
         ),
         "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_dsn_env_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-dsn-env-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousdsnaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", "postgres://alpha")
+        .env("SEC4_RT_LASM_DB_POSTGRES_DSN", "postgres://lasm")
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres DSN env aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres DSN environment variables is ambiguous"),
+        "stderr should contain deterministic ambiguous DSN env alias guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_dsn_file_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-dsn-file-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousdsnfilealiascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let alpha_dsn_file = project_dir.join("alpha.postgres.dsn");
+    let lasm_dsn_file = project_dir.join("lasm.postgres.dsn");
+    fs::write(&alpha_dsn_file, "postgres://alpha").expect("alpha postgres file should be written");
+    fs::write(&lasm_dsn_file, "postgres://lasm").expect("lasm postgres file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
+            alpha_dsn_file
+                .to_str()
+                .expect("alpha dsn file path should be valid utf-8"),
+        )
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+            lasm_dsn_file
+                .to_str()
+                .expect("lasm dsn file path should be valid utf-8"),
+        )
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres dsn file aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres DSN file sources is ambiguous"),
+        "stderr should contain deterministic ambiguous DSN file source guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_runtime_env_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-runtime-env-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousruntimeenvaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let alpha_runtime_env_file = project_dir.join("alpha-runtime.postgres.env");
+    let lasm_runtime_env_file = project_dir.join("lasm-runtime.postgres.env");
+    fs::write(
+        &alpha_runtime_env_file,
+        "SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://alpha\n",
+    )
+    .expect("alpha runtime env file should be written");
+    fs::write(
+        &lasm_runtime_env_file,
+        "SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://lasm\n",
+    )
+    .expect("lasm runtime env file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+            alpha_runtime_env_file
+                .to_str()
+                .expect("alpha runtime env file path should be valid utf-8"),
+        )
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
+            lasm_runtime_env_file
+                .to_str()
+                .expect("lasm runtime env file path should be valid utf-8"),
+        )
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres runtime-env aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres runtime env file sources is ambiguous"),
+        "stderr should contain deterministic ambiguous runtime env file source guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

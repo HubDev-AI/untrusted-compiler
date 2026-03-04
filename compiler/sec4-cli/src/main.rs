@@ -1197,14 +1197,14 @@ fn cmd_lasm_smoke(
             op_sequence_max: resolved_lasm_db_usize.db_op_sequence_max,
         },
     );
-    let explicit_db_postgres_statement_cache_max = resolved_lasm_db_usize
-        .db_postgres_statement_cache_max;
-    let explicit_db_postgres_placeholder_cache_max = resolved_lasm_db_usize
-        .db_postgres_placeholder_cache_max;
-    let explicit_db_postgres_statement_cache_max_u64 = explicit_db_postgres_statement_cache_max
-        .map(|value| value as u64);
-    let explicit_db_postgres_placeholder_cache_max_u64 = explicit_db_postgres_placeholder_cache_max
-        .map(|value| value as u64);
+    let explicit_db_postgres_statement_cache_max =
+        resolved_lasm_db_usize.db_postgres_statement_cache_max;
+    let explicit_db_postgres_placeholder_cache_max =
+        resolved_lasm_db_usize.db_postgres_placeholder_cache_max;
+    let explicit_db_postgres_statement_cache_max_u64 =
+        explicit_db_postgres_statement_cache_max.map(|value| value as u64);
+    let explicit_db_postgres_placeholder_cache_max_u64 =
+        explicit_db_postgres_placeholder_cache_max.map(|value| value as u64);
     let explicit_db_postgres_retryable_conflict_retry_max =
         resolved_lasm_db_usize.db_postgres_retryable_conflict_retry_max;
     let explicit_db_sqlite_lock_retry_max = resolved_lasm_db_usize.db_sqlite_lock_retry_max;

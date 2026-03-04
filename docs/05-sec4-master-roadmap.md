@@ -54,6 +54,7 @@ Roadmap impact:
 - Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
 - Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
 - `c-bin` compile path now prefers canonical runtime sources from `runtime/c/` with deterministic build-folder fallback when canonical files are unavailable.
+- LASM DB operator docs/runbooks are synchronized for this slice (`examples/lasm-alpha-full`): smoke and README now reflect the current Postgres DSN alias set and tokenized runtime env overrides used by cluster/runtime forwarding.
 
 ## Execution Mode Lock (2026-02-17)
 
@@ -357,6 +358,7 @@ Post-alpha track acceptance anchors:
 - [x] `sec4 run` now resolves explicit Postgres DSN sources (`--db-postgres-dsn` / `--db-postgres-dsn-file`) once in `cmd_run` before project validation and forwards only the resolved DSN downstream, eliminating duplicate file reads and keeping deterministic invalid-config exit semantics (`docs/book/1086-m39-run-postgres-dsn-single-resolution.md`).
 - [x] `sec4 run --db-postgres-dsn-file <relative-path>` now resolves missing relative file paths against the selected project root (`--path`) before failing, so project-local DSN files work without absolute paths while preserving deterministic invalid-content diagnostics (`docs/book/1502-m39-run-db-postgres-dsn-file-project-relative-resolution.md`).
 - [x] `sec4 run` now auto-selects Postgres adapter when explicit Postgres DSN flags are provided without `--db-adapter`, and rejects DSN/DSN-file flags when a non-Postgres adapter is explicitly set, preventing silent DSN-flag ignore paths (`docs/book/1088-m39-run-postgres-dsn-adapter-coherence.md`).
+- [x] `examples/lasm-alpha-full` smoke/run docs now align to the operator DSN-runtime token matrix (`SEC4_ALPHA_FULL_POSTGRES_DSN`, `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE`, `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE`) and auth header override token (`SEC4_ALPHA_FULL_AUTH_HEADER`) used by the smoke harness.
 - [x] LASM sqlite/postgres `db.queryOne` success paths now append persisted runtime records (`op=queryOne`) with deterministic IDs and adapter record-list visibility, instead of reusing prior `exec`/`execTx` metadata in queryOne responses (`docs/book/1089-m39-lasm-query-one-record-persistence-parity.md`).
 - [x] LASM `db.queryOne` responses now expose structured `rowObject` payloads for sqlite/postgres adapters (while preserving legacy serialized `row` string and keeping records-log fallback on `rowObject: null`), improving runtime DB-client payload usability without breaking compatibility (`docs/book/1090-m39-lasm-query-one-row-object-response.md`).
 - [x] LASM records-log fallback now also appends deterministic `queryOne` runtime records on successful queryOne matches, bringing queryOne record-history parity across records-log/sqlite/postgres adapters (`docs/book/1091-m39-lasm-query-one-records-log-parity.md`).
@@ -482,7 +484,7 @@ Post-alpha track acceptance anchors:
    - [x] Routed `DbListRecordsResponse` through LASM internal DB operation dispatch (`listRecords`) for planned routes (including `lasm-smoke`) instead of relying on schema-switch-only runtime materialization.
    - [x] Hardened internal DB marker handling:
       - invalid DB operation markers now fail deterministically with `DB.OPERATION_INVALID`,
-      - handlers that resolve to more than one DB intrinsic operation now fail deterministically with `DB.MULTI_OP_UNSUPPORTED` (no silent partial execution).
+      - handlers with multi-operation marker sequences now execute deterministically in order with stop-on-first-error behavior (no silent partial-execution tolerance).
 2. [x] Made LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), with clean-machine `init -> check -> build -> run` validated on LASM-first flow.
 3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
    - [x] Added built-in LASM horizontal front-layer orchestration in `sec4 run`:
@@ -1909,7 +1911,7 @@ Post-alpha track acceptance anchors:
       - autoscale snapshot refresh helper now returns a change flag and bumps a shared worker-port generation only when topology changes,
       - relay worker loop and status writer loop now check generation first and avoid no-op `ArcSwap` snapshot loads when worker ports are unchanged.
       - documented in `docs/book/1490-m39-lasm-worker-port-generation-gated-snapshot-loads.md`.
-   - [ ] Deferred by sequencing lock: performance-tuning feature work (including 1M req/s campaign) resumes only after `M39-S2` Composition Contract Analyzer is completed; correctness/stability-critical performance fixes may proceed before that.
+   - [x] Sequencing lock cleared: performance-tuning feature work (including 1M req/s campaign) may resume now that `M39-S2` Composition Contract Analyzer is completed; correctness/stability-critical performance fixes may proceed before and during ramp-up.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,
