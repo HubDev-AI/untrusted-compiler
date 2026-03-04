@@ -404,12 +404,12 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "use feature.util;\n\nfn main() -> Int {\n  // localdb.main\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
+        "use feature.util;\n\nfn main() -> Int {\n  let localdb = 0;\n  let marker = localdb.read;\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
     )
     .expect("main should be written");
     fs::write(
         project_dir.join("src/feature/util.ut"),
-        "// localdb.module\nfn is_valid() -> Bool {\n  true\n}\n",
+        "fn is_valid() -> Bool {\n  let localdb = 0;\n  let marker = localdb.write;\n  true\n}\n",
     )
     .expect("feature module should be written");
     let project_path = project_dir
@@ -477,13 +477,13 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     let main_source = fs::read_to_string(project_dir.join("src/main.ut"))
         .expect("rewritten main source should exist");
     assert!(
-        main_source.contains("// db.main"),
+        main_source.contains("let marker = db.read"),
         "apply rewrite should replace localdb token in composition root:\n{main_source}"
     );
     let module_source = fs::read_to_string(project_dir.join("src/feature/util.ut"))
         .expect("feature module source should remain readable");
     assert!(
-        module_source.contains("// localdb.module"),
+        module_source.contains("let marker = localdb.write"),
         "composition-root guard should preserve module files outside src/main.ut:\n{module_source}"
     );
 

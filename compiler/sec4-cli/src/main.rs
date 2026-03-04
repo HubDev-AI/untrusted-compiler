@@ -4,7 +4,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, TrySendError};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
-    build_security_map_with_allows, emit_program_with_backend, parse_source,
+    build_security_map_with_allows, collect_promote_binding_references,
+    emit_program_with_backend, parse_source,
     render_security_audit_text, run_security_audit_with_baseline, should_fail,
     strip_allow_annotations, summarize_history_window, validate_lockfile_stub,
     write_build_metadata, write_lockfile_stub, write_sbom, write_security_map,
@@ -2350,7 +2351,9 @@ fn parse_lasm_internal_db_indexed_header_index(
     suffix.parse::<usize>().ok()
 }
 
-fn find_lasm_non_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<&'static str> {
+fn find_lasm_non_indexed_db_operation_marker(
+    headers: &BTreeMap<String, String>,
+) -> Option<&'static str> {
     for header_name in LASM_DB_MARKER_BASE_HEADERS {
         if lasm_route_db_header_value(headers, header_name, None).is_some() {
             return Some(header_name);
@@ -2378,7 +2381,9 @@ fn find_lasm_out_of_range_indexed_db_operation_marker(
     None
 }
 
-fn find_unknown_lasm_internal_db_marker_header(headers: &BTreeMap<String, String>) -> Option<String> {
+fn find_unknown_lasm_internal_db_marker_header(
+    headers: &BTreeMap<String, String>,
+) -> Option<String> {
     for header_name in headers.keys() {
         if !header_name.starts_with(LASM_INTERNAL_DB_HEADER_PREFIX) {
             continue;
@@ -2393,7 +2398,8 @@ fn find_unknown_lasm_internal_db_marker_header(headers: &BTreeMap<String, String
             continue;
         }
         if LASM_DB_MARKER_BASE_HEADERS.iter().any(|known_header| {
-            parse_lasm_internal_db_indexed_header_index(header_name.as_str(), known_header).is_some()
+            parse_lasm_internal_db_indexed_header_index(header_name.as_str(), known_header)
+                .is_some()
         }) {
             continue;
         }
@@ -2549,7 +2555,11 @@ fn validate_lasm_route_db_operation_header_contract(
                 || (tx.is_none() && tx_db.is_none())
                 || (tx.is_some() && tx_db.is_some())
                 || (tx.is_some()
-                    && !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_TX_HEADER, index))
+                    && !lasm_route_db_numeric_header_valid(
+                        headers,
+                        LASM_INTERNAL_DB_TX_HEADER,
+                        index,
+                    ))
                 || (tx_db.is_some()
                     && !lasm_route_db_numeric_header_valid(
                         headers,
@@ -2565,7 +2575,10 @@ fn validate_lasm_route_db_operation_header_contract(
             if lasm_route_db_has_any_headers(
                 headers,
                 index,
-                &[LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER],
+                &[
+                    LASM_INTERNAL_DB_HANDLE_HEADER,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                ],
             ) {
                 return Err(format!(
                     "route {} {} has invalid DB execTx marker contract at {} (must not include db/rowSchema headers)",
@@ -13390,7 +13403,13 @@ fn cmd_promote(
         .map(|file| project_relative_path(path, file))
         .collect::<Vec<_>>();
 
-    let localdb_references = collect_promote_binding_references(path, &source_files, "localdb.")?;
+    let localdb_references = collect_promote_binding_references(&source_files, "localdb.")
+        .into_iter()
+        .map(|reference| PromoteBindingReference {
+            file: project_relative_path(path, &reference.file),
+            line: reference.line,
+        })
+        .collect::<Vec<_>>();
     let mut preconditions = Vec::new();
 
     if source_files.is_empty() {
@@ -13747,36 +13766,6 @@ fn promote_diagnostic_blocks_plan(diagnostic: &Diagnostic) -> bool {
 fn project_relative_path(project_root: &Path, file: &Path) -> String {
     let relative = file.strip_prefix(project_root).unwrap_or(file);
     relative.to_string_lossy().replace('\\', "/")
-}
-
-fn collect_promote_binding_references(
-    project_root: &Path,
-    source_files: &[PathBuf],
-    needle: &str,
-) -> Result<Vec<PromoteBindingReference>, i32> {
-    let mut references = Vec::new();
-    for source_file in source_files {
-        let source = match fs::read_to_string(source_file) {
-            Ok(source) => source,
-            Err(err) => {
-                eprintln!(
-                    "promote failed: could not read source file `{}`: {err}",
-                    source_file.display()
-                );
-                return Err(2);
-            }
-        };
-
-        for (index, line) in source.lines().enumerate() {
-            if line.contains(needle) {
-                references.push(PromoteBindingReference {
-                    file: project_relative_path(project_root, source_file),
-                    line: index + 1,
-                });
-            }
-        }
-    }
-    Ok(references)
 }
 
 fn collect_ut_files(path: &Path) -> Result<Vec<PathBuf>, i32> {
