@@ -246,10 +246,11 @@ Post-alpha track acceptance anchors:
 
 ### M39-S2 tracking (live status)
 
-- [ ] Deferred by sequencing lock until after strict no-stub alpha functionality closure and full LASM DB client completion.
-- [ ] Composition contract analyzer implemented.
-- [ ] Fixture coverage added for pass/fail composition graphs.
-- [ ] Book chapter documenting S2 implementation added.
+- [x] Sequencing lock satisfied after strict no-stub alpha functionality closure and full LASM DB client completion.
+- [x] Composition contract analyzer implemented.
+- [x] Fixture coverage added for pass/fail composition graphs (promotion `domain_module_dependency_calls` guard path).
+- [x] Book chapter documenting S2 implementation added:
+  - `docs/book/1545-m39-promote-composition-contract-analyzer-implementation.md`.
 
 ### M39-S2A multi-file module system acceptance criteria (alpha-priority replacement slice)
 
