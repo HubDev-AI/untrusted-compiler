@@ -53,6 +53,7 @@ set +a
 
 export SEC4_RT_LASM_DB_ADAPTER=postgres
 resolved_dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
+resolved_dsn="$(printf '%s' "$resolved_dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 if [ -z "$resolved_dsn" ]; then
   for dsn_file in \
     "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
