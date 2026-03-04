@@ -2590,6 +2590,56 @@ fn lasm_smoke_command_rejects_indexed_db_operation_marker_without_sequence_count
 }
 
 #[test]
+fn lasm_smoke_command_rejects_mixed_indexed_and_non_indexed_db_markers() {
+    let root = temp_dir("sec4-lasm-smoke-mixed-db-marker-modes");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-mixed-db-marker-modes\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let countName = headers.name(\"X-Sec4-Internal-Db-Op-Count\");\n  let countValue = headers.value(\"2\");\n  let indexedName0 = headers.name(\"X-Sec4-Internal-Db-Op-0\");\n  let indexedValue0 = headers.value(\"listRecords\");\n  let indexedName1 = headers.name(\"X-Sec4-Internal-Db-Op-1\");\n  let indexedValue1 = headers.value(\"listRecords\");\n  let plainName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let plainValue = headers.value(\"exec\");\n  res.setHeader(countName, countValue);\n  res.setHeader(indexedName0, indexedValue0);\n  res.setHeader(indexedName1, indexedValue1);\n  res.setHeader(plainName, plainValue);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad-mixed\", bad);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad-mixed",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject mixed indexed and non-indexed DB operation markers"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "lasm-smoke should exit with deterministic route-validation failure status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad-mixed has non-indexed DB operation marker `X-Sec4-Internal-Db-Op`"
+        ) && stderr.contains("X-Sec4-Internal-Db-Op-Count enables sequence mode"),
+        "lasm-smoke should emit deterministic mixed-marker diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_both_db_postgres_dsn_and_file() {
     let root = temp_dir("sec4-lasm-smoke-postgres-dsn-conflict");
     let project_dir = root.join("project");

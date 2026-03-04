@@ -2270,6 +2270,12 @@ fn validate_lasm_db_operation_sequence_limits_for_headers(
             route_method, route_path, operation_count
         ));
     }
+    if let Some(non_indexed_header) = find_lasm_non_indexed_db_operation_marker(headers) {
+        return Err(format!(
+            "route {} {} has non-indexed DB operation marker `{}` while {} enables sequence mode; use indexed markers only",
+            route_method, route_path, non_indexed_header, LASM_INTERNAL_DB_OP_COUNT_HEADER
+        ));
+    }
     for index in 0..operation_count {
         let Some(operation) =
             lasm_route_db_header_value(headers, LASM_INTERNAL_DB_OP_HEADER, Some(index))
@@ -2290,19 +2296,19 @@ fn validate_lasm_db_operation_sequence_limits_for_headers(
     Ok(())
 }
 
-fn find_lasm_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<String> {
-    const INDEXED_DB_MARKER_BASE_HEADERS: [&str; 7] = [
-        LASM_INTERNAL_DB_OP_HEADER,
-        LASM_INTERNAL_DB_HANDLE_HEADER,
-        LASM_INTERNAL_DB_TEMPLATE_HEADER,
-        LASM_INTERNAL_DB_PARAMS_HEADER,
-        LASM_INTERNAL_DB_TX_HEADER,
-        LASM_INTERNAL_DB_TX_DB_HEADER,
-        LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    ];
+const LASM_DB_MARKER_BASE_HEADERS: [&str; 7] = [
+    LASM_INTERNAL_DB_OP_HEADER,
+    LASM_INTERNAL_DB_HANDLE_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+];
 
+fn find_lasm_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<String> {
     for header_name in headers.keys() {
-        if INDEXED_DB_MARKER_BASE_HEADERS.iter().any(|base_header| {
+        if LASM_DB_MARKER_BASE_HEADERS.iter().any(|base_header| {
             is_lasm_internal_db_indexed_header_key(header_name.as_str(), base_header)
         }) {
             return Some(header_name.clone());
@@ -2320,6 +2326,15 @@ fn is_lasm_internal_db_indexed_header_key(header_name: &str, base_header: &str) 
         return false;
     };
     !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
+}
+
+fn find_lasm_non_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<&'static str> {
+    for header_name in LASM_DB_MARKER_BASE_HEADERS {
+        if lasm_route_db_header_value(headers, header_name, None).is_some() {
+            return Some(header_name);
+        }
+    }
+    None
 }
 
 fn parse_lasm_db_operation_sequence_count(headers: &BTreeMap<String, String>) -> usize {
