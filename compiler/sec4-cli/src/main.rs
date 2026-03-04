@@ -79,6 +79,7 @@ use lasm_cluster_runtime_config::{
 };
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
+use lasm_db_config::lasm_db_records_adapter_label;
 use lasm_db_cli::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, resolve_lasm_db_usize_options,
@@ -9731,8 +9732,12 @@ fn cmd_run_lasm_backend(
             2
         })?,
     ));
+    let db_records_op_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     let db_records_adapter = match dynamic_state.lock() {
-        Ok(state) => state.db_records_adapter,
+        Ok(state) => {
+            print_lasm_db_startup_summary(&state, db_records_op_sequence_max);
+            state.db_records_adapter
+        }
         Err(_) => {
             eprintln!("run failed: dynamic response state unavailable");
             return Err(2);
@@ -9953,6 +9958,72 @@ fn cmd_run_lasm_backend(
     }
 
     Ok(())
+}
+
+fn print_lasm_db_startup_summary(
+    state: &LasmDynamicResponseState,
+    db_records_op_sequence_max: usize,
+) {
+    let adapter = lasm_db_records_adapter_label(state.db_records_adapter);
+    let active_db_store = match state.db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => format!(
+            "records.log at {}",
+            state
+                .db_records_store_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        ),
+        LasmDbRecordsAdapter::Sqlite => format!(
+            "records.sqlite3 at {}",
+            state
+                .db_records_sqlite_store_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        ),
+        LasmDbRecordsAdapter::Postgres => "postgres connection pool".to_string(),
+    };
+    let records_log_path = state
+        .db_records_store_path
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "-".to_string());
+    let sqlite_store_path = state
+        .db_records_sqlite_store_path
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "-".to_string());
+    let postgres_dsn = if state.db_records_postgres_dsn.is_some() {
+        "configured"
+    } else {
+        "not configured"
+    };
+
+    println!(
+        "LASM DB: adapter={} recordsMax={} txHandlesMax={} opSequenceMax={}",
+        adapter,
+        state.db_records_max,
+        state.db_tx_max_handles,
+        db_records_op_sequence_max,
+    );
+    println!("LASM DB active store: {active_db_store}");
+    println!(
+        "LASM DB paths: records.log={records_log_path} records.sqlite3={sqlite_store_path}",
+    );
+    println!(
+        "LASM DB postgres: dsn={postgres_dsn} statementCacheMax={} placeholderCacheMax={}",
+        state.db_postgres_statement_cache_max,
+        state.db_postgres_placeholder_cache_max,
+    );
+    println!(
+        "LASM DB sqlite: busyTimeoutMs={} lockRetryMax={} lockRetryDelayMs={} journalMode={} synchronous={}",
+        state.db_sqlite_busy_timeout_ms,
+        state.db_sqlite_lock_retry_max,
+        state.db_sqlite_lock_retry_delay_ms,
+        state.db_sqlite_journal_mode,
+        state.db_sqlite_synchronous,
+    );
 }
 
 fn build_lasm_http_runtime(
