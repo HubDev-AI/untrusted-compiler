@@ -4,28 +4,14 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::lasm_db_config::{
+    LASM_DB_POSTGRES_DSN_FILE_KEYS, LASM_DB_POSTGRES_DSN_KEYS, LASM_DB_POSTGRES_RUNTIME_ENV_KEYS,
+};
 use crate::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, LasmClusterConfig, LasmClusterState,
     LasmClusterWorker,
 };
-
-const LASM_DB_POSTGRES_DSN_KEYS: [&str; 2] = [
-    "SEC4_DB_ALPHA_DB_POSTGRES_DSN",
-    "SEC4_RT_LASM_DB_POSTGRES_DSN",
-];
-const LASM_DB_POSTGRES_DSN_FILE_KEYS: [&str; 4] = [
-    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
-    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
-    "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH",
-    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
-];
-const LASM_DB_POSTGRES_RUNTIME_ENV_KEYS: [&str; 4] = [
-    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
-    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE",
-    "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
-    "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE",
-];
 
 fn forward_env_if_set(cmd: &mut Command, env_key: &str) {
     if let Ok(value) = std::env::var(env_key) {
