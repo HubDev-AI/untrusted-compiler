@@ -16,10 +16,9 @@ use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_records_adapter, resolve_lasm_dynamic_db_tx_max_handles,
 };
 use crate::lasm_db_runtime_dispatch::{
-    lasm_db_op_sequence_max_limit,
-    lasm_db_params_max_bytes_limit, lasm_db_params_max_entries_limit,
-    lasm_db_query_one_row_max_bytes_limit, lasm_db_query_one_row_max_columns_limit,
-    lasm_db_sql_template_max_bytes_limit,
+    lasm_db_op_sequence_max_limit, lasm_db_params_max_bytes_limit,
+    lasm_db_params_max_entries_limit, lasm_db_query_one_row_max_bytes_limit,
+    lasm_db_query_one_row_max_columns_limit, lasm_db_sql_template_max_bytes_limit,
 };
 use crate::lasm_db_runtime_postgres::{
     lasm_postgres_shared_client_pool_idle_total, lasm_postgres_shared_client_pool_key_count,

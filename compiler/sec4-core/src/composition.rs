@@ -110,9 +110,19 @@ fn collect_promote_contract_violations_from_modules(
     resolved: &ResolvedProjectSources,
 ) -> Result<Vec<PromoteContractViolation>, Vec<crate::diagnostics::Diagnostic>> {
     let mut issues = Vec::new();
+    let mut parse_diagnostics = Vec::new();
+    let domain_forbidden_roots = forbidden_domain_dependency_roots();
 
     for module in &resolved.modules {
         collect_contract_violations_from_imports(module, &mut issues);
+
+        match collect_contract_violations_from_domain_dependency_calls(
+            module,
+            &domain_forbidden_roots,
+        ) {
+            Ok(mut module_issues) => issues.append(&mut module_issues),
+            Err(mut module_diagnostics) => parse_diagnostics.append(&mut module_diagnostics),
+        }
     }
 
     let (browser_methods, server_methods) = collect_repo_adapter_methods(&resolved.modules)?;
@@ -120,6 +130,10 @@ fn collect_promote_contract_violations_from_modules(
         &browser_methods,
         &server_methods,
     ));
+
+    if !parse_diagnostics.is_empty() {
+        return Err(parse_diagnostics);
+    }
 
     issues.sort_by(|left, right| {
         (
@@ -160,6 +174,45 @@ fn collect_contract_violations_from_imports(
             });
         }
     }
+}
+
+fn collect_contract_violations_from_domain_dependency_calls(
+    module: &crate::project::ResolvedModuleSource,
+    forbidden_roots: &HashSet<String>,
+) -> Result<Vec<PromoteContractViolation>, Vec<crate::diagnostics::Diagnostic>> {
+    if is_domain_module(module) == false {
+        return Ok(Vec::new());
+    }
+
+    let program =
+        crate::parse_source(&module.file_path, &module.source_without_uses).map_err(|errors| {
+            errors
+                .into_iter()
+                .map(|diagnostic| {
+                    diagnostic.with_note(format!(
+                        "failed to parse module for promote contract analyzer: {}",
+                        module.module_path
+                    ))
+                })
+                .collect::<Vec<_>>()
+        })?;
+
+    let mut issues = Vec::new();
+    let mut seen = HashSet::new();
+
+    for item in program.items {
+        if let ItemKind::Function(function) = item.kind {
+            collect_domain_forbidden_roots_from_block(
+                &function.body,
+                module,
+                forbidden_roots,
+                &mut issues,
+                &mut seen,
+            );
+        }
+    }
+
+    Ok(issues)
 }
 
 fn collect_repo_adapter_methods(
@@ -274,6 +327,205 @@ fn collect_repo_interface_parity_issues(
     }
 
     issues
+}
+
+fn is_domain_module(module: &crate::project::ResolvedModuleSource) -> bool {
+    module.module_path != "main" && !module.module_path.starts_with("repo.")
+}
+
+fn forbidden_domain_dependency_roots() -> HashSet<String> {
+    [
+        "localdb",
+        "db",
+        "net",
+        "auth",
+        "csrf",
+        "http",
+        "httpClient",
+        "secrets",
+    ]
+    .into_iter()
+    .map(std::string::ToString::to_string)
+    .collect()
+}
+
+fn collect_domain_forbidden_roots_from_block(
+    block: &crate::ast::Block,
+    module: &crate::project::ResolvedModuleSource,
+    forbidden_roots: &HashSet<String>,
+    issues: &mut Vec<PromoteContractViolation>,
+    seen: &mut HashSet<(PathBuf, usize, usize)>,
+) {
+    for statement in &block.statements {
+        collect_domain_forbidden_roots_from_statement(
+            statement,
+            module,
+            forbidden_roots,
+            issues,
+            seen,
+        );
+    }
+
+    if let Some(tail) = block.tail.as_deref() {
+        collect_domain_forbidden_roots_from_expr(tail, module, forbidden_roots, issues, seen);
+    }
+}
+
+fn collect_domain_forbidden_roots_from_statement(
+    statement: &Stmt,
+    module: &crate::project::ResolvedModuleSource,
+    forbidden_roots: &HashSet<String>,
+    issues: &mut Vec<PromoteContractViolation>,
+    seen: &mut HashSet<(PathBuf, usize, usize)>,
+) {
+    match &statement.kind {
+        StmtKind::Let { value, .. } => {
+            collect_domain_forbidden_roots_from_expr(value, module, forbidden_roots, issues, seen);
+        }
+        StmtKind::Return { value } => {
+            if let Some(value) = value {
+                collect_domain_forbidden_roots_from_expr(
+                    value,
+                    module,
+                    forbidden_roots,
+                    issues,
+                    seen,
+                );
+            }
+        }
+        StmtKind::Expr { expr } => {
+            collect_domain_forbidden_roots_from_expr(expr, module, forbidden_roots, issues, seen);
+        }
+    }
+}
+
+fn collect_domain_forbidden_roots_from_expr(
+    expr: &Expr,
+    module: &crate::project::ResolvedModuleSource,
+    forbidden_roots: &HashSet<String>,
+    issues: &mut Vec<PromoteContractViolation>,
+    seen: &mut HashSet<(PathBuf, usize, usize)>,
+) {
+    if let Some(root) = root_member_expression_root(expr) {
+        if forbidden_roots.contains(root.as_str())
+            && seen.insert((
+                module.file_path.clone(),
+                expr.span.start_line,
+                expr.span.start_col,
+            ))
+        {
+            issues.push(PromoteContractViolation {
+                code: "PROMOTE.P9404".to_string(),
+                severity: "error".to_string(),
+                message: format!(
+                    "domain module cannot call `{root}.*` directly; use the repository interface and compose via `repo.*` adapter contract"
+                ),
+                file: module.file_path.clone(),
+                line: expr.span.start_line,
+            });
+        }
+    }
+
+    match &expr.kind {
+        ExprKind::Unary { expr, .. } => {
+            collect_domain_forbidden_roots_from_expr(expr, module, forbidden_roots, issues, seen);
+        }
+        ExprKind::Binary { left, right, .. } => {
+            collect_domain_forbidden_roots_from_expr(left, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(right, module, forbidden_roots, issues, seen);
+        }
+        ExprKind::Call { callee, args } => {
+            collect_domain_forbidden_roots_from_expr(callee, module, forbidden_roots, issues, seen);
+            for arg in args {
+                collect_domain_forbidden_roots_from_expr(
+                    arg,
+                    module,
+                    forbidden_roots,
+                    issues,
+                    seen,
+                );
+            }
+        }
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_domain_forbidden_roots_from_expr(
+                condition,
+                module,
+                forbidden_roots,
+                issues,
+                seen,
+            );
+            collect_domain_forbidden_roots_from_block(
+                then_branch,
+                module,
+                forbidden_roots,
+                issues,
+                seen,
+            );
+            if let Some(else_expr) = else_branch {
+                collect_domain_forbidden_roots_from_expr(
+                    else_expr,
+                    module,
+                    forbidden_roots,
+                    issues,
+                    seen,
+                );
+            }
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            collect_domain_forbidden_roots_from_expr(
+                scrutinee,
+                module,
+                forbidden_roots,
+                issues,
+                seen,
+            );
+            for arm in arms {
+                collect_domain_forbidden_roots_from_match_arm(
+                    arm,
+                    module,
+                    forbidden_roots,
+                    issues,
+                    seen,
+                );
+            }
+        }
+        ExprKind::Block(block) => {
+            collect_domain_forbidden_roots_from_block(block, module, forbidden_roots, issues, seen);
+        }
+        ExprKind::Member { .. }
+        | ExprKind::Identifier(_)
+        | ExprKind::Number(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_) => {}
+    }
+}
+
+fn collect_domain_forbidden_roots_from_match_arm(
+    arm: &MatchArm,
+    module: &crate::project::ResolvedModuleSource,
+    forbidden_roots: &HashSet<String>,
+    issues: &mut Vec<PromoteContractViolation>,
+    seen: &mut HashSet<(PathBuf, usize, usize)>,
+) {
+    collect_domain_forbidden_roots_from_expr(&arm.value, module, forbidden_roots, issues, seen);
+}
+
+fn root_member_expression_root(expr: &Expr) -> Option<String> {
+    let mut current = expr;
+
+    loop {
+        match &current.kind {
+            ExprKind::Member { object, .. } => {
+                current = object;
+            }
+            ExprKind::Identifier(name) => return Some(name.clone()),
+            _ => return None,
+        }
+    }
 }
 
 fn collect_references_from_item(

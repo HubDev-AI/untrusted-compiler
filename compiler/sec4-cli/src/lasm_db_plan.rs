@@ -482,9 +482,8 @@ fn collect_lasm_db_operation_call_bindings(
 
     for statement in &function.body.statements {
         if let sec4_core::ast::StmtKind::Let { name, value, .. } = &statement.kind {
-            let resolved =
-                resolve_route_registration_expr(value, &call_bindings, 0)
-                    .unwrap_or_else(|| value.clone());
+            let resolved = resolve_route_registration_expr(value, &call_bindings, 0)
+                .unwrap_or_else(|| value.clone());
             call_bindings.insert(name.clone(), resolved);
         }
     }

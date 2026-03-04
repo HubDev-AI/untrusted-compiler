@@ -145,8 +145,10 @@ impl LasmAsyncRuntime {
             }
             Some(RuntimeAction::SleepMs(duration_ms)) => {
                 let wake_at_ms = self.now_ms.saturating_add(duration_ms);
-                self.sleeping
-                    .push(Reverse(SleepEntry { wake_at_ms, task_id }));
+                self.sleeping.push(Reverse(SleepEntry {
+                    wake_at_ms,
+                    task_id,
+                }));
             }
             Some(RuntimeAction::Complete(code)) => {
                 self.finish_task(task_id, code);
@@ -190,10 +192,17 @@ mod tests {
 
         let report = runtime.run_until_idle(64);
 
-        assert!(report.idle, "runtime should be idle after scripted completion");
+        assert!(
+            report.idle,
+            "runtime should be idle after scripted completion"
+        );
         assert_eq!(report.steps, 2, "runtime should execute yield + complete");
         assert_eq!(runtime.completed().len(), 1, "one task should complete");
-        assert_eq!(runtime.completed()[0].code, 7, "exit code should match script");
+        assert_eq!(
+            runtime.completed()[0].code,
+            7,
+            "exit code should match script"
+        );
     }
 
     #[test]
@@ -204,11 +213,22 @@ mod tests {
 
         let report = runtime.run_until_idle(64);
 
-        assert!(report.idle, "runtime should be idle after both tasks complete");
+        assert!(
+            report.idle,
+            "runtime should be idle after both tasks complete"
+        );
         assert_eq!(report.now_ms, 25, "clock should advance to latest wakeup");
         assert_eq!(runtime.completed().len(), 2, "both tasks should complete");
-        assert_eq!(runtime.completed()[0].code, 2, "shorter sleep should complete first");
-        assert_eq!(runtime.completed()[1].code, 1, "longer sleep should complete second");
+        assert_eq!(
+            runtime.completed()[0].code,
+            2,
+            "shorter sleep should complete first"
+        );
+        assert_eq!(
+            runtime.completed()[1].code,
+            1,
+            "longer sleep should complete second"
+        );
     }
 
     #[test]
@@ -223,26 +243,44 @@ mod tests {
 
         let report = runtime.run_until_idle(2);
 
-        assert!(!report.idle, "runtime should not be idle when budget is exhausted");
-        assert!(runtime.has_live_tasks(), "task should still be live after partial run");
-        assert!(runtime.completed().is_empty(), "task should not complete within limited steps");
+        assert!(
+            !report.idle,
+            "runtime should not be idle when budget is exhausted"
+        );
+        assert!(
+            runtime.has_live_tasks(),
+            "task should still be live after partial run"
+        );
+        assert!(
+            runtime.completed().is_empty(),
+            "task should not complete within limited steps"
+        );
     }
 
     #[test]
     fn cancel_task_removes_live_task_without_completion() {
         let mut runtime = LasmAsyncRuntime::with_start_time(0);
-        let task = runtime.spawn_scripted(vec![
-            RuntimeAction::SleepMs(25),
-            RuntimeAction::Complete(7),
-        ]);
-        assert_eq!(runtime.live_task_count(), 1, "task should be live before cancel");
+        let task =
+            runtime.spawn_scripted(vec![RuntimeAction::SleepMs(25), RuntimeAction::Complete(7)]);
+        assert_eq!(
+            runtime.live_task_count(),
+            1,
+            "task should be live before cancel"
+        );
 
         let cancelled = runtime.cancel_task(task);
         assert!(cancelled, "existing task cancellation should return true");
-        assert_eq!(runtime.live_task_count(), 0, "cancelled task should be removed");
+        assert_eq!(
+            runtime.live_task_count(),
+            0,
+            "cancelled task should be removed"
+        );
 
         let report = runtime.run_until_idle(8);
-        assert!(report.idle, "runtime should remain idle after cancelled task");
+        assert!(
+            report.idle,
+            "runtime should remain idle after cancelled task"
+        );
         assert!(
             runtime.completed().is_empty(),
             "cancelled task should not produce completion record"

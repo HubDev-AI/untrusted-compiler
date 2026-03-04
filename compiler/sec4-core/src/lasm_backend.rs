@@ -182,10 +182,7 @@ fn lower_block_to_lasm(block: &MirBlock) -> LasmBlock {
         MirTerminator::Switch {
             scrutinee, targets, ..
         } => {
-            let mapped_targets = targets
-                .iter()
-                .map(map_switch_target)
-                .collect::<Vec<_>>();
+            let mapped_targets = targets.iter().map(map_switch_target).collect::<Vec<_>>();
             ops.push(LasmOp::Switch {
                 scrutinee: scrutinee.clone(),
                 targets: mapped_targets,
