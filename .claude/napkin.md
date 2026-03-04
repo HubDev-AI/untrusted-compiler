@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-04 | self | I temporarily introduced duplicate `LASM_DB_POSTGRES_DSN_FILE_KEYS` constant declarations while removing legacy DSN aliases. | Remove duplicate lines and run `rustfmt` on touched Rust files before rerunning targeted `sec4` DSN tests. |
 | 2026-03-04 | self | I had an open S2 release checklist item (`Book chapter documenting S2 implementation`) blocking closure. | Finish the chapter (`1545-m39-promote-composition-contract-analyzer-implementation.md`) and mark `docs/05-sec4-master-roadmap.md` tracking entry as complete in the same slice. |
 | 2026-03-04 | self | I initially used two separate DSN error strings across LASM runtime modules after adding alpha-style alias resolution. | Added one shared `LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE` constant in `lasm_db_config.rs` and updated runtime/state callsites to emit the same deterministic message. |
 | 2026-03-04 | self | Cluster worker launch path still injected only legacy Postgres DSN env var, defeating alias-first consistency. | Added `SEC4_DB_ALPHA_DB_POSTGRES_DSN` emission alongside legacy `SEC4_RT_LASM_DB_POSTGRES_DSN` in `lasm_cluster_lifecycle.rs`. |
