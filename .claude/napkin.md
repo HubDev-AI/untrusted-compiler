@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-04 | self | I initially forwarded `LASM_DB_POSTGRES_DSN_KEYS` in `forward_db_alias_env_vars_to_worker`, which could overwrite CLI-resolved DSN values with parent env DSN in cluster workers. | Keep cluster helper forwarding scoped to file/runtime alias keys only so explicit CLI/env-derived DB DSN continues to win before alias-resolution fallback. |
 | 2026-03-04 | self | I temporarily introduced duplicate `LASM_DB_POSTGRES_DSN_FILE_KEYS` constant declarations while removing legacy DSN aliases. | Remove duplicate lines and run `rustfmt` on touched Rust files before rerunning targeted `sec4` DSN tests. |
 | 2026-03-04 | self | I had an open S2 release checklist item (`Book chapter documenting S2 implementation`) blocking closure. | Finish the chapter (`1545-m39-promote-composition-contract-analyzer-implementation.md`) and mark `docs/05-sec4-master-roadmap.md` tracking entry as complete in the same slice. |
 | 2026-03-04 | self | I initially used two separate DSN error strings across LASM runtime modules after adding alpha-style alias resolution. | Added one shared `LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE` constant in `lasm_db_config.rs` and updated runtime/state callsites to emit the same deterministic message. |
