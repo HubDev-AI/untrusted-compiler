@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-04 | self | I committed the DB startup marker-contract slice directly on local `dev` before creating a `codex/*` branch. | Enforce a hard pre-commit branch gate (`git branch --show-current`); if on `dev`, create/switch to `codex/*` before staging/commit. |
 | 2026-03-04 | self | I started this continuation by running a parallel command bundle (status + skill + napkin + file read) instead of enforcing the strict standalone first-command napkin gate. | On every continuation, run `cat .claude/napkin.md` as the only first command; only after that run status/search/skill/context commands. |
 | 2026-02-27 | self | I repeated the branch-gate sequencing miss by launching `git checkout -b ...` in a parallel tool call alongside file reads while starting the worker-forwarding audit slice. | Run branch create/switch commands as standalone steps, then start parallel read/search commands only after branch state is settled. |
 | 2026-02-27 | self | After PR merge returned me to `dev`, I started the next cluster-status adapter patch directly on `dev` before branching. | Enforce a hard post-merge gate: check current branch immediately after each merge and create the next `codex/*` branch before any edits. |
