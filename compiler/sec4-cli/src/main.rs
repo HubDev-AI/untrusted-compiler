@@ -2439,6 +2439,15 @@ fn validate_lasm_route_db_operation_header_contract(
     };
     match operation {
         "listRecords" => Ok(()),
+        "tx" => {
+            if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none() {
+                return Err(format!(
+                    "route {} {} has invalid DB tx marker contract at {} (requires db header)",
+                    route_method, route_path, context
+                ));
+            }
+            Ok(())
+        }
         "exec" => {
             if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none()
                 || lasm_route_db_header_value(headers, LASM_INTERNAL_DB_TEMPLATE_HEADER, index)

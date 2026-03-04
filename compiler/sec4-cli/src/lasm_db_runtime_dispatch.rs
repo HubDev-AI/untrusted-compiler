@@ -855,6 +855,19 @@ fn set_lasm_db_exec_like_success_response(
     );
 }
 
+fn set_lasm_db_tx_success_response(response: &mut sec4_core::HttpResponse, db: i64, tx: i64) {
+    set_lasm_json_response(
+        response,
+        200,
+        &serde_json::json!({
+            "ok": true,
+            "db": db,
+            "op": "tx",
+            "tx": tx,
+        }),
+    );
+}
+
 fn set_lasm_db_query_one_success_response(
     response: &mut sec4_core::HttpResponse,
     record: &LasmDbRecord,
@@ -1283,6 +1296,14 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             let operation = raw_operation.trim().to_string();
 
             stage_lasm_internal_db_sequence_operation_headers(response, index, raw_operation);
+            let sequence_tx_db_source_raw = if operation == "tx" {
+                response
+                    .headers
+                    .get(LASM_INTERNAL_DB_HANDLE_HEADER)
+                    .cloned()
+            } else {
+                None
+            };
             let mut sequence_allocated_tx_source: Option<i64> = None;
             if operation == "execTx" {
                 let raw_tx_db = take_lasm_internal_header_value_indexed(
@@ -1407,6 +1428,61 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             }
+            if operation == "tx" {
+                let Some(raw_db_source) = sequence_tx_db_source_raw else {
+                    return fail_lasm_internal_db_sequence_with_envelope(
+                        response,
+                        dynamic_state,
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime did not preserve db handle marker",
+                        500,
+                        trace_id,
+                    );
+                };
+                let db_source_raw =
+                    materialize_lasm_internal_header_value(raw_db_source, request, path_params);
+                let Some(db_source) = parse_lasm_positive_i64(db_source_raw.trim()) else {
+                    return fail_lasm_internal_db_sequence_with_envelope(
+                        response,
+                        dynamic_state,
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime failure",
+                        500,
+                        trace_id,
+                    );
+                };
+                let Some(tx_handle_raw) =
+                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
+                else {
+                    return fail_lasm_internal_db_sequence_with_envelope(
+                        response,
+                        dynamic_state,
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime did not publish transaction handle marker",
+                        500,
+                        trace_id,
+                    );
+                };
+                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
+                    return fail_lasm_internal_db_sequence_with_envelope(
+                        response,
+                        dynamic_state,
+                        &sequence_tx_handles_by_source,
+                        "DB.TX_INTERNAL",
+                        "internal",
+                        "db.tx runtime failure",
+                        500,
+                        trace_id,
+                    );
+                };
+                sequence_tx_handles_by_source.insert(db_source, tx_handle);
+            }
             if let Some(tx_db_source) = sequence_allocated_tx_source {
                 let Some(tx_handle_raw) =
                     take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
@@ -1478,6 +1554,14 @@ fn apply_lasm_internal_db_operation_materialization_single(
             );
             true
         }
+        "tx" => handle_lasm_internal_db_tx_operation(
+            response,
+            request,
+            path_params,
+            dynamic_state,
+            db_records_adapter,
+            trace_id,
+        ),
         "exec" => handle_lasm_internal_db_exec_operation(
             response,
             request,
@@ -1517,6 +1601,57 @@ fn apply_lasm_internal_db_operation_materialization_single(
             true
         }
     }
+}
+
+fn handle_lasm_internal_db_tx_operation(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    trace_id: &str,
+) -> bool {
+    let Some(db) = resolve_lasm_db_operation_db_cap_handle(
+        response,
+        request,
+        path_params,
+        "DB.TX_INVALID",
+        "db.tx requires db capability handle",
+        trace_id,
+    ) else {
+        return true;
+    };
+    let tx = {
+        let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
+        {
+            Some(state) => state,
+            None => return true,
+        };
+        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
+            return true;
+        }
+        let Some(tx) = allocate_lasm_db_tx_handle(&mut state, db) else {
+            set_lasm_json_response(
+                response,
+                500,
+                &lasm_error_envelope(
+                    "DB.TX_INTERNAL",
+                    "internal",
+                    "db.tx runtime failure",
+                    500,
+                    trace_id,
+                ),
+            );
+            return true;
+        };
+        tx
+    };
+    set_lasm_db_tx_success_response(response, db, tx);
+    response.headers.insert(
+        LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
+        tx.to_string(),
+    );
+    true
 }
 
 fn handle_lasm_internal_db_exec_operation(
