@@ -18,12 +18,17 @@ WORKBENCH_ARGS=(
 
 case "$DB_ADAPTER" in
   records|records.log)
+    echo "LASM workbench: records adapter (persistence: records.log)"
+    echo "DB base: $DB_BASE"
     WORKBENCH_ARGS+=(--db-base "$DB_BASE")
     ;;
   sqlite)
+    echo "LASM workbench: sqlite adapter (persistence: records.sqlite3)"
+    echo "DB base: $DB_BASE"
     WORKBENCH_ARGS+=(--db-base "$DB_BASE" --db-adapter sqlite)
     ;;
   postgres)
+    echo "LASM workbench: postgres adapter"
     WORKBENCH_ARGS+=(--db-adapter postgres)
     if [[ -n "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" ]]; then
       WORKBENCH_ARGS+=(--db-postgres-dsn-file "$SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
