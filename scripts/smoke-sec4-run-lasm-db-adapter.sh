@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--project <path>] [--db-adapter <records-log|sqlite|postgres>] [--db-base <path>] [--db-postgres-dsn <dsn>] [--db-postgres-dsn-file <path>] [--artifacts-dir <path>] [--serve-timeout-ms <ms>]
+usage: $0 [--project <path>] [--db-adapter <records|records.log|records-log|records_log|sqlite|postgres>] [--db-base <path>] [--db-postgres-dsn <dsn>] [--db-postgres-dsn-file <path>] [--artifacts-dir <path>] [--serve-timeout-ms <ms>]
 
 Builds and runs a temporary lasm-alpha-full service via `sec4 run` in oneshot mode,
 executes deterministic DB intrinsic requests, and validates adapter-specific persistence.
@@ -18,6 +18,8 @@ db_postgres_dsn=""
 db_postgres_dsn_file=""
 artifacts_dir=""
 serve_timeout_ms="20000"
+default_smoke_auth_header="Authorization: Bearer smoke-token"
+auth_header="${SEC4_ALPHA_FULL_AUTH_HEADER:-$default_smoke_auth_header}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -140,11 +142,29 @@ if ! [[ "${serve_timeout_ms}" =~ ^[0-9]+$ ]] || [ "${serve_timeout_ms}" -le 0 ];
   exit 1
 fi
 
+normalize_db_adapter() {
+  local adapter="$1"
+  case "${adapter}" in
+    records|records.log|records-log|records_log)
+      echo "records-log"
+      ;;
+    sqlite|postgres|records-log)
+      echo "${adapter}"
+      ;;
+    *)
+      echo "invalid --db-adapter value (expected records|records.log|records-log|records_log|sqlite or postgres): ${adapter}" >&2
+      exit 2
+      ;;
+  esac
+}
+
+db_adapter="$(normalize_db_adapter "${db_adapter}")"
+
 case "${db_adapter}" in
   records-log|sqlite|postgres)
     ;;
   *)
-    echo "invalid --db-adapter value (expected records-log, sqlite or postgres): ${db_adapter}" >&2
+    echo "invalid --db-adapter value (expected records|records.log|records-log|records_log|sqlite or postgres): ${db_adapter}" >&2
     exit 1
     ;;
 esac
@@ -207,7 +227,7 @@ resolve_postgres_dsn_file() {
 
     if [[ "${line}" == *"="* ]]; then
       local key="${line%%=*}"
-      if [ "${key}" != "SEC4_DB_ALPHA_DB_POSTGRES_DSN" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_DSN_FILE" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH" ]; then
+      if [ "${key}" != "SEC4_DB_ALPHA_DB_POSTGRES_DSN" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_DSN" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN" ] && [ "${key}" != "SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_DSN_FILE" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE" ] && [ "${key}" != "SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE_PATH" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE" ] && [ "${key}" != "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE_PATH" ]; then
         continue
       fi
       local value="${line#*=}"
@@ -226,26 +246,108 @@ resolve_postgres_dsn_file() {
 }
 
 resolve_dsn_from_file_candidates() {
-  local candidate_one
-  local candidate_two
+  local candidate_alpha_db
+  local candidate_alpha
+  local candidate_alpha_runtime
+  local candidate_alpha_path
+  local candidate_alpha_runtime_path
+  local candidate_rt
+  local candidate_rt_runtime
+  local candidate_rt_path
+  local candidate_rt_runtime_path
   local value
-  candidate_one="$(resolve_env_value SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE)"
-  candidate_two="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_DSN_FILE)"
-  if [ -n "${candidate_one}" ] && [ -n "${candidate_two}" ] && [ "${candidate_one}" != "${candidate_two}" ]; then
+
+  candidate_alpha_db="$(resolve_env_value SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE)"
+  candidate_alpha="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_DSN_FILE)"
+  candidate_alpha_runtime="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE)"
+  candidate_alpha_path="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH)"
+  candidate_alpha_runtime_path="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE_PATH)"
+  candidate_rt="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_DSN_FILE)"
+  candidate_rt_runtime="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE)"
+  candidate_rt_path="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH)"
+  candidate_rt_runtime_path="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE_PATH)"
+
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_alpha}" ] && [ "${candidate_alpha_db}" != "${candidate_alpha}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_alpha_runtime}" ] && [ "${candidate_alpha_db}" != "${candidate_alpha_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha}" ] && [ -n "${candidate_alpha_runtime}" ] && [ "${candidate_alpha}" != "${candidate_alpha_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_alpha_path}" ] && [ "${candidate_alpha_db}" != "${candidate_alpha_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_alpha_runtime_path}" ] && [ "${candidate_alpha_db}" != "${candidate_alpha_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_alpha_runtime}" ] && [ -n "${candidate_alpha_runtime_path}" ] && \
+    [ "${candidate_alpha_db}" != "${candidate_alpha_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_alpha}" ] && [ -n "${candidate_alpha_path}" ] && [ "${candidate_alpha}" != "${candidate_alpha_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_alpha}" ] && [ -n "${candidate_alpha_runtime}" ] && [ "${candidate_alpha}" != "${candidate_alpha_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_path}" ] && [ -n "${candidate_alpha_runtime_path}" ] && [ "${candidate_alpha_path}" != "${candidate_alpha_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH and SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_rt}" ] && [ -n "${candidate_rt_runtime}" ] && [ "${candidate_rt}" != "${candidate_rt_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_rt}" ] && [ -n "${candidate_rt_path}" ] && [ "${candidate_rt}" != "${candidate_rt_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_rt_runtime}" ] && [ -n "${candidate_rt_runtime_path}" ] && [ "${candidate_rt_runtime}" != "${candidate_rt_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_rt}" ] && [ -n "${candidate_rt_path}" ] && [ -n "${candidate_rt_runtime_path}" ] && \
+    [ "${candidate_rt_path}" != "${candidate_rt_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_rt}" ] && [ -n "${candidate_rt_runtime}" ] && [ -n "${candidate_rt_runtime_path}" ] && \
+    [ "${candidate_rt}" != "${candidate_rt_runtime_path}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE_PATH"
+    return 1
+  fi
+  if [ -n "${candidate_rt_path}" ] && [ -n "${candidate_rt_runtime}" ] && [ "${candidate_rt_path}" != "${candidate_rt_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_rt}" ] && [ "${candidate_alpha_db}" != "${candidate_rt}" ]; then
     echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_DSN_FILE"
     return 1
   fi
-
-  local candidate_three
-  local candidate_four
-  candidate_three="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH)"
-  candidate_four="$(resolve_env_value SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH)"
-  if [ -n "${candidate_three}" ] && [ -n "${candidate_four}" ] && [ "${candidate_three}" != "${candidate_four}" ]; then
-    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH and SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH"
+  if [ -n "${candidate_alpha}" ] && [ -n "${candidate_rt}" ] && [ "${candidate_alpha}" != "${candidate_rt}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_DSN_FILE"
+    return 1
+  fi
+  if [ -n "${candidate_alpha_db}" ] && [ -n "${candidate_rt_runtime}" ] && [ "${candidate_alpha_db}" != "${candidate_rt_runtime}" ]; then
+    echo "db adapter postgres environment DSN file source is ambiguous: SEC4_DB_ALPHA_DB_POSTGRES_DSN_FILE and SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE"
     return 1
   fi
 
-  for dsn_file in "${db_postgres_dsn_file}" "${candidate_one}" "${candidate_two}" "${candidate_three}" "${candidate_four}"; do
+  for dsn_file in \
+    "${db_postgres_dsn_file}" \
+    "${candidate_alpha_db}" "${candidate_alpha}" "${candidate_alpha_runtime}" \
+    "${candidate_alpha_path}" "${candidate_alpha_runtime_path}" \
+    "${candidate_rt}" "${candidate_rt_runtime}" "${candidate_rt_path}" "${candidate_rt_runtime_path}"; do
     if [ -z "${dsn_file}" ]; then
       continue
     fi
@@ -289,6 +391,12 @@ resolve_postgres_dsn() {
   fi
 
   resolved="$(resolve_env_value SEC4_DB_ALPHA_DB_POSTGRES_DSN)"
+  if [ -n "${resolved}" ]; then
+    printf '%s' "${resolved}"
+    return 0
+  fi
+
+  resolved="$(resolve_env_value SEC4_DB_ALPHA_POSTGRES_DSN)"
   if [ -n "${resolved}" ]; then
     printf '%s' "${resolved}"
     return 0
@@ -418,7 +526,7 @@ request_once() {
     --dump-header "${headers_file}"
     --write-out "%{http_code}"
     --request "${method}"
-    --header "Authorization: Bearer smoke-token"
+    --header "${auth_header}"
     "$@"
     "http://127.0.0.1:${port}${path}"
   )
