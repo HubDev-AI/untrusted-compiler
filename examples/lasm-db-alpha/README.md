@@ -9,11 +9,15 @@ Larger alpha example for validating LASM server mode with real disk-backed DB be
 - `db.queryOne` style behavior returns the latest matching record.
 - You can inspect full persisted state through `/db/records`.
 - `db` adapter can be switched between `records`, `sqlite`, and `postgres` without changing handlers.
+- Multi-statement transaction batching via `/db/exec-batch`.
+- Write/read composition in one request via `/db/write-and-query`.
 
 ## Files
 
 - `src/main.ut`:
-  - intrinsic-backed DB routes (`db.exec`, `db.execTx`, `db.queryOne`) plus list response
+  - intrinsic-backed DB routes (`db.exec`, `db.execTx`, `db.queryOne`)
+  - `/db/exec-batch` for tx batching
+  - `/db/write-and-query` for request-local write/read composition
   - comments explain each route and expected query parameters.
 - `sec4.toml`: project manifest.
 - `sec4.policy`: minimal policy for local alpha runs.
@@ -168,24 +172,40 @@ curl -i \
   'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=%5B%5D&row_schema=7'
 ```
 
-4. List all persisted records:
+4. Execute a batched tx write:
+
+```bash
+curl -i \
+  'http://127.0.0.1:8080/db/exec-batch?template_a=INSERT%201&params_a=%5B%22alpha%22%5D&template_b=INSERT%202&params_b=%5B%22beta%22%5D'
+```
+
+5. Execute write+query composition:
+
+```bash
+curl -i -X POST \
+  'http://127.0.0.1:8080/db/write-and-query?write_template=SELECT%201&write_params=%5B1%5D&query_template=SELECT%201&query_params=%5B1%5D&row_schema=7'
+```
+
+6. List all persisted records:
 
 ```bash
 curl -i 'http://127.0.0.1:8080/db/records'
 ```
 
-5. Inspect persisted DB file:
+7. Inspect persisted DB file:
 
 ```bash
 cat "$DB_BASE/records.log"
-```
+``` 
 
 If `records.log` does not exist yet, either DB writes were not executed, startup failed, or the adapter is not `records`.
 
 ## Expected shape
 
 - `/db/exec` and `/db/exec-tx` return JSON with `recordId`, `op`, `db`, `template`, `params`, `tx`.
+- `/db/exec-batch` returns plain text confirming batched tx writes.
 - `/db/query-one` returns latest matching `record` plus deterministic `row` text.
+- `/db/write-and-query` returns query result of the post-write lookup.
 - `/db/records` returns `{ "ok": true, "count": N, "records": [...] }`.
 
 ## Notes
