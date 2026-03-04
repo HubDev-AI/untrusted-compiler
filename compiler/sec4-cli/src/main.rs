@@ -2237,6 +2237,12 @@ fn validate_lasm_db_operation_sequence_limits_for_headers(
     headers: &BTreeMap<String, String>,
     operation_sequence_max: usize,
 ) -> Result<(), String> {
+    if let Some(unknown_header) = find_unknown_lasm_internal_db_marker_header(headers) {
+        return Err(format!(
+            "route {} {} has unsupported internal DB marker header `{}`",
+            route_method, route_path, unknown_header
+        ));
+    }
     let operation_count = parse_lasm_db_operation_sequence_count(headers);
     if operation_count > operation_sequence_max {
         return Err(format!(
@@ -2313,6 +2319,7 @@ const LASM_DB_MARKER_BASE_HEADERS: [&str; 7] = [
     LASM_INTERNAL_DB_TX_DB_HEADER,
     LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
 ];
+const LASM_INTERNAL_DB_HEADER_PREFIX: &str = "X-Sec4-Internal-Db-";
 
 fn find_lasm_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<String> {
     for header_name in headers.keys() {
@@ -2367,6 +2374,30 @@ fn find_lasm_out_of_range_indexed_db_operation_marker(
                 return Some((header_name.clone(), indexed_marker));
             }
         }
+    }
+    None
+}
+
+fn find_unknown_lasm_internal_db_marker_header(headers: &BTreeMap<String, String>) -> Option<String> {
+    for header_name in headers.keys() {
+        if !header_name.starts_with(LASM_INTERNAL_DB_HEADER_PREFIX) {
+            continue;
+        }
+        if header_name == LASM_INTERNAL_DB_OP_COUNT_HEADER {
+            continue;
+        }
+        if LASM_DB_MARKER_BASE_HEADERS
+            .iter()
+            .any(|known_header| known_header == &header_name.as_str())
+        {
+            continue;
+        }
+        if LASM_DB_MARKER_BASE_HEADERS.iter().any(|known_header| {
+            parse_lasm_internal_db_indexed_header_index(header_name.as_str(), known_header).is_some()
+        }) {
+            continue;
+        }
+        return Some(header_name.clone());
     }
     None
 }

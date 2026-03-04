@@ -2540,6 +2540,56 @@ fn lasm_smoke_command_rejects_unsupported_internal_db_operation_marker_header() 
 }
 
 #[test]
+fn lasm_smoke_command_rejects_unknown_internal_db_marker_header_name() {
+    let root = temp_dir("sec4-lasm-smoke-unknown-internal-db-marker-header");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-unknown-internal-db-marker-header\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let markerName = headers.name(\"X-Sec4-Internal-Db-Weird\");\n  let markerValue = headers.value(\"value\");\n  res.setHeader(markerName, markerValue);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad-unknown\", bad);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad-unknown",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject unknown internal DB marker header names"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "lasm-smoke should exit with deterministic route-validation failure status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad-unknown has unsupported internal DB marker header `X-Sec4-Internal-Db-Weird`"
+        ),
+        "lasm-smoke should emit deterministic unknown-header diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_indexed_db_operation_marker_without_sequence_count() {
     let root = temp_dir("sec4-lasm-smoke-indexed-db-op-marker-missing-count");
     let project_dir = root.join("project");
