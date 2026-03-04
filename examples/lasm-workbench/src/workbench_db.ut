@@ -33,6 +33,18 @@ fn writeTxProbe() effects { net, db.write, db.tx } -> Int {
   0
 }
 
+fn writeTxSequenceProbe() effects { net, db.write, db.tx } -> Int {
+  // Runs two tx-bound DB statements from fixed SQL templates.
+  // Useful to validate LASM transaction-handle sequencing and tx cleanup.
+  let db = DbCap();
+  let tx = db.tx(db);
+
+  db.execTx(tx, sql.q("SELECT 1 LIMIT 1", "alpha"));
+  db.execTx(tx, sql.q("SELECT 1 LIMIT 1", "beta"));
+  res.text(200, "db tx sequence executed");
+  0
+}
+
 fn queryOneProbe() effects { net, db.read } -> Int {
   // Required query args:
   // - template=<text>

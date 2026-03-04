@@ -72,6 +72,7 @@ fn main() effects { net } -> Int {
 
   http.get(router, "/db/write", writeProbe);
   http.get(router, "/db/write-tx", writeTxProbe);
+  http.get(router, "/db/write-tx-batch", writeTxSequenceProbe);
   http.get(router, "/db/query", queryOneProbe);
   http.get(router, "/db/list", listProbe);
 

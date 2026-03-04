@@ -64,6 +64,7 @@ curl -i -H 'X-Request-Id: req-42' 'http://127.0.0.1:8080/echo/jane?user=jane'
 ```bash
 curl -i 'http://127.0.0.1:8080/db/write?template=SELECT%201&params=[]'
 curl -i 'http://127.0.0.1:8080/db/write-tx?template=SELECT%201&params=[]'
+curl -i 'http://127.0.0.1:8080/db/write-tx-batch'
 curl -i 'http://127.0.0.1:8080/db/list'
 ```
 
