@@ -2640,6 +2640,53 @@ fn lasm_smoke_command_rejects_db_tx_marker_without_db_handle() {
 }
 
 #[test]
+fn lasm_smoke_command_rejects_db_tx_marker_with_template_header() {
+    let root = temp_dir("sec4-lasm-smoke-invalid-db-tx-marker-extra-template");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-invalid-db-tx-marker-extra-template\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn bad() effects { net } -> Int {\n  let opName = headers.name(\"X-Sec4-Internal-Db-Op\");\n  let opValue = headers.value(\"tx\");\n  let dbName = headers.name(\"X-Sec4-Internal-Db\");\n  let dbValue = headers.value(\"1\");\n  let templateName = headers.name(\"X-Sec4-Internal-Db-Template\");\n  let templateValue = headers.value(\"SELECT 1\");\n  res.setHeader(opName, opValue);\n  res.setHeader(dbName, dbValue);\n  res.setHeader(templateName, templateValue);\n  res.text(200, \"ok\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/bad-tx-extra\", bad);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/bad-tx-extra",
+        "--requests",
+        "1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should reject DB tx marker contract when template header is present"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("lasm-smoke failed: route GET /bad-tx-extra has invalid DB tx marker contract")
+            && stderr.contains("must not include template/params/tx/txDb/rowSchema headers"),
+        "lasm-smoke should emit deterministic tx-marker extra-header diagnostics:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_unknown_internal_db_marker_header_name() {
     let root = temp_dir("sec4-lasm-smoke-unknown-internal-db-marker-header");
     let project_dir = root.join("project");

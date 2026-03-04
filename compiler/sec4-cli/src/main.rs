@@ -2426,6 +2426,16 @@ fn lasm_route_db_header_value<'a>(
     }
 }
 
+fn lasm_route_db_has_any_headers(
+    headers: &BTreeMap<String, String>,
+    index: Option<usize>,
+    header_names: &[&str],
+) -> bool {
+    header_names
+        .iter()
+        .any(|name| lasm_route_db_header_value(headers, name, index).is_some())
+}
+
 fn validate_lasm_route_db_operation_header_contract(
     route_method: &str,
     route_path: &str,
@@ -2438,11 +2448,46 @@ fn validate_lasm_route_db_operation_header_contract(
         None => "single-operation marker".to_string(),
     };
     match operation {
-        "listRecords" => Ok(()),
+        "listRecords" => {
+            if lasm_route_db_has_any_headers(
+                headers,
+                index,
+                &[
+                    LASM_INTERNAL_DB_HANDLE_HEADER,
+                    LASM_INTERNAL_DB_TEMPLATE_HEADER,
+                    LASM_INTERNAL_DB_PARAMS_HEADER,
+                    LASM_INTERNAL_DB_TX_HEADER,
+                    LASM_INTERNAL_DB_TX_DB_HEADER,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                ],
+            ) {
+                return Err(format!(
+                    "route {} {} has invalid DB listRecords marker contract at {} (must not include db/template/params/tx/txDb/rowSchema headers)",
+                    route_method, route_path, context
+                ));
+            }
+            Ok(())
+        }
         "tx" => {
             if lasm_route_db_header_value(headers, LASM_INTERNAL_DB_HANDLE_HEADER, index).is_none() {
                 return Err(format!(
                     "route {} {} has invalid DB tx marker contract at {} (requires db header)",
+                    route_method, route_path, context
+                ));
+            }
+            if lasm_route_db_has_any_headers(
+                headers,
+                index,
+                &[
+                    LASM_INTERNAL_DB_TEMPLATE_HEADER,
+                    LASM_INTERNAL_DB_PARAMS_HEADER,
+                    LASM_INTERNAL_DB_TX_HEADER,
+                    LASM_INTERNAL_DB_TX_DB_HEADER,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                ],
+            ) {
+                return Err(format!(
+                    "route {} {} has invalid DB tx marker contract at {} (must not include template/params/tx/txDb/rowSchema headers)",
                     route_method, route_path, context
                 ));
             }
@@ -2457,6 +2502,20 @@ fn validate_lasm_route_db_operation_header_contract(
             {
                 return Err(format!(
                     "route {} {} has invalid DB exec marker contract at {} (requires db/template/params headers)",
+                    route_method, route_path, context
+                ));
+            }
+            if lasm_route_db_has_any_headers(
+                headers,
+                index,
+                &[
+                    LASM_INTERNAL_DB_TX_HEADER,
+                    LASM_INTERNAL_DB_TX_DB_HEADER,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                ],
+            ) {
+                return Err(format!(
+                    "route {} {} has invalid DB exec marker contract at {} (must not include tx/txDb/rowSchema headers)",
                     route_method, route_path, context
                 ));
             }
@@ -2477,6 +2536,16 @@ fn validate_lasm_route_db_operation_header_contract(
                     route_method, route_path, context
                 ));
             }
+            if lasm_route_db_has_any_headers(
+                headers,
+                index,
+                &[LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER],
+            ) {
+                return Err(format!(
+                    "route {} {} has invalid DB execTx marker contract at {} (must not include db/rowSchema headers)",
+                    route_method, route_path, context
+                ));
+            }
             Ok(())
         }
         "queryOne" => {
@@ -2490,6 +2559,16 @@ fn validate_lasm_route_db_operation_header_contract(
             {
                 return Err(format!(
                     "route {} {} has invalid DB queryOne marker contract at {} (requires db/template/params/rowSchema headers)",
+                    route_method, route_path, context
+                ));
+            }
+            if lasm_route_db_has_any_headers(
+                headers,
+                index,
+                &[LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER],
+            ) {
+                return Err(format!(
+                    "route {} {} has invalid DB queryOne marker contract at {} (must not include tx/txDb headers)",
                     route_method, route_path, context
                 ));
             }
