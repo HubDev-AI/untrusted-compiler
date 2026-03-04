@@ -2245,6 +2245,12 @@ fn validate_lasm_db_operation_sequence_limits_for_headers(
         ));
     }
     if operation_count == 0 {
+        if let Some(indexed_header) = find_lasm_indexed_db_operation_marker(headers) {
+            return Err(format!(
+                "route {} {} has indexed DB operation marker `{}` but missing valid {} header",
+                route_method, route_path, indexed_header, LASM_INTERNAL_DB_OP_COUNT_HEADER
+            ));
+        }
         if let Some(operation) =
             lasm_route_db_header_value(headers, LASM_INTERNAL_DB_OP_HEADER, None)
         {
@@ -2282,6 +2288,38 @@ fn validate_lasm_db_operation_sequence_limits_for_headers(
         )?;
     }
     Ok(())
+}
+
+fn find_lasm_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<String> {
+    const INDEXED_DB_MARKER_BASE_HEADERS: [&str; 7] = [
+        LASM_INTERNAL_DB_OP_HEADER,
+        LASM_INTERNAL_DB_HANDLE_HEADER,
+        LASM_INTERNAL_DB_TEMPLATE_HEADER,
+        LASM_INTERNAL_DB_PARAMS_HEADER,
+        LASM_INTERNAL_DB_TX_HEADER,
+        LASM_INTERNAL_DB_TX_DB_HEADER,
+        LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    ];
+
+    for header_name in headers.keys() {
+        if INDEXED_DB_MARKER_BASE_HEADERS.iter().any(|base_header| {
+            is_lasm_internal_db_indexed_header_key(header_name.as_str(), base_header)
+        }) {
+            return Some(header_name.clone());
+        }
+    }
+
+    None
+}
+
+fn is_lasm_internal_db_indexed_header_key(header_name: &str, base_header: &str) -> bool {
+    let Some(suffix) = header_name
+        .strip_prefix(base_header)
+        .and_then(|rest| rest.strip_prefix('-'))
+    else {
+        return false;
+    };
+    !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
 }
 
 fn parse_lasm_db_operation_sequence_count(headers: &BTreeMap<String, String>) -> usize {
