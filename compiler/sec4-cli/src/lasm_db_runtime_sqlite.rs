@@ -53,12 +53,13 @@ impl LasmSqliteQueryParams {
 
 fn parse_lasm_sqlite_positional_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
-) -> Vec<SqliteValue> {
+) -> Result<Vec<SqliteValue>, String> {
     let mut indexed = Vec::with_capacity(entries.len());
     let mut max_index = 0usize;
     for (key, value) in entries {
-        let index = parse_lasm_sqlite_positional_param_index(key.as_str())
-            .expect("positional object keys should be validated before parsing");
+        let index = parse_lasm_sqlite_positional_param_index(key.as_str()).ok_or_else(|| {
+            format!("sqlite params object key `{key}` is not a valid positional index")
+        })?;
         max_index = max_index.max(index);
         indexed.push((index, parse_lasm_sqlite_query_param_value(value.clone())));
     }
@@ -66,7 +67,7 @@ fn parse_lasm_sqlite_positional_object_params(
     for (index, value) in indexed {
         params[index - 1] = value;
     }
-    params
+    Ok(params)
 }
 
 fn parse_lasm_sqlite_named_object_params(
@@ -74,8 +75,9 @@ fn parse_lasm_sqlite_named_object_params(
 ) -> Result<Vec<(String, SqliteValue)>, String> {
     let mut named = BTreeMap::new();
     for (key, value) in entries {
-        let key = parse_lasm_sqlite_named_param_key(key.as_str())
-            .expect("named object keys should be validated before parsing");
+        let key = parse_lasm_sqlite_named_param_key(key.as_str()).ok_or_else(|| {
+            format!("sqlite params object key `{key}` is not a valid named parameter key")
+        })?;
         let value = parse_lasm_sqlite_query_param_value(value.clone());
         if named.insert(key.clone(), value).is_some() {
             return Err(format!(
@@ -184,7 +186,7 @@ pub(crate) fn parse_lasm_sqlite_query_params_value(
             match classify_lasm_sqlite_params_object_keys(entries)? {
                 LasmSqliteParamsObjectKeyStyle::Positional => {
                     Ok(LasmSqliteQueryParams::Positional(
-                        parse_lasm_sqlite_positional_object_params(entries),
+                        parse_lasm_sqlite_positional_object_params(entries)?,
                     ))
                 }
                 LasmSqliteParamsObjectKeyStyle::Named => Ok(LasmSqliteQueryParams::Named(
@@ -477,6 +479,26 @@ fn lasm_sqlite_named_param_refs<'a>(
         .collect()
 }
 
+fn lasm_sqlite_tx_savepoint_name(tx_handle: i64) -> String {
+    format!("sec4_tx_{tx_handle}")
+}
+
+fn run_lasm_sqlite_tx_command(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+    context: &str,
+    command: &str,
+) -> Result<(), String> {
+    let sql = command.to_string();
+    let savepoint = lasm_sqlite_tx_savepoint_name(tx_handle);
+    let command_text = sql.replace("{tx}", savepoint.as_str());
+    run_lasm_sqlite_with_connection_retry(state, context, |connection| {
+        connection
+            .execute_batch(command_text.as_str())
+            .map_err(|err| format_lasm_sqlite_runtime_error(context, &err))
+    })
+}
+
 pub(crate) fn run_lasm_sqlite_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -587,10 +609,186 @@ pub(crate) fn run_lasm_sqlite_exec(
 
 pub(crate) fn run_lasm_sqlite_exec_tx(
     state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
     query_template: &str,
     sqlite_params: &LasmSqliteQueryParams,
-) -> Result<u64, String> {
-    run_lasm_sqlite_exec(state, query_template, sqlite_params)
+    tx_active: bool,
+) -> Result<(u64, bool), (String, bool)> {
+    let mut tx_started = false;
+    let to_err_tuple = |message: String, tx_started: bool| (message, tx_started);
+
+    if !tx_active {
+        match run_lasm_sqlite_tx_command(
+            state,
+            tx_handle,
+            "sqlite transaction begin failed",
+            "SAVEPOINT {tx}",
+        ) {
+            Ok(()) => tx_started = true,
+            Err(message) => return Err((message, false)),
+        }
+    }
+
+    let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)
+        .map_err(|error| to_err_tuple(error, tx_started))?;
+    let affected_rows = if sqlite_params.is_empty()
+        && has_lasm_sql_non_trailing_statement_separator(query_template)
+    {
+        let before_changes = connection.total_changes();
+        connection.execute_batch(query_template).map_err(|err| {
+            to_err_tuple(
+                format_lasm_sqlite_runtime_error("sqlite execution failed", &err),
+                tx_started,
+            )
+        })?;
+        connection.total_changes().saturating_sub(before_changes)
+    } else {
+        let mut statement = connection.prepare_cached(query_template).map_err(|err| {
+            to_err_tuple(
+                format_lasm_sqlite_runtime_error("sqlite execution prepare failed", &err),
+                tx_started,
+            )
+        })?;
+        let parameter_count = statement.parameter_count();
+        if let LasmSqliteQueryParams::Positional(values) = sqlite_params {
+            validate_lasm_sqlite_parameter_arity(parameter_count, values.len())
+                .map_err(|message| to_err_tuple(message, tx_started))?;
+        }
+        let use_params = parameter_count > 0 && !sqlite_params.is_empty();
+        if use_params && has_lasm_sql_non_trailing_statement_separator(query_template) {
+            return Err((
+                "sqlite parameterized execution requires a single SQL statement".to_string(),
+                tx_started,
+            ));
+        }
+        let execute_result = if use_params {
+            match sqlite_params {
+                LasmSqliteQueryParams::Positional(values) => {
+                    statement.execute(rusqlite::params_from_iter(values.iter()))
+                }
+                LasmSqliteQueryParams::Named(values) => {
+                    let named_bindings =
+                        resolve_lasm_sqlite_named_param_bindings(&statement, values.as_slice())
+                            .map_err(|message| to_err_tuple(message, tx_started))?;
+                    let named_refs = lasm_sqlite_named_param_refs(named_bindings.as_slice());
+                    statement.execute(named_refs.as_slice())
+                }
+            }
+        } else {
+            statement.execute([])
+        };
+        match execute_result {
+            Ok(count) => count as u64,
+            Err(rusqlite::Error::ExecuteReturnedResults) => {
+                let mut rows = if use_params {
+                    match sqlite_params {
+                        LasmSqliteQueryParams::Positional(values) => statement
+                            .query(rusqlite::params_from_iter(values.iter()))
+                            .map_err(|err| {
+                                to_err_tuple(
+                                    format_lasm_sqlite_runtime_error(
+                                        "sqlite execution query failed",
+                                        &err,
+                                    ),
+                                    tx_started,
+                                )
+                            })?,
+                        LasmSqliteQueryParams::Named(values) => {
+                            let named_bindings = resolve_lasm_sqlite_named_param_bindings(
+                                &statement,
+                                values.as_slice(),
+                            )
+                            .map_err(|message| to_err_tuple(message, tx_started))?;
+                            let named_refs =
+                                lasm_sqlite_named_param_refs(named_bindings.as_slice());
+                            statement.query(named_refs.as_slice()).map_err(|err| {
+                                to_err_tuple(
+                                    format_lasm_sqlite_runtime_error(
+                                        "sqlite execution query failed",
+                                        &err,
+                                    ),
+                                    tx_started,
+                                )
+                            })?
+                        }
+                    }
+                } else {
+                    statement.query([]).map_err(|err| {
+                        to_err_tuple(
+                            format_lasm_sqlite_runtime_error("sqlite execution query failed", &err),
+                            tx_started,
+                        )
+                    })?
+                };
+                let mut row_count = 0u64;
+                while rows
+                    .next()
+                    .map_err(|err| {
+                        to_err_tuple(
+                            format_lasm_sqlite_runtime_error(
+                                "sqlite execution row drain failed",
+                                &err,
+                            ),
+                            tx_started,
+                        )
+                    })?
+                    .is_some()
+                {
+                    row_count = row_count.saturating_add(1);
+                }
+                row_count
+            }
+            Err(err) => {
+                return Err(to_err_tuple(
+                    format_lasm_sqlite_runtime_error("sqlite execution failed", &err),
+                    tx_started,
+                ))
+            }
+        }
+    };
+    Ok((affected_rows, tx_started))
+}
+
+fn is_lasm_sqlite_no_such_savepoint_error(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("no such savepoint")
+}
+
+pub(crate) fn run_lasm_sqlite_exec_tx_commit(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+) -> Result<(), String> {
+    run_lasm_sqlite_tx_command(
+        state,
+        tx_handle,
+        "sqlite transaction commit failed",
+        "RELEASE SAVEPOINT {tx}",
+    )
+}
+
+pub(crate) fn run_lasm_sqlite_exec_tx_rollback(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+) -> Result<(), String> {
+    let savepoint = lasm_sqlite_tx_savepoint_name(tx_handle);
+    let rollback_to = format!("ROLLBACK TO SAVEPOINT {savepoint}");
+    let release = format!("RELEASE SAVEPOINT {savepoint}");
+    run_lasm_sqlite_with_connection_retry(
+        state,
+        "sqlite transaction rollback failed",
+        |connection| match connection.execute_batch(&format!("{rollback_to}; {release}")) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                let message =
+                    format_lasm_sqlite_runtime_error("sqlite transaction rollback failed", &err);
+                if is_lasm_sqlite_no_such_savepoint_error(message.as_str()) {
+                    Ok(())
+                } else {
+                    Err(message)
+                }
+            }
+        },
+    )
 }
 
 pub(crate) fn run_lasm_sqlite_query_one(
