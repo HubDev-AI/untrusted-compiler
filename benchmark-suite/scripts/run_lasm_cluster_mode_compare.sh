@@ -289,6 +289,41 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
+resolve_postgres_dsn_file_env() {
+  local dsn_file
+  local dsn
+  for dsn_file in \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+  do
+    dsn="$(resolve_postgres_dsn_file "$dsn_file" || true)"
+    if [ -n "$dsn" ]; then
+      printf '%s\n' "$dsn"
+      return 0
+    fi
+  done
+  return 1
+}
+
 for field in threads connections target_requests port instances autoscale_max_instances autoscale_target_connections autoscale_check_ms autoscale_scale_up_cooldown_ms autoscale_scale_down_cooldown_ms autoscale_scale_up_step autoscale_scale_down_step autoscale_saturation_boost_step; do
   value="${!field}"
   if ! is_number "$value"; then
@@ -327,6 +362,9 @@ if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   echo "request-header must include ':' (example: Authorization: Bearer token123)" >&2
   exit 2
 fi
+if [ -z "$db_postgres_dsn_file" ]; then
+  db_postgres_dsn_file="$(resolve_postgres_dsn_file_env || true)"
+fi
 case "$profile" in
   ping|db-hot-write|db-hot-write-tx|db-hot-query-one|db-hot-postgres-query-one) ;;
   *)
@@ -337,7 +375,7 @@ esac
 if [ "$profile" = "db-hot-postgres-query-one" ] \
   && [ -z "$db_postgres_dsn_file" ] \
   && [ -z "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]; then
-  echo "postgres adapter requires --db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+  echo "postgres adapter requires --db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN (legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN)" >&2
   exit 2
 fi
 case "$build_profile" in

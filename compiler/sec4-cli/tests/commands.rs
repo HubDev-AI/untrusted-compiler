@@ -32503,8 +32503,8 @@ fn main() effects { net } -> Int {
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
-        .env_remove("SEC4_RT_LASM_DB_RUNTIME_ENV_FILE")
-        .env_remove("SEC4_RT_LASM_DB_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
         .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
         .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
         .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
@@ -32525,7 +32525,7 @@ fn main() effects { net } -> Int {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: db adapter postgres requires --db-postgres-dsn or a DSN source via"
+            "run failed: db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN"
         ),
         "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
     );

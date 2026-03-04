@@ -68,7 +68,7 @@ curl -i 'http://127.0.0.1:18080/db/records'
 
 ## Troubleshooting
 
-- `db adapter postgres requires SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN to be set`
+- `db adapter postgres requires SEC4_DB_ALPHA_DB_POSTGRES_DSN (legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN) to be set`
   - Ensure `.env` exists and is sourced, or export DSN explicitly.
 - Postgres connect/auth failures
   - Verify container health: `docker compose -f /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/docker-compose.yml ps`

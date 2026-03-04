@@ -231,7 +231,7 @@ Measure end-to-end service behavior across identical implementations:
 - Published markdown reports also include implementation scope (`Implementations in matrix (...)`).
 - Matrix/step/full orchestrators accept LASM runtime DB mode wiring:
   - `--lasm-db-adapter records-log|sqlite|postgres`
-  - `--lasm-db-postgres-dsn-file /abs/path/to/postgres.dsn` (or `SEC4_DB_ALPHA_DB_POSTGRES_DSN` / `SEC4_RT_LASM_DB_POSTGRES_DSN`)
+  - `--lasm-db-postgres-dsn-file /abs/path/to/postgres.dsn` (or `SEC4_DB_ALPHA_DB_POSTGRES_DSN`; legacy alias `SEC4_RT_LASM_DB_POSTGRES_DSN`)
 - `run_alpha_postgres_comparison_suite.sh` executes two deterministic phases (baseline + db-hot) and snapshots each phase to stable artifact suffixes:
   - `*-alpha-base.*`
   - `*-alpha-db-postgres.*`

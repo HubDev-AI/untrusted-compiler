@@ -61,12 +61,12 @@ fn resolve_env_file_path(name: &str, project_path: Option<&Path>) -> Option<Path
     }
 }
 
-fn resolve_env_value_with_candidates(
-    keys: &[&str],
+fn resolve_env_file_path_with_candidates(
+    keys: &[&'static str],
     project_path: Option<&Path>,
-) -> Option<PathBuf> {
+) -> Option<(&'static str, PathBuf)> {
     keys.iter()
-        .find_map(|name| resolve_env_file_path(name, project_path))
+        .find_map(|name| resolve_env_file_path(name, project_path).map(|path| (*name, path)))
 }
 
 fn parse_env_file_value(
@@ -106,24 +106,30 @@ fn parse_env_file_value(
 
 fn parse_first_existing_postgres_dsn_file(
     path: PathBuf,
-    file_label: &str,
+    file_source: &str,
 ) -> Result<String, String> {
     let raw = fs::read_to_string(&path)
-        .map_err(|err| format!("could not read {file_label} `{}`: {err}", path.display()))?;
-    resolve_lasm_db_postgres_dsn_from_file_contents(file_label, raw.as_str())
+        .map_err(|err| format!("could not read {file_source} `{}`: {err}", path.display()))?;
+    let dsn_source = format!("{file_source} `{}`", path.display());
+    resolve_lasm_db_postgres_dsn_from_file_contents(dsn_source.as_str(), raw.as_str())
 }
 
 fn parse_runtime_env_file_for_postgres_dsn(
     path: PathBuf,
     keys: &[&str],
+    source: &str,
 ) -> Result<Option<String>, String> {
     let raw = fs::read_to_string(&path).map_err(|err| {
         format!(
-            "could not read runtime env file `{}`: {err}",
+            "could not read runtime env file `{}` from {source}: {err}",
             path.display()
         )
     })?;
-    parse_env_file_value(raw.as_str(), keys, &format!("runtime env file `{}`", path.display()))
+    parse_env_file_value(
+        raw.as_str(),
+        keys,
+        &format!("runtime env file `{}` from {source}", path.display()),
+    )
 }
 
 pub(crate) fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<PathBuf> {
@@ -248,22 +254,23 @@ pub(crate) fn resolve_lasm_dynamic_db_postgres_dsn(
         return Ok(Some(raw));
     }
 
-    if let Some(file_path) =
-        resolve_env_value_with_candidates(&LASM_DB_POSTGRES_DSN_FILE_KEYS, project_path)
+    if let Some((file_env_name, file_path)) =
+        resolve_env_file_path_with_candidates(&LASM_DB_POSTGRES_DSN_FILE_KEYS, project_path)
     {
         return parse_first_existing_postgres_dsn_file(
             file_path,
-            "SEC4_DB_ALPHA_POSTGRES_DSN_FILE/_PATH or SEC4_RT_LASM_DB_POSTGRES_DSN_FILE/_PATH",
+            file_env_name,
         )
         .map(Some);
     }
 
-    if let Some(env_file_path) =
-        resolve_env_value_with_candidates(&LASM_DB_POSTGRES_RUNTIME_ENV_KEYS, project_path)
+    if let Some((runtime_env_name, env_file_path)) =
+        resolve_env_file_path_with_candidates(&LASM_DB_POSTGRES_RUNTIME_ENV_KEYS, project_path)
     {
         let dsn = parse_runtime_env_file_for_postgres_dsn(
             env_file_path,
             &LASM_DB_POSTGRES_DSN_KEYS,
+            runtime_env_name,
         )?;
         if let Some(dsn_value) = dsn {
             return Ok(Some(dsn_value));

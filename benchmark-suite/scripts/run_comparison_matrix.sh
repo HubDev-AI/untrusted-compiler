@@ -96,6 +96,39 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
+resolve_postgres_dsn_file_env() {
+  local dsn_file
+  for dsn_file in \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+    "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+  do
+    if resolve_postgres_dsn_file "$dsn_file" >/dev/null; then
+      printf '%s\n' "$dsn_file"
+      return 0
+    fi
+  done
+  return 1
+}
+
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 bench_port="${BENCH_PORT:-18085}"
 base_url="http://127.0.0.1:${bench_port}"
@@ -181,18 +214,19 @@ fi
 
 lasm_postgres_dsn=""
 if [ "$lasm_db_adapter" = "postgres" ]; then
+  if [ -z "$lasm_db_postgres_dsn_file" ]; then
+    lasm_db_postgres_dsn_file="$(resolve_postgres_dsn_file_env || true)"
+  fi
   if [ -n "$lasm_db_postgres_dsn_file" ]; then
     if [ ! -f "$lasm_db_postgres_dsn_file" ]; then
       echo "lasm postgres dsn file not found: ${lasm_db_postgres_dsn_file}" >&2
       exit 2
     fi
-    lasm_postgres_dsn="$(<"$lasm_db_postgres_dsn_file")"
-    lasm_postgres_dsn="${lasm_postgres_dsn//$'\r'/}"
-    lasm_postgres_dsn="${lasm_postgres_dsn//$'\n'/}"
+    lasm_postgres_dsn="$(resolve_postgres_dsn_file "$lasm_db_postgres_dsn_file")"
   elif [ -n "${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}" ]; then
     lasm_postgres_dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
   else
-    echo "postgres adapter requires --lasm-db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN or SEC4_RT_LASM_DB_POSTGRES_DSN" >&2
+    echo "postgres adapter requires --lasm-db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN (legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN)" >&2
     exit 2
   fi
 fi
