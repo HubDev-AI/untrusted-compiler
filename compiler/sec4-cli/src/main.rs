@@ -13403,7 +13403,13 @@ fn cmd_promote(
         .map(|file| project_relative_path(path, file))
         .collect::<Vec<_>>();
 
-    let localdb_references = collect_promote_binding_references(&source_files, "localdb.")
+    let localdb_references = match collect_promote_binding_references(&source_files, "localdb.") {
+        Ok(references) => references,
+        Err(message) => {
+            eprintln!("promote failed: {message}");
+            return Err(2);
+        }
+    }
         .into_iter()
         .map(|reference| PromoteBindingReference {
             file: project_relative_path(path, &reference.file),

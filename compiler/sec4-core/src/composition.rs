@@ -1,5 +1,6 @@
 use crate::ast::{Expr, ExprKind, Item, ItemKind, MatchArm, Stmt, StmtKind};
 use std::collections::HashSet;
+use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -11,10 +12,10 @@ pub struct PromoteBindingReference {
 pub fn collect_promote_binding_references(
     source_files: &[PathBuf],
     needle: &str,
-) -> Vec<PromoteBindingReference> {
+) -> Result<Vec<PromoteBindingReference>, String> {
     let target = needle.trim_end_matches('.').trim().to_string();
     if target.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut references = Vec::new();
@@ -23,15 +24,18 @@ pub fn collect_promote_binding_references(
     roots.insert(target);
 
     for source_file in source_files {
-        let source = match std::fs::read_to_string(source_file) {
-            Ok(source) => source,
-            Err(_) => continue,
-        };
+        let source = fs::read_to_string(source_file).map_err(|err| {
+            format!("could not read source file `{}`: {err}", source_file.display())
+        })?;
 
-        let program = match crate::parse_source(source_file, &source) {
-            Ok(program) => program,
-            Err(_) => continue,
-        };
+        let program = crate::parse_source(source_file, &source).map_err(|errors| {
+            let primary = errors
+                .first()
+                .map(|error| error.message.clone())
+                .unwrap_or_else(|| "failed to parse source file".to_string());
+
+            format!("could not parse source file `{}`: {primary}", source_file.display())
+        })?;
 
         for item in &program.items {
             collect_references_from_item(item, source_file, &roots, &mut references, &mut seen);
@@ -39,19 +43,10 @@ pub fn collect_promote_binding_references(
     }
 
     references.sort_by(|left, right| {
-        (
-            &left.file,
-            left.line,
-            left.file.to_string_lossy().as_ref(),
-        )
-            .cmp(&(
-                &right.file,
-                right.line,
-                right.file.to_string_lossy().as_ref(),
-            ))
+        (left.file.as_os_str(), left.line).cmp(&(right.file.as_os_str(), right.line))
     });
 
-    references
+    Ok(references)
 }
 
 fn collect_references_from_item(
