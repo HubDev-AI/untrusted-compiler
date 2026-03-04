@@ -913,6 +913,25 @@ fn set_lasm_db_preparse_mismatch_response(
     );
 }
 
+fn set_lasm_db_tx_capacity_response(
+    response: &mut sec4_core::HttpResponse,
+    max_handles: usize,
+    trace_id: &str,
+) {
+    let message = format!("db.tx handle capacity reached (max {max_handles})");
+    set_lasm_json_response(
+        response,
+        429,
+        &lasm_error_envelope(
+            "DB.TX_CAPACITY",
+            "resource_limit",
+            message.as_str(),
+            429,
+            trace_id,
+        ),
+    );
+}
+
 fn ensure_lasm_db_adapter_state_match(
     response: &mut sec4_core::HttpResponse,
     state: &LasmDynamicResponseState,
@@ -1031,17 +1050,7 @@ fn resolve_lasm_exec_tx_state_bindings(
     match tx_source {
         LasmExecTxSource::AllocateFromDb(db_value) => {
             let Some(tx_value) = allocate_lasm_db_tx_handle(state, *db_value) else {
-                set_lasm_json_response(
-                    response,
-                    500,
-                    &lasm_error_envelope(
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    ),
-                );
+                set_lasm_db_tx_capacity_response(response, state.db_tx_max_handles, trace_id);
                 return None;
             };
             Some((*db_value, tx_value, Some(tx_value)))
@@ -1631,17 +1640,7 @@ fn handle_lasm_internal_db_tx_operation(
             return true;
         }
         let Some(tx) = allocate_lasm_db_tx_handle(&mut state, db) else {
-            set_lasm_json_response(
-                response,
-                500,
-                &lasm_error_envelope(
-                    "DB.TX_INTERNAL",
-                    "internal",
-                    "db.tx runtime failure",
-                    500,
-                    trace_id,
-                ),
-            );
+            set_lasm_db_tx_capacity_response(response, state.db_tx_max_handles, trace_id);
             return true;
         };
         tx
@@ -2974,5 +2973,79 @@ mod tests {
         assert_eq!(response.status, 400);
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
         assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
+    }
+
+    #[test]
+    fn tx_marker_rejects_when_tx_handle_capacity_is_exhausted() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState {
+            db_tx_max_handles: 0,
+            ..LasmDynamicResponseState::default()
+        });
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "tx".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(handled, "tx marker should be handled deterministically");
+        assert_eq!(response.status, 429);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.TX_CAPACITY\""));
+        assert!(body.contains("db.tx handle capacity reached (max 0)"));
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_when_inline_tx_allocation_capacity_is_exhausted() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState {
+            db_tx_max_handles: 0,
+            ..LasmDynamicResponseState::default()
+        });
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), "1".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "inline tx allocation should fail deterministically when capacity is exhausted"
+        );
+        assert_eq!(response.status, 429);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.TX_CAPACITY\""));
+        assert!(body.contains("db.tx handle capacity reached (max 0)"));
     }
 }
