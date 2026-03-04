@@ -1,6 +1,7 @@
 use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
 };
+use crate::lasm_db_config::LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE;
 use crate::LasmDynamicResponseState;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -438,7 +439,7 @@ pub(crate) fn lasm_dynamic_postgres_client_mut(
     state: &mut LasmDynamicResponseState,
 ) -> Result<&mut PostgresClient, String> {
     state.db_records_postgres_client.as_mut().ok_or_else(|| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+        LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
     })
 }
 
@@ -524,7 +525,7 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
     let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+        LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
     })?;
     let mut client = connect_lasm_dynamic_db_records_postgres(
         dsn,

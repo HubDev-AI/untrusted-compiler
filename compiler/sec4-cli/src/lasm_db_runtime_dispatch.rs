@@ -20,6 +20,7 @@ use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
     run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
+use crate::lasm_db_config::LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE;
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
     lasm_internal_db_indexed_header, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
@@ -509,7 +510,7 @@ fn build_lasm_postgres_thread_local_config(
     state: &LasmDynamicResponseState,
 ) -> Result<LasmPostgresThreadLocalConfig, String> {
     let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+        LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
     })?;
     Ok(LasmPostgresThreadLocalConfig {
         dsn: dsn.to_string(),

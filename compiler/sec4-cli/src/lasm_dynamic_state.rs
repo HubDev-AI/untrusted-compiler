@@ -11,6 +11,7 @@ use crate::lasm_db_adapter_state::{
 use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
+    LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE,
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
@@ -374,8 +375,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
             let dsn = db_records_postgres_dsn
                 .as_ref()
                 .ok_or_else(|| {
-                    "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
-                        .to_string()
+                    LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string()
                 })?
                 .as_str();
             let mut client = connect_lasm_dynamic_db_records_postgres(
