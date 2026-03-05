@@ -125,10 +125,12 @@ fn collect_promote_contract_violations_from_modules(
         }
     }
 
-    let (browser_methods, server_methods) = collect_repo_adapter_methods(&resolved.modules)?;
+    let (browser_methods, server_methods, unscoped_methods) =
+        collect_repo_adapter_methods(&resolved.modules)?;
     issues.extend(collect_repo_interface_parity_issues(
         &browser_methods,
         &server_methods,
+        &unscoped_methods,
     ));
 
     if !parse_diagnostics.is_empty() {
@@ -221,11 +223,13 @@ fn collect_repo_adapter_methods(
     (
         BTreeMap<String, (PathBuf, usize)>,
         BTreeMap<String, (PathBuf, usize)>,
+        Vec<(String, PathBuf, usize)>,
     ),
     Vec<crate::diagnostics::Diagnostic>,
 > {
     let mut browser_methods: BTreeMap<String, (PathBuf, usize)> = BTreeMap::new();
     let mut server_methods: BTreeMap<String, (PathBuf, usize)> = BTreeMap::new();
+    let mut unscoped_methods: Vec<(String, PathBuf, usize)> = Vec::new();
 
     for module in modules {
         if !module.module_path.starts_with("repo.") {
@@ -259,17 +263,24 @@ fn collect_repo_adapter_methods(
                         stripped.to_string(),
                         (module.file_path.clone(), item.span.start_line),
                     );
+                } else {
+                    unscoped_methods.push((
+                        function_name,
+                        module.file_path.clone(),
+                        item.span.start_line,
+                    ));
                 }
             }
         }
     }
 
-    Ok((browser_methods, server_methods))
+    Ok((browser_methods, server_methods, unscoped_methods))
 }
 
 fn collect_repo_interface_parity_issues(
     browser_methods: &BTreeMap<String, (PathBuf, usize)>,
     server_methods: &BTreeMap<String, (PathBuf, usize)>,
+    unscoped_methods: &[(String, PathBuf, usize)],
 ) -> Vec<PromoteContractViolation> {
     let mut issues = Vec::new();
 
@@ -285,6 +296,17 @@ fn collect_repo_interface_parity_issues(
         .collect::<Vec<_>>();
 
     if browser_methods.is_empty() && server_methods.is_empty() {
+        for (method, file, line) in unscoped_methods {
+            issues.push(PromoteContractViolation {
+                code: "PROMOTE.P9405".to_string(),
+                severity: "error".to_string(),
+                message: format!(
+                    "repo adapter method `{method}` must be prefixed with `browser_` or `server_` for promotion parity"
+                ),
+                file: file.clone(),
+                line: *line,
+            });
+        }
         return issues;
     }
 
@@ -322,6 +344,18 @@ fn collect_repo_interface_parity_issues(
                 .expect("server method details should exist")
                 .0
                 .clone(),
+            line: *line,
+        });
+    }
+
+    for (method, file, line) in unscoped_methods {
+        issues.push(PromoteContractViolation {
+            code: "PROMOTE.P9405".to_string(),
+            severity: "error".to_string(),
+            message: format!(
+                "repo adapter method `{method}` must be prefixed with `browser_` or `server_` for promotion parity"
+            ),
+            file: file.clone(),
             line: *line,
         });
     }
