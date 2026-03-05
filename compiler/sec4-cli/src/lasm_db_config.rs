@@ -94,7 +94,7 @@ fn resolve_unique_env_file_path_with_candidates(
     project_path: Option<&Path>,
     source_name: &str,
 ) -> Result<Option<(&'static str, PathBuf)>, String> {
-    let mut found = Vec::<(&'static str, PathBuf)>::new();
+    let mut configured = Vec::<(&'static str, String)>::new();
 
     for &name in keys {
         let raw = match std::env::var(name) {
@@ -105,26 +105,11 @@ fn resolve_unique_env_file_path_with_candidates(
         if trimmed.is_empty() {
             continue;
         }
-        let mut file_path = expand_tilde_in_path(trimmed);
-        if file_path.is_relative() && !file_path.exists() {
-            if let Some(project_path) = project_path {
-                let candidate = project_path.join(file_path.as_path());
-                if candidate.exists() {
-                    file_path = candidate;
-                }
-            }
-        }
-        if !file_path.exists() {
-            return Err(format!(
-                "{source_name} configured via `{name}` points to missing file `{}`",
-                trimmed
-            ));
-        }
-        found.push((name, file_path));
+        configured.push((name, trimmed.to_string()));
     }
 
-    if found.len() > 1 {
-        let names = found
+    if configured.len() > 1 {
+        let names = configured
             .iter()
             .map(|(name, _)| format!("{name}"))
             .collect::<Vec<_>>()
@@ -134,7 +119,27 @@ fn resolve_unique_env_file_path_with_candidates(
         ));
     }
 
-    Ok(found.into_iter().next())
+    let Some((name, raw_path)) = configured.into_iter().next() else {
+        return Ok(None);
+    };
+
+    let mut file_path = expand_tilde_in_path(raw_path.as_str());
+    if file_path.is_relative() && !file_path.exists() {
+        if let Some(project_path) = project_path {
+            let candidate = project_path.join(file_path.as_path());
+            if candidate.exists() {
+                file_path = candidate;
+            }
+        }
+    }
+    if !file_path.exists() {
+        return Err(format!(
+            "{source_name} configured via `{name}` points to missing file `{}`",
+            raw_path
+        ));
+    }
+
+    Ok(Some((name, file_path)))
 }
 
 fn parse_env_file_value(
@@ -474,7 +479,7 @@ mod tests {
     fn with_env_vars<R>(vars: &[(&str, Option<&str>)], action: impl FnOnce() -> R) -> R {
         let _env_lock = TEST_ENV_LOCK
             .lock()
-            .expect("test environment lock should be available");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let originals: Vec<(String, Option<String>)> = vars
             .iter()
             .map(|(name, _value)| {
