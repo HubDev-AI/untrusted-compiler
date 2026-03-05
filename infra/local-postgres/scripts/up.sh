@@ -22,6 +22,34 @@ compose_up() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
 }
 
+compose_up_with_auto_port() {
+  local replacement_port=""
+  while true; do
+    local up_log="/tmp/sec4-local-postgres-up-${PG_PORT:-5432}.log"
+    if compose_up >"$up_log" 2>&1; then
+      return 0
+    fi
+    if [ "$AUTO_PORT" != "1" ]; then
+      cat "$up_log" >&2 || true
+      return 1
+    fi
+    if ! grep -qi 'port is already allocated' "$up_log"; then
+      cat "$up_log" >&2 || true
+      return 1
+    fi
+    replacement_port="$(find_available_port "$AUTO_PORT_START" "$AUTO_PORT_END" || true)"
+    if [ -z "$replacement_port" ] || [ "$replacement_port" = "${PG_PORT:-5432}" ]; then
+      cat "$up_log" >&2 || true
+      return 1
+    fi
+    echo "local postgres bind conflict on port ${PG_PORT:-5432}; retrying compose startup with free port $replacement_port"
+    PG_PORT="$replacement_port"
+    SEC4_DB_ALPHA_DB_POSTGRES_DSN="$(build_local_dsn_for_port "$replacement_port")"
+    SEC4_RT_LASM_DB_POSTGRES_DSN="$SEC4_DB_ALPHA_DB_POSTGRES_DSN"
+    compose_down_quiet
+  done
+}
+
 compose_down_quiet() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down >/dev/null 2>&1 || true
 }
@@ -177,7 +205,10 @@ pushd "$INFRA_DIR" >/dev/null
 
 rm -f "$RUNTIME_ENV_FILE"
 
-compose_up
+if ! compose_up_with_auto_port; then
+  popd >/dev/null
+  fail "failed to start postgres container (see /tmp/sec4-local-postgres-up-<port>.log)"
+fi
 container_id="$(resolve_container_id)"
 if [ -z "$container_id" ]; then
   popd >/dev/null
@@ -198,7 +229,10 @@ if [ "$status" -ne 0 ]; then
       SEC4_DB_ALPHA_DB_POSTGRES_DSN="$(build_local_dsn_for_port "$replacement_port")"
       SEC4_RT_LASM_DB_POSTGRES_DSN="$SEC4_DB_ALPHA_DB_POSTGRES_DSN"
       compose_down_quiet
-      compose_up
+      if ! compose_up_with_auto_port; then
+        popd >/dev/null
+        fail "failed to restart postgres container after host-route retry"
+      fi
       container_id="$(resolve_container_id)"
       if [ -z "$container_id" ]; then
         popd >/dev/null

@@ -42,7 +42,17 @@ p99="$(awk '/^[[:space:]]*99(\.000)?%/ {print $2; exit}' "$raw")"
 
 load_generator="wrk"
 constant_rate="false"
-if grep -q 'Thread calibration:' "$raw"; then
+load_bin_marker="$(awk -F= '/^# sec4-bench-load-bin=/{print $2; exit}' "$raw")"
+load_supports_rate_marker="$(awk -F= '/^# sec4-bench-load-supports-rate=/{print $2; exit}' "$raw")"
+
+if [ "$load_supports_rate_marker" = "true" ]; then
+  load_generator="wrk2"
+  constant_rate="true"
+elif [ "$load_supports_rate_marker" = "false" ]; then
+  if printf '%s' "$load_bin_marker" | grep -qi 'wrk2'; then
+    load_generator="wrk2"
+  fi
+elif grep -q 'Thread calibration:' "$raw"; then
   load_generator="wrk2"
   constant_rate="true"
 fi

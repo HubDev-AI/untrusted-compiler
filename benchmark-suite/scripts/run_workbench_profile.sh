@@ -217,10 +217,15 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
+{
+  echo "# sec4-bench-load-bin=${load_bin}"
+  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+} >"$raw"
+
 if [ "${#endpoint_env[@]}" -gt 0 ]; then
-  env "${endpoint_env[@]}" "${cmd[@]}" | tee "$raw"
+  env "${endpoint_env[@]}" "${cmd[@]}" | tee -a "$raw"
 else
-  "${cmd[@]}" | tee "$raw"
+  "${cmd[@]}" | tee -a "$raw"
 fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"

@@ -212,6 +212,7 @@ Measure end-to-end service behavior across identical implementations:
 - Set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when you intentionally allow local `wrk` fallback (non-constant-rate posture).
 - Install repo-local `wrk2` when system `wrk2` is missing:
   - `make -C benchmark-suite wrk2-install`
+  - installer mode defaults to `auto` (source build, then docker-wrapper fallback if build fails)
   - then export `BENCH_WRK2_BIN="$PWD/benchmark-suite/bin/wrk2"` for benchmark runs.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
 - `services/sec4`, `services/sec4-lasm`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.

@@ -100,7 +100,7 @@ help:
 	@echo "  env          Capture environment metadata"
 	@echo "  preflight    Validate required benchmark tooling for IMPLS=$(IMPLS)"
 	@echo "  preflight-dry Validate dry-run tooling only (skips wrk2 requirement)"
-	@echo "  wrk2-install Build and install repo-local wrk2 binary to benchmark-suite/bin/wrk2"
+	@echo "  wrk2-install Install repo-local wrk2 command (source build with docker-wrapper fallback)"
 	@echo "  workbench-smoke Run workbench matrix smoke orchestration"
 	@echo "  workbench-bench Run workbench matrix load benchmarks + compare/analysis/report outputs"
 	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
