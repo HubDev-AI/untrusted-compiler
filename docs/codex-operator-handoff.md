@@ -17,6 +17,7 @@ Use it to keep speed high without losing architecture direction.
 4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
 5. Fixed-cluster fast path is available through shared-port workers (reuse-port mode when `instances == autoscale-max-instances`).
 6. Composition Contract Analyzer (`M39-S2`) is completed, and the docs+perf-sequencing lock is now lifted.
+7. `M39-S2K` is in-progress: Zed operator readiness (`scripts/check-zed-extension-operator-readiness.sh`) is part of release-operator handoff lane checks.
 
 ## 3) Backlog Priority (Immediate)
 

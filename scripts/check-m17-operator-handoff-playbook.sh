@@ -73,6 +73,7 @@ inspector_script="${repo_root}/scripts/inspect-m17-operator-handoff-artifacts.sh
 release_packet_script="${repo_root}/scripts/build-m17-operator-release-packet.sh"
 closure_script="${repo_root}/scripts/check-milestone-closure.sh"
 playbook_chapter="${repo_root}/docs/book/473-m17-operator-handoff-final-playbook.md"
+zed_readiness_script="${repo_root}/scripts/check-zed-extension-operator-readiness.sh"
 
 require_executable "${quickstart_script}" "M17 handoff quickstart script"
 require_executable "${ci_smoke_script}" "M17 handoff CI smoke wrapper"
@@ -80,6 +81,7 @@ require_executable "${summary_script}" "M17 readiness summary script"
 require_executable "${inspector_script}" "M17 artifact inspector script"
 require_executable "${release_packet_script}" "M17 release packet builder"
 require_executable "${closure_script}" "milestone closure checker"
+require_executable "${zed_readiness_script}" "zed extension operator readiness checker"
 require_file "${playbook_chapter}" "M17 final handoff playbook chapter"
 
 require_token "${playbook_chapter}" '## Bundle A: Local Validation Flow' "playbook chapter"
@@ -99,5 +101,8 @@ require_token "${playbook_chapter}" 'scripts/check-milestone-closure.sh --repo-r
 
 require_token "${playbook_chapter}" 'build/operator-release-packet/release-packet.json' "playbook chapter"
 require_token "${playbook_chapter}" 'build/operator-release-packet/artifact-manifest.txt' "playbook chapter"
+require_token "${playbook_chapter}" '## Bundle D: Zed Extension Operator Readiness' "playbook chapter"
+require_token "${playbook_chapter}" 'scripts/check-zed-extension-operator-readiness.sh --stage-output build/zed-extension-release-operator' "playbook chapter"
+require_token "${playbook_chapter}" 'build/zed-extension-release-operator/bundle-manifest.json' "playbook chapter"
 
 echo "m17 operator handoff playbook check passed"

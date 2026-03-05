@@ -12160,7 +12160,11 @@ M13-S1 go/no-go note:
 - [x] Updated `zed-extension/README.md` with one-command readiness entrypoint.
 
 ### Next planned slice
-- M39-S2K Wire Zed operator readiness command into release-operator handoff docs and lane prompts.
+- [x] M39-S2K completed: Wire Zed operator readiness command into release-operator handoff docs and lane prompts.
+  - Added the zed readiness command to `docs/book/473-m17-operator-handoff-final-playbook.md` as Bundle D.
+  - Added the zed readiness command to `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`.
+  - Updated readiness checkers to enforce the handoff-lane zed command presence and executability.
+- [ ] Next planned slice: reserve next alpha-hardening focus.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
