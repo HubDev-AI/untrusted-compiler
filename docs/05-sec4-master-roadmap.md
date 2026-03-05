@@ -12165,7 +12165,7 @@ M13-S1 go/no-go note:
   - Added the zed readiness command to `docs/book/473-m17-operator-handoff-final-playbook.md` as Bundle D.
   - Added the zed readiness command to `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`.
   - Updated readiness checkers to enforce the handoff-lane zed command presence and executability.
-- [ ] Next planned slice: reserve next alpha-hardening focus.
+- [x] Next planned slice reserved: alpha-hardening focus remains locked to release-closure verification and Postgres runtime-env hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
