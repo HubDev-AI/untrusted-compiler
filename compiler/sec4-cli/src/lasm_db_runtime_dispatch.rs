@@ -1951,11 +1951,18 @@ fn handle_lasm_internal_db_exec_tx_operation(
                     append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
                 (record, Some((config, compaction_snapshot)))
             }
-            LasmDbExecTxOperationResult::Sqlite {
-                affected_rows,
-                tx_started,
-            } => {
-                if tx_started && !keep_allocated_tx_handle {
+            other_result => {
+                let (affected_rows, tx_started, should_commit_tx) = match other_result {
+                    LasmDbExecTxOperationResult::Sqlite {
+                        affected_rows,
+                        tx_started,
+                    } => (affected_rows, tx_started, true),
+                    LasmDbExecTxOperationResult::RecordsLog { affected_rows } => {
+                        (affected_rows, false, false)
+                    }
+                    LasmDbExecTxOperationResult::Postgres { .. } => unreachable!(),
+                };
+                if should_commit_tx && tx_started && !keep_allocated_tx_handle {
                     if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
                     {
                         state.db_tx_handles.remove(&tx);
@@ -1969,24 +1976,6 @@ fn handle_lasm_internal_db_exec_tx_operation(
                     }
                     state.db_tx_handles.remove(&tx);
                 }
-                if let Some(tx_handle) = allocated_tx_handle {
-                    if !keep_allocated_tx_handle {
-                        state.db_tx_handles.remove(&tx_handle);
-                    }
-                }
-                let record = allocate_lasm_db_runtime_record(
-                    &mut state,
-                    "execTx",
-                    db,
-                    template.as_str(),
-                    params.as_str(),
-                    tx,
-                    affected_rows,
-                );
-                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                (record, None)
-            }
-            LasmDbExecTxOperationResult::RecordsLog { affected_rows } => {
                 if let Some(tx_handle) = allocated_tx_handle {
                     if !keep_allocated_tx_handle {
                         state.db_tx_handles.remove(&tx_handle);
