@@ -2079,155 +2079,67 @@ fn handle_lasm_internal_db_query_one_operation(
         if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
             return true;
         }
-        match db_records_adapter {
-            LasmDbRecordsAdapter::RecordsLog => {
-                match run_lasm_db_query_one_operation(
-                    &mut state,
-                    db_records_adapter,
+        match run_lasm_db_query_one_operation(
+            &mut state,
+            db_records_adapter,
+            db,
+            template.as_str(),
+            params.as_str(),
+            row_schema,
+            &prepared_params,
+        ) {
+            Ok(LasmDbQueryOneOperationResult::Postgres { config, row }) => {
+                let row_object = row;
+                let record = LasmDbRecord {
+                    id: state.next_db_record_id,
+                    op: "queryOne".to_string(),
                     db,
-                    template.as_str(),
-                    params.as_str(),
-                    row_schema,
-                    &prepared_params,
-                ) {
-                    Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => {
-                        let record = LasmDbRecord {
-                            id: state.next_db_record_id,
-                            op: "queryOne".to_string(),
-                            db,
-                            template: template.clone(),
-                            params: params.clone(),
-                            tx: 0,
-                            affected_rows: 1,
-                            created_at_ms: lasm_now_ms(),
-                        };
-                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                        Some((record, row))
-                    }
-                    Ok(LasmDbQueryOneOperationResult::Postgres { .. })
-                    | Ok(LasmDbQueryOneOperationResult::Sqlite { .. }) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::NotFound) => None,
-                    Err(LasmDbQueryOneOperationError::Runtime(message)) => {
-                        set_lasm_db_runtime_error_response(
-                            response,
-                            "queryOne",
-                            message.as_str(),
-                            trace_id,
-                        );
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                }
+                    template: template.clone(),
+                    params: params.clone(),
+                    tx: 0,
+                    affected_rows: 1,
+                    created_at_ms: lasm_now_ms(),
+                };
+                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                let (record, compaction_snapshot) =
+                    append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
+                persist_lasm_db_record_after_unlock(
+                    db_records_adapter,
+                    &config,
+                    &record,
+                    compaction_snapshot,
+                );
+                Some((record, row_object))
             }
-            LasmDbRecordsAdapter::Postgres => {
-                match run_lasm_db_query_one_operation(
-                    &mut state,
-                    db_records_adapter,
+            Ok(LasmDbQueryOneOperationResult::Sqlite { row })
+            | Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => {
+                let record = LasmDbRecord {
+                    id: state.next_db_record_id,
+                    op: "queryOne".to_string(),
                     db,
-                    template.as_str(),
-                    params.as_str(),
-                    row_schema,
-                    &prepared_params,
-                ) {
-                    Ok(LasmDbQueryOneOperationResult::Postgres { config, row }) => {
-                        let row_object = row;
-                        let record = LasmDbRecord {
-                            id: state.next_db_record_id,
-                            op: "queryOne".to_string(),
-                            db,
-                            template: template.clone(),
-                            params: params.clone(),
-                            tx: 0,
-                            affected_rows: 1,
-                            created_at_ms: lasm_now_ms(),
-                        };
-                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        let (record, compaction_snapshot) =
-                            append_lasm_db_record_in_memory_with_compaction_snapshot(
-                                &mut state, record,
-                            );
-                        persist_lasm_db_record_after_unlock(
-                            db_records_adapter,
-                            &config,
-                            &record,
-                            compaction_snapshot,
-                        );
-                        Some((record, row_object))
-                    }
-                    Ok(LasmDbQueryOneOperationResult::Sqlite { row: _ })
-                    | Ok(LasmDbQueryOneOperationResult::RecordsLog { row: _ }) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::NotFound) => None,
-                    Err(LasmDbQueryOneOperationError::Runtime(message)) => {
-                        set_lasm_db_runtime_error_response(
-                            response,
-                            "queryOne",
-                            message.as_str(),
-                            trace_id,
-                        );
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                }
+                    template: template.clone(),
+                    params: params.clone(),
+                    tx: 0,
+                    affected_rows: 1,
+                    created_at_ms: lasm_now_ms(),
+                };
+                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                Some((record, row))
             }
-            LasmDbRecordsAdapter::Sqlite => {
-                match run_lasm_db_query_one_operation(
-                    &mut state,
-                    db_records_adapter,
-                    db,
-                    template.as_str(),
-                    params.as_str(),
-                    row_schema,
-                    &prepared_params,
-                ) {
-                    Ok(LasmDbQueryOneOperationResult::Sqlite { row }) => {
-                        let row_object = row;
-                        let record = LasmDbRecord {
-                            id: state.next_db_record_id,
-                            op: "queryOne".to_string(),
-                            db,
-                            template: template.clone(),
-                            params: params.clone(),
-                            tx: 0,
-                            affected_rows: 1,
-                            created_at_ms: lasm_now_ms(),
-                        };
-                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                        Some((record, row_object))
-                    }
-                    Ok(LasmDbQueryOneOperationResult::Postgres { .. })
-                    | Ok(LasmDbQueryOneOperationResult::RecordsLog { row: _ }) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::NotFound) => None,
-                    Err(LasmDbQueryOneOperationError::Runtime(message)) => {
-                        set_lasm_db_runtime_error_response(
-                            response,
-                            "queryOne",
-                            message.as_str(),
-                            trace_id,
-                        );
-                        return true;
-                    }
-                    Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
-                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                        return true;
-                    }
-                }
+            Err(LasmDbQueryOneOperationError::NotFound) => None,
+            Err(LasmDbQueryOneOperationError::Runtime(message)) => {
+                set_lasm_db_runtime_error_response(
+                    response,
+                    "queryOne",
+                    message.as_str(),
+                    trace_id,
+                );
+                return true;
+            }
+            Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
+                set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
+                return true;
             }
         }
     };
