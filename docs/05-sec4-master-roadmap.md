@@ -53,7 +53,7 @@ Roadmap impact:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
 - Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
 - Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
-- `c-bin` compile path now prefers canonical runtime sources from `runtime/c/` with deterministic build-folder fallback when canonical files are unavailable.
+- `c-bin` compile path now requires canonical runtime sources from `runtime/c/` and fails deterministically when they are missing.
 - LASM DB operator docs/runbooks are synchronized for this slice (`examples/lasm-alpha-full`): smoke and README now reflect the current Postgres DSN alias set and tokenized runtime env overrides used by cluster/runtime forwarding.
 
 ## Execution Mode Lock (2026-02-17)
