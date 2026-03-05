@@ -12173,6 +12173,11 @@ M13-S1 go/no-go note:
   - Added the zed readiness command to `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`.
   - Updated readiness checkers to enforce the handoff-lane zed command presence and executability.
 - [x] Next planned slice reserved: alpha-hardening focus remains locked to release-closure verification and Postgres runtime-env hardening.
+- [x] Postgres runtime-env hardening completed for alias-migration safety:
+  - DSN env aliases now resolve when values are identical, while conflicting values remain deterministic errors.
+  - DSN file alias sources now resolve when they point to the same normalized file path, while conflicting file sources remain deterministic errors.
+  - Runtime env files now accept duplicate DSN alias keys only when values match, preserving conflict failures on mismatched values.
+  - documented in `docs/book/1549-m39-postgres-dsn-alias-same-value-hardening.md`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -1517,5 +1517,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1546-m39-lasm-db-records-queryone-client-path-unification.md`
 - `1547-m39-workbench-benchmark-html-report.md`
 - `1548-m39-lasm-pattern-route-indexed-lookup.md`
+- `1549-m39-postgres-dsn-alias-same-value-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
