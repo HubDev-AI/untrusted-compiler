@@ -1,0 +1,58 @@
+// lasm-alpha-showcase
+//
+// Multi-file LASM example proving the full alpha stack:
+// - DB write + transactional writes + queryOne
+// - FS roundtrip with deterministic path policy
+// - Public/Internal net gating
+//
+// This app is intentionally explicit so operators can validate:
+// - compile-time policy checks
+// - runtime intrinsic wiring
+// - adapter compatibility (records/sqlite/postgres) from one codebase
+
+use showcase_db;
+use showcase_fs;
+use showcase_net;
+
+fn home() effects { net } -> Int {
+  // Health probe endpoint used by local runbooks.
+  res.text(200, "ok");
+  0
+}
+
+fn status() effects { net } -> Int {
+  let name = headers.name("X-Lasm-Showcase");
+  let value = headers.value("active");
+  let cookie = cookie.build("showcase-session", "demo-token");
+
+  // Showcase deterministic response headers and cookie emission.
+  res.setHeader(name, value);
+  res.addCookie(cookie);
+  res.text(200, "showcase metadata route");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/", home);
+  http.get(router, "/status", status);
+
+  // DB lanes.
+  http.post(router, "/db/exec", execRecord);
+  http.post(router, "/db/exec-tx", execTxRecord);
+  http.post(router, "/db/write-and-query", writeAndQueryRecord);
+  http.get(router, "/db/query-one", queryOneRecord);
+  http.get(router, "/db/list", listRecords);
+
+  // FS lanes.
+  http.get(router, "/fs/roundtrip", roundtrip);
+  http.get(router, "/fs/inspect", inspect);
+
+  // Net lanes.
+  http.get(router, "/net/public", publicGet);
+  http.get(router, "/net/internal", internalGet);
+
+  http.serve(8080, router);
+  0
+}

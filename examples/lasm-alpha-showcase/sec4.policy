@@ -1,0 +1,16 @@
+[policy]
+name = "lasm-alpha-showcase"
+version = "0.1"
+mode = "enforce"
+env = "dev"
+
+[http]
+max_body_bytes = 262144
+max_header_bytes = 32768
+default_timeout_ms = 5000
+
+[fs]
+enabled = true
+
+[net.internal]
+enabled = true
