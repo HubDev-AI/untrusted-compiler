@@ -497,6 +497,29 @@ fn persist_lasm_db_record_with_capacity_guard(
     }
 }
 
+fn allocate_lasm_db_runtime_record(
+    state: &mut LasmDynamicResponseState,
+    op: &str,
+    db: i64,
+    template: &str,
+    params: &str,
+    tx: i64,
+    affected_rows: u64,
+) -> LasmDbRecord {
+    let record = LasmDbRecord {
+        id: state.next_db_record_id,
+        op: op.to_string(),
+        db,
+        template: template.to_string(),
+        params: params.to_string(),
+        tx,
+        affected_rows,
+        created_at_ms: lasm_now_ms(),
+    };
+    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+    record
+}
+
 fn append_lasm_db_record_in_memory_with_compaction_snapshot(
     state: &mut LasmDynamicResponseState,
     record: LasmDbRecord,
@@ -1756,48 +1779,30 @@ fn handle_lasm_internal_db_exec_operation(
                 config,
                 affected_rows,
             } => {
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "exec".to_string(),
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "exec",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
-                    tx: 0,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
                     affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                );
                 let (record, compaction_snapshot) =
                     append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
                 (record, Some((config, compaction_snapshot)))
             }
-            LasmDbExecOperationResult::Sqlite { affected_rows } => {
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "exec".to_string(),
+            LasmDbExecOperationResult::Sqlite { affected_rows }
+            | LasmDbExecOperationResult::RecordsLog { affected_rows } => {
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "exec",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
-                    tx: 0,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
                     affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                (record, None)
-            }
-            LasmDbExecOperationResult::RecordsLog { affected_rows } => {
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "exec".to_string(),
-                    db,
-                    template: template.clone(),
-                    params: params.clone(),
-                    tx: 0,
-                    affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                );
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                 (record, None)
             }
@@ -1928,17 +1933,20 @@ fn handle_lasm_internal_db_exec_tx_operation(
                     }
                     state.db_tx_handles.remove(&tx);
                 }
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "execTx".to_string(),
+                if let Some(tx_handle) = allocated_tx_handle {
+                    if !keep_allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx_handle);
+                    }
+                }
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "execTx",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
+                    template.as_str(),
+                    params.as_str(),
                     tx,
                     affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                );
                 let (record, compaction_snapshot) =
                     append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
                 (record, Some((config, compaction_snapshot)))
@@ -1966,17 +1974,15 @@ fn handle_lasm_internal_db_exec_tx_operation(
                         state.db_tx_handles.remove(&tx_handle);
                     }
                 }
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "execTx".to_string(),
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "execTx",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
+                    template.as_str(),
+                    params.as_str(),
                     tx,
                     affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                );
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                 (record, None)
             }
@@ -1986,17 +1992,15 @@ fn handle_lasm_internal_db_exec_tx_operation(
                         state.db_tx_handles.remove(&tx_handle);
                     }
                 }
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "execTx".to_string(),
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "execTx",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
+                    template.as_str(),
+                    params.as_str(),
                     tx,
                     affected_rows,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                );
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                 (record, None)
             }
