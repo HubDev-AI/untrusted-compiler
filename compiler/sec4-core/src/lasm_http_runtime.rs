@@ -89,6 +89,8 @@ pub struct LasmHttpRuntime {
     scheduler: LasmAsyncRuntime,
     exact_routes: HashMap<(String, String), RoutePlan>,
     pattern_routes: Vec<PatternRoute>,
+    pattern_route_indexes_by_method: HashMap<String, HashMap<usize, Vec<usize>>>,
+    pattern_route_indexes_by_len: HashMap<usize, Vec<usize>>,
     max_in_flight: Option<usize>,
     max_pending: Option<usize>,
     max_request_duration_ms: Option<u64>,
@@ -114,6 +116,8 @@ impl LasmHttpRuntime {
             scheduler: LasmAsyncRuntime::with_start_time(start_ms),
             exact_routes: HashMap::new(),
             pattern_routes: Vec::new(),
+            pattern_route_indexes_by_method: HashMap::new(),
+            pattern_route_indexes_by_len: HashMap::new(),
             max_in_flight: None,
             max_pending: None,
             max_request_duration_ms: None,
@@ -144,11 +148,24 @@ impl LasmHttpRuntime {
             .iter()
             .any(|segment| matches!(segment, RouteSegment::Param(_)))
         {
+            let segment_count = pattern_segments.len();
+            let route_index = self.pattern_routes.len();
+            let method_key = key.0.clone();
             self.pattern_routes.push(PatternRoute {
-                method: key.0,
+                method: method_key.clone(),
                 pattern_segments,
                 plan,
             });
+            self.pattern_route_indexes_by_method
+                .entry(method_key)
+                .or_default()
+                .entry(segment_count)
+                .or_default()
+                .push(route_index);
+            self.pattern_route_indexes_by_len
+                .entry(segment_count)
+                .or_default()
+                .push(route_index);
             return Ok(());
         }
         self.exact_routes.insert(key, plan);
@@ -575,7 +592,15 @@ impl LasmHttpRuntime {
                 path_params: BTreeMap::new(),
             });
         }
-        for route in self.pattern_routes.iter().rev() {
+        let route_indexes = self
+            .pattern_route_indexes_by_method
+            .get(&key.0)
+            .and_then(|by_len| by_len.get(&request_segments.len()));
+        for route_index in route_indexes
+            .into_iter()
+            .flat_map(|indexes| indexes.iter().rev())
+        {
+            let route = &self.pattern_routes[*route_index];
             if route.method != key.0 || route.pattern_segments.len() != request_segments.len() {
                 continue;
             }
@@ -616,7 +641,13 @@ impl LasmHttpRuntime {
             }
         }
 
-        for route in &self.pattern_routes {
+        for route_index in self
+            .pattern_route_indexes_by_len
+            .get(&request_segments.len())
+            .into_iter()
+            .flat_map(|indexes| indexes.iter())
+        {
+            let route = &self.pattern_routes[*route_index];
             if route.pattern_segments.len() != request_segments.len() {
                 continue;
             }
