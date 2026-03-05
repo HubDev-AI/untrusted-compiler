@@ -304,4 +304,5 @@ Notes:
   - `make bench-workbench WORKBENCH_IMPLS=sec4,sec4-lasm`
   - `make bench-workbench-full WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
 - Matrix/full-suite wrappers enforce `wrk2` by default for constant-rate compare quality; set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when intentionally allowing local `wrk` fallback.
+- If fallback mode is enabled, you can cap slow/hanging requests with `BENCH_WRK_FALLBACK_TIMEOUT` (default `10s`).
 - If `wrk2` is missing, run `make -C ../../benchmark-suite wrk2-install` (source build with docker-wrapper fallback) and export `BENCH_WRK2_BIN="$PWD/../../benchmark-suite/bin/wrk2"` before benchmark commands.

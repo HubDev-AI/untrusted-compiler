@@ -214,6 +214,7 @@ Measure end-to-end service behavior across identical implementations:
 - Use constant-rate load for primary comparisons.
 - Workbench matrix/step/full suite runners enforce `wrk2` by default (`BENCH_WORKBENCH_REQUIRE_WRK2=1`) so compare artifacts stay constant-rate.
 - Set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when you intentionally allow local `wrk` fallback (non-constant-rate posture).
+- When fallback is enabled, bound request hang behavior with `BENCH_WRK_FALLBACK_TIMEOUT` (default `10s`).
 - Install repo-local `wrk2` when system `wrk2` is missing:
   - `make -C benchmark-suite wrk2-install`
   - installer mode defaults to `auto` (source build, then docker-wrapper fallback if build fails)
