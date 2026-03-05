@@ -180,6 +180,11 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
+{
+  echo "# sec4-bench-load-bin=${load_bin}"
+  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+} >"$raw"
+
 if [ "$endpoint" = "users-get" ]; then
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required for users-get seed setup" >&2
@@ -206,11 +211,11 @@ if [ "$endpoint" = "users-get" ]; then
       exit 1
       ;;
   esac
-  BENCH_USER_ID="$seed_user_id" "${cmd[@]}" | tee "$raw"
+  BENCH_USER_ID="$seed_user_id" "${cmd[@]}" | tee -a "$raw"
 elif [ "$endpoint" = "decode" ] || [ "$endpoint" = "users-post" ]; then
-  BENCH_PAYLOAD_FILE="$payload_path" "${cmd[@]}" | tee "$raw"
+  BENCH_PAYLOAD_FILE="$payload_path" "${cmd[@]}" | tee -a "$raw"
 else
-  "${cmd[@]}" | tee "$raw"
+  "${cmd[@]}" | tee -a "$raw"
 fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"
