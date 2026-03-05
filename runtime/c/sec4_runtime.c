@@ -49,8 +49,16 @@
 #define SEC4_RT_DEFAULT_NET_TIMEOUT_MS 2000
 #define SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES 1048576
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
+#define SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY 256
+#define SEC4_RT_MAX_HTTP_MAX_CONCURRENCY 4096
+#define SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 20
+#define SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 1000
+#define SEC4_RT_DEFAULT_HTTP_ACCEPT_RATE_LIMIT_RPS 0
+#define SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS 1000000
+#define SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST 1000000
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
+#define SEC4_RT_MAX_DB_LATEST_RECORD_CACHE 256
 #define SEC4_RT_MAX_LOG_VALUES 256
 #define SEC4_RT_MAX_LOG_EVENTS 128
 #define SEC4_RT_MAX_ERROR_STATES 128
@@ -60,10 +68,18 @@
 #define SEC4_RT_MAX_LOG_LINE_BYTES 2048
 #define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
 #define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
+#define SEC4_RT_MAX_CSP_POLICY_BYTES 1024
+#define SEC4_RT_DEFAULT_CSP_POLICY "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 #define SEC4_RT_POLICY_CORS_HANDLE INT64_C(0x6EC4001)
 #define SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE INT64_C(0x6EC4002)
 #define SEC4_RT_POLICY_CSRF_HANDLE INT64_C(0x6EC4003)
 #define SEC4_RT_POLICY_AUTH_HANDLE INT64_C(0x6EC4004)
+#define SEC4_RT_CTX_HANDLE INT64_C(0x6EC5001)
+#define SEC4_RT_DB_CAP_HANDLE INT64_C(0x6EC5002)
+#define SEC4_RT_FS_CAP_HANDLE INT64_C(0x6EC5003)
+#define SEC4_RT_NET_CAP_HANDLE INT64_C(0x6EC5004)
+#define SEC4_RT_INTERNAL_NET_CAP_HANDLE INT64_C(0x6EC5005)
+#define SEC4_RT_SECRETS_CAP_HANDLE INT64_C(0x6EC5006)
 
 typedef int64_t (*sec4_rt_handler_fn)(void);
 
@@ -82,14 +98,25 @@ typedef struct {
   bool cors_require_vary_origin;
   char cors_allow_methods[128];
   char cors_allow_headers[128];
+  char cors_expose_headers[128];
   int64_t cors_max_age_seconds;
+  bool cors_allow_private_network;
   bool security_headers_enabled;
+  bool security_hsts_enabled;
+  int64_t security_hsts_max_age_seconds;
+  bool security_hsts_include_subdomains;
+  bool security_hsts_preload;
   bool security_x_content_type_options;
   char security_x_frame_options[16];
   char security_referrer_policy[128];
+  bool security_csp_enabled;
+  bool security_csp_report_only;
+  char security_csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
   bool csrf_enabled;
   char csrf_mode[32];
   char csrf_protected_methods[64];
+  char csrf_cookie_name[64];
+  char csrf_header_name[64];
   bool auth_enabled;
   char auth_mode[16];
   size_t route_count;
@@ -110,6 +137,7 @@ typedef struct {
   bool has_request;
   char trace_id[32];
   char method[8];
+  char http_version[16];
   char path[SEC4_RT_MAX_PATH_BYTES];
   char route_path[SEC4_RT_MAX_PATH_BYTES];
   char matched_route_pattern[SEC4_RT_MAX_PATH_BYTES];
@@ -144,6 +172,14 @@ typedef struct {
   int64_t db_handle;
 } sec4_rt_db_tx_state;
 
+typedef struct {
+  bool active;
+  int64_t db_handle;
+  int64_t query_handle;
+  char base_root[SEC4_RT_MAX_FS_PATH_BYTES];
+  char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+} sec4_rt_db_latest_record_cache_state;
+
 typedef enum {
   SEC4_RT_FS_RESULT_OK = 0,
   SEC4_RT_FS_RESULT_INVALID = 1,
@@ -169,14 +205,26 @@ typedef struct {
   char allow_origin[256];
   bool allow_credentials;
   bool require_vary_origin;
+  int64_t max_age_seconds;
+  bool allow_private_network;
+  char allow_methods[128];
+  char allow_headers[128];
+  char expose_headers[128];
 } sec4_rt_cors_policy_state;
 
 typedef struct {
   bool loaded;
   bool enabled;
+  bool hsts_enabled;
+  int64_t hsts_max_age_seconds;
+  bool hsts_include_subdomains;
+  bool hsts_preload;
   bool x_content_type_options;
   char x_frame_options[16];
   char referrer_policy[128];
+  bool csp_enabled;
+  bool csp_report_only;
+  char csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
 } sec4_rt_security_headers_policy_state;
 
 typedef struct {
@@ -184,6 +232,8 @@ typedef struct {
   bool enabled;
   char mode[32];
   char protected_methods[64];
+  char cookie_name[64];
+  char header_name[64];
 } sec4_rt_csrf_policy_state;
 
 typedef struct {
@@ -235,6 +285,15 @@ typedef struct {
   int64_t cause_handle;
 } sec4_rt_error_state;
 
+typedef struct {
+  bool enabled;
+  int64_t refill_rps;
+  int64_t burst;
+  int64_t tokens_milli;
+  int64_t burst_milli;
+  int64_t last_refill_ms;
+} sec4_rt_http_accept_rate_limiter;
+
 typedef enum {
   SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED = 0,
   SEC4_RT_IPV6_URL_HOST_OK = 1,
@@ -250,6 +309,8 @@ static sec4_rt_request_state g_sec4_rt_request;
 static sec4_rt_tracked_value g_sec4_rt_tracked_values[SEC4_RT_MAX_TRACKED_VALUES];
 static sec4_rt_db_query_state g_sec4_rt_db_queries[SEC4_RT_MAX_DB_QUERIES];
 static sec4_rt_db_tx_state g_sec4_rt_db_txs[SEC4_RT_MAX_DB_TXS];
+static sec4_rt_db_latest_record_cache_state
+    g_sec4_rt_db_latest_records[SEC4_RT_MAX_DB_LATEST_RECORD_CACHE];
 static uint64_t g_sec4_rt_next_trace_id = 1;
 static int64_t g_sec4_rt_last_log_handle = 0;
 static sec4_rt_cors_policy_state g_sec4_rt_cors_policy;
@@ -272,6 +333,8 @@ static bool sec4_rt_parse_header_value(
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
+static bool sec4_rt_is_header_name_valid(const char *value);
+static bool sec4_rt_is_header_value_valid(const char *value);
 static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
@@ -732,6 +795,20 @@ static int64_t sec4_rt_handle_from_three(int64_t a, int64_t b, int64_t c, uint64
   return sec4_rt_handle_from_two(left, c, salt);
 }
 
+static const char *sec4_rt_resolve_tracked_or_literal_string(int64_t input) {
+  const char *tracked = sec4_rt_lookup_tracked_value(input);
+  if (tracked != NULL) {
+    return tracked;
+  }
+  if (input == 0) {
+    return NULL;
+  }
+  if ((uint64_t) input < UINT64_C(4096)) {
+    return NULL;
+  }
+  return (const char *) (uintptr_t) input;
+}
+
 static bool sec4_rt_extract_request_header(
     const char *name,
     char *value,
@@ -1065,6 +1142,57 @@ static void sec4_rt_error_append_detail_entry(
   }
 }
 
+static int sec4_rt_query_hex_nibble(char value) {
+  if (value >= '0' && value <= '9') {
+    return value - '0';
+  }
+  if (value >= 'a' && value <= 'f') {
+    return 10 + (value - 'a');
+  }
+  if (value >= 'A' && value <= 'F') {
+    return 10 + (value - 'A');
+  }
+  return -1;
+}
+
+static bool sec4_rt_query_decode_component(
+    const char *input,
+    size_t input_len,
+    char *out,
+    size_t out_size
+) {
+  if (input == NULL || out == NULL || out_size == 0) {
+    return false;
+  }
+
+  size_t written = 0;
+  for (size_t i = 0; i < input_len; i++) {
+    char decoded = input[i];
+    if (decoded == '+') {
+      decoded = ' ';
+    } else if (decoded == '%') {
+      if (i + 2 >= input_len) {
+        return false;
+      }
+      int high = sec4_rt_query_hex_nibble(input[i + 1]);
+      int low = sec4_rt_query_hex_nibble(input[i + 2]);
+      if (high < 0 || low < 0) {
+        return false;
+      }
+      decoded = (char) ((high << 4) | low);
+      i += 2;
+    }
+
+    if (written + 1 < out_size) {
+      out[written] = decoded;
+      written += 1;
+    }
+  }
+
+  out[written] = '\0';
+  return true;
+}
+
 static bool sec4_rt_extract_query_value(
     const char *path,
     const char *name,
@@ -1093,9 +1221,27 @@ static bool sec4_rt_extract_query_value(
     const char *key_end = equals != NULL ? equals : segment_end;
 
     size_t this_key_len = (size_t) (key_end - segment_start);
-    if (this_key_len == key_len && strncmp(segment_start, name, key_len) == 0) {
+    bool key_matches =
+        this_key_len == key_len && strncmp(segment_start, name, key_len) == 0;
+    if (!key_matches) {
+      char decoded_key[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+      if (sec4_rt_query_decode_component(
+              segment_start,
+              this_key_len,
+              decoded_key,
+              sizeof(decoded_key)
+          ) && strcmp(decoded_key, name) == 0) {
+        key_matches = true;
+      }
+    }
+
+    if (key_matches) {
       const char *value_start = equals != NULL ? equals + 1 : key_end;
       size_t value_len = (size_t) (segment_end - value_start);
+      if (sec4_rt_query_decode_component(value_start, value_len, out, out_size)) {
+        return true;
+      }
+
       if (value_len >= out_size) {
         value_len = out_size - 1;
       }
@@ -1209,6 +1355,10 @@ static bool sec4_rt_extract_path_param(
     size_t q_len = (size_t) (q - q_start);
     if (p_len > 1 && p_start[0] == ':') {
       if (p_len - 1 == target_len && strncmp(p_start + 1, name, target_len) == 0) {
+        if (sec4_rt_query_decode_component(q_start, q_len, out, out_size)) {
+          return out[0] != '\0';
+        }
+
         size_t copy_len = q_len;
         if (copy_len >= out_size) {
           copy_len = out_size - 1;
@@ -1485,6 +1635,208 @@ static bool sec4_rt_csv_is_valid_port_list(const char *csv) {
     }
 
     if (parsed_port == 0UL) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_cors_methods_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    bool known_method = (token_len == 3 && strncasecmp(token_start, "GET", 3) == 0)
+        || (token_len == 4 && strncasecmp(token_start, "POST", 4) == 0)
+        || (token_len == 3 && strncasecmp(token_start, "PUT", 3) == 0)
+        || (token_len == 5 && strncasecmp(token_start, "PATCH", 5) == 0)
+        || (token_len == 6 && strncasecmp(token_start, "DELETE", 6) == 0)
+        || (token_len == 7 && strncasecmp(token_start, "OPTIONS", 7) == 0);
+    if (!known_method) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_cors_headers_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= 128) {
+      return false;
+    }
+    char token[128];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_header_name_valid(token)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_is_cors_origin_token_valid(const char *token) {
+  if (token == NULL || token[0] == '\0') {
+    return false;
+  }
+  if (strcmp(token, "*") == 0) {
+    return true;
+  }
+  if (!sec4_rt_is_header_value_valid(token)) {
+    return false;
+  }
+
+  const char *scheme_sep = strstr(token, "://");
+  if (scheme_sep == NULL) {
+    return false;
+  }
+  size_t scheme_len = (size_t) (scheme_sep - token);
+  bool scheme_ok = (scheme_len == 4 && strncasecmp(token, "http", 4) == 0)
+      || (scheme_len == 5 && strncasecmp(token, "https", 5) == 0);
+  if (!scheme_ok) {
+    return false;
+  }
+
+  const char *authority = scheme_sep + 3;
+  if (authority[0] == '\0' || strpbrk(authority, "/?#") != NULL) {
+    return false;
+  }
+
+  const char *port_sep = NULL;
+  if (authority[0] == '[') {
+    const char *close = strchr(authority, ']');
+    if (close == NULL || close == authority + 1) {
+      return false;
+    }
+    size_t literal_len = (size_t) (close - (authority + 1));
+    if (literal_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char literal[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(literal, authority + 1, literal_len);
+    literal[literal_len] = '\0';
+    struct in6_addr parsed6;
+    if (inet_pton(AF_INET6, literal, &parsed6) != 1) {
+      return false;
+    }
+    if (close[1] == '\0') {
+      return true;
+    }
+    if (close[1] != ':') {
+      return false;
+    }
+    port_sep = close + 1;
+  } else {
+    const char *first_colon = strchr(authority, ':');
+    const char *last_colon = strrchr(authority, ':');
+    if (first_colon != NULL && first_colon != last_colon) {
+      return false;
+    }
+    if (last_colon != NULL) {
+      port_sep = last_colon;
+    }
+
+    size_t host_len = port_sep != NULL ? (size_t) (port_sep - authority) : strlen(authority);
+    if (host_len == 0 || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(host, authority, host_len);
+    host[host_len] = '\0';
+    if (!sec4_rt_is_redirect_host_token_valid(host)) {
+      return false;
+    }
+    if (port_sep == NULL) {
+      return true;
+    }
+  }
+
+  const char *digits = port_sep + 1;
+  if (digits[0] == '\0') {
+    return false;
+  }
+  unsigned long parsed_port = 0;
+  while (*digits != '\0') {
+    if (!isdigit((unsigned char) *digits)) {
+      return false;
+    }
+    parsed_port = (parsed_port * 10UL) + (unsigned long) (*digits - '0');
+    if (parsed_port > 65535UL) {
+      return false;
+    }
+    digits += 1;
+  }
+  return parsed_port != 0UL;
+}
+
+static bool sec4_rt_csv_is_valid_cors_origins_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES) {
+      return false;
+    }
+    char token[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_cors_origin_token_valid(token)) {
       return false;
     }
 
@@ -4896,6 +5248,20 @@ static bool sec4_rt_is_header_name_valid(const char *value) {
   return true;
 }
 
+static bool sec4_rt_is_http_method_token_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  while (*value != '\0') {
+    unsigned char ch = (unsigned char) *value;
+    if (!(isalnum(ch) || ch == '-' || ch == '_')) {
+      return false;
+    }
+    value += 1;
+  }
+  return true;
+}
+
 static bool sec4_rt_is_header_value_valid(const char *value) {
   if (value == NULL || value[0] == '\0') {
     return false;
@@ -4907,6 +5273,30 @@ static bool sec4_rt_is_header_value_valid(const char *value) {
     value += 1;
   }
   return true;
+}
+
+static bool sec4_rt_is_referrer_policy_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+
+  static const char *allowed[] = {
+      "no-referrer",
+      "no-referrer-when-downgrade",
+      "origin",
+      "origin-when-cross-origin",
+      "same-origin",
+      "strict-origin",
+      "strict-origin-when-cross-origin",
+      "unsafe-url",
+  };
+  for (size_t i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+    if (strcasecmp(value, allowed[i]) == 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static bool sec4_rt_is_email_local_char(unsigned char ch) {
@@ -5631,6 +6021,28 @@ static bool sec4_rt_has_json_media_type(const char *value, size_t value_len) {
   return false;
 }
 
+static bool sec4_rt_has_multipart_media_type(const char *value, size_t value_len) {
+  size_t start = 0;
+  while (start < value_len && isspace((unsigned char) value[start])) {
+    start += 1;
+  }
+  if (start >= value_len) {
+    return false;
+  }
+
+  size_t end = start;
+  while (end < value_len && value[end] != ';' && !isspace((unsigned char) value[end])) {
+    end += 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  size_t token_len = end - start;
+  const char *token = value + start;
+  return token_len == 19 && strncasecmp(token, "multipart/form-data", 19) == 0;
+}
+
 static bool sec4_rt_parse_content_type_is_json(
     const char *request,
     size_t request_len,
@@ -5653,6 +6065,30 @@ static bool sec4_rt_parse_content_type_is_json(
       const char *value = cursor + 13;
       *has_content_type = true;
       return sec4_rt_has_json_media_type(value, (size_t) (line_end - value));
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_content_type_is_multipart(const char *request, size_t request_len) {
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) >= 13 && strncasecmp(cursor, "Content-Type:", 13) == 0) {
+      const char *value = cursor + 13;
+      return sec4_rt_has_multipart_media_type(value, (size_t) (line_end - value));
     }
 
     cursor = line_end + 2;
@@ -5714,6 +6150,118 @@ static bool sec4_rt_parse_header_value(
   return false;
 }
 
+static bool sec4_rt_parse_header_value_merged(
+    const char *request,
+    size_t request_len,
+    const char *name,
+    char *value,
+    size_t value_size
+) {
+  if (value == NULL || value_size == 0) {
+    return false;
+  }
+  value[0] = '\0';
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return false;
+  }
+
+  size_t name_len = strlen(name);
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+  bool found = false;
+  bool keep_first_only = strcasecmp(name, "host") == 0 || strcasecmp(name, "content-length") == 0;
+  const char *separator = strcasecmp(name, "cookie") == 0 ? "; " : ", ";
+  size_t separator_len = strlen(separator);
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      const char *start = cursor + name_len + 1;
+      while (start < line_end && isspace((unsigned char) *start)) {
+        start += 1;
+      }
+      const char *end = line_end;
+      while (end > start && isspace((unsigned char) *(end - 1))) {
+        end -= 1;
+      }
+      size_t len = (size_t) (end - start);
+
+      if (!found) {
+        size_t copy_len = len;
+        if (copy_len >= value_size) {
+          copy_len = value_size - 1;
+        }
+        memcpy(value, start, copy_len);
+        value[copy_len] = '\0';
+        found = true;
+      } else if (!keep_first_only) {
+        size_t current_len = strlen(value);
+        if (current_len < value_size - 1) {
+          size_t available = value_size - 1 - current_len;
+          size_t copy_separator_len = separator_len < available ? separator_len : available;
+          memcpy(value + current_len, separator, copy_separator_len);
+          current_len += copy_separator_len;
+          value[current_len] = '\0';
+
+          if (current_len < value_size - 1) {
+            available = value_size - 1 - current_len;
+            size_t copy_len = len < available ? len : available;
+            memcpy(value + current_len, start, copy_len);
+            current_len += copy_len;
+            value[current_len] = '\0';
+          }
+        }
+      }
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return found;
+}
+
+static size_t sec4_rt_count_header_occurrences(
+    const char *request,
+    size_t request_len,
+    const char *name
+) {
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return 0;
+  }
+
+  size_t name_len = strlen(name);
+  size_t count = 0;
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      count += 1;
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return count;
+}
+
 static bool sec4_rt_parse_cookie_value(
     const char *cookie_header,
     const char *cookie_name,
@@ -5761,6 +6309,21 @@ static bool sec4_rt_parse_cookie_value(
   return false;
 }
 
+static bool sec4_rt_auth_mode_is_supported(const char *mode) {
+  if (mode == NULL || mode[0] == '\0') {
+    return false;
+  }
+  return strcasecmp(mode, "off") == 0 || strcasecmp(mode, "token") == 0
+      || strcasecmp(mode, "cookie") == 0 || strcasecmp(mode, "mixed") == 0;
+}
+
+static const char *sec4_rt_auth_mode_or_default(const char *mode) {
+  if (sec4_rt_auth_mode_is_supported(mode)) {
+    return mode;
+  }
+  return "token";
+}
+
 static bool sec4_rt_auth_mode_allows_token(const char *mode) {
   if (mode == NULL || mode[0] == '\0') {
     return true;
@@ -5786,24 +6349,54 @@ static bool sec4_rt_auth_mode_allows_cookie(const char *mode) {
 
 static const char *sec4_rt_auth_cookie_name(void) {
   const char *configured = getenv("SEC4_RT_AUTH_COOKIE_NAME");
-  if (configured != NULL && configured[0] != '\0') {
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
     return configured;
   }
   return "session";
 }
 
-static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
-  if (router != NULL && router->auth_mode[0] != '\0') {
-    return router->auth_mode;
+static const char *sec4_rt_csrf_cookie_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_cookie_name[0] != '\0') {
+    return router->csrf_cookie_name;
   }
-  if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
-    return g_sec4_rt_auth_policy.mode;
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.cookie_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    return g_sec4_rt_csrf_policy.cookie_name;
   }
-  const char *configured = getenv("SEC4_RT_AUTH_MODE");
-  if (configured != NULL && configured[0] != '\0') {
+  const char *configured = getenv("SEC4_RT_CSRF_COOKIE_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
     return configured;
   }
-  return "token";
+  return "csrf";
+}
+
+static const char *sec4_rt_csrf_header_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_header_name[0] != '\0') {
+    return router->csrf_header_name;
+  }
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.header_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    return g_sec4_rt_csrf_policy.header_name;
+  }
+  const char *configured = getenv("SEC4_RT_CSRF_HEADER_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
+    return configured;
+  }
+  return "X-CSRF-Token";
+}
+
+static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
+  if (router != NULL && router->auth_mode[0] != '\0') {
+    return sec4_rt_auth_mode_or_default(router->auth_mode);
+  }
+  if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
+    return sec4_rt_auth_mode_or_default(g_sec4_rt_auth_policy.mode);
+  }
+  const char *configured = getenv("SEC4_RT_AUTH_MODE");
+  return sec4_rt_auth_mode_or_default(configured);
 }
 
 static const char *sec4_rt_auth_unauthorized_message(const char *mode) {
@@ -5909,6 +6502,16 @@ static bool sec4_rt_auth_cookie_has_role(const char *required_role) {
   return false;
 }
 
+static bool sec4_rt_csrf_methods_has_protected_verb(const char *methods) {
+  if (methods == NULL || !sec4_rt_csv_has_any_token(methods)) {
+    return false;
+  }
+  return sec4_rt_csv_contains_token_ci(methods, "POST", strlen("POST"))
+      || sec4_rt_csv_contains_token_ci(methods, "PUT", strlen("PUT"))
+      || sec4_rt_csv_contains_token_ci(methods, "PATCH", strlen("PATCH"))
+      || sec4_rt_csv_contains_token_ci(methods, "DELETE", strlen("DELETE"));
+}
+
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method) {
   if (method == NULL) {
     return false;
@@ -5989,10 +6592,14 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Conflict";
     case 429:
       return "Too Many Requests";
+    case 431:
+      return "Request Header Fields Too Large";
     case 501:
       return "Not Implemented";
     case 502:
       return "Bad Gateway";
+    case 503:
+      return "Service Unavailable";
     case 500:
       return "Internal Server Error";
     default:
@@ -6121,9 +6728,36 @@ static const char *sec4_rt_cors_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   int written = snprintf(
       buffer,
       buffer_size,
@@ -6135,7 +6769,7 @@ static const char *sec4_rt_cors_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,
@@ -6155,6 +6789,17 @@ static const char *sec4_rt_cors_headers_block(
       used += (size_t) written;
     }
   }
+  if (router->cors_expose_headers[0] != '\0') {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Expose-Headers: %s\r\n",
+        router->cors_expose_headers
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
   (void) used;
   return buffer;
 }
@@ -6168,9 +6813,36 @@ static const char *sec4_rt_preflight_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   const char *allow_methods = router->cors_allow_methods[0] != '\0'
       ? router->cors_allow_methods
       : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -6198,7 +6870,7 @@ static const char *sec4_rt_preflight_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,
@@ -6218,8 +6890,105 @@ static const char *sec4_rt_preflight_headers_block(
       used += (size_t) written;
     }
   }
+  char requested_private_network_header[16];
+  bool wants_private_network = sec4_rt_extract_request_header(
+      "Access-Control-Request-Private-Network",
+      requested_private_network_header,
+      sizeof(requested_private_network_header)
+  ) && strcasecmp(requested_private_network_header, "true") == 0;
+  if (router->cors_allow_private_network && wants_private_network) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Allow-Private-Network: true\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
   (void) used;
   return buffer;
+}
+
+static bool sec4_rt_cors_requested_headers_allowed(
+    const char *requested_headers,
+    const char *allow_headers,
+    bool *invalid_token
+) {
+  if (invalid_token != NULL) {
+    *invalid_token = false;
+  }
+  if (requested_headers == NULL) {
+    return true;
+  }
+  if (requested_headers[0] == '\0') {
+    if (invalid_token != NULL) {
+      *invalid_token = true;
+    }
+    return false;
+  }
+  if (allow_headers == NULL || allow_headers[0] == '\0') {
+    return false;
+  }
+
+  char seen_tokens[32][128];
+  size_t seen_count = 0;
+  const char *cursor = requested_headers;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+    if (token_end <= token_start) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= 128) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    char token[128];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_header_name_valid(token)) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    for (size_t i = 0; i < seen_count; i++) {
+      if (strcasecmp(seen_tokens[i], token) == 0) {
+        if (invalid_token != NULL) {
+          *invalid_token = true;
+        }
+        return false;
+      }
+    }
+    if (seen_count >= (sizeof(seen_tokens) / sizeof(seen_tokens[0]))) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    memcpy(seen_tokens[seen_count], token, token_len + 1);
+    seen_count += 1;
+    if (!sec4_rt_csv_contains_token_ci(allow_headers, token, token_len)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
 }
 
 static const char *sec4_rt_security_headers_block(
@@ -6233,6 +7002,25 @@ static const char *sec4_rt_security_headers_block(
 
   size_t used = 0;
   int written = 0;
+  if (router->security_hsts_enabled && router->security_hsts_max_age_seconds > 0) {
+    const char *include_subdomains = router->security_hsts_include_subdomains
+        ? "; includeSubDomains"
+        : "";
+    const char *preload = router->security_hsts_preload ? "; preload" : "";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Strict-Transport-Security: max-age=%lld%s%s\r\n",
+        (long long) router->security_hsts_max_age_seconds,
+        include_subdomains,
+        preload
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
   if (router->security_x_content_type_options) {
     written = snprintf(
         buffer + used,
@@ -6264,6 +7052,23 @@ static const char *sec4_rt_security_headers_block(
         buffer_size - used,
         "Referrer-Policy: %s\r\n",
         router->security_referrer_policy
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
+  if (router->security_csp_enabled && router->security_csp_policy[0] != '\0') {
+    const char *header_name = router->security_csp_report_only
+        ? "Content-Security-Policy-Report-Only"
+        : "Content-Security-Policy";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "%s: %s\r\n",
+        header_name,
+        router->security_csp_policy
     );
     if (written <= 0 || (size_t) written >= buffer_size - used) {
       return used > 0 ? buffer : NULL;
@@ -6325,6 +7130,138 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
     return fallback;
   }
   return (int64_t) value;
+}
+
+static size_t sec4_rt_http_max_header_bytes_limit(void) {
+  size_t fallback = SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_HTTP_MAX_HEADER_BYTES", (int64_t) fallback);
+  if (parsed <= 0) {
+    return fallback;
+  }
+  size_t limit = (size_t) parsed;
+  if (limit > SEC4_RT_REQUEST_BUFFER_BYTES - 1) {
+    return SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  }
+  return limit;
+}
+
+static size_t sec4_rt_http_max_concurrency_limit(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_MAX_CONCURRENCY",
+      SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY
+  );
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_MAX_CONCURRENCY) {
+    parsed = SEC4_RT_MAX_HTTP_MAX_CONCURRENCY;
+  }
+  return (size_t) parsed;
+}
+
+static int64_t sec4_rt_http_accept_rate_limit_rps(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_ACCEPT_RATE_LIMIT_RPS",
+      SEC4_RT_DEFAULT_HTTP_ACCEPT_RATE_LIMIT_RPS
+  );
+  if (parsed <= 0) {
+    return 0;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS) {
+    parsed = SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS;
+  }
+  return parsed;
+}
+
+static int64_t sec4_rt_http_accept_rate_limit_burst(int64_t rps_limit) {
+  if (rps_limit <= 0) {
+    return 0;
+  }
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_ACCEPT_RATE_LIMIT_BURST",
+      rps_limit
+  );
+  if (parsed <= 0) {
+    parsed = rps_limit;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST) {
+    parsed = SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST;
+  }
+  return parsed;
+}
+
+static void sec4_rt_http_accept_rate_limiter_init(
+    sec4_rt_http_accept_rate_limiter *limiter,
+    int64_t rps_limit,
+    int64_t burst_limit
+) {
+  if (limiter == NULL) {
+    return;
+  }
+  memset(limiter, 0, sizeof(*limiter));
+  if (rps_limit <= 0 || burst_limit <= 0) {
+    return;
+  }
+  limiter->enabled = true;
+  limiter->refill_rps = rps_limit;
+  limiter->burst = burst_limit;
+  limiter->tokens_milli = burst_limit * 1000;
+  limiter->burst_milli = burst_limit * 1000;
+  limiter->last_refill_ms = sec4_rt_time_now();
+}
+
+static void sec4_rt_http_accept_rate_limiter_refill(
+    sec4_rt_http_accept_rate_limiter *limiter
+) {
+  if (limiter == NULL || !limiter->enabled) {
+    return;
+  }
+  int64_t now_ms = sec4_rt_time_now();
+  if (now_ms <= limiter->last_refill_ms) {
+    return;
+  }
+  int64_t elapsed_ms = now_ms - limiter->last_refill_ms;
+  limiter->last_refill_ms = now_ms;
+  if (elapsed_ms <= 0 || limiter->refill_rps <= 0) {
+    return;
+  }
+  int64_t add_milli = elapsed_ms * limiter->refill_rps;
+  if (add_milli <= 0) {
+    return;
+  }
+  if (limiter->tokens_milli > limiter->burst_milli - add_milli) {
+    limiter->tokens_milli = limiter->burst_milli;
+  } else {
+    limiter->tokens_milli += add_milli;
+  }
+}
+
+static bool sec4_rt_http_accept_rate_limiter_consume(
+    sec4_rt_http_accept_rate_limiter *limiter
+) {
+  if (limiter == NULL || !limiter->enabled) {
+    return true;
+  }
+  sec4_rt_http_accept_rate_limiter_refill(limiter);
+  if (limiter->tokens_milli < 1000) {
+    return false;
+  }
+  limiter->tokens_milli -= 1000;
+  return true;
+}
+
+static int64_t sec4_rt_http_throttle_drain_timeout_ms(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS",
+      SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS
+  );
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS) {
+    parsed = SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS;
+  }
+  return parsed;
 }
 
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
@@ -6413,27 +7350,189 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
   return flag != NULL && strcmp(flag, "0") != 0;
 }
 
-static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
+static void sec4_rt_finalize_throttle_socket_close(
+    int socket_fd,
+    int64_t throttle_drain_timeout_ms
+) {
+  if (socket_fd < 0) {
+    return;
+  }
+
+  // Ensure response writes are half-closed before final close.
+  (void) shutdown(socket_fd, SHUT_WR);
+  (void) sec4_rt_set_socket_nonblocking(socket_fd, true);
+
+  int64_t timeout_ms = throttle_drain_timeout_ms;
+  if (timeout_ms <= 0) {
+    timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  }
+  int64_t deadline_ms = sec4_rt_time_now() + timeout_ms;
+
+  char discard[256];
+  for (;;) {
+    for (;;) {
+      ssize_t rc = recv(socket_fd, discard, sizeof(discard), 0);
+      if (rc > 0) {
+        continue;
+      }
+      if (rc == 0) {
+        return;
+      }
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        break;
+      }
+      return;
+    }
+
+    int64_t remaining_ms = deadline_ms - sec4_rt_time_now();
+    if (remaining_ms <= 0) {
+      return;
+    }
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(socket_fd, &read_fds);
+    struct timeval timeout = {0};
+    timeout.tv_sec = (time_t) (remaining_ms / 1000);
+    timeout.tv_usec = (suseconds_t) ((remaining_ms % 1000) * 1000);
+    int select_rc = select(socket_fd + 1, &read_fds, NULL, NULL, &timeout);
+    if (select_rc <= 0 || !FD_ISSET(socket_fd, &read_fds)) {
+      return;
+    }
+  }
+}
+
+static void sec4_rt_send_concurrency_throttle_response(
+    int socket_fd,
+    sec4_rt_router_state *router
+) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
   sec4_rt_reset_response();
-  char security_headers_buffer[384];
-  char cors_headers_buffer[384];
-  char preflight_headers_buffer[512];
+
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
   const char *security_headers = sec4_rt_security_headers_block(
       router,
       security_headers_buffer,
       sizeof(security_headers_buffer)
   );
-  const char *cors_headers = sec4_rt_cors_headers_block(
-      router,
-      cors_headers_buffer,
-      sizeof(cors_headers_buffer)
+  const char *final_headers = sec4_rt_merge_three_headers(
+      NULL,
+      NULL,
+      security_headers,
+      merged_headers,
+      sizeof(merged_headers)
   );
-  char merged_headers[320];
+  const char *body = "server busy: max concurrency exceeded";
+  (void) sec4_rt_send_response_with_extra_headers(
+      socket_fd,
+      503,
+      "text/plain; charset=utf-8",
+      body,
+      strlen(body),
+      final_headers
+  );
+}
+
+static void sec4_rt_send_rate_limit_throttle_response(
+    int socket_fd,
+    sec4_rt_router_state *router
+) {
+  sec4_rt_reset_request();
+  sec4_rt_assign_trace_id();
+  sec4_rt_reset_response();
+
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  const char *security_headers = sec4_rt_security_headers_block(
+      router,
+      security_headers_buffer,
+      sizeof(security_headers_buffer)
+  );
+  const char *retry_after_headers = "Retry-After: 1\r\n";
+  const char *final_headers = sec4_rt_merge_three_headers(
+      retry_after_headers,
+      NULL,
+      security_headers,
+      merged_headers,
+      sizeof(merged_headers)
+  );
+  const char *body = "rate limited: too many inbound requests";
+  (void) sec4_rt_send_response_with_extra_headers(
+      socket_fd,
+      429,
+      "text/plain; charset=utf-8",
+      body,
+      strlen(body),
+      final_headers
+  );
+}
+
+static void sec4_rt_drain_oneshot_backlog_with_throttle(
+    int server_fd,
+    sec4_rt_router_state *router,
+    int *pending_clients,
+    size_t *pending_count,
+    bool *fatal_error,
+    int64_t throttle_drain_timeout_ms
+) {
+  if (router == NULL || pending_clients == NULL || pending_count == NULL) {
+    return;
+  }
+
+  for (size_t i = 0; i < *pending_count; i++) {
+    int client_fd = pending_clients[i];
+    if (client_fd < 0) {
+      continue;
+    }
+    sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
+    close(client_fd);
+  }
+  *pending_count = 0;
+
+  for (;;) {
+    int client_fd = accept(server_fd, NULL, NULL);
+    if (client_fd < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        break;
+      }
+      if (fatal_error != NULL) {
+        *fatal_error = true;
+      }
+      break;
+    }
+
+    sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
+    close(client_fd);
+  }
+}
+
+static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
+  sec4_rt_reset_request();
+  sec4_rt_assign_trace_id();
+  sec4_rt_reset_response();
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char cors_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char preflight_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  const char *security_headers = sec4_rt_security_headers_block(
+      router,
+      security_headers_buffer,
+      sizeof(security_headers_buffer)
+  );
+  const char *cors_headers = NULL;
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
+  size_t header_cap = sec4_rt_http_max_header_bytes_limit();
   ssize_t bytes_read = recv(socket_fd, request, sizeof(request) - 1, 0);
   if (bytes_read <= 0) {
     return;
@@ -6442,27 +7541,77 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   request[total_bytes] = '\0';
 
   char *headers_end = strstr(request, "\r\n\r\n");
-  size_t headers_len = 0;
-  if (headers_end != NULL) {
-    headers_len = (size_t) (headers_end - request) + 4;
-    size_t content_length = sec4_rt_parse_content_length(request, headers_len);
-    size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
-
-    while (content_length > available_body && total_bytes < sizeof(request) - 1) {
-      size_t remaining = (sizeof(request) - 1) - total_bytes;
-      ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
-      if (next <= 0) {
-        break;
-      }
-      total_bytes += (size_t) next;
-      request[total_bytes] = '\0';
-      available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (headers_end == NULL && total_bytes < header_cap && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
     }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    headers_end = strstr(request, "\r\n\r\n");
+  }
+
+  if (headers_end == NULL) {
+    bool too_large = total_bytes >= header_cap || total_bytes >= sizeof(request) - 1;
+    const char *body = too_large ? "request headers too large" : "bad request";
+    int64_t status = too_large ? 431 : 400;
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        status,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t headers_len = (size_t) (headers_end - request) + 4;
+  if (headers_len > header_cap) {
+    const char *body = "request headers too large";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        431,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+  size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (content_length > available_body && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
+    }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
   }
 
   char method[8] = {0};
   char path[SEC4_RT_MAX_PATH_BYTES] = {0};
-  if (sscanf(request, "%7s %255s", method, path) != 2) {
+  char http_version[16] = {0};
+  if (sscanf(request, "%7s %255s %15s", method, path, http_version) != 3) {
     const char *body = "bad request";
     const char *final_headers = sec4_rt_merge_three_headers(
         NULL,
@@ -6501,6 +7650,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         headers_len,
         &has_content_type
     );
+    bool content_type_is_multipart = sec4_rt_parse_content_type_is_multipart(request, headers_len);
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
     size_t body_cap = sizeof(g_sec4_rt_request.body) - 1;
     int64_t configured_body_cap = sec4_rt_parse_env_i64(
@@ -6509,6 +7659,34 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     if (configured_body_cap > 0 && (size_t) configured_body_cap < body_cap) {
       body_cap = (size_t) configured_body_cap;
+    }
+    size_t multipart_cap = body_cap;
+    int64_t configured_multipart_cap = sec4_rt_parse_env_i64(
+        "SEC4_RT_HTTP_MAX_MULTIPART_BYTES",
+        (int64_t) body_cap
+    );
+    if (configured_multipart_cap > 0 && (size_t) configured_multipart_cap < multipart_cap) {
+      multipart_cap = (size_t) configured_multipart_cap;
+    }
+    if (content_type_is_multipart
+        && (content_length > multipart_cap || available_body > multipart_cap)) {
+      const char *body = "multipart payload exceeds runtime limit";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          413,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
     }
     if (content_length > body_cap || available_body > body_cap) {
       g_sec4_rt_request.body_limit_exceeded = true;
@@ -6539,12 +7717,579 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.has_request = true;
   strncpy(g_sec4_rt_request.method, method, sizeof(g_sec4_rt_request.method) - 1);
   g_sec4_rt_request.method[sizeof(g_sec4_rt_request.method) - 1] = '\0';
+  strncpy(
+      g_sec4_rt_request.http_version,
+      http_version,
+      sizeof(g_sec4_rt_request.http_version) - 1
+  );
+  g_sec4_rt_request.http_version[sizeof(g_sec4_rt_request.http_version) - 1] = '\0';
   strncpy(g_sec4_rt_request.path, request_target, sizeof(g_sec4_rt_request.path) - 1);
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
   strncpy(g_sec4_rt_request.route_path, path, sizeof(g_sec4_rt_request.route_path) - 1);
   g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
+  cors_headers = sec4_rt_cors_headers_block(
+      router,
+      cors_headers_buffer,
+      sizeof(cors_headers_buffer)
+  );
+  size_t request_origin_occurrences = sec4_rt_count_header_occurrences(
+      g_sec4_rt_request.raw_headers,
+      g_sec4_rt_request.raw_headers_len,
+      "Origin"
+  );
+  if (router->cors_enabled && request_origin_occurrences > 1 && strcmp(method, "OPTIONS") != 0) {
+    const char *body = "cors request duplicate origin header";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        NULL,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        400,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+  if (router->cors_enabled && strcmp(method, "OPTIONS") != 0) {
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (has_request_origin
+        && (strcmp(request_origin, "*") == 0
+            || !sec4_rt_is_cors_origin_token_valid(request_origin))) {
+      const char *body = "cors request origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_method_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Method"
+    );
+    if (requested_method_header_occurrences > 1) {
+      const char *body = "cors request duplicate requested method header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_method_header[32];
+    bool has_requested_method_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Method",
+        requested_method_header,
+        sizeof(requested_method_header)
+    );
+    if (has_requested_method_header) {
+      const char *body = "cors request requested method header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_headers_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Headers"
+    );
+    if (requested_headers_header_occurrences > 1) {
+      const char *body = "cors request duplicate requested headers header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_headers_header[256];
+    bool has_requested_headers_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers_header,
+        sizeof(requested_headers_header)
+    );
+    if (has_requested_headers_header) {
+      const char *body = "cors request requested headers header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_private_network_header[16];
+    size_t requested_private_network_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Private-Network"
+    );
+    if (requested_private_network_header_occurrences > 1) {
+      const char *body = "cors request duplicate private-network header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    bool has_requested_private_network_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Private-Network",
+        requested_private_network_header,
+        sizeof(requested_private_network_header)
+    );
+    if (has_requested_private_network_header) {
+      const char *body = "cors request private-network header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+  }
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
+    if (request_origin_occurrences > 1) {
+      const char *body = "cors preflight duplicate origin header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (g_sec4_rt_request.body_len > 0) {
+      const char *body = "cors preflight body not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char cookie_header[512];
+    bool has_cookie_header = sec4_rt_extract_request_header(
+        "Cookie",
+        cookie_header,
+        sizeof(cookie_header)
+    );
+    if (has_cookie_header) {
+      const char *body = "cors preflight cookie header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char authorization_header[512];
+    bool has_authorization_header = sec4_rt_extract_request_header(
+        "Authorization",
+        authorization_header,
+        sizeof(authorization_header)
+    );
+    if (has_authorization_header) {
+      const char *body = "cors preflight authorization header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_private_network_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Private-Network"
+    );
+    if (requested_private_network_header_occurrences > 1) {
+      const char *body = "cors preflight duplicate private-network header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_private_network_header[16];
+    bool has_requested_private_network_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Private-Network",
+        requested_private_network_header,
+        sizeof(requested_private_network_header)
+    );
+    if (has_requested_private_network_header
+        && strcasecmp(requested_private_network_header, "true") != 0) {
+      const char *body = "cors preflight private-network header invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (has_requested_private_network_header && !router->cors_allow_private_network) {
+      const char *body = "cors preflight private-network not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          403,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (!has_request_origin) {
+      const char *body = "cors preflight missing origin";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (strcmp(request_origin, "*") == 0 || !sec4_rt_is_cors_origin_token_valid(request_origin)) {
+      const char *body = "cors preflight origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_method[32];
+    size_t requested_method_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Method"
+    );
+    if (requested_method_occurrences > 1) {
+      const char *body = "cors preflight duplicate requested method header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    bool has_requested_method = sec4_rt_extract_request_header(
+        "Access-Control-Request-Method",
+        requested_method,
+        sizeof(requested_method)
+    );
+    if (!has_requested_method) {
+      const char *body = "cors preflight missing requested method";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (!sec4_rt_is_http_method_token_valid(requested_method)) {
+      const char *body = "cors preflight requested method invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    const char *allow_methods = router->cors_allow_methods[0] != '\0'
+        ? router->cors_allow_methods
+        : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+    if (!sec4_rt_csv_contains_token_ci(
+            allow_methods,
+            requested_method,
+            strlen(requested_method)
+        )) {
+      const char *body = "cors preflight method not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          403,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_headers[256];
+    size_t requested_headers_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Headers"
+    );
+    if (requested_headers_occurrences > 1) {
+      const char *body = "cors preflight duplicate requested headers header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    bool has_requested_headers = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers,
+        sizeof(requested_headers)
+    );
+    const char *allow_headers = router->cors_allow_headers[0] != '\0'
+        ? router->cors_allow_headers
+        : "content-type, authorization";
+    bool invalid_requested_headers = false;
+    if (has_requested_headers
+        && !sec4_rt_cors_requested_headers_allowed(
+            requested_headers,
+            allow_headers,
+            &invalid_requested_headers
+        )) {
+      int64_t status = invalid_requested_headers ? 400 : 403;
+      const char *body = invalid_requested_headers
+          ? "cors preflight requested headers invalid"
+          : "cors preflight headers not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          status,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     const char *extra_headers = sec4_rt_preflight_headers_block(
         router,
         preflight_headers_buffer,
@@ -6603,13 +8348,15 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(router, method)) {
+    const char *csrf_header_name = sec4_rt_csrf_header_name(router);
+    const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(router);
     char csrf_header[128];
     char cookie_header[512];
     char csrf_cookie[128];
     bool has_csrf_header = sec4_rt_parse_header_value(
         request,
         headers_len,
-        "X-CSRF-Token",
+        csrf_header_name,
         csrf_header,
         sizeof(csrf_header)
     );
@@ -6621,7 +8368,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         sizeof(cookie_header)
     );
     bool has_csrf_cookie = has_cookie_header
-        && sec4_rt_parse_cookie_value(cookie_header, "csrf", csrf_cookie, sizeof(csrf_cookie));
+        && sec4_rt_parse_cookie_value(
+            cookie_header,
+            csrf_cookie_name,
+            csrf_cookie,
+            sizeof(csrf_cookie)
+        );
 
     if (!has_csrf_header || !has_csrf_cookie || strcmp(csrf_header, csrf_cookie) != 0) {
       sec4_rt_store_std_error_response(
@@ -6725,6 +8477,26 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.matched_route_pattern[sizeof(g_sec4_rt_request.matched_route_pattern) - 1] = '\0';
   (void) match->handler();
 
+  if (g_sec4_rt_request.body_limit_exceeded && !g_sec4_rt_request.json_checked) {
+    const char *body = "request body exceeds runtime limit";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        sec4_rt_response_extra_headers(),
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        413,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
   if (!g_sec4_rt_response.active) {
     const char *body = "";
     const char *final_headers = sec4_rt_merge_three_headers(
@@ -6768,6 +8540,39 @@ int64_t sec4_rt_identity_i64(int64_t value) {
 
 bool sec4_rt_identity_bool(bool value) {
   return value;
+}
+
+int64_t sec4_rt_ctx(void) {
+  return SEC4_RT_CTX_HANDLE;
+}
+
+int64_t sec4_rt_ctx_current(void) {
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.trace_id[0] != '\0') {
+    int64_t trace_handle =
+        sec4_rt_nonzero_handle_from_string(g_sec4_rt_request.trace_id, UINT64_C(0x6EC5007));
+    return sec4_rt_handle_from_two(SEC4_RT_CTX_HANDLE, trace_handle, UINT64_C(0x6EC5008));
+  }
+  return SEC4_RT_CTX_HANDLE;
+}
+
+int64_t sec4_rt_db_cap(void) {
+  return SEC4_RT_DB_CAP_HANDLE;
+}
+
+int64_t sec4_rt_fs_cap(void) {
+  return SEC4_RT_FS_CAP_HANDLE;
+}
+
+int64_t sec4_rt_net_cap(void) {
+  return SEC4_RT_NET_CAP_HANDLE;
+}
+
+int64_t sec4_rt_internal_net_cap(void) {
+  return SEC4_RT_INTERNAL_NET_CAP_HANDLE;
+}
+
+int64_t sec4_rt_secrets_cap(void) {
+  return SEC4_RT_SECRETS_CAP_HANDLE;
 }
 
 int64_t sec4_rt_time_now(void) {
@@ -7198,14 +9003,16 @@ void sec4_rt_log_error(int64_t event) {
   sec4_rt_log_emit_with_level(event, "error");
 }
 
-int64_t sec4_rt_log_event(const char *event_name) {
-  return sec4_rt_log_register_event(event_name);
+int64_t sec4_rt_log_event(int64_t event_name) {
+  const char *event_name_value = sec4_rt_resolve_tracked_or_literal_string(event_name);
+  return sec4_rt_log_register_event(event_name_value != NULL ? event_name_value : "event");
 }
 
-int64_t sec4_rt_log_field(const char *key, int64_t value) {
+int64_t sec4_rt_log_field(int64_t key, int64_t value) {
+  const char *key_value = sec4_rt_resolve_tracked_or_literal_string(key);
   char escaped_key[96];
   sec4_rt_json_escape(
-      key != NULL && key[0] != '\0' ? key : "field",
+      key_value != NULL && key_value[0] != '\0' ? key_value : "field",
       escaped_key,
       sizeof(escaped_key)
   );
@@ -7233,9 +9040,10 @@ int64_t sec4_rt_log_obj(int64_t field) {
   return sec4_rt_log_register_value(field_json, UINT64_C(0xA1005));
 }
 
-int64_t sec4_rt_log_str(const char *value) {
+int64_t sec4_rt_log_str(int64_t value) {
+  const char *value_text = sec4_rt_resolve_tracked_or_literal_string(value);
   char escaped[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
-  sec4_rt_json_escape(value != NULL ? value : "", escaped, sizeof(escaped));
+  sec4_rt_json_escape(value_text != NULL ? value_text : "", escaped, sizeof(escaped));
   char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
   (void) snprintf(json_value, sizeof(json_value), "\"%s\"", escaped);
   return sec4_rt_log_register_value(json_value, UINT64_C(0xA1006));
@@ -7254,9 +9062,10 @@ int64_t sec4_rt_log_bool(int64_t value) {
   );
 }
 
-int64_t sec4_rt_log_redacted(const char *value) {
+int64_t sec4_rt_log_redacted(int64_t value) {
+  const char *value_text = sec4_rt_resolve_tracked_or_literal_string(value);
   char escaped[96];
-  sec4_rt_json_escape(value != NULL ? value : "secret", escaped, sizeof(escaped));
+  sec4_rt_json_escape(value_text != NULL ? value_text : "secret", escaped, sizeof(escaped));
   char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
   (void) snprintf(
       json_value,
@@ -7267,9 +9076,10 @@ int64_t sec4_rt_log_redacted(const char *value) {
   return sec4_rt_log_register_value(json_value, UINT64_C(0xA1009));
 }
 
-int64_t sec4_rt_log_attr_redacted(const char *value) {
+int64_t sec4_rt_log_attr_redacted(int64_t value) {
+  const char *value_text = sec4_rt_resolve_tracked_or_literal_string(value);
   char escaped[96];
-  sec4_rt_json_escape(value != NULL ? value : "secret", escaped, sizeof(escaped));
+  sec4_rt_json_escape(value_text != NULL ? value_text : "secret", escaped, sizeof(escaped));
   char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
   (void) snprintf(
       json_value,
@@ -7280,12 +9090,16 @@ int64_t sec4_rt_log_attr_redacted(const char *value) {
   return sec4_rt_log_register_value(json_value, UINT64_C(0xA100A));
 }
 
-int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value) {
+int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value) {
+  const char *key_value = sec4_rt_resolve_tracked_or_literal_string(key);
+  if (key_value == NULL || key_value[0] == '\0') {
+    key_value = "field";
+  }
   sec4_rt_log_event_state state;
   sec4_rt_log_load_event_state(event, &state);
-  sec4_rt_log_append_attr(&state, key, value);
+  sec4_rt_log_append_attr(&state, key_value, value);
 
-  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xA100B));
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key_value, UINT64_C(0xA100B));
   int64_t attr_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xA100C));
   int64_t next_event = sec4_rt_handle_from_two(event, attr_handle, UINT64_C(0xA100D));
   state.handle = next_event;
@@ -7295,23 +9109,29 @@ int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value) {
 
 int64_t sec4_rt_log_with_http(
     int64_t event,
-    const char *method,
-    const char *path,
+    int64_t method,
+    int64_t path,
     int64_t status,
     int64_t duration_ms
 ) {
+  const char *method_value = sec4_rt_resolve_tracked_or_literal_string(method);
+  const char *path_value = sec4_rt_resolve_tracked_or_literal_string(path);
   sec4_rt_log_event_state state;
   sec4_rt_log_load_event_state(event, &state);
   state.has_http = true;
-  strncpy(state.http_method, method != NULL ? method : "", sizeof(state.http_method) - 1);
+  strncpy(
+      state.http_method,
+      method_value != NULL ? method_value : "",
+      sizeof(state.http_method) - 1
+  );
   state.http_method[sizeof(state.http_method) - 1] = '\0';
-  strncpy(state.http_path, path != NULL ? path : "", sizeof(state.http_path) - 1);
+  strncpy(state.http_path, path_value != NULL ? path_value : "", sizeof(state.http_path) - 1);
   state.http_path[sizeof(state.http_path) - 1] = '\0';
   state.http_status = status;
   state.http_latency_ms = duration_ms;
 
-  int64_t method_handle = sec4_rt_nonzero_handle_from_string(method, UINT64_C(0xA100E));
-  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xA100F));
+  int64_t method_handle = sec4_rt_nonzero_handle_from_string(method_value, UINT64_C(0xA100E));
+  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path_value, UINT64_C(0xA100F));
   int64_t route_handle = sec4_rt_handle_from_two(method_handle, path_handle, UINT64_C(0xA1010));
   int64_t http_meta = sec4_rt_handle_from_two(status, duration_ms, UINT64_C(0xA1011));
   int64_t http_handle = sec4_rt_handle_from_two(route_handle, http_meta, UINT64_C(0xA1012));
@@ -7613,7 +9433,7 @@ int64_t sec4_rt_req_header(const char *name) {
   const char *value = name;
   if (g_sec4_rt_request.has_request
       && g_sec4_rt_request.raw_headers_len > 0
-      && sec4_rt_parse_header_value(
+      && sec4_rt_parse_header_value_merged(
           g_sec4_rt_request.raw_headers,
           g_sec4_rt_request.raw_headers_len,
           name,
@@ -7623,6 +9443,53 @@ int64_t sec4_rt_req_header(const char *name) {
     value = extracted;
   }
   return sec4_rt_track_string_value(value, UINT64_C(0x30303));
+}
+
+int64_t sec4_rt_req_cookie(const char *name) {
+  char cookie_header[512];
+  char extracted[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  const char *value = name;
+  if (g_sec4_rt_request.has_request
+      && g_sec4_rt_request.raw_headers_len > 0
+      && sec4_rt_parse_header_value_merged(
+          g_sec4_rt_request.raw_headers,
+          g_sec4_rt_request.raw_headers_len,
+          "Cookie",
+          cookie_header,
+          sizeof(cookie_header)
+      )
+      && sec4_rt_parse_cookie_value(cookie_header, name, extracted, sizeof(extracted))) {
+    value = extracted;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x34343));
+}
+
+int64_t sec4_rt_req_method(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.method[0] != '\0') {
+    value = g_sec4_rt_request.method;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x35353));
+}
+
+int64_t sec4_rt_req_path(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request) {
+    if (g_sec4_rt_request.route_path[0] != '\0') {
+      value = g_sec4_rt_request.route_path;
+    } else if (g_sec4_rt_request.path[0] != '\0') {
+      value = g_sec4_rt_request.path;
+    }
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x36363));
+}
+
+int64_t sec4_rt_req_http_version(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.http_version[0] != '\0') {
+    value = g_sec4_rt_request.http_version;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x37373));
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
@@ -7707,13 +9574,28 @@ int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64
   return 0;
 }
 
-int64_t sec4_rt_res_html() {
-  sec4_rt_store_response(200, "text/html; charset=utf-8", "<html></html>");
+int64_t sec4_rt_res_html(int64_t html) {
+  const char *html_body = sec4_rt_lookup_tracked_value(html);
+  if (html_body == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "HTML.BODY_INVALID",
+        "validation",
+        "res.html requires tracked HtmlSafe input"
+    );
+    return 1;
+  }
+
+  sec4_rt_store_response(200, "text/html; charset=utf-8", html_body);
   return 0;
 }
 
-int64_t sec4_rt_res_text(int64_t status, const char *body) {
-  sec4_rt_store_response(status, "text/plain; charset=utf-8", body);
+int64_t sec4_rt_res_text(int64_t status, int64_t body) {
+  const char *body_value = sec4_rt_resolve_tracked_or_literal_string(body);
+  if (body_value == NULL) {
+    body_value = "";
+  }
+  sec4_rt_store_response(status, "text/plain; charset=utf-8", body_value);
   return 0;
 }
 
@@ -7726,13 +9608,18 @@ int64_t sec4_rt_set_header(int64_t name, int64_t value) {
   return sec4_rt_append_response_header(header_name, header_value);
 }
 
-int64_t sec4_rt_cookie_build(const char *name, const char *value) {
-  if (!sec4_rt_is_header_name_valid(name) || !sec4_rt_is_header_value_valid(value)) {
+int64_t sec4_rt_cookie_build(int64_t name, int64_t value) {
+  const char *name_value = sec4_rt_resolve_tracked_or_literal_string(name);
+  const char *cookie_value = sec4_rt_resolve_tracked_or_literal_string(value);
+  if (name_value == NULL || cookie_value == NULL) {
+    return 0;
+  }
+  if (!sec4_rt_is_header_name_valid(name_value) || !sec4_rt_is_header_value_valid(cookie_value)) {
     return 0;
   }
 
   char cookie[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
-  int written = snprintf(cookie, sizeof(cookie), "%s=%s", name, value);
+  int written = snprintf(cookie, sizeof(cookie), "%s=%s", name_value, cookie_value);
   if (written <= 0 || (size_t) written >= sizeof(cookie)) {
     return 0;
   }
@@ -7865,6 +9752,111 @@ static bool sec4_rt_db_lookup_tx_db(int64_t tx_handle, int64_t *db_handle_out) {
       *db_handle_out = slot->db_handle;
       return true;
     }
+  }
+  return false;
+}
+
+static size_t sec4_rt_db_latest_record_cache_index(
+    const char *base_root,
+    int64_t db_handle,
+    int64_t query_handle
+) {
+  uint64_t hash = UINT64_C(1469598103934665603);
+  if (base_root != NULL) {
+    for (const unsigned char *cursor = (const unsigned char *) base_root;
+         *cursor != '\0';
+         cursor++) {
+      hash ^= (uint64_t) (*cursor);
+      hash *= UINT64_C(1099511628211);
+    }
+  }
+  hash ^= (uint64_t) db_handle;
+  hash *= UINT64_C(1099511628211);
+  hash ^= (uint64_t) query_handle;
+  hash *= UINT64_C(1099511628211);
+  return (size_t) (hash % SEC4_RT_MAX_DB_LATEST_RECORD_CACHE);
+}
+
+static void sec4_rt_db_latest_record_cache_store(
+    const char *base_root,
+    int64_t db_handle,
+    int64_t query_handle,
+    const char *body
+) {
+  if (base_root == NULL || base_root[0] == '\0'
+      || db_handle == 0 || query_handle == 0
+      || body == NULL || body[0] == '\0') {
+    return;
+  }
+
+  size_t first_free = SEC4_RT_MAX_DB_LATEST_RECORD_CACHE;
+  size_t target = SEC4_RT_MAX_DB_LATEST_RECORD_CACHE;
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_LATEST_RECORD_CACHE; i++) {
+    sec4_rt_db_latest_record_cache_state *slot = &g_sec4_rt_db_latest_records[i];
+    if (!slot->active) {
+      if (first_free == SEC4_RT_MAX_DB_LATEST_RECORD_CACHE) {
+        first_free = i;
+      }
+      continue;
+    }
+    if (slot->db_handle == db_handle
+        && slot->query_handle == query_handle
+        && strcmp(slot->base_root, base_root) == 0) {
+      target = i;
+      break;
+    }
+  }
+
+  if (target == SEC4_RT_MAX_DB_LATEST_RECORD_CACHE) {
+    if (first_free != SEC4_RT_MAX_DB_LATEST_RECORD_CACHE) {
+      target = first_free;
+    } else {
+      target = sec4_rt_db_latest_record_cache_index(base_root, db_handle, query_handle);
+    }
+  }
+
+  sec4_rt_db_latest_record_cache_state *slot = &g_sec4_rt_db_latest_records[target];
+  slot->active = true;
+  slot->db_handle = db_handle;
+  slot->query_handle = query_handle;
+  strncpy(slot->base_root, base_root, sizeof(slot->base_root) - 1);
+  slot->base_root[sizeof(slot->base_root) - 1] = '\0';
+  strncpy(slot->body, body, sizeof(slot->body) - 1);
+  slot->body[sizeof(slot->body) - 1] = '\0';
+}
+
+static bool sec4_rt_db_latest_record_cache_lookup(
+    const char *base_root,
+    int64_t db_handle,
+    int64_t query_handle,
+    char *body_out,
+    size_t body_out_size
+) {
+  if (base_root == NULL || base_root[0] == '\0'
+      || db_handle == 0 || query_handle == 0
+      || body_out == NULL || body_out_size == 0) {
+    return false;
+  }
+
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_LATEST_RECORD_CACHE; i++) {
+    const sec4_rt_db_latest_record_cache_state *slot = &g_sec4_rt_db_latest_records[i];
+    if (!slot->active) {
+      continue;
+    }
+    if (slot->db_handle != db_handle
+        || slot->query_handle != query_handle
+        || strcmp(slot->base_root, base_root) != 0) {
+      continue;
+    }
+    if (slot->body[0] == '\0') {
+      continue;
+    }
+    size_t body_len = strlen(slot->body);
+    if (body_len >= body_out_size) {
+      return false;
+    }
+    memcpy(body_out, slot->body, body_len + 1);
+    return true;
   }
   return false;
 }
@@ -8081,6 +10073,53 @@ static bool sec4_rt_db_parse_record_line(
   return true;
 }
 
+static bool sec4_rt_lock_file(FILE *file, short lock_type) {
+  if (file == NULL) {
+    return false;
+  }
+
+  int fd = fileno(file);
+  if (fd < 0) {
+    return false;
+  }
+
+  struct flock lock;
+  memset(&lock, 0, sizeof(lock));
+  lock.l_type = lock_type;
+  lock.l_whence = SEEK_SET;
+  lock.l_start = 0;
+  lock.l_len = 0;
+
+  for (;;) {
+    if (fcntl(fd, F_SETLKW, &lock) == 0) {
+      return true;
+    }
+    if (errno != EINTR) {
+      return false;
+    }
+  }
+}
+
+static bool sec4_rt_unlock_file(FILE *file) {
+  if (file == NULL) {
+    return false;
+  }
+
+  int fd = fileno(file);
+  if (fd < 0) {
+    return false;
+  }
+
+  struct flock lock;
+  memset(&lock, 0, sizeof(lock));
+  lock.l_type = F_UNLCK;
+  lock.l_whence = SEEK_SET;
+  lock.l_start = 0;
+  lock.l_len = 0;
+
+  return fcntl(fd, F_SETLK, &lock) == 0;
+}
+
 static sec4_rt_db_result sec4_rt_db_append_record(
     int64_t db_handle,
     int64_t query_handle,
@@ -8131,10 +10170,20 @@ static sec4_rt_db_result sec4_rt_db_append_record(
   if (file == NULL) {
     return SEC4_RT_DB_RESULT_IO;
   }
+  if (!sec4_rt_lock_file(file, F_WRLCK)) {
+    fclose(file);
+    return SEC4_RT_DB_RESULT_IO;
+  }
 
   bool io_failed = false;
   size_t line_len = (size_t) written;
   if (fwrite(line, 1, line_len, file) != line_len) {
+    io_failed = true;
+  }
+  if (fflush(file) != 0) {
+    io_failed = true;
+  }
+  if (!sec4_rt_unlock_file(file)) {
     io_failed = true;
   }
   if (fclose(file) != 0) {
@@ -8144,6 +10193,7 @@ static sec4_rt_db_result sec4_rt_db_append_record(
     return SEC4_RT_DB_RESULT_IO;
   }
 
+  sec4_rt_db_latest_record_cache_store(base_root, db_handle, query_handle, body);
   return SEC4_RT_DB_RESULT_OK;
 }
 
@@ -8164,6 +10214,16 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
     return base_result;
   }
 
+  if (sec4_rt_db_latest_record_cache_lookup(
+          base_root,
+          db_handle,
+          query_handle,
+          body_out,
+          body_out_size
+      )) {
+    return SEC4_RT_DB_RESULT_OK;
+  }
+
   char record_path[SEC4_RT_MAX_FS_PATH_BYTES];
   sec4_rt_db_result record_path_result =
       sec4_rt_db_resolve_record_path(base_root, record_path, sizeof(record_path));
@@ -8176,6 +10236,10 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
     if (errno == ENOENT) {
       return SEC4_RT_DB_RESULT_NOT_FOUND;
     }
+    return SEC4_RT_DB_RESULT_IO;
+  }
+  if (!sec4_rt_lock_file(file, F_RDLCK)) {
+    fclose(file);
     return SEC4_RT_DB_RESULT_IO;
   }
 
@@ -8207,8 +10271,7 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
             &record_query,
             &record_body_hex
         )) {
-      io_failed = true;
-      break;
+      continue;
     }
 
     if (record_db != db_handle || record_query != query_handle) {
@@ -8217,13 +10280,15 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
 
     size_t decoded_len = 0;
     if (!sec4_rt_hex_decode_bytes(record_body_hex, body_out, body_out_size, &decoded_len)) {
-      io_failed = true;
-      break;
+      continue;
     }
     found = true;
   }
 
   if (ferror(file) != 0) {
+    io_failed = true;
+  }
+  if (!sec4_rt_unlock_file(file)) {
     io_failed = true;
   }
   if (fclose(file) != 0) {
@@ -8236,11 +10301,13 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
   if (!found) {
     return SEC4_RT_DB_RESULT_NOT_FOUND;
   }
+  sec4_rt_db_latest_record_cache_store(base_root, db_handle, query_handle, body_out);
   return SEC4_RT_DB_RESULT_OK;
 }
 
-int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
-  if (query_template == NULL || query_template[0] == '\0') {
+int64_t sec4_rt_sql_q(int64_t query_template, int64_t params) {
+  const char *query_template_value = sec4_rt_resolve_tracked_or_literal_string(query_template);
+  if (query_template_value == NULL || query_template_value[0] == '\0') {
     sec4_rt_store_std_error_response(
         400,
         "DB.SQL_TEMPLATE_INVALID",
@@ -8250,7 +10317,7 @@ int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
     return 0;
   }
 
-  int64_t template_handle = sec4_rt_track_string_value(query_template, UINT64_C(0x18181));
+  int64_t template_handle = sec4_rt_track_string_value(query_template_value, UINT64_C(0x18181));
   if (template_handle == 0) {
     sec4_rt_store_std_error_response(
         500,
@@ -8272,6 +10339,13 @@ int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
     return 0;
   }
   return query_handle;
+}
+
+int64_t sec4_rt_schema_row(int64_t row_schema) {
+  if (row_schema <= 0) {
+    return 0;
+  }
+  return row_schema;
 }
 
 int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
@@ -9522,7 +11596,7 @@ int64_t sec4_rt_path_under(int64_t base, int64_t input) {
   return handle;
 }
 
-int64_t sec4_rt_path_base(const char *input) {
+int64_t sec4_rt_path_base_literal(const char *input) {
   char normalized[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
   if (!sec4_rt_normalize_absolute_path(input, normalized, sizeof(normalized))) {
     sec4_rt_store_std_error_response(
@@ -9547,18 +11621,45 @@ int64_t sec4_rt_path_base(const char *input) {
   return handle;
 }
 
-int64_t sec4_rt_headers_name(const char *input) {
-  if (!sec4_rt_is_header_name_valid(input)) {
+int64_t sec4_rt_path_base_handle(int64_t input) {
+  if (input == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.BASE_INVALID",
+        "validation",
+        "path.base requires tracked string input"
+    );
     return 0;
   }
-  return sec4_rt_track_string_value(input, UINT64_C(0xE0E0E));
+
+  const char *raw = sec4_rt_lookup_tracked_value(input);
+  if (raw == NULL || raw[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.BASE_INVALID",
+        "validation",
+        "path.base requires tracked string input"
+    );
+    return 0;
+  }
+
+  return sec4_rt_path_base_literal(raw);
 }
 
-int64_t sec4_rt_headers_value(const char *input) {
-  if (!sec4_rt_is_header_value_valid(input)) {
+int64_t sec4_rt_headers_name(int64_t input) {
+  const char *input_value = sec4_rt_resolve_tracked_or_literal_string(input);
+  if (!sec4_rt_is_header_name_valid(input_value)) {
     return 0;
   }
-  return sec4_rt_track_string_value(input, UINT64_C(0xF0F0F));
+  return sec4_rt_track_string_value(input_value, UINT64_C(0xE0E0E));
+}
+
+int64_t sec4_rt_headers_value(int64_t input) {
+  const char *input_value = sec4_rt_resolve_tracked_or_literal_string(input);
+  if (!sec4_rt_is_header_value_valid(input_value)) {
+    return 0;
+  }
+  return sec4_rt_track_string_value(input_value, UINT64_C(0xF0F0F));
 }
 
 int64_t sec4_rt_http_router(void) {
@@ -9619,6 +11720,11 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
     return 1;
   }
 
+  if (!sec4_rt_set_socket_nonblocking(server_fd, true)) {
+    close(server_fd);
+    return 1;
+  }
+
   if (listen(server_fd, 16) != 0) {
     close(server_fd);
     return 1;
@@ -9632,41 +11738,131 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
   if (timeout_ms < 0) {
     timeout_ms = SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS;
   }
+  int64_t throttle_drain_timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  int64_t accept_rate_limit_rps = sec4_rt_http_accept_rate_limit_rps();
+  int64_t accept_rate_limit_burst = sec4_rt_http_accept_rate_limit_burst(
+      accept_rate_limit_rps
+  );
+  sec4_rt_http_accept_rate_limiter accept_rate_limiter;
+  sec4_rt_http_accept_rate_limiter_init(
+      &accept_rate_limiter,
+      accept_rate_limit_rps,
+      accept_rate_limit_burst
+  );
+
+  size_t max_concurrency = sec4_rt_http_max_concurrency_limit();
+  int *pending_clients = (int *) calloc(max_concurrency, sizeof(int));
+  if (pending_clients == NULL) {
+    close(server_fd);
+    return 1;
+  }
+  size_t pending_count = 0;
+  bool served_request = false;
+  bool fatal_error = false;
 
   for (;;) {
-    if (oneshot) {
+    if (oneshot && served_request) {
+      sec4_rt_drain_oneshot_backlog_with_throttle(
+          server_fd,
+          slot,
+          pending_clients,
+          &pending_count,
+          &fatal_error,
+          throttle_drain_timeout_ms
+      );
+      break;
+    }
+
+    if (pending_count == 0) {
       fd_set fds;
       FD_ZERO(&fds);
       FD_SET(server_fd, &fds);
 
-      struct timeval timeout;
-      timeout.tv_sec = (time_t) (timeout_ms / 1000);
-      timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+      struct timeval timeout = {0};
+      struct timeval *timeout_ptr = NULL;
+      if (oneshot) {
+        timeout.tv_sec = (time_t) (timeout_ms / 1000);
+        timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+        timeout_ptr = &timeout;
+      }
 
-      int select_rc = select(server_fd + 1, &fds, NULL, NULL, &timeout);
-      if (select_rc <= 0) {
+      int select_rc = select(server_fd + 1, &fds, NULL, NULL, timeout_ptr);
+      if (select_rc == 0) {
+        if (oneshot) {
+          break;
+        }
+        continue;
+      }
+      if (select_rc < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        fatal_error = true;
         break;
       }
     }
 
-    int client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
-      if (errno == EINTR) {
+    for (;;) {
+      int client_fd = accept(server_fd, NULL, NULL);
+      if (client_fd < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          break;
+        }
+        fatal_error = true;
+        break;
+      }
+
+      if (pending_count >= max_concurrency) {
+        sec4_rt_send_concurrency_throttle_response(client_fd, slot);
+        sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
+        close(client_fd);
         continue;
       }
+
+      if (!sec4_rt_http_accept_rate_limiter_consume(&accept_rate_limiter)) {
+        sec4_rt_send_rate_limit_throttle_response(client_fd, slot);
+        sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
+        close(client_fd);
+        continue;
+      }
+
+      (void) sec4_rt_set_socket_nonblocking(client_fd, false);
+      pending_clients[pending_count++] = client_fd;
+    }
+
+    if (fatal_error) {
       break;
     }
+
+    if (pending_count == 0) {
+      continue;
+    }
+
+    int client_fd = pending_clients[0];
+    if (pending_count > 1) {
+      memmove(
+          pending_clients,
+          pending_clients + 1,
+          (pending_count - 1) * sizeof(pending_clients[0])
+      );
+    }
+    pending_count--;
 
     sec4_rt_handle_client(client_fd, slot);
     close(client_fd);
-
-    if (oneshot) {
-      break;
-    }
+    served_request = true;
   }
 
+  for (size_t i = 0; i < pending_count; i++) {
+    close(pending_clients[i]);
+  }
+  free(pending_clients);
+
   close(server_fd);
-  return 0;
+  return fatal_error ? 1 : 0;
 }
 
 static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
@@ -9690,7 +11886,9 @@ static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
       sizeof(slot->cors_allow_headers) - 1
   );
   slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+  slot->cors_expose_headers[0] = '\0';
   slot->cors_max_age_seconds = 600;
+  slot->cors_allow_private_network = false;
 }
 
 static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *slot) {
@@ -9698,6 +11896,10 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
     return;
   }
   slot->security_headers_enabled = true;
+  slot->security_hsts_enabled = false;
+  slot->security_hsts_max_age_seconds = 15552000;
+  slot->security_hsts_include_subdomains = true;
+  slot->security_hsts_preload = false;
   slot->security_x_content_type_options = true;
   strncpy(
       slot->security_x_frame_options,
@@ -9711,6 +11913,14 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
       sizeof(slot->security_referrer_policy) - 1
   );
   slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+  slot->security_csp_enabled = true;
+  slot->security_csp_report_only = false;
+  strncpy(
+      slot->security_csp_policy,
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      sizeof(slot->security_csp_policy) - 1
+  );
+  slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
@@ -9726,6 +11936,18 @@ static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
       sizeof(slot->csrf_protected_methods) - 1
   );
   slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+  strncpy(
+      slot->csrf_cookie_name,
+      "csrf",
+      sizeof(slot->csrf_cookie_name) - 1
+  );
+  slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+  strncpy(
+      slot->csrf_header_name,
+      "X-CSRF-Token",
+      sizeof(slot->csrf_header_name) - 1
+  );
+  slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_auth(sec4_rt_router_state *slot) {
@@ -9749,12 +11971,61 @@ static void sec4_rt_load_cors_policy_from_env(void) {
       "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
       false
   );
-  const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
-  if (!sec4_rt_csv_copy_first_token(
-          allowed_origins,
-          g_sec4_rt_cors_policy.allow_origin,
-          sizeof(g_sec4_rt_cors_policy.allow_origin)
-      )) {
+  g_sec4_rt_cors_policy.max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_CORS_MAX_AGE_SECONDS",
+      600
+  );
+  if (g_sec4_rt_cors_policy.max_age_seconds <= 0) {
+    g_sec4_rt_cors_policy.max_age_seconds = 600;
+  }
+  g_sec4_rt_cors_policy.allow_private_network = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK",
+      false
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_METHODS",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      g_sec4_rt_cors_policy.allow_methods,
+      sizeof(g_sec4_rt_cors_policy.allow_methods)
+  );
+  if (!sec4_rt_csv_is_valid_cors_methods_list(g_sec4_rt_cors_policy.allow_methods)) {
+    strncpy(
+        g_sec4_rt_cors_policy.allow_methods,
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        sizeof(g_sec4_rt_cors_policy.allow_methods) - 1
+    );
+    g_sec4_rt_cors_policy.allow_methods[sizeof(g_sec4_rt_cors_policy.allow_methods) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_HEADERS",
+      "content-type, authorization",
+      g_sec4_rt_cors_policy.allow_headers,
+      sizeof(g_sec4_rt_cors_policy.allow_headers)
+  );
+  if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.allow_headers)) {
+    strncpy(
+        g_sec4_rt_cors_policy.allow_headers,
+        "content-type, authorization",
+        sizeof(g_sec4_rt_cors_policy.allow_headers) - 1
+    );
+    g_sec4_rt_cors_policy.allow_headers[sizeof(g_sec4_rt_cors_policy.allow_headers) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_EXPOSED_HEADERS",
+      "",
+      g_sec4_rt_cors_policy.expose_headers,
+      sizeof(g_sec4_rt_cors_policy.expose_headers)
+  );
+  if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.expose_headers)) {
+    g_sec4_rt_cors_policy.expose_headers[0] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_ORIGINS",
+      "",
+      g_sec4_rt_cors_policy.allow_origin,
+      sizeof(g_sec4_rt_cors_policy.allow_origin)
+  );
+  if (!sec4_rt_csv_is_valid_cors_origins_list(g_sec4_rt_cors_policy.allow_origin)) {
     strncpy(
         g_sec4_rt_cors_policy.allow_origin,
         "*",
@@ -9774,6 +12045,26 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
   g_sec4_rt_security_headers_policy.enabled = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_ENABLED",
       true
+  );
+  g_sec4_rt_security_headers_policy.hsts_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED",
+      false
+  );
+  g_sec4_rt_security_headers_policy.hsts_max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS",
+      15552000
+  );
+  if (g_sec4_rt_security_headers_policy.hsts_max_age_seconds <= 0) {
+    g_sec4_rt_security_headers_policy.hsts_max_age_seconds = 15552000;
+  }
+  g_sec4_rt_security_headers_policy.hsts_include_subdomains =
+      sec4_rt_env_flag_enabled_default(
+          "SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS",
+          true
+      );
+  g_sec4_rt_security_headers_policy.hsts_preload = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD",
+      false
   );
   g_sec4_rt_security_headers_policy.x_content_type_options = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
@@ -9801,6 +12092,38 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
       g_sec4_rt_security_headers_policy.referrer_policy,
       sizeof(g_sec4_rt_security_headers_policy.referrer_policy)
   );
+  if (!sec4_rt_is_referrer_policy_valid(g_sec4_rt_security_headers_policy.referrer_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.referrer_policy,
+        "strict-origin-when-cross-origin",
+        sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.referrer_policy
+        [sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1] = '\0';
+  }
+  g_sec4_rt_security_headers_policy.csp_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_ENABLED",
+      true
+  );
+  g_sec4_rt_security_headers_policy.csp_report_only = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY",
+      false
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      g_sec4_rt_security_headers_policy.csp_policy,
+      sizeof(g_sec4_rt_security_headers_policy.csp_policy)
+  );
+  if (!sec4_rt_is_header_value_valid(g_sec4_rt_security_headers_policy.csp_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.csp_policy,
+        SEC4_RT_DEFAULT_CSP_POLICY,
+        sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.csp_policy
+        [sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1] = '\0';
+  }
 }
 
 static void sec4_rt_load_csrf_policy_from_env(void) {
@@ -9819,6 +12142,43 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
       g_sec4_rt_csrf_policy.protected_methods,
       sizeof(g_sec4_rt_csrf_policy.protected_methods)
   );
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_COOKIE_NAME",
+      "csrf",
+      g_sec4_rt_csrf_policy.cookie_name,
+      sizeof(g_sec4_rt_csrf_policy.cookie_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.cookie_name,
+        "csrf",
+        sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1
+    );
+    g_sec4_rt_csrf_policy.cookie_name[sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_HEADER_NAME",
+      "X-CSRF-Token",
+      g_sec4_rt_csrf_policy.header_name,
+      sizeof(g_sec4_rt_csrf_policy.header_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.header_name,
+        "X-CSRF-Token",
+        sizeof(g_sec4_rt_csrf_policy.header_name) - 1
+    );
+    g_sec4_rt_csrf_policy.header_name[sizeof(g_sec4_rt_csrf_policy.header_name) - 1] = '\0';
+  }
+  if (!sec4_rt_csrf_methods_has_protected_verb(g_sec4_rt_csrf_policy.protected_methods)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.protected_methods,
+        "POST,PUT,PATCH,DELETE",
+        sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1
+    );
+    g_sec4_rt_csrf_policy
+        .protected_methods[sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1] = '\0';
+  }
   if (strcasecmp(g_sec4_rt_csrf_policy.mode, "off") == 0) {
     g_sec4_rt_csrf_policy.enabled = false;
   }
@@ -9827,12 +12187,14 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
 static void sec4_rt_load_auth_policy_from_env(void) {
   memset(&g_sec4_rt_auth_policy, 0, sizeof(g_sec4_rt_auth_policy));
   g_sec4_rt_auth_policy.loaded = true;
-  sec4_rt_read_env_string(
-      "SEC4_RT_AUTH_MODE",
-      "token",
+  const char *configured_mode = getenv("SEC4_RT_AUTH_MODE");
+  const char *effective_mode = sec4_rt_auth_mode_or_default(configured_mode);
+  strncpy(
       g_sec4_rt_auth_policy.mode,
-      sizeof(g_sec4_rt_auth_policy.mode)
+      effective_mode,
+      sizeof(g_sec4_rt_auth_policy.mode) - 1
   );
+  g_sec4_rt_auth_policy.mode[sizeof(g_sec4_rt_auth_policy.mode) - 1] = '\0';
   g_sec4_rt_auth_policy.enabled = strcasecmp(g_sec4_rt_auth_policy.mode, "off") != 0;
 }
 
@@ -9844,6 +12206,8 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
   if (cfg == 0) {
     slot->cors_enabled = false;
     slot->cors_allow_origin[0] = '\0';
+    slot->cors_expose_headers[0] = '\0';
+    slot->cors_allow_private_network = false;
     return router;
   }
   if (cfg == SEC4_RT_POLICY_CORS_HANDLE) {
@@ -9853,6 +12217,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_enabled = g_sec4_rt_cors_policy.enabled;
     if (!slot->cors_enabled) {
       slot->cors_allow_origin[0] = '\0';
+      slot->cors_allow_private_network = false;
       return router;
     }
     strncpy(
@@ -9865,17 +12230,26 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_require_vary_origin = g_sec4_rt_cors_policy.require_vary_origin;
     strncpy(
         slot->cors_allow_methods,
-        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        g_sec4_rt_cors_policy.allow_methods,
         sizeof(slot->cors_allow_methods) - 1
     );
     slot->cors_allow_methods[sizeof(slot->cors_allow_methods) - 1] = '\0';
     strncpy(
         slot->cors_allow_headers,
-        "content-type, authorization",
+        g_sec4_rt_cors_policy.allow_headers,
         sizeof(slot->cors_allow_headers) - 1
     );
     slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
-    slot->cors_max_age_seconds = 600;
+    strncpy(
+        slot->cors_expose_headers,
+        g_sec4_rt_cors_policy.expose_headers,
+        sizeof(slot->cors_expose_headers) - 1
+    );
+    slot->cors_expose_headers[sizeof(slot->cors_expose_headers) - 1] = '\0';
+    slot->cors_max_age_seconds = g_sec4_rt_cors_policy.max_age_seconds > 0
+        ? g_sec4_rt_cors_policy.max_age_seconds
+        : 600;
+    slot->cors_allow_private_network = g_sec4_rt_cors_policy.allow_private_network;
     return router;
   }
   sec4_rt_router_apply_default_cors(slot);
@@ -9889,6 +12263,13 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
   }
   if (cfg == 0) {
     slot->security_headers_enabled = false;
+    slot->security_hsts_enabled = false;
+    slot->security_hsts_max_age_seconds = 0;
+    slot->security_hsts_include_subdomains = false;
+    slot->security_hsts_preload = false;
+    slot->security_csp_enabled = false;
+    slot->security_csp_report_only = false;
+    slot->security_csp_policy[0] = '\0';
     return router;
   }
   if (cfg == SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE) {
@@ -9899,6 +12280,11 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
     if (!slot->security_headers_enabled) {
       return router;
     }
+    slot->security_hsts_enabled = g_sec4_rt_security_headers_policy.hsts_enabled;
+    slot->security_hsts_max_age_seconds = g_sec4_rt_security_headers_policy.hsts_max_age_seconds;
+    slot->security_hsts_include_subdomains =
+        g_sec4_rt_security_headers_policy.hsts_include_subdomains;
+    slot->security_hsts_preload = g_sec4_rt_security_headers_policy.hsts_preload;
     slot->security_x_content_type_options = g_sec4_rt_security_headers_policy.x_content_type_options;
     strncpy(
         slot->security_x_frame_options,
@@ -9912,6 +12298,14 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
         sizeof(slot->security_referrer_policy) - 1
     );
     slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+    slot->security_csp_enabled = g_sec4_rt_security_headers_policy.csp_enabled;
+    slot->security_csp_report_only = g_sec4_rt_security_headers_policy.csp_report_only;
+    strncpy(
+        slot->security_csp_policy,
+        g_sec4_rt_security_headers_policy.csp_policy,
+        sizeof(slot->security_csp_policy) - 1
+    );
+    slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_security_headers(slot);
@@ -9947,6 +12341,18 @@ int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
         sizeof(slot->csrf_protected_methods) - 1
     );
     slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+    strncpy(
+        slot->csrf_cookie_name,
+        g_sec4_rt_csrf_policy.cookie_name,
+        sizeof(slot->csrf_cookie_name) - 1
+    );
+    slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+    strncpy(
+        slot->csrf_header_name,
+        g_sec4_rt_csrf_policy.header_name,
+        sizeof(slot->csrf_header_name) - 1
+    );
+    slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_csrf(slot);
@@ -9989,9 +12395,12 @@ int64_t sec4_rt_sec_csp(void) {
   return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2002));
 }
 
-int64_t sec4_rt_sec_csp_add(int64_t csp, const char *directive, const char *value) {
-  int64_t directive_handle = sec4_rt_nonzero_handle_from_string(directive, UINT64_C(0xB2003));
-  int64_t value_handle = sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xB2004));
+int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value) {
+  const char *directive_value = sec4_rt_resolve_tracked_or_literal_string(directive);
+  const char *csp_value = sec4_rt_resolve_tracked_or_literal_string(value);
+  int64_t directive_handle =
+      sec4_rt_nonzero_handle_from_string(directive_value, UINT64_C(0xB2003));
+  int64_t value_handle = sec4_rt_nonzero_handle_from_string(csp_value, UINT64_C(0xB2004));
   int64_t addition = sec4_rt_handle_from_two(directive_handle, value_handle, UINT64_C(0xB2005));
   return sec4_rt_handle_from_two(csp, addition, UINT64_C(0xB2006));
 }
@@ -10012,6 +12421,8 @@ int64_t sec4_rt_csrf_from_policy(void) {
 
 int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
   (void) ctx;
+  const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(NULL);
+  const char *csrf_header_name = sec4_rt_csrf_header_name(NULL);
   char token[128];
   int written = snprintf(
       token,
@@ -10029,13 +12440,14 @@ int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
     int cookie_written = snprintf(
         cookie,
         sizeof(cookie),
-        "csrf=%s; Path=/; SameSite=Lax",
+        "%s=%s; Path=/; SameSite=Lax",
+        csrf_cookie_name,
         token
     );
     if (cookie_written > 0 && (size_t) cookie_written < sizeof(cookie)) {
       (void) sec4_rt_append_response_header("Set-Cookie", cookie);
     }
-    (void) sec4_rt_append_response_header("X-CSRF-Token", token);
+    (void) sec4_rt_append_response_header(csrf_header_name, token);
   }
   return handle;
 }
@@ -10068,8 +12480,12 @@ int64_t sec4_rt_auth_require(int64_t ctx) {
   return sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2014));
 }
 
-int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
+int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role) {
   (void) ctx;
+  const char *required_role_value = sec4_rt_resolve_tracked_or_literal_string(required_role);
+  if (required_role_value == NULL || required_role_value[0] == '\0') {
+    required_role_value = "role";
+  }
   const char *auth_mode = sec4_rt_effective_auth_mode(NULL);
   char auth_subject[256];
   bool used_bearer = false;
@@ -10091,8 +12507,8 @@ int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
   }
 
   bool has_required_role = used_bearer
-      ? sec4_rt_bearer_token_has_role(auth_subject, required_role)
-      : sec4_rt_auth_cookie_has_role(required_role);
+      ? sec4_rt_bearer_token_has_role(auth_subject, required_role_value)
+      : sec4_rt_auth_cookie_has_role(required_role_value);
   if (!has_required_role) {
     const char *forbidden_message = used_bearer
         ? "Authorization token missing required role"
@@ -10105,61 +12521,73 @@ int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
           forbidden_message
       );
     }
-    int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2016));
+    int64_t role_handle =
+        sec4_rt_nonzero_handle_from_string(required_role_value, UINT64_C(0xB2016));
     return sec4_rt_handle_from_two(role_handle, 403, UINT64_C(0xB2017));
   }
 
   int64_t auth_handle = sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2018));
-  int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2019));
+  int64_t role_handle =
+      sec4_rt_nonzero_handle_from_string(required_role_value, UINT64_C(0xB2019));
   return sec4_rt_handle_from_two(auth_handle, role_handle, UINT64_C(0xB2020));
 }
 
-int64_t sec4_rt_err_validation(const char *code, const char *message) {
+int64_t sec4_rt_err_validation(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       400,
-      code != NULL ? code : "VALIDATION.BAD_REQUEST",
+      code_value != NULL ? code_value : "VALIDATION.BAD_REQUEST",
       "validation",
-      message != NULL ? message : "validation failed",
+      message_value != NULL ? message_value : "validation failed",
       UINT64_C(0xC3001)
   );
 }
 
-int64_t sec4_rt_err_auth(const char *code, const char *message, int64_t status) {
+int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   int64_t resolved_status = status > 0 ? status : 401;
   return sec4_rt_emit_error_handle(
       resolved_status,
-      code != NULL ? code : "AUTH.UNAUTHORIZED",
+      code_value != NULL ? code_value : "AUTH.UNAUTHORIZED",
       "auth",
-      message != NULL ? message : "authorization failed",
+      message_value != NULL ? message_value : "authorization failed",
       UINT64_C(0xC3002)
   );
 }
 
-int64_t sec4_rt_err_not_found(const char *code, const char *message) {
+int64_t sec4_rt_err_not_found(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       404,
-      code != NULL ? code : "RESOURCE.NOT_FOUND",
+      code_value != NULL ? code_value : "RESOURCE.NOT_FOUND",
       "not_found",
-      message != NULL ? message : "resource not found",
+      message_value != NULL ? message_value : "resource not found",
       UINT64_C(0xC3003)
   );
 }
 
-int64_t sec4_rt_err_conflict(const char *code, const char *message) {
+int64_t sec4_rt_err_conflict(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       409,
-      code != NULL ? code : "RESOURCE.CONFLICT",
+      code_value != NULL ? code_value : "RESOURCE.CONFLICT",
       "conflict",
-      message != NULL ? message : "conflict",
+      message_value != NULL ? message_value : "conflict",
       UINT64_C(0xC3004)
   );
 }
 
-int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t limit) {
-  const char *resolved_message = message != NULL ? message : "rate limit exceeded";
+int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
+  const char *resolved_message = message_value != NULL ? message_value : "rate limit exceeded";
   int64_t error_handle = sec4_rt_emit_error_handle(
       429,
-      code != NULL ? code : "LIMIT.RATE",
+      code_value != NULL ? code_value : "LIMIT.RATE",
       "rate_limit",
       resolved_message,
       UINT64_C(0xC3005)
@@ -10180,25 +12608,27 @@ int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t li
   return next;
 }
 
-int64_t sec4_rt_err_internal(const char *message) {
+int64_t sec4_rt_err_internal(int64_t message) {
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       500,
       "INTERNAL.ERROR",
       "internal",
-      message != NULL ? message : "internal error",
+      message_value != NULL ? message_value : "internal error",
       UINT64_C(0xC3007)
   );
 }
 
-int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
+int64_t sec4_rt_err_with_path(int64_t error, int64_t path) {
+  const char *path_value = sec4_rt_resolve_tracked_or_literal_string(path);
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
-  if (path != NULL && path[0] != '\0') {
-    strncpy(state.path, path, sizeof(state.path) - 1);
+  if (path_value != NULL && path_value[0] != '\0') {
+    strncpy(state.path, path_value, sizeof(state.path) - 1);
     state.path[sizeof(state.path) - 1] = '\0';
   }
-  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xC3008));
+  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path_value, UINT64_C(0xC3008));
   int64_t next = sec4_rt_handle_from_two(error, path_handle, UINT64_C(0xC3009));
   state.handle = next;
   sec4_rt_error_store_state(&state);
@@ -10208,12 +12638,16 @@ int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
   return next;
 }
 
-int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
+int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value) {
+  const char *key_value = sec4_rt_resolve_tracked_or_literal_string(key);
+  if (key_value == NULL || key_value[0] == '\0') {
+    key_value = "detail";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
-  sec4_rt_error_append_detail_entry(&state, key, value);
-  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xC3010));
+  sec4_rt_error_append_detail_entry(&state, key_value, value);
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key_value, UINT64_C(0xC3010));
   int64_t detail_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xC3011));
   int64_t next = sec4_rt_handle_from_two(error, detail_handle, UINT64_C(0xC3012));
   state.handle = next;
@@ -10224,20 +12658,20 @@ int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
   return next;
 }
 
-int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max) {
+int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max) {
+  const char *name_value = sec4_rt_resolve_tracked_or_literal_string(name);
+  if (name_value == NULL || name_value[0] == '\0') {
+    name_value = "limit";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
   state.has_limit = true;
-  strncpy(
-      state.limit_name,
-      name != NULL && name[0] != '\0' ? name : "limit",
-      sizeof(state.limit_name) - 1
-  );
+  strncpy(state.limit_name, name_value, sizeof(state.limit_name) - 1);
   state.limit_name[sizeof(state.limit_name) - 1] = '\0';
   state.limit_value = value;
   state.limit_max = max;
-  int64_t limit_name = sec4_rt_nonzero_handle_from_string(name, UINT64_C(0xC3013));
+  int64_t limit_name = sec4_rt_nonzero_handle_from_string(name_value, UINT64_C(0xC3013));
   int64_t observed = sec4_rt_handle_from_two(value, max, UINT64_C(0xC3014));
   int64_t limit_handle = sec4_rt_handle_from_two(limit_name, observed, UINT64_C(0xC3015));
   int64_t next = sec4_rt_handle_from_two(error, limit_handle, UINT64_C(0xC3016));
@@ -10251,29 +12685,34 @@ int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, i
 
 int64_t sec4_rt_err_with_dependency(
     int64_t error,
-    const char *service,
-    const char *operation,
+    int64_t service,
+    int64_t operation,
     int64_t retryable
 ) {
+  const char *service_value = sec4_rt_resolve_tracked_or_literal_string(service);
+  const char *operation_value = sec4_rt_resolve_tracked_or_literal_string(operation);
+  if (service_value == NULL || service_value[0] == '\0') {
+    service_value = "dependency";
+  }
+  if (operation_value == NULL || operation_value[0] == '\0') {
+    operation_value = "op";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
   state.has_dependency = true;
-  strncpy(
-      state.dependency_service,
-      service != NULL && service[0] != '\0' ? service : "dependency",
-      sizeof(state.dependency_service) - 1
-  );
+  strncpy(state.dependency_service, service_value, sizeof(state.dependency_service) - 1);
   state.dependency_service[sizeof(state.dependency_service) - 1] = '\0';
   strncpy(
       state.dependency_operation,
-      operation != NULL && operation[0] != '\0' ? operation : "op",
+      operation_value,
       sizeof(state.dependency_operation) - 1
   );
   state.dependency_operation[sizeof(state.dependency_operation) - 1] = '\0';
   state.dependency_retryable = retryable != 0;
-  int64_t service_handle = sec4_rt_nonzero_handle_from_string(service, UINT64_C(0xC3017));
-  int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation, UINT64_C(0xC3018));
+  int64_t service_handle =
+      sec4_rt_nonzero_handle_from_string(service_value, UINT64_C(0xC3017));
+  int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation_value, UINT64_C(0xC3018));
   int64_t dep_handle = sec4_rt_handle_from_three(
       service_handle,
       op_handle,

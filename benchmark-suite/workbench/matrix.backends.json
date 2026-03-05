@@ -1,0 +1,31 @@
+{
+  "version": "0.1",
+  "workbenchContract": "feature-app-v1",
+  "implementations": [
+    {
+      "impl": "sec4",
+      "servicePath": "benchmark-suite/services/sec4-workbench",
+      "status": "implemented-alpha"
+    },
+    {
+      "impl": "sec4-lasm",
+      "servicePath": "benchmark-suite/services/sec4-lasm-workbench",
+      "status": "implemented-alpha"
+    },
+    {
+      "impl": "node",
+      "servicePath": "benchmark-suite/services/node-workbench",
+      "status": "implemented-alpha"
+    },
+    {
+      "impl": "go",
+      "servicePath": "benchmark-suite/services/go-workbench",
+      "status": "implemented-alpha"
+    },
+    {
+      "impl": "rust",
+      "servicePath": "benchmark-suite/services/rust-workbench",
+      "status": "implemented-alpha"
+    }
+  ]
+}

@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+  echo "usage: $0 <saturation_boost_matrix.json> <saturation_boost_analysis.json> <out_summary.md> [recommended_verify_probe.json]" >&2
+  exit 2
+fi
+
+matrix_path="$1"
+analysis_path="$2"
+out_path="$3"
+verify_path="${4:-}"
+
+if [ ! -f "${matrix_path}" ]; then
+  echo "saturation boost matrix file not found: ${matrix_path}" >&2
+  exit 2
+fi
+if [ ! -f "${analysis_path}" ]; then
+  echo "saturation boost analysis file not found: ${analysis_path}" >&2
+  exit 2
+fi
+if [ -n "${verify_path}" ] && [ ! -f "${verify_path}" ]; then
+  echo "recommended verification file not found: ${verify_path}" >&2
+  exit 2
+fi
+
+if ! jq -e '.runs | type == "array" and length > 0' "${matrix_path}" >/dev/null; then
+  echo "saturation boost matrix has no runs: ${matrix_path}" >&2
+  exit 2
+fi
+
+recommended_step="$(jq -r '.summary.recommendedBoostStep // empty' "${analysis_path}")"
+if [ -z "${recommended_step}" ]; then
+  echo "saturation boost analysis missing summary.recommendedBoostStep: ${analysis_path}" >&2
+  exit 2
+fi
+if ! [[ "${recommended_step}" =~ ^[0-9]+$ ]]; then
+  echo "saturation boost analysis has invalid recommended boost step: ${recommended_step}" >&2
+  exit 2
+fi
+if ! jq -e --argjson step "${recommended_step}" '.runs | any(.saturationBoostStep == $step)' "${matrix_path}" >/dev/null; then
+  echo "recommended boost step is not present in matrix runs: ${recommended_step}" >&2
+  exit 2
+fi
+
+if [ -n "${verify_path}" ]; then
+  verify_step="$(jq -r '.run.autoscaleSaturationBoostStep // empty' "${verify_path}")"
+  if [ -z "${verify_step}" ]; then
+    echo "recommended verification file missing run.autoscaleSaturationBoostStep: ${verify_path}" >&2
+    exit 2
+  fi
+  if [ "${verify_step}" != "${recommended_step}" ]; then
+    echo "recommended verification boost step mismatch: expected ${recommended_step}, got ${verify_step}" >&2
+    exit 2
+  fi
+fi
+
+mkdir -p "$(dirname "${out_path}")"
+
+now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+run_count="$(jq -r '.summary.runCount // 0' "${analysis_path}")"
+pass_count="$(jq -r '.summary.passCount // 0' "${analysis_path}")"
+selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}")"
+
+{
+  echo "# LASM Saturation Boost Summary (v0.1)"
+  echo
+  echo "- Generated UTC: ${now_utc}"
+  echo "- Matrix source: ${matrix_path}"
+  echo "- Analysis source: ${analysis_path}"
+  if [ -n "${verify_path}" ]; then
+    echo "- Verification source: ${verify_path}"
+  fi
+  echo "- Run count: ${run_count}"
+  echo "- Pass runs: ${pass_count}"
+  echo "- Selection mode: ${selection_mode}"
+  echo "- Recommended boost step: ${recommended_step}"
+  echo
+
+  echo "## Probe Profile"
+  echo
+  echo "- Profile: $(jq -r '.run.profile // "ping"' "${matrix_path}")"
+  echo "- Project path: $(jq -r '.run.projectPath // "unknown"' "${matrix_path}")"
+  echo "- Request path: $(jq -r '.run.requestPath // "unknown"' "${matrix_path}")"
+  echo "- Warmup path: $(jq -r '.run.warmupPath // "none"' "${matrix_path}")"
+  echo "- Duration: $(jq -r '.run.duration // "unknown"' "${matrix_path}")"
+  echo "- Threads: $(jq -r '.run.threads // "unknown"' "${matrix_path}")"
+  echo "- Connections: $(jq -r '.run.connections // "unknown"' "${matrix_path}")"
+  echo "- Target requests: $(jq -r '.run.targetRequests // "unknown"' "${matrix_path}")"
+  echo "- Relay pump batch max: $(jq -r '.run.clusterRelayPumpBatchMax // "unknown"' "${matrix_path}")"
+  echo
+
+  echo "## Ranked Runs"
+  echo
+  echo "| Rank | Boost Step | Pass | Requests/sec | p99 | Requests | Peak RSS (KB) | Relay Workers (resolved) | Accept Workers (resolved) | Accept Batch (resolved) | Pump Batch (resolved) | Live Relay Shards (resolved) | Short-Circuit Total (resolved) | Short-Circuit/s (resolved) |"
+  echo "|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+  jq -r '
+    .rankedRuns
+    | to_entries[]
+    | "| \(.key + 1) | \(.value.saturationBoostStep) | \(.value.pass) | \(.value.requestsPerSec) | \((.value.p99 // "n/a")) | \(.value.requests) | \(.value.peakRssKb) | \((.value.clusterRelayWorkersResolved // "n/a")) | \((.value.clusterAcceptWorkersResolved // "n/a")) | \((.value.clusterRelayAcceptBatchMaxResolved // "n/a")) | \((.value.clusterRelayPumpBatchMaxResolved // "n/a")) | \((.value.clusterRelayLiveSenderCountResolved // "n/a")) | \((.value.clusterRelayDispatchSaturationShortCircuitTotal // "n/a")) | \((.value.clusterRelayDispatchSaturationShortCircuitPerSec // "n/a")) |"
+  ' "${analysis_path}"
+  echo
+
+  echo "## Recommendation"
+  echo
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- selected row: pass=\(.pass), requestsPerSec=\(.requestsPerSec), p99=\(.p99 // "unknown"), requests=\(.requests), peakRssKb=\(.peakRssKb), resolvedRelayWorkers=\(.clusterRelayWorkersResolved // "n/a"), resolvedAcceptWorkers=\(.clusterAcceptWorkersResolved // "n/a"), resolvedAcceptBatch=\(.clusterRelayAcceptBatchMaxResolved // "n/a"), resolvedPumpBatch=\(.clusterRelayPumpBatchMaxResolved // "n/a"), resolvedLiveRelayShards=\(.clusterRelayLiveSenderCountResolved // "n/a"), resolvedShortCircuitTotal=\(.clusterRelayDispatchSaturationShortCircuitTotal // "n/a"), resolvedShortCircuitPerSec=\(.clusterRelayDispatchSaturationShortCircuitPerSec // "n/a")"
+  ' "${analysis_path}"
+  echo
+
+  echo "## Resolved DB Runtime (Recommended Step)"
+  echo
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB adapter (resolved): \(.clusterDbAdapterResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres TLS mode (resolved): \(.clusterDbPostgresTlsModeResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB max tx handles (resolved): \(.clusterDbMaxTxHandlesResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB records max (resolved): \(.clusterDbRecordsMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres statement timeout ms (resolved): \(.clusterDbPostgresStatementTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres lock timeout ms (resolved): \(.clusterDbPostgresLockTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres connect timeout ms (resolved): \(.clusterDbPostgresConnectTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite busy timeout ms (resolved): \(.clusterDbSqliteBusyTimeoutMsResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite journal mode (resolved): \(.clusterDbSqliteJournalModeResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite synchronous (resolved): \(.clusterDbSqliteSynchronousResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB postgres retryable conflict retry max (resolved): \(.clusterDbPostgresRetryableConflictRetryMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite lock retry max (resolved): \(.clusterDbSqliteLockRetryMaxResolved // "n/a")"
+  ' "${analysis_path}"
+  jq -r --arg step "${recommended_step}" '
+    .rankedRuns[]
+    | select((.saturationBoostStep | tostring) == $step)
+    | "- DB sqlite lock retry delay ms (resolved): \(.clusterDbSqliteLockRetryDelayMsResolved // "n/a")"
+  ' "${analysis_path}"
+  echo
+
+  if [ -n "${verify_path}" ]; then
+    echo "## Recommended Step Verification"
+    echo
+    echo "- Profile: $(jq -r '.run.profile // "unknown"' "${verify_path}")"
+    echo "- Boost step: $(jq -r '.run.autoscaleSaturationBoostStep // "unknown"' "${verify_path}")"
+    echo "- Warmup path: $(jq -r '.run.warmupPath // "unknown"' "${verify_path}")"
+    echo "- Pass: $(jq -r '.pass // "unknown"' "${verify_path}")"
+    echo "- Requests target met: $(jq -r '.requestsTargetMet // "unknown"' "${verify_path}")"
+    echo "- Requests: $(jq -r '.observed.requests // "unknown"' "${verify_path}")"
+    echo "- Requests/sec: $(jq -r '.observed.requestsPerSec // "unknown"' "${verify_path}")"
+    echo "- Peak RSS (KB): $(jq -r '.observed.peakRssKb // "unknown"' "${verify_path}")"
+    echo "- p99: $(jq -r '.observed.p99 // "unknown"' "${verify_path}")"
+    echo "- Relay workers (resolved): $(jq -r '.run.clusterRelayWorkersResolved // "unknown"' "${verify_path}")"
+    echo "- Accept workers (resolved): $(jq -r '.run.clusterAcceptWorkersResolved // "unknown"' "${verify_path}")"
+    echo "- Accept batch max (resolved): $(jq -r '.run.clusterRelayAcceptBatchMaxResolved // "unknown"' "${verify_path}")"
+    echo "- Relay pump batch max (resolved): $(jq -r '.run.clusterRelayPumpBatchMaxResolved // "unknown"' "${verify_path}")"
+    echo "- Relay queue capacity (resolved): $(jq -r '.run.clusterRelayQueueCapacityResolved // "unknown"' "${verify_path}")"
+    echo "- Relay queue shard capacity (resolved): $(jq -r '.run.clusterRelayQueueShardCapacityResolved // "unknown"' "${verify_path}")"
+    echo "- Relay live sender count (resolved): $(jq -r '.run.clusterRelayLiveSenderCountResolved // "unknown"' "${verify_path}")"
+    echo "- Relay dispatch short-circuit total (resolved): $(jq -r '.run.clusterRelayDispatchSaturationShortCircuitTotal // "unknown"' "${verify_path}")"
+    echo "- Relay dispatch short-circuit per sec (resolved): $(jq -r '.run.clusterRelayDispatchSaturationShortCircuitPerSec // "unknown"' "${verify_path}")"
+    echo "- DB adapter (resolved): $(jq -r '.run.clusterDbAdapterResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres TLS mode (resolved): $(jq -r '.run.clusterDbPostgresTlsModeResolved // "unknown"' "${verify_path}")"
+    echo "- DB max tx handles (resolved): $(jq -r '.run.clusterDbMaxTxHandlesResolved // "unknown"' "${verify_path}")"
+    echo "- DB records max (resolved): $(jq -r '.run.clusterDbRecordsMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres statement timeout ms (resolved): $(jq -r '.run.clusterDbPostgresStatementTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres lock timeout ms (resolved): $(jq -r '.run.clusterDbPostgresLockTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres connect timeout ms (resolved): $(jq -r '.run.clusterDbPostgresConnectTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite busy timeout ms (resolved): $(jq -r '.run.clusterDbSqliteBusyTimeoutMsResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite journal mode (resolved): $(jq -r '.run.clusterDbSqliteJournalModeResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite synchronous (resolved): $(jq -r '.run.clusterDbSqliteSynchronousResolved // "unknown"' "${verify_path}")"
+    echo "- DB postgres retryable conflict retry max (resolved): $(jq -r '.run.clusterDbPostgresRetryableConflictRetryMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite lock retry max (resolved): $(jq -r '.run.clusterDbSqliteLockRetryMaxResolved // "unknown"' "${verify_path}")"
+    echo "- DB sqlite lock retry delay ms (resolved): $(jq -r '.run.clusterDbSqliteLockRetryDelayMsResolved // "unknown"' "${verify_path}")"
+    echo
+  fi
+} > "${out_path}"
+
+echo "wrote ${out_path}"

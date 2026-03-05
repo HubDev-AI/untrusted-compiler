@@ -2,11 +2,11 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] [--impls sec4,node,go,rust,c]" >&2
+  echo "usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c]" >&2
 }
 
 dry_run="false"
-impls_csv="sec4,node,go,rust,c"
+impls_csv="sec4,sec4-lasm,node,go,rust,c"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -42,7 +42,7 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
 is_supported_impl() {
   case "$1" in
-    sec4|node|go|rust|c) return 0 ;;
+    sec4|sec4-lasm|node|go|rust|c) return 0 ;;
     *) return 1 ;;
   esac
 }

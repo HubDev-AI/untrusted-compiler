@@ -23,6 +23,16 @@ if ! grep -q '^preflight passed$' <<<"$out_equals"; then
   exit 1
 fi
 
+out_lasm="$($root_dir/scripts/preflight.sh --impls sec4-lasm --dry-run-only)"
+if ! grep -q 'Untrusted<T> compiler runner' <<<"$out_lasm"; then
+  echo "preflight missing sec4-lasm tool check" >&2
+  exit 1
+fi
+if ! grep -q '^preflight passed$' <<<"$out_lasm"; then
+  echo "preflight sec4-lasm mode did not pass" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/preflight.sh" --impls unknown --dry-run-only >/dev/null 2>&1; then
   echo "expected unknown implementation to fail" >&2
   exit 1

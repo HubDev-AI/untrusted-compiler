@@ -140,6 +140,7 @@ fn handle_message<W: Write>(
                             "renameProvider": {
                                 "prepareProvider": true
                             },
+                            "documentFormattingProvider": true,
                             "codeActionProvider": {
                                 "codeActionKinds": ["quickfix"]
                             }
@@ -340,6 +341,25 @@ fn handle_message<W: Write>(
                 }
             }
         }
+        Some("textDocument/formatting") => {
+            if let Some(id) = id {
+                if let Some(uri) = parse_text_document_uri(message) {
+                    match format_document(state, &uri) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid formatting request payload".to_string(),
+                    )?;
+                }
+            }
+        }
         Some("textDocument/codeAction") => {
             if let Some(id) = id {
                 if let Some((uri, diagnostics)) = parse_code_action_request(message) {
@@ -412,13 +432,18 @@ fn parse_did_close(message: &Value) -> Option<String> {
         .map(|uri| uri.to_string())
 }
 
-fn parse_text_document_position(message: &Value) -> Option<(String, usize, usize)> {
-    let params = message.get("params")?;
-    let uri = params
+fn parse_text_document_uri(message: &Value) -> Option<String> {
+    message
+        .get("params")?
         .get("textDocument")?
         .get("uri")?
-        .as_str()?
-        .to_string();
+        .as_str()
+        .map(|uri| uri.to_string())
+}
+
+fn parse_text_document_position(message: &Value) -> Option<(String, usize, usize)> {
+    let params = message.get("params")?;
+    let uri = parse_text_document_uri(message)?;
     let line = params.get("position")?.get("line")?.as_u64()? as usize;
     let character = params.get("position")?.get("character")?.as_u64()? as usize;
     Some((uri, line, character))
@@ -459,6 +484,29 @@ fn parse_code_action_request(message: &Value) -> Option<(String, Vec<Value>)> {
         .and_then(Value::as_array)?
         .clone();
     Some((uri, diagnostics))
+}
+
+fn format_document(state: &ServerState, uri: &str) -> io::Result<Value> {
+    let (_, source) = load_document_source(state, uri)?;
+    let formatted = format_ut_source_for_lsp(&source);
+    if formatted == source {
+        return Ok(Value::Array(Vec::new()));
+    }
+
+    let (end_line, end_character) = source_end_position(&source);
+    Ok(json!([{
+        "range": {
+            "start": {
+                "line": 0,
+                "character": 0
+            },
+            "end": {
+                "line": end_line,
+                "character": end_character
+            }
+        },
+        "newText": formatted
+    }]))
 }
 
 fn definition_at_position(
@@ -1218,6 +1266,30 @@ fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, 
 
     let text = fs::read_to_string(&path)?;
     Ok((path, text))
+}
+
+fn format_ut_source_for_lsp(source: &str) -> String {
+    let mut formatted = source
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    formatted.push('\n');
+    formatted
+}
+
+fn source_end_position(source: &str) -> (usize, usize) {
+    let mut line = 0usize;
+    let mut character = 0usize;
+    for ch in source.chars() {
+        if ch == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
+    }
+    (line, character)
 }
 
 fn refresh_program_cache(state: &mut ServerState, uri: &str, text: &str) {
@@ -2557,6 +2629,15 @@ mod tests {
             messages[0]
                 .get("result")
                 .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("documentFormattingProvider"))
+                .and_then(Value::as_bool),
+            Some(true),
+            "initialize response should advertise document formatting provider",
+        );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
                 .and_then(|caps| caps.get("codeActionProvider"))
                 .and_then(|provider| provider.get("codeActionKinds"))
                 .and_then(Value::as_array)
@@ -3080,6 +3161,145 @@ mod tests {
             .map(|diags| diags.len())
             .unwrap_or(0);
         assert_eq!(second_count, 0, "valid change should clear diagnostics");
+    }
+
+    #[test]
+    fn formatting_request_returns_full_document_edit_when_source_needs_changes() {
+        let uri = "file:///tmp/lsp_formatting_rewrite.ut";
+        let source = "fn main() -> Int {  \n  0  \n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "untrusted",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 900,
+            "method": "textDocument/formatting",
+            "params": {
+                "textDocument": {"uri": uri},
+                "options": {
+                    "tabSize": 2,
+                    "insertSpaces": true
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(900)))
+            .expect("formatting response should exist");
+        let edits = response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("formatting result should be array");
+        assert_eq!(
+            edits.len(),
+            1,
+            "formatter should emit one full-document edit"
+        );
+
+        let edit = &edits[0];
+        assert_eq!(
+            edit.get("newText").and_then(Value::as_str),
+            Some("fn main() -> Int {\n  0\n}\n"),
+            "formatting should trim trailing whitespace and keep final newline",
+        );
+        assert_eq!(
+            edit.get("range")
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("line"))
+                .and_then(Value::as_u64),
+            Some(0),
+            "full-document edit should start at line 0",
+        );
+        assert_eq!(
+            edit.get("range")
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("character"))
+                .and_then(Value::as_u64),
+            Some(0),
+            "full-document edit should start at character 0",
+        );
+    }
+
+    #[test]
+    fn formatting_request_returns_no_edits_when_source_is_already_formatted() {
+        let uri = "file:///tmp/lsp_formatting_noop.ut";
+        let source = "fn main() -> Int {\n  0\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "untrusted",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 901,
+            "method": "textDocument/formatting",
+            "params": {
+                "textDocument": {"uri": uri},
+                "options": {
+                    "tabSize": 2,
+                    "insertSpaces": true
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(901)))
+            .expect("formatting response should exist");
+        let edits = response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("formatting result should be array");
+        assert!(edits.is_empty(), "formatted source should produce no edits");
     }
 
     #[test]

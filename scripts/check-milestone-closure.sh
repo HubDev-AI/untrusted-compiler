@@ -402,121 +402,139 @@ if [ -f "${release_contract_smoke_workflow_path}" ] \
 fi
 
 naming_lock_workflow_path="${repo_root}/.github/workflows/naming-lock.yml"
+naming_lock_ci_guard_source_path="${naming_lock_workflow_path}"
+naming_lock_ci_guard_source_tmp=""
+naming_lock_contract_runner_script="${repo_root}/scripts/run-naming-lock-contract-suite.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-release-contract-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-release-contract-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/run-naming-lock-contract-suite.sh' "${naming_lock_workflow_path}" \
+  && [ -f "${naming_lock_contract_runner_script}" ]; then
+  naming_lock_ci_guard_source_tmp="$(mktemp)"
+  cat "${naming_lock_workflow_path}" "${naming_lock_contract_runner_script}" > "${naming_lock_ci_guard_source_tmp}"
+  naming_lock_ci_guard_source_path="${naming_lock_ci_guard_source_tmp}"
+fi
+
+cleanup_closure_check_temp_files() {
+  if [ -n "${naming_lock_ci_guard_source_tmp}" ] && [ -f "${naming_lock_ci_guard_source_tmp}" ]; then
+    rm -f "${naming_lock_ci_guard_source_tmp}"
+  fi
+}
+trap cleanup_closure_check_temp_files EXIT
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-release-contract-smoke-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-release-contract-smoke-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_release_contract_smoke_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-alpha-release-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-alpha-release-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-alpha-release-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-alpha-release-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_alpha_release_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_cross_impl_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_trend_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-check-sec4-explain-audit-coverage.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-check-sec4-explain-audit-coverage.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_explain_coverage_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-replay-capture-contract.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-replay-capture-contract.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_replay_capture_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-replay-capture-compat.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-replay-capture-compat.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_replay_compat_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-replay-stub-registry-contract.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-replay-stub-registry-contract.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_replay_stub_registry_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-replay-cli-json-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-replay-cli-json-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-replay-cli-json-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-replay-cli-json-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_replay_json_cli_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-m16-runtime-http-coverage.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-m16-runtime-http-coverage-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-m16-runtime-http-coverage.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-m16-runtime-http-coverage-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m16_runtime_http_coverage_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-smoke-sec4-run-hello-api-script-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-smoke-sec4-run-hello-api-script-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m16_operator_smoke_script_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-runtime-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-runtime-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-check-runtime-smoke-artifacts.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-build-runtime-smoke-branch-index.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-check-runtime-smoke-bundle.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-runtime-smoke-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-runtime-smoke-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-check-runtime-smoke-artifacts.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-check-runtime-smoke-db-adapter-artifacts.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-build-runtime-smoke-branch-index.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-check-runtime-smoke-bundle.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m16_runtime_smoke_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-sec4-run-runtime-flag-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-sec4-run-runtime-flag-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-sec4-run-runtime-flag-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-sec4-run-runtime-flag-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m16_run_runtime_flag_ci_guard=1
 fi
 
 m17_handoff_test_script="${repo_root}/scripts/test-check-m17-operator-handoff-readiness.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_handoff_test_script}" ] \
-  && rg -q 'scripts/test-check-m17-operator-handoff-readiness.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-check-m17-operator-handoff-readiness.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_handoff_ci_guard=1
 fi
 
 m17_bootstrap_test_script="${repo_root}/scripts/test-run-m17-operator-bootstrap.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_bootstrap_test_script}" ] \
-  && rg -q 'scripts/test-run-m17-operator-bootstrap.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m17-operator-bootstrap.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_bootstrap_ci_guard=1
 fi
 
 m17_troubleshooting_test_script="${repo_root}/scripts/test-print-m17-operator-troubleshooting-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_troubleshooting_test_script}" ] \
-  && rg -q 'scripts/test-print-m17-operator-troubleshooting-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-print-m17-operator-troubleshooting-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_troubleshooting_ci_guard=1
 fi
 
 m17_quickstart_test_script="${repo_root}/scripts/test-run-m17-operator-handoff-quickstart.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_quickstart_test_script}" ] \
-  && rg -q 'scripts/test-run-m17-operator-handoff-quickstart.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m17-operator-handoff-quickstart.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_quickstart_ci_guard=1
 fi
 
 m17_ci_smoke_test_script="${repo_root}/scripts/test-run-m17-operator-handoff-ci-smoke.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_ci_smoke_test_script}" ] \
-  && rg -q 'scripts/test-run-m17-operator-handoff-ci-smoke.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m17-operator-handoff-ci-smoke.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_ci_smoke_ci_guard=1
 fi
 
 operator_handoff_workflow_path="${repo_root}/.github/workflows/operator-handoff-smoke.yml"
 if [ -f "${operator_handoff_workflow_path}" ] \
-  && rg -q 'pull_request:' "${operator_handoff_workflow_path}" \
   && rg -q 'push:' "${operator_handoff_workflow_path}" \
   && rg -q 'branches:' "${operator_handoff_workflow_path}" \
   && rg -q -- '- main' "${operator_handoff_workflow_path}" \
@@ -531,986 +549,986 @@ if [ -f "${operator_handoff_workflow_path}" ] \
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-operator-handoff-workflow-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-operator-handoff-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-operator-handoff-workflow-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-operator-handoff-workflow-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_handoff_workflow_ci_guard=1
 fi
 
 m17_artifact_inspector_test_script="${repo_root}/scripts/test-inspect-m17-operator-handoff-artifacts.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_artifact_inspector_test_script}" ] \
-  && rg -q 'scripts/test-inspect-m17-operator-handoff-artifacts.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-inspect-m17-operator-handoff-artifacts.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_artifact_inspector_ci_guard=1
 fi
 
 m17_summary_test_script="${repo_root}/scripts/test-summarize-m17-operator-handoff-readiness.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_summary_test_script}" ] \
-  && rg -q 'scripts/test-summarize-m17-operator-handoff-readiness.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-summarize-m17-operator-handoff-readiness.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_summary_ci_guard=1
 fi
 
 m17_release_packet_test_script="${repo_root}/scripts/test-build-m17-operator-release-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_release_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m17-operator-release-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m17-operator-release-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_release_packet_ci_guard=1
 fi
 
 m17_playbook_test_script="${repo_root}/scripts/test-check-m17-operator-handoff-playbook.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_playbook_test_script}" ] \
-  && rg -q 'scripts/test-check-m17-operator-handoff-playbook.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-check-m17-operator-handoff-playbook.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_playbook_ci_guard=1
 fi
 
 m17_clean_clone_test_script="${repo_root}/scripts/test-run-m17-operator-clean-clone-rehearsal.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_clean_clone_test_script}" ] \
-  && rg -q 'scripts/test-run-m17-operator-clean-clone-rehearsal.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m17-operator-clean-clone-rehearsal.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m17_operator_clean_clone_ci_guard=1
 fi
 
 m18_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m18-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m18-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m18-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_kickoff_brief_ci_guard=1
 fi
 
 m18_priority_matrix_test_script="${repo_root}/scripts/test-build-m18-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m18-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m18-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_priority_matrix_ci_guard=1
 fi
 
 m18_slice_selector_test_script="${repo_root}/scripts/test-select-m18-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m18-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m18-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_slice_selector_ci_guard=1
 fi
 
 m18_editor_contract_test_script="${repo_root}/scripts/test-m18-editor-contract-expansion.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_editor_contract_test_script}" ] \
-  && rg -q 'scripts/test-m18-editor-contract-expansion.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-m18-editor-contract-expansion.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_editor_contract_ci_guard=1
 fi
 
 m18_release_publish_integrity_test_script="${repo_root}/scripts/test-m18-release-publish-integrity.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_release_publish_integrity_test_script}" ] \
-  && rg -q 'scripts/test-m18-release-publish-integrity.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-m18-release-publish-integrity.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_release_publish_integrity_ci_guard=1
 fi
 
 m18_runtime_track_runner_test_script="${repo_root}/scripts/test-run-m18-runtime-track.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_runtime_track_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m18-runtime-track.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m18-runtime-track.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_runtime_track_runner_ci_guard=1
 fi
 
 m18_track_convergence_summary_test_script="${repo_root}/scripts/test-build-m18-track-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_track_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m18-track-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m18-track-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_track_convergence_summary_ci_guard=1
 fi
 
 m18_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m18-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m18-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m18-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_transition_handoff_packet_ci_guard=1
 fi
 
 m18_closure_report_test_script="${repo_root}/scripts/test-build-m18-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m18-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m18-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m18_closure_report_ci_guard=1
 fi
 
 m19_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m19-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m19-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m19-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_kickoff_brief_ci_guard=1
 fi
 
 m19_priority_matrix_test_script="${repo_root}/scripts/test-build-m19-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m19-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m19-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_priority_matrix_ci_guard=1
 fi
 
 m19_slice_selector_test_script="${repo_root}/scripts/test-select-m19-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m19-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m19-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_slice_selector_ci_guard=1
 fi
 
 m19_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m19-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m19-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m19-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_runtime_hardening_runner_ci_guard=1
 fi
 
 m19_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m19-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m19-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m19-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m19_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m19-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m19-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m19-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_transition_handoff_packet_ci_guard=1
 fi
 
 m19_closure_report_test_script="${repo_root}/scripts/test-build-m19-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m19_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m19-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m19-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m19_closure_report_ci_guard=1
 fi
 
 m20_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m20-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m20-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m20-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_kickoff_brief_ci_guard=1
 fi
 
 m20_priority_matrix_test_script="${repo_root}/scripts/test-build-m20-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m20-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m20-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_priority_matrix_ci_guard=1
 fi
 
 m20_slice_selector_test_script="${repo_root}/scripts/test-select-m20-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m20-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m20-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_slice_selector_ci_guard=1
 fi
 
 m20_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m20-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m20-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m20-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_runtime_hardening_runner_ci_guard=1
 fi
 
 m20_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m20-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m20-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m20-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m20_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m20-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m20-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m20-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_transition_handoff_packet_ci_guard=1
 fi
 
 m20_closure_report_test_script="${repo_root}/scripts/test-build-m20-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m20_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m20-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m20-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m20_closure_report_ci_guard=1
 fi
 
 m21_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m21-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m21-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m21-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_kickoff_brief_ci_guard=1
 fi
 
 m21_priority_matrix_test_script="${repo_root}/scripts/test-build-m21-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m21-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m21-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_priority_matrix_ci_guard=1
 fi
 
 m21_slice_selector_test_script="${repo_root}/scripts/test-select-m21-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m21-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m21-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_slice_selector_ci_guard=1
 fi
 
 m21_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m21-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m21-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m21-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_runtime_hardening_runner_ci_guard=1
 fi
 
 m21_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m21-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m21-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m21-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m21_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m21-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m21-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m21-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_transition_handoff_packet_ci_guard=1
 fi
 
 m21_closure_report_test_script="${repo_root}/scripts/test-build-m21-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m21_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m21-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m21-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m21_closure_report_ci_guard=1
 fi
 
 m22_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m22-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m22-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m22-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_kickoff_brief_ci_guard=1
 fi
 
 m22_priority_matrix_test_script="${repo_root}/scripts/test-build-m22-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m22-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m22-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_priority_matrix_ci_guard=1
 fi
 
 m22_slice_selector_test_script="${repo_root}/scripts/test-select-m22-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m22-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m22-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_slice_selector_ci_guard=1
 fi
 
 m22_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m22-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m22-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m22-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_runtime_hardening_runner_ci_guard=1
 fi
 
 m22_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m22-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m22-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m22-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m22_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m22-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m22-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m22-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_transition_handoff_packet_ci_guard=1
 fi
 
 m22_closure_report_test_script="${repo_root}/scripts/test-build-m22-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m22_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m22-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m22-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m22_closure_report_ci_guard=1
 fi
 
 m23_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m23-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m23-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m23-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_kickoff_brief_ci_guard=1
 fi
 
 m23_priority_matrix_test_script="${repo_root}/scripts/test-build-m23-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m23-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m23-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_priority_matrix_ci_guard=1
 fi
 
 m23_slice_selector_test_script="${repo_root}/scripts/test-select-m23-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m23-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m23-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_slice_selector_ci_guard=1
 fi
 
 m23_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m23-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m23-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m23-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_runtime_hardening_runner_ci_guard=1
 fi
 
 m23_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m23-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m23-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m23-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m23_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m23-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m23-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m23-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_transition_handoff_packet_ci_guard=1
 fi
 
 m23_closure_report_test_script="${repo_root}/scripts/test-build-m23-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m23_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m23-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m23-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m23_closure_report_ci_guard=1
 fi
 
 m24_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m24-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m24-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m24-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_kickoff_brief_ci_guard=1
 fi
 
 m24_priority_matrix_test_script="${repo_root}/scripts/test-build-m24-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m24-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m24-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_priority_matrix_ci_guard=1
 fi
 
 m24_slice_selector_test_script="${repo_root}/scripts/test-select-m24-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m24-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m24-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_slice_selector_ci_guard=1
 fi
 
 m24_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m24-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m24-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m24-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_runtime_hardening_runner_ci_guard=1
 fi
 
 m24_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m24-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m24-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m24-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m24_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m24-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m24-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m24-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_transition_handoff_packet_ci_guard=1
 fi
 
 m24_closure_report_test_script="${repo_root}/scripts/test-build-m24-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m24_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m24-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m24-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m24_closure_report_ci_guard=1
 fi
 
 m25_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m25-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m25-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m25-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_kickoff_brief_ci_guard=1
 fi
 
 m25_priority_matrix_test_script="${repo_root}/scripts/test-build-m25-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m25-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m25-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_priority_matrix_ci_guard=1
 fi
 
 m25_slice_selector_test_script="${repo_root}/scripts/test-select-m25-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m25-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m25-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_slice_selector_ci_guard=1
 fi
 
 m25_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m25-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m25-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m25-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_runtime_hardening_runner_ci_guard=1
 fi
 
 m25_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m25-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m25-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m25-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m25_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m25-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m25-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m25-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_transition_handoff_packet_ci_guard=1
 fi
 
 m25_closure_report_test_script="${repo_root}/scripts/test-build-m25-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m25_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m25-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m25-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m25_closure_report_ci_guard=1
 fi
 
 m26_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m26-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m26-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m26-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_kickoff_brief_ci_guard=1
 fi
 
 m26_priority_matrix_test_script="${repo_root}/scripts/test-build-m26-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m26-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m26-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_priority_matrix_ci_guard=1
 fi
 
 m26_slice_selector_test_script="${repo_root}/scripts/test-select-m26-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m26-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m26-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_slice_selector_ci_guard=1
 fi
 
 m26_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m26-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m26-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m26-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_runtime_hardening_runner_ci_guard=1
 fi
 
 m26_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m26-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m26-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m26-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m26_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m26-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m26-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m26-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_transition_handoff_packet_ci_guard=1
 fi
 
 m26_closure_report_test_script="${repo_root}/scripts/test-build-m26-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m26_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m26-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m26-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m26_closure_report_ci_guard=1
 fi
 
 m27_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m27-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m27-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m27-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_kickoff_brief_ci_guard=1
 fi
 
 m27_priority_matrix_test_script="${repo_root}/scripts/test-build-m27-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m27-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m27-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_priority_matrix_ci_guard=1
 fi
 
 m27_slice_selector_test_script="${repo_root}/scripts/test-select-m27-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m27-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m27-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_slice_selector_ci_guard=1
 fi
 
 m27_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m27-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m27-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m27-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_runtime_hardening_runner_ci_guard=1
 fi
 
 m27_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m27-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m27-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m27-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m27_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m27-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m27-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m27-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_transition_handoff_packet_ci_guard=1
 fi
 
 m27_closure_report_test_script="${repo_root}/scripts/test-build-m27-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m27_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m27-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m27-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m27_closure_report_ci_guard=1
 fi
 
 m28_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m28-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m28-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m28-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_kickoff_brief_ci_guard=1
 fi
 
 m28_priority_matrix_test_script="${repo_root}/scripts/test-build-m28-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m28-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m28-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_priority_matrix_ci_guard=1
 fi
 
 m28_slice_selector_test_script="${repo_root}/scripts/test-select-m28-next-slice.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_slice_selector_test_script}" ] \
-  && rg -q 'scripts/test-select-m28-next-slice.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-select-m28-next-slice.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_slice_selector_ci_guard=1
 fi
 
 m28_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m28-runtime-hardening.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_runtime_hardening_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m28-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m28-runtime-hardening.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_runtime_hardening_runner_ci_guard=1
 fi
 
 m28_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m28-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m28-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m28-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m28_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m28-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m28-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m28-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_transition_handoff_packet_ci_guard=1
 fi
 
 m28_closure_report_test_script="${repo_root}/scripts/test-build-m28-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m28_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m28-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m28-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m28_closure_report_ci_guard=1
 fi
 
 m29_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m29-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m29-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m29-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_kickoff_brief_ci_guard=1
 fi
 
 m29_priority_matrix_test_script="${repo_root}/scripts/test-build-m29-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m29-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m29-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_priority_matrix_ci_guard=1
 fi
 
 m29_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m29-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m29-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m29-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_runtime_destub_plan_ci_guard=1
 fi
 
 m29_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m29-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m29-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m29-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_runtime_destub_runner_ci_guard=1
 fi
 
 m29_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m29-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m29-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m29-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m29_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m29-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m29-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m29-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_transition_handoff_packet_ci_guard=1
 fi
 
 m29_closure_report_test_script="${repo_root}/scripts/test-build-m29-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m29_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m29-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m29-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m29_closure_report_ci_guard=1
 fi
 
 m30_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m30-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m30-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m30-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_kickoff_brief_ci_guard=1
 fi
 
 m30_priority_matrix_test_script="${repo_root}/scripts/test-build-m30-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m30-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m30-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_priority_matrix_ci_guard=1
 fi
 
 m30_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m30-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m30-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m30-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_runtime_destub_plan_ci_guard=1
 fi
 
 m30_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m30-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m30-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m30-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_runtime_destub_runner_ci_guard=1
 fi
 
 m30_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m30-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m30-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m30-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m30_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m30-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m30-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m30-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_transition_handoff_packet_ci_guard=1
 fi
 
 m30_closure_report_test_script="${repo_root}/scripts/test-build-m30-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m30_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m30-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m30-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m30_closure_report_ci_guard=1
 fi
 
 m31_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m31-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m31-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m31-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_kickoff_brief_ci_guard=1
 fi
 
 m31_priority_matrix_test_script="${repo_root}/scripts/test-build-m31-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m31-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m31-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_priority_matrix_ci_guard=1
 fi
 
 m31_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m31-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m31-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m31-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_runtime_destub_plan_ci_guard=1
 fi
 
 m31_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m31-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m31-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m31-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_runtime_destub_runner_ci_guard=1
 fi
 
 m31_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m31-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m31-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m31-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m31_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m31-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m31-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m31-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_transition_handoff_packet_ci_guard=1
 fi
 
 m31_closure_report_test_script="${repo_root}/scripts/test-build-m31-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m31_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m31-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m31-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m31_closure_report_ci_guard=1
 fi
 
 m32_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m32-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m32-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m32-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_kickoff_brief_ci_guard=1
 fi
 
 m32_priority_matrix_test_script="${repo_root}/scripts/test-build-m32-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m32-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m32-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_priority_matrix_ci_guard=1
 fi
 
 m32_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m32-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m32-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m32-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_runtime_destub_plan_ci_guard=1
 fi
 
 m32_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m32-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m32-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m32-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_runtime_destub_runner_ci_guard=1
 fi
 
 m32_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m32-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m32-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m32-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m32_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m32-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m32-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m32-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_transition_handoff_packet_ci_guard=1
 fi
 
 m32_closure_report_test_script="${repo_root}/scripts/test-build-m32-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m32_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m32-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m32-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m32_closure_report_ci_guard=1
 fi
 
 m33_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m33-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m33-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m33-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_kickoff_brief_ci_guard=1
 fi
 
 m33_priority_matrix_test_script="${repo_root}/scripts/test-build-m33-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m33-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m33-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_priority_matrix_ci_guard=1
 fi
 
 m33_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m33-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m33-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m33-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_runtime_destub_plan_ci_guard=1
 fi
 
 m33_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m33-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m33-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m33-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_runtime_destub_runner_ci_guard=1
 fi
 
 m33_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m33-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m33-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m33-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m33_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m33-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m33-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m33-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_transition_handoff_packet_ci_guard=1
 fi
 
 m33_closure_report_test_script="${repo_root}/scripts/test-build-m33-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m33_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m33-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m33-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m33_closure_report_ci_guard=1
 fi
 
 m34_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m34-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m34-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m34-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_kickoff_brief_ci_guard=1
 fi
 
 m34_priority_matrix_test_script="${repo_root}/scripts/test-build-m34-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m34-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m34-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_priority_matrix_ci_guard=1
 fi
 
 m34_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m34-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m34-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m34-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_runtime_destub_plan_ci_guard=1
 fi
 
 m34_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m34-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m34-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m34-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_runtime_destub_runner_ci_guard=1
 fi
 
 m34_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m34-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m34-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m34-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m34_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m34-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m34-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m34-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_transition_handoff_packet_ci_guard=1
 fi
 
 m34_closure_report_test_script="${repo_root}/scripts/test-build-m34-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m34_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m34-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m34-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m34_closure_report_ci_guard=1
 fi
 
 m35_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m35-kickoff-brief.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_kickoff_brief_test_script}" ] \
-  && rg -q 'scripts/test-generate-m35-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-generate-m35-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_kickoff_brief_ci_guard=1
 fi
 
 m35_priority_matrix_test_script="${repo_root}/scripts/test-build-m35-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m35-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m35-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_priority_matrix_ci_guard=1
 fi
 
 m35_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m35-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m35-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m35-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_runtime_destub_plan_ci_guard=1
 fi
 
 m35_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m35-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m35-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m35-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_runtime_destub_runner_ci_guard=1
 fi
 
 m35_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m35-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m35-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m35-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m35_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m35-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m35-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m35-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_transition_handoff_packet_ci_guard=1
 fi
 
 m35_closure_report_test_script="${repo_root}/scripts/test-build-m35-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m35_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m35-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m35-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m35_closure_report_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-build-m36-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m36-kickoff-brief.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_kickoff_brief_ci_guard=1
 fi
 
 m36_priority_matrix_test_script="${repo_root}/scripts/test-build-m36-priority-matrix.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_priority_matrix_test_script}" ] \
-  && rg -q 'scripts/test-build-m36-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m36-priority-matrix.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_priority_matrix_ci_guard=1
 fi
 
 m36_runtime_destub_plan_test_script="${repo_root}/scripts/test-plan-m36-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_runtime_destub_plan_test_script}" ] \
-  && rg -q 'scripts/test-plan-m36-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-plan-m36-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_runtime_destub_plan_ci_guard=1
 fi
 
 m36_runtime_destub_runner_test_script="${repo_root}/scripts/test-run-m36-runtime-destub.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_runtime_destub_runner_test_script}" ] \
-  && rg -q 'scripts/test-run-m36-runtime-destub.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-run-m36-runtime-destub.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_runtime_destub_runner_ci_guard=1
 fi
 
 m36_executed_slice_convergence_summary_test_script="${repo_root}/scripts/test-build-m36-executed-slice-convergence-summary.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_executed_slice_convergence_summary_test_script}" ] \
-  && rg -q 'scripts/test-build-m36-executed-slice-convergence-summary.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m36-executed-slice-convergence-summary.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_executed_slice_convergence_summary_ci_guard=1
 fi
 
 m36_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m36-transition-handoff-packet.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_transition_handoff_packet_test_script}" ] \
-  && rg -q 'scripts/test-build-m36-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m36-transition-handoff-packet.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_transition_handoff_packet_ci_guard=1
 fi
 
 m36_closure_report_test_script="${repo_root}/scripts/test-build-m36-closure-report.sh"
 if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m36_closure_report_test_script}" ] \
-  && rg -q 'scripts/test-build-m36-closure-report.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-build-m36-closure-report.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_m36_closure_report_ci_guard=1
 fi
 
@@ -1526,14 +1544,13 @@ if [ -f "${replay_json_contract_script}" ] \
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-zed-grammar-pin.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-zed-grammar-pin-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-zed-grammar-pin.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-zed-grammar-pin-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_zed_grammar_pin_ci_guard=1
 fi
 
 runtime_smoke_workflow_path="${repo_root}/.github/workflows/runtime-smoke.yml"
 if [ -f "${runtime_smoke_workflow_path}" ] \
-  && rg -q 'pull_request:' "${runtime_smoke_workflow_path}" \
   && rg -q 'push:' "${runtime_smoke_workflow_path}" \
   && rg -q 'branches:' "${runtime_smoke_workflow_path}" \
   && rg -q -- '- main' "${runtime_smoke_workflow_path}" \
@@ -1541,6 +1558,8 @@ if [ -f "${runtime_smoke_workflow_path}" ] \
   && rg -q 'uses:[[:space:]]*actions/checkout@v4' "${runtime_smoke_workflow_path}" \
   && rg -q 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default' "${runtime_smoke_workflow_path}" \
   && rg -q 'scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter records-log --artifacts-dir build/runtime-smoke/lasm-db-records-log' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter sqlite --artifacts-dir build/runtime-smoke/lasm-db-sqlite' "${runtime_smoke_workflow_path}" \
   && rg -q 'scripts/check-runtime-smoke-bundle.sh --artifacts-root build/runtime-smoke --index-path build/runtime-smoke/runtime-smoke-branch-index.json' "${runtime_smoke_workflow_path}" \
   && rg -q 'if:[[:space:]]*always\(\)' "${runtime_smoke_workflow_path}" \
   && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${runtime_smoke_workflow_path}" \
@@ -1550,13 +1569,13 @@ if [ -f "${runtime_smoke_workflow_path}" ] \
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-sec4-cli-command-contract.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-sec4-cli-command-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-sec4-cli-command-contract.sh' "${naming_lock_ci_guard_source_path}" \
+  && rg -q 'scripts/test-sec4-cli-command-contract-guard.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_cli_command_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-check-no-local-path-leaks.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-check-no-local-path-leaks.sh' "${naming_lock_ci_guard_source_path}"; then
   bool_has_local_path_leak_ci_guard=1
 fi
 
@@ -1716,15 +1735,15 @@ emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tes
 emit_check "M15-A" "replay CLI json contract guards execution fields + missing-key fixtures" "${bool_has_replay_execution_contract_guard}" "scripts/test-replay-cli-json-contract.sh + scripts/test-replay-cli-json-contract-guard.sh"
 emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests" "${bool_has_m16_runtime_http_coverage_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests" "${bool_has_m16_operator_smoke_script_ci_guard}" "${naming_lock_workflow_path}"
-emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke + artifact validation/index/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
-emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M16-C" "runtime-smoke workflow executes hello-api default/max-body plus LASM db-adapter lanes with bundle validation/index/upload on main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
+emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + hello-api/db-adapter artifact checker + index/bundle tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-A" "naming-lock CI enforces M17 operator handoff readiness checker" "${bool_has_m17_operator_handoff_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-B" "naming-lock CI enforces M17 operator bootstrap profile helper" "${bool_has_m17_operator_bootstrap_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-C" "naming-lock CI enforces M17 operator troubleshooting matrix" "${bool_has_m17_operator_troubleshooting_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-D" "naming-lock CI enforces M17 operator handoff quickstart" "${bool_has_m17_operator_quickstart_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-E" "naming-lock CI enforces M17 operator handoff CI smoke wrapper" "${bool_has_m17_operator_ci_smoke_ci_guard}" "${naming_lock_workflow_path}"
-emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
+emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
 emit_check "M17-G" "naming-lock CI enforces operator-handoff workflow contract + guard tests" "${bool_has_m17_operator_handoff_workflow_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-H" "naming-lock CI enforces M17 operator handoff artifact inspector" "${bool_has_m17_operator_artifact_inspector_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-I" "naming-lock CI enforces M17 operator handoff readiness summary" "${bool_has_m17_operator_summary_ci_guard}" "${naming_lock_workflow_path}"

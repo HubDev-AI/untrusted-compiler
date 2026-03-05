@@ -18,7 +18,12 @@ pub enum PolicyMode {
 pub struct CorsPolicyConfig {
     pub enabled: bool,
     pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub allowed_headers: Vec<String>,
+    pub exposed_headers: Vec<String>,
+    pub max_age_seconds: i64,
     pub allow_credentials: bool,
+    pub allow_private_network: bool,
     pub reflect_origin: bool,
     pub forbid_any_origin: bool,
     pub forbid_reflect_origin: bool,
@@ -35,8 +40,12 @@ impl CorsPolicyConfig {
 pub struct SecurityHeadersPolicyConfig {
     pub enabled: bool,
     pub hsts_enabled: bool,
+    pub hsts_max_age_seconds: i64,
+    pub hsts_include_subdomains: bool,
+    pub hsts_preload: bool,
     pub csp_enabled: bool,
     pub csp_report_only: bool,
+    pub csp_policy: String,
     pub x_frame_options: String,
     pub x_content_type_options: bool,
     pub referrer_policy: String,
@@ -46,6 +55,8 @@ pub struct SecurityHeadersPolicyConfig {
 pub struct CsrfPolicyConfig {
     pub enabled: bool,
     pub mode: String,
+    pub cookie_name: String,
+    pub header_name: String,
     pub same_site: String,
     pub secure_cookie: bool,
     pub protected_methods: Vec<String>,
@@ -87,6 +98,19 @@ pub struct JsonPolicyConfig {
     pub max_bytes: i64,
     pub max_depth: i64,
     pub require_schema_for_encode: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HttpPolicyConfig {
+    pub max_body_bytes: i64,
+    pub max_concurrency: i64,
+    pub max_pending: i64,
+    pub overflow_probe_timeout_ms: i64,
+    pub max_keep_alive_requests: i64,
+    pub max_runtime_steps: i64,
+    pub max_header_bytes: i64,
+    pub max_multipart_bytes: i64,
+    pub default_timeout_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -142,6 +166,7 @@ pub struct Policy {
     pub logging: LoggingPolicyConfig,
     pub sql: SqlPolicyConfig,
     pub json: JsonPolicyConfig,
+    pub http: HttpPolicyConfig,
     pub net_public: NetPublicPolicyConfig,
     pub net_internal: NetInternalPolicyConfig,
     pub net_ssrf: NetSsrfPolicyConfig,
@@ -165,7 +190,19 @@ impl Default for Policy {
             cors: CorsPolicyConfig {
                 enabled: true,
                 allowed_origins: vec!["https://app.example.com".to_string()],
+                allowed_methods: vec![
+                    "GET".to_string(),
+                    "POST".to_string(),
+                    "PUT".to_string(),
+                    "PATCH".to_string(),
+                    "DELETE".to_string(),
+                    "OPTIONS".to_string(),
+                ],
+                allowed_headers: vec!["content-type".to_string(), "authorization".to_string()],
+                exposed_headers: Vec::new(),
+                max_age_seconds: 600,
                 allow_credentials: true,
+                allow_private_network: false,
                 reflect_origin: false,
                 forbid_any_origin: true,
                 forbid_reflect_origin: true,
@@ -174,8 +211,13 @@ impl Default for Policy {
             security_headers: SecurityHeadersPolicyConfig {
                 enabled: true,
                 hsts_enabled: true,
+                hsts_max_age_seconds: 15552000,
+                hsts_include_subdomains: true,
+                hsts_preload: false,
                 csp_enabled: true,
                 csp_report_only: false,
+                csp_policy: "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+                    .to_string(),
                 x_frame_options: "DENY".to_string(),
                 x_content_type_options: true,
                 referrer_policy: "strict-origin-when-cross-origin".to_string(),
@@ -183,6 +225,8 @@ impl Default for Policy {
             csrf: CsrfPolicyConfig {
                 enabled: true,
                 mode: "double_submit".to_string(),
+                cookie_name: "csrf".to_string(),
+                header_name: "X-CSRF-Token".to_string(),
                 same_site: "Lax".to_string(),
                 secure_cookie: true,
                 protected_methods: vec![
@@ -223,6 +267,17 @@ impl Default for Policy {
                 max_bytes: 1_048_576,
                 max_depth: 32,
                 require_schema_for_encode: true,
+            },
+            http: HttpPolicyConfig {
+                max_body_bytes: 4_096,
+                max_concurrency: 256,
+                max_pending: 256,
+                overflow_probe_timeout_ms: 50,
+                max_keep_alive_requests: 256,
+                max_runtime_steps: 65_536,
+                max_header_bytes: 8_191,
+                max_multipart_bytes: 4_096,
+                default_timeout_ms: 200,
             },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
@@ -281,6 +336,7 @@ impl Policy {
             "logging": self.logging,
             "sql": self.sql,
             "json": self.json,
+            "http": self.http,
             "net_public": self.net_public,
             "net_internal": self.net_internal,
             "net_ssrf": self.net_ssrf,
@@ -397,6 +453,14 @@ struct HttpSection {
     max_body_bytes: Option<i64>,
     #[serde(default)]
     max_concurrency: Option<i64>,
+    #[serde(default)]
+    max_pending: Option<i64>,
+    #[serde(default)]
+    overflow_probe_timeout_ms: Option<i64>,
+    #[serde(default)]
+    max_keep_alive_requests: Option<i64>,
+    #[serde(default)]
+    max_runtime_steps: Option<i64>,
     #[serde(default)]
     default_timeout_ms: Option<i64>,
     #[serde(default)]
@@ -565,6 +629,8 @@ struct CorsSection {
     #[serde(default)]
     allow_credentials: Option<bool>,
     #[serde(default)]
+    allow_private_network: Option<bool>,
+    #[serde(default)]
     reflect_origin: Option<bool>,
     #[serde(default)]
     max_age_seconds: Option<i64>,
@@ -615,6 +681,8 @@ struct SecurityHeadersCspSection {
     enabled: Option<bool>,
     #[serde(default)]
     report_only: Option<bool>,
+    #[serde(default)]
+    policy: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -790,6 +858,143 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
     }
 
+    if let Some(section) = raw.http {
+        if let Some(max_body_bytes) = section.max_body_bytes {
+            if max_body_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_body_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_body_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_body_bytes = max_body_bytes;
+            }
+        }
+
+        if let Some(max_concurrency) = section.max_concurrency {
+            if max_concurrency < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_concurrency",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_concurrency must be >= 1"),
+                );
+            } else {
+                policy.http.max_concurrency = max_concurrency;
+            }
+        }
+
+        if let Some(max_pending) = section.max_pending {
+            if max_pending < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_pending",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_pending must be >= 1"),
+                );
+            } else {
+                policy.http.max_pending = max_pending;
+            }
+        }
+
+        if let Some(overflow_probe_timeout_ms) = section.overflow_probe_timeout_ms {
+            if overflow_probe_timeout_ms < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.overflow_probe_timeout_ms",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.overflow_probe_timeout_ms must be >= 1"),
+                );
+            } else {
+                policy.http.overflow_probe_timeout_ms = overflow_probe_timeout_ms;
+            }
+        }
+
+        if let Some(max_keep_alive_requests) = section.max_keep_alive_requests {
+            if max_keep_alive_requests < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_keep_alive_requests",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_keep_alive_requests must be >= 1"),
+                );
+            } else {
+                policy.http.max_keep_alive_requests = max_keep_alive_requests;
+            }
+        }
+
+        if let Some(max_runtime_steps) = section.max_runtime_steps {
+            if max_runtime_steps < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_runtime_steps",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_runtime_steps must be >= 1"),
+                );
+            } else {
+                policy.http.max_runtime_steps = max_runtime_steps;
+            }
+        }
+
+        if let Some(max_header_bytes) = section.max_header_bytes {
+            if max_header_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_header_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_header_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_header_bytes = max_header_bytes;
+            }
+        }
+
+        if let Some(max_multipart_bytes) = section.max_multipart_bytes {
+            if max_multipart_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_multipart_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_multipart_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_multipart_bytes = max_multipart_bytes;
+            }
+        }
+
+        if let Some(default_timeout_ms) = section.default_timeout_ms {
+            if default_timeout_ms < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.default_timeout_ms",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.default_timeout_ms must be >= 1"),
+                );
+            } else {
+                policy.http.default_timeout_ms = default_timeout_ms;
+            }
+        }
+    }
+
     if let Some(section) = raw.cors {
         if let Some(value) = section.enabled {
             policy.cors.enabled = value;
@@ -797,8 +1002,34 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         if let Some(value) = section.allowed_origins {
             policy.cors.allowed_origins = value;
         }
+        if let Some(value) = section.allowed_methods {
+            policy.cors.allowed_methods = value;
+        }
+        if let Some(value) = section.allowed_headers {
+            policy.cors.allowed_headers = value;
+        }
+        if let Some(value) = section.exposed_headers {
+            policy.cors.exposed_headers = value;
+        }
+        if let Some(value) = section.max_age_seconds {
+            if value <= 0 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid cors.max_age_seconds",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("cors.max_age_seconds must be >= 1"),
+                );
+            } else {
+                policy.cors.max_age_seconds = value;
+            }
+        }
         if let Some(value) = section.allow_credentials {
             policy.cors.allow_credentials = value;
+        }
+        if let Some(value) = section.allow_private_network {
+            policy.cors.allow_private_network = value;
         }
         if let Some(value) = section.reflect_origin {
             policy.cors.reflect_origin = value;
@@ -1082,6 +1313,40 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             if let Some(enabled) = hsts.enabled {
                 policy.security_headers.hsts_enabled = enabled;
             }
+            if let Some(max_age_seconds) = hsts.max_age_seconds {
+                if max_age_seconds < 0 {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid security_headers.hsts.max_age_seconds",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("security_headers.hsts.max_age_seconds must be >= 0"),
+                    );
+                } else {
+                    policy.security_headers.hsts_max_age_seconds = max_age_seconds;
+                }
+            }
+            if let Some(include_subdomains) = hsts.include_subdomains {
+                policy.security_headers.hsts_include_subdomains = include_subdomains;
+            }
+            if let Some(preload) = hsts.preload {
+                policy.security_headers.hsts_preload = preload;
+            }
+            if policy.security_headers.hsts_enabled
+                && policy.security_headers.hsts_max_age_seconds <= 0
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid security_headers.hsts.max_age_seconds",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note(
+                        "security_headers.hsts.max_age_seconds must be >= 1 when HSTS is enabled",
+                    ),
+                );
+            }
         }
 
         if let Some(csp) = section.csp {
@@ -1090,6 +1355,20 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             }
             if let Some(report_only) = csp.report_only {
                 policy.security_headers.csp_report_only = report_only;
+            }
+            if let Some(csp_policy) = csp.policy {
+                if csp_policy.trim().is_empty() {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid security_headers.csp.policy",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("security_headers.csp.policy must be a non-empty string"),
+                    );
+                } else {
+                    policy.security_headers.csp_policy = csp_policy;
+                }
             }
         }
     }
@@ -1109,6 +1388,34 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     )
                     .with_note("csrf.mode must be `off`, `double_submit`, or `synchronizer_token`"),
                 ),
+            }
+        }
+        if let Some(cookie_name) = section.cookie_name {
+            if cookie_name.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.cookie_name",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.cookie_name must be a non-empty string"),
+                );
+            } else {
+                policy.csrf.cookie_name = cookie_name;
+            }
+        }
+        if let Some(header_name) = section.header_name {
+            if header_name.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.header_name",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.header_name must be a non-empty string"),
+                );
+            } else {
+                policy.csrf.header_name = header_name;
             }
         }
         if let Some(same_site) = section.same_site {

@@ -1,3 +1,10 @@
+error[E2002]: filesystem is disabled by active policy
+  --> invalid_fs_write_path_argument_type.ut:2:3
+  note: filesystem calls are blocked because `[fs].enabled` is `false` in the active policy
+  note: enable filesystem in `sec4.policy`:
+[fs]
+enabled = true
+
 error[E4001]: fs sink path argument must be `PathSafe`
   --> invalid_fs_write_path_argument_type.ut:2:16
   note: found `Int`

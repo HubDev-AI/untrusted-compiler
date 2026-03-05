@@ -1,0 +1,18 @@
+use auth.access;
+use data.user_store;
+
+fn healthHandler() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn userHandler() effects { net } -> Int {
+  req.pathParam("id");
+  if canReadUsers() {
+    loadUser("42");
+    res.text(200, "user allowed");
+  } else {
+    res.text(403, "forbidden");
+  };
+  0
+}

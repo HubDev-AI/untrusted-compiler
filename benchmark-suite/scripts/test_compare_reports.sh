@@ -40,8 +40,12 @@ if ! jq -e '. as $doc | ($doc.compared | all(.[]; .endpoint == "ping")) and ($do
   echo "expected compare-reports rows to carry requested endpoint" >&2
   exit 1
 fi
-if ! jq -e '. as $doc | any($doc.compared[]; .impl == $doc.leader.impl and .endpoint == $doc.leader.endpoint and .targetRps == $doc.leader.targetRps and .requestsPerSec == $doc.leader.requestsPerSec and .p99 == $doc.leader.p99 and .loadGenerator == $doc.leader.loadGenerator and .constantRate == $doc.leader.constantRate)' "$out" >/dev/null; then
+if ! jq -e '. as $doc | any($doc.compared[]; .impl == $doc.leader.impl and .endpoint == $doc.leader.endpoint and .targetRps == $doc.leader.targetRps and .requestsPerSec == $doc.leader.requestsPerSec and .p99 == $doc.leader.p99 and .loadGenerator == $doc.leader.loadGenerator and .constantRate == $doc.leader.constantRate and .rssKb == $doc.leader.rssKb)' "$out" >/dev/null; then
   echo "expected leader row to be present in compared rows" >&2
+  exit 1
+fi
+if ! jq -e '.leader | has("rssKb")' "$out" >/dev/null; then
+  echo "expected leader row to include rssKb field" >&2
   exit 1
 fi
 

@@ -1,0 +1,6 @@
+// Open this file in Zed to test diagnostics + quickfixes.
+// It intentionally misses required effects.
+fn missingEffectExample() -> Int {
+  log.info("hello");
+  0
+}

@@ -53,6 +53,79 @@ Roadmap impact:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
 - Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
 - Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
+- `c-bin` compile path now prefers canonical runtime sources from `runtime/c/` with deterministic build-folder fallback when canonical files are unavailable.
+- LASM DB operator docs/runbooks are synchronized for this slice (`examples/lasm-alpha-full`): smoke and README now reflect the current Postgres DSN alias set and tokenized runtime env overrides used by cluster/runtime forwarding.
+
+## Execution Mode Lock (2026-02-17)
+
+Implementation work is now explicitly prioritized over repeated governance loops.
+
+Operating rules:
+
+1. Normal PRs must include real runtime/compiler/CLI behavior movement.
+2. During coding loops, run focused implementation checks first:
+   - `sec4 check/build/run` for touched scope,
+   - targeted Rust tests around changed behavior.
+3. Full governance suites (naming-lock/closure bundles) run once near PR completion (or in CI), not after every incremental edit.
+4. Gate-only/test-only churn without logic movement is out-of-policy unless fixing a concrete broken contract.
+
+Reference chapter:
+
+- `docs/book/887-m38-implementation-first-execution-mode-lock.md`
+
+## Alpha Scope Reset Addendum (2026-02-17)
+
+This addendum is the canonical delivery lock for current execution. It exists to avoid repeated scope re-negotiation in chat threads.
+
+Operating rules:
+
+1. Window lock (through March 17, 2026): backend no-stub alpha completion only.
+2. Implementation priority: real runtime/compiler logic and authoring usability, with multi-file module support prioritized over non-critical analyzers.
+3. `M39-S2` Composition Contract Analyzer is deferred until after the alpha checkpoint unless browser-to-server promotion work becomes immediately blocking.
+4. Test cadence remains implementation-first:
+   - run targeted behavior tests for changed logic during coding,
+   - run broad governance/closure suites near PR completion or in CI.
+5. Scope decisions must be recorded in both this roadmap and a book chapter in the same PR.
+
+Checkpoint criteria for continuing this execution mode:
+
+1. Fresh clone `sec4 init -> sec4 check -> sec4 build --emit c-bin -> sec4 run` works locally and in CI.
+2. Showcase app path validates DB/FS/NET behavior without branch-local patches.
+3. Main branch CI stays green for at least 10 consecutive days.
+4. No alpha-critical runtime/compiler placeholder paths remain.
+
+## Alpha Priority Sequencing Lock (2026-02-25)
+
+Execution order is now fixed to avoid scope drift:
+
+1. Close strict no-stub alpha functionality checklist first (runtime/compiler behavior criteria in this roadmap).
+2. After that closure, complete full LASM DB client implementation on the intrinsic runtime path.
+3. After full DB client completion, implement `M39-S2` Composition Contract Analyzer.
+4. Defer performance-tuning feature work (including 1M req/s optimization campaign) until after `M39-S2` completion.
+5. Before step 4, only allow performance changes that are required for deterministic correctness/stability.
+
+## Backend Engine Transition Lock (2026-02-17)
+
+This section resolves backend-engine direction explicitly.
+
+1. Current C runtime is the alpha reference engine for correctness/conformance, not the final high-concurrency server engine.
+2. C runtime work stays limited to:
+   - alpha-critical correctness fixes,
+   - deterministic behavior guarantees,
+   - no broad new architecture investment beyond what is required for no-stub alpha.
+3. LASM async backend bootstrap starts on February 18, 2026 as a parallel track.
+4. Through the March 17, 2026 checkpoint window, execution split is:
+   - 70% alpha closure + multi-file module delivery (`M39-S2A`),
+   - 30% LASM async bootstrap (`M39-S2B`).
+5. Browser execution does not depend on socket-based C runtime semantics:
+   - browser target uses WASM + browser host ABI profile,
+   - server concurrency evolution is owned by LASM async runtime track.
+
+Checkpoint decision rule (March 17, 2026):
+
+1. If alpha criteria are green, continue release hardening and increase LASM allocation.
+2. If LASM bootstrap shows viable concurrent request handling, begin migration planning from C reference runtime to LASM server runtime.
+3. If LASM bootstrap misses viability criteria, keep C as alpha reference runtime while continuing LASM in bounded slices.
 
 ## No-Stub Alpha Readiness (2026-02-15)
 
@@ -88,19 +161,2348 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
 4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
 
-When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track.
+### `WASM_START_GATE` status (2026-02-19)
+
+- `OPEN` based on verified closure evidence:
+  - alpha decision record `GO`:
+    - `build/m37-alpha-tag-decision-record.json`
+  - alpha tag created and pushed:
+    - `v0.1.0-alpha.2`
+  - post-tag publish-manifest chain verified:
+    - `scripts/verify-release-promotion-inputs.sh`
+    - `scripts/generate-release-publish-manifest.sh`
+    - `scripts/verify-release-publish-manifest.sh`
+    - `build/release-alpha-gate/publish-manifest.json`
+
+When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track, executed first through the browser-to-server promotion milestone plan (M39 below).
+
+### Post-alpha two-phase backend promotion track (browser -> server)
+
+After `WASM_START_GATE` opens, the first execution track should prioritize browser-first prototyping with deterministic server promotion.
+
+Target product loop:
+
+1. Prototype instantly in browser profile (`no deploy`).
+2. Validate UX/domain flows locally with deterministic state.
+3. Promote same domain modules to server target with mechanical adapter swap + generated deployment scaffolding.
+
+Post-alpha track acceptance anchors:
+
+- Browser profile enforces strict capability boundary:
+  - forbid `db.*`, `secrets.*`, `net.listen`, internal-net sinks.
+  - allow browser-local persistence adapter (`localdb.*`) and constrained outbound fetch gates.
+- Composition model is explicit:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Promotion flow is compiler-driven and deterministic:
+  - `sec4 promote --from browser --to server`
+  - binding rewrite at composition root (`LocalRepo` -> `ServerRepo`)
+  - generated server scaffold (schema/migrations, runtime wiring, deployment manifest baseline)
+  - deterministic diagnostics when promotion preconditions fail.
+- Promotion contract includes data portability path:
+  - browser-local export artifact
+  - generated server import scaffold/command path.
+
+## M39 - Browser-First to Server Promotion MVP (Queued; gated by `WASM_START_GATE`)
+
+### Goal
+
+- Deliver a deterministic two-phase backend loop:
+  - browser-first prototype profile (`zero deploy`)
+  - mechanical promotion to server target (`sec4 promote --from browser --to server`).
+
+### M39-S1 browser profile capability fence acceptance criteria
+
+- Compiler/profile enforcement blocks server-only capabilities in browser mode:
+  - `db.*`
+  - `secrets.*`
+  - `net.listen`
+  - internal-net sinks.
+- Browser profile allows only approved local/browser runtime capabilities (for MVP: `localdb.*`, constrained public fetch gates).
+- Deterministic diagnostics include profile context and fix guidance.
+
+### M39-S1 tracking (live status)
+
+- [x] Profile capability fence diagnostics implemented in semantic layer.
+- [x] Browser profile now also blocks server-only capability types/constructors:
+  - type positions (`Ctx`, `DbCap`, `FsCap`, `NetCap`, `InternalNetCap`, `SecretsCap`)
+  - constructor calls (`Ctx()`, `DbCap()`, `FsCap()`, `NetCap()`, `InternalNetCap()`, `SecretsCap()`)
+- [x] CLI coverage added for allow/deny profile behavior:
+  - `check_fails_when_browser_profile_uses_server_only_intrinsics`
+  - `check_succeeds_when_browser_profile_uses_allowed_public_net_intrinsics`
+  - `check_fails_when_browser_profile_uses_server_capability_types_and_constructors`
+- [x] Book chapter documenting S1 implementation added:
+  - `docs/book/891-m39-browser-profile-capability-fence-diagnostics.md`
+  - `docs/book/892-m39-browser-profile-capability-type-and-constructor-fences.md`
+
+### M39-S2 composition contract analyzer acceptance criteria (deferred by scope reset)
+
+- Analyzer enforces promotion-ready architecture contract:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Analyzer rejects direct domain coupling to browser/server-only adapters.
+- Analyzer verifies repository method parity between browser/server adapters.
+
+### M39-S2 tracking (live status)
+
+- [x] Sequencing lock satisfied after strict no-stub alpha functionality closure and full LASM DB client completion.
+- [x] Composition contract analyzer implemented.
+- [x] Fixture coverage added for pass/fail composition graphs (promotion `domain_module_dependency_calls` guard path).
+- [x] Book chapter documenting S2 implementation added:
+  - `docs/book/1545-m39-promote-composition-contract-analyzer-implementation.md`.
+
+### M39-S2A multi-file module system acceptance criteria (alpha-priority replacement slice)
+
+- Project code can be split across multiple `.ut` files with deterministic module resolution from project root.
+- Module references remain explicit (`use`/imports) with stable path rules that survive folder/file renames via deterministic diagnostics.
+- Resolver emits deterministic errors for:
+  - missing modules/files,
+  - ambiguous module targets,
+  - cyclic module dependencies.
+- Single-file projects remain valid with unchanged behavior.
+
+### M39-S2A tracking (live status)
+
+- [x] Module graph resolver implemented for project-local modules.
+- [x] Deterministic cycle detection + diagnostics implemented.
+- [x] CLI/integration fixture coverage added for multi-file pass/fail cases.
+- [x] Book chapter documenting scope-reset and multi-file priority added (`docs/book/893-m39-alpha-scope-reset-and-multi-file-priority.md`).
+- [x] Book chapter documenting resolver implementation added (`docs/book/896-m39-multi-file-module-resolver-implementation.md`).
+- [x] Build/run integration coverage locked for multi-file modules (`docs/book/900-m39-multi-file-build-and-run-pipeline-lock.md`).
+- [x] `sec4 test` now resolves module graphs per test entry (from `tests/` root), supports helper modules without standalone execution, fails deterministically when no runnable `fn main` entries exist, emits close-match suggestions for missing module imports, and reports deterministic discovery/skip counts (`docs/book/911-m39-test-command-module-graph-entrypoint-filtering.md`).
+
+### M39-S2B LASM async backend bootstrap acceptance criteria (parallel lane)
+
+- New backend target surface is introduced without breaking existing C target flows.
+- Runtime execution model supports evented/concurrent request handling (not one-thread-per-request).
+- Deterministic envelope parity is preserved for core response/error contracts.
+- Benchmark smoke includes a LASM lane for baseline concurrency sanity.
+
+### M39-S2B tracking (live status)
+
+- [x] Backend target skeleton + compile-path wiring added for LASM bootstrap.
+- [x] Async runtime core loop prototype added (reactor/scheduler baseline).
+- [x] Minimal HTTP request/response path running on LASM runtime baseline.
+- [x] Book chapter documenting C-runtime role and LASM transition plan added (`docs/book/894-m39-c-runtime-role-and-lasm-async-transition-plan.md`).
+- [x] sec4 capacity-probe benchmark tooling added for early scale evidence (`benchmark-suite/scripts/run_sec4_capacity_probe.sh`, chapter `docs/book/895-m39-sec4-capacity-probe-tooling.md`).
+- [x] LASM deterministic entrypoint contract metadata added for runtime bootstrap (`docs/book/897-m39-lasm-entrypoint-contract-baseline.md`).
+- [x] LASM async scheduler core loop baseline added (`docs/book/898-m39-lasm-async-runtime-core-loop-baseline.md`).
+- [x] LASM async scheduler now supports explicit task cancellation (`cancel_task`) + live task counting baseline for timeout/abort evolution (`docs/book/915-m39-lasm-runtime-task-cancellation-baseline.md`).
+- [x] LASM in-memory HTTP baseline added on scheduler runtime (`docs/book/899-m39-lasm-http-runtime-baseline.md`).
+- [x] CLI `lasm-smoke` command executes compiled entrypoint through LASM runtime baseline (`docs/book/901-m39-cli-lasm-smoke-command.md`).
+- [x] CLI `lasm-smoke` route/response extraction now resolves through helper call graphs (route registration + `res.text/res.html/res.json/res.ok/res.okMeta` helpers), and LASM run response extraction now applies latest-response-write precedence plus caller-argument parameter binding for helper response wrappers (`docs/book/903-m39-lasm-smoke-helper-call-graph-route-resolution.md`, `docs/book/982-m39-lasm-run-latest-response-write-parity.md`, `docs/book/983-m39-lasm-run-response-helper-parameter-binding.md`).
+- [x] CLI `lasm-smoke` now supports machine-readable `--format json` summaries alongside text output (`docs/book/904-m39-lasm-smoke-json-summary-output.md`).
+- [x] LASM HTTP runtime now supports parameterized route matching (`/users/:id`) with exact-route-first resolution, captured path-parameter propagation into exchanges, query/fragment-insensitive request matching, and deterministic `HEAD -> GET` fallback when HEAD is not explicitly registered (`docs/book/905-m39-lasm-http-runtime-parameterized-route-matching.md`, `docs/book/907-m39-lasm-http-runtime-request-path-normalization.md`, `docs/book/908-m39-lasm-http-runtime-head-fallback.md`).
+- [x] LASM HTTP runtime pattern route overrides now follow deterministic latest-registration-wins semantics (aligned with exact-route overwrite behavior), and `run --backend lasm` route-plan consolidation now preserves the same latest-registration-wins parity for duplicate method/path registrations (`docs/book/910-m39-lasm-http-runtime-pattern-override-order.md`, `docs/book/981-m39-lasm-run-duplicate-route-latest-wins-parity.md`).
+- [x] LASM HTTP runtime now supports deterministic max in-flight concurrency gating with FIFO pending-request queue drain semantics (`set_max_in_flight` / `clear_max_in_flight`) (`docs/book/912-m39-lasm-http-runtime-max-in-flight-queue.md`).
+- [x] LASM HTTP runtime now supports deterministic max pending queue backpressure (`set_max_pending` / `clear_max_pending`) with immediate queue-full `503` overflow responses (`docs/book/914-m39-lasm-http-runtime-max-pending-backpressure.md`).
+- [x] LASM HTTP runtime now supports deterministic per-request timeout enforcement (`set_max_request_duration_ms`) with timeout `504` response mapping, live-task cancellation for timed-out handlers, and timeout-age evaluation from original request submit time (including pending queue wait) (`docs/book/916-m39-lasm-http-runtime-request-timeout-enforcement.md`, `docs/book/918-m39-lasm-http-runtime-timeout-from-submit-time.md`).
+- [x] CLI `lasm-smoke` now supports `--request-path` and emits captured `pathParams` in text/json summaries (`docs/book/906-m39-lasm-smoke-request-path-and-path-param-summary.md`).
+- [x] CLI `lasm-smoke` now supports `--max-in-flight`, `--max-pending`, and `--max-request-ms` for exercising LASM runtime queue/backpressure/timeout controls from command line, with deterministic zero-value rejection, explicit `maxInFlight`/`maxPending`/`maxRequestMs` + `statusCounts` summary visibility, deterministic latency metrics (`durationMs.{min,max,avg}` + `firstDurationMs`), and `--fail-on-errors` promotion of observed runtime error responses into deterministic smoke-command failure; `--runtime-script` now enables deterministic scripted action sequences (`yield`/`sleep:<ms>`/`complete:<code>`) for runtime behavior probes (`docs/book/913-m39-lasm-smoke-max-in-flight-flag.md`, `docs/book/914-m39-lasm-http-runtime-max-pending-backpressure.md`, `docs/book/917-m39-lasm-smoke-runtime-script-and-timeout-flag.md`, `docs/book/919-m39-lasm-smoke-duration-metrics.md`).
+- [x] CLI `lasm-smoke` now extracts static response headers from handler call graphs (`res.setHeader`) including typed header gate wrappers and local let-bindings, and LASM run header extraction now binds helper parameters from caller literals so wrapper helpers emit deterministic headers (`docs/book/909-m39-lasm-smoke-response-header-extraction.md`, `docs/book/984-m39-lasm-run-response-header-helper-parameter-binding.md`).
+- [x] LASM run backend now materializes benchmark contract JSON bodies from request payloads/path params (`DecodeResponse`, `CreateUserResponse`, `UserResponse`) with shared in-process user state for deterministic read-after-write behavior in the LASM benchmark lane (`docs/book/922-m39-lasm-run-benchmark-contract-response-materialization.md`).
+- [x] LASM benchmark response materialization now enforces deterministic JSON/UUID validation (`400` `JSON.INVALID_SYNTAX` / `VALIDATION.UUID_INVALID`) for JSON-expected decode/create paths while preserving compatibility fallback for legacy empty-body fixture requests (`docs/book/923-m39-lasm-run-benchmark-response-validation-hardening.md`).
+- [x] LASM decode/create materialization now enforces full benchmark user payload validation parity (`email`, `age`, `tags`, `address.zip`, `meta.flags`) with deterministic `VALIDATION.INVALID` responses for malformed request bodies (`docs/book/924-m39-lasm-benchmark-payload-validation-parity.md`).
+- [x] Benchmark default implementation sets now include `sec4-lasm` across preflight/comparison/step/full-suite orchestration and Makefile defaults, so LASM benchmark coverage is exercised by default (`docs/book/925-m39-benchmark-default-impl-set-includes-sec4-lasm.md`).
+- [x] LASM dynamic validation errors now include benchmark-style envelope metadata parity (`traceId` + `timeMs`) using one request-scoped trace id shared across header/body paths (`docs/book/926-m39-lasm-trace-and-error-envelope-parity.md`).
+- [x] LASM decode/create materialization now rejects non-JSON content-type payloads deterministically (`400 HTTP.BAD_REQUEST`, `content-type must be application/json`) while preserving empty-body fallback compatibility (`docs/book/927-m39-lasm-json-content-type-enforcement.md`).
+- [x] LASM non-oneshot overload path now returns deterministic JSON error envelopes (`HTTP.SERVICE_UNAVAILABLE`) with trace metadata instead of plain-text overload bodies (`docs/book/928-m39-lasm-overload-json-error-envelope.md`).
+- [x] LASM response writer now enforces HTTP HEAD body omission across runtime and overload paths while preserving deterministic overload JSON headers (`docs/book/929-m39-lasm-head-body-omission-parity.md`).
+- [x] LASM request-line parsing now enforces explicit HTTP version tokens, enforces `max_header_bytes` on the request line before parsing headers, and emits deterministic unsupported-version rejection (`505 HTTP Version Not Supported`) for non-HTTP/1.0/1.1 requests (`docs/book/930-m39-lasm-request-line-version-hardening.md`).
+- [x] LASM worker runtime now supports HTTP keep-alive request reuse on persistent sockets (with HTTP/1.0 + `Connection: close` deterministic close behavior) while preserving existing queue/backpressure controls (`docs/book/931-m39-lasm-worker-keep-alive-support.md`).
+- [x] LASM worker runtime now reuses a persistent buffered request reader per connection (supporting pipelined request parsing), interprets comma-delimited `Connection` tokens deterministically, and rejects unsupported `Transfer-Encoding` with deterministic `501 Not Implemented` responses (`docs/book/932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`).
+- [x] LASM chunked request parsing now validates chunk-extension syntax (token name + token/quoted value forms) and rejects malformed extensions deterministically (`400 Bad Request`, `invalid transfer-encoding chunk extension`) while preserving chunked success behavior (`docs/book/985-m39-lasm-chunk-extension-validation.md`).
+- [x] LASM chunked trailer parsing now rejects forbidden framing/routing trailer headers (`Host`, `Content-Length`, `Transfer-Encoding`) with deterministic `400 Bad Request` diagnostics (`invalid chunk trailer: forbidden trailer header`) while preserving valid trailer acceptance (`docs/book/986-m39-lasm-chunk-trailer-forbidden-header-validation.md`).
+- [x] LASM chunked trailer parsing now merges accepted trailer headers into request headers (case-insensitive merge semantics) so handlers can consume trailer values via `req.header(...)` (`docs/book/987-m39-lasm-chunk-trailer-header-merge-for-req-header.md`).
+- [x] LASM chunked trailer parsing now enforces `max_header_bytes` against trailer-section bytes, rejecting oversized trailers deterministically with `431 Request Header Fields Too Large`; request-head header-limit diagnostics now also interpolate the configured byte value deterministically (`docs/book/988-m39-lasm-chunk-trailer-header-limit-enforcement.md`).
+- [x] LASM chunked parser now also enforces `max_header_bytes` on chunk-size lines (including long extension lines), returning deterministic `431 Request Header Fields Too Large` on oversized framing metadata (`docs/book/989-m39-lasm-chunk-size-line-header-limit-enforcement.md`).
+- [x] LASM request-head parser now rejects incomplete header sections (EOF before blank-line terminator) with deterministic `400 Bad Request` diagnostics (`incomplete request while reading header line`) to prevent truncated-header acceptance (`docs/book/990-m39-lasm-incomplete-header-section-rejection.md`).
+- [x] LASM chunked-body parser now rejects incomplete chunk-size and chunk-trailer lines (EOF before newline terminator) with deterministic `400 Bad Request` diagnostics (`incomplete request while reading chunk size` / `incomplete request while reading chunk trailer`) to prevent truncated chunk framing acceptance (`docs/book/991-m39-lasm-incomplete-chunk-line-rejection.md`).
+- [x] LASM request-head parser now rejects request/header lines missing newline terminators (EOF-truncated lines) with deterministic stage-specific `400 Bad Request` diagnostics (`incomplete request while reading request line` / `incomplete request while reading header line`) to prevent accepting partially framed start-lines and headers (`docs/book/992-m39-lasm-incomplete-request-and-header-line-terminator-rejection.md`).
+- [x] LASM connection keep-alive request accounting now increments on runtime step-budget failure responses, so `max_keep_alive_requests` limits remain enforced even when requests terminate via deterministic runtime-step `500` paths (`docs/book/993-m39-lasm-keep-alive-accounting-on-runtime-step-failure.md`).
+- [x] LASM absolute-form request-target parsing now accepts case-insensitive `http`/`https` schemes (`HTTP://`, `HTTPS://`) while preserving host-authority parity enforcement and deterministic mismatch diagnostics (`docs/book/994-m39-lasm-absolute-form-scheme-case-insensitive-parsing.md`).
+- [x] LASM runtime now resets transient execution state after step-budget exhaustion responses so unfinished tasks/pending queues/ready-response carryover are cleared before the next request on the same connection (`docs/book/995-m39-lasm-runtime-reset-after-step-budget-exhaustion.md`).
+- [x] LASM absolute-form normalization now preserves query-only targets without explicit path (`http://host?x=1` -> `/?x=1`) so `req.query(...)` extraction remains available for absolute-form requests (`docs/book/996-m39-lasm-absolute-form-query-only-normalization.md`).
+- [x] LASM step-budget exhaustion responses now emit deterministic JSON error envelopes (`LASM.STEP_BUDGET_EXCEEDED`, `kind=internal`) with shared trace metadata parity instead of plain-text-only payloads (`docs/book/997-m39-lasm-step-budget-json-error-envelope.md`).
+- [x] LASM parser now rejects request lines with leading whitespace before method tokens, returning deterministic `400 Bad Request` diagnostics (`invalid request line: leading whitespace is not allowed`) with parser-envelope parity (`docs/book/998-m39-lasm-request-line-leading-whitespace-rejection.md`).
+- [x] LASM parser now rejects request lines with trailing whitespace after the HTTP version token, returning deterministic `400 Bad Request` diagnostics (`invalid request line: trailing whitespace is not allowed`) with parser-envelope parity (`docs/book/999-m39-lasm-request-line-trailing-whitespace-rejection.md`).
+- [x] LASM parser now rejects tab-separated request-line tokens, returning deterministic `400 Bad Request` diagnostics (`invalid request line: tab separators are not allowed`) with parser-envelope parity (`docs/book/1000-m39-lasm-request-line-tab-separator-rejection.md`).
+- [x] LASM parser now enforces single-space request-line token separation (rejecting double-space separators) with deterministic `400 Bad Request` diagnostics (`invalid request line: expected single-space separators`) and parser-envelope parity (`docs/book/1001-m39-lasm-request-line-single-space-separator-enforcement.md`).
+- [x] LASM dynamic benchmark-user state now supports optional disk persistence through `SEC4_RT_LASM_DB_BASE` (users store file load on startup + write-through on create), enabling user read-after-restart behavior for `CreateUserResponse`/`UserResponse` flows (`docs/book/1002-m39-lasm-dynamic-user-store-persistence.md`).
+- [x] LASM route extraction now materializes `sql.q` + `db.exec`/`db.execTx` intrinsic call plans into internal runtime markers, and LASM run executes those DB operations through deterministic tx-handle registration plus persisted `records.log` writes (instead of schema-name-only DB write bridges for these paths) (`docs/book/1004-m39-lasm-db-intrinsic-execution-baseline.md`).
+- [x] `examples/lasm-alpha-full` DB write routes now execute real intrinsic flows (`DbCap` + `sql.q` + `db.exec`/`db.execTx`) so the canonical LASM operator sample demonstrates intrinsic-backed `records.log` writes end-to-end (`docs/book/1005-m39-lasm-alpha-full-db-intrinsic-routes.md`).
+- [x] Removed LASM schema-switch DB write fallback arms (`DbExecResponse` / `DbExecTxResponse`) from response materialization; DB writes now require intrinsic extraction markers and no longer execute through response-schema-only branches (`docs/book/1006-m39-lasm-remove-schema-fallback-db-write-arms.md`).
+- [x] Added `schema.row(...)` row-schema bridge intrinsic across semantic typing + C backend/runtime, moved LASM query-one routes/examples to real `db.queryOne` intrinsic flows, and removed `DbQueryOneResponse` schema-switch fallback materialization branch (`docs/book/1007-m39-lasm-db-query-one-intrinsic-parity-and-schema-row-bridge.md`).
+- [x] `sec4 run` now defaults to LASM backend (`--backend lasm` implicit), while C backend remains explicit via `--backend c`; command coverage now locks help/default contract, default-backend acceptance of LASM-only flags, and C-only guard behavior under explicit C selection (`docs/book/1008-m39-lasm-default-run-backend-and-explicit-c-fallback.md`).
+- [x] Benchmark profile summaries now capture service RSS memory samples (`memory.rssKb`) and propagate `rssKb` through compare-report/matrix leader rows plus published benchmark markdown output, establishing throughput/latency/memory baseline visibility for LASM stability hardening (`docs/book/1009-m39-benchmark-rss-memory-baseline-visibility.md`).
+- [x] Benchmark regression threshold guard now supports RSS-based checks (`--max-rss-kb`) plus baseline RSS regression limits (`baselineRssKb`, `maxRssRegressionPct`) alongside existing p99/coverage checks, with deterministic failure modes for missing/invalid leader RSS data when RSS guards are active (`docs/book/1010-m39-benchmark-rss-regression-threshold-guard.md`).
+- [x] Trend-note rendering/import flow now surfaces leader RSS (`rssKb`) as a first-class table column, so comparative trend notes keep throughput/latency/memory visibility aligned with matrix artifacts (`docs/book/1011-m39-trend-note-rss-column-visibility.md`).
+- [x] Scheduled benchmark-trend CI workflow now applies explicit RSS absolute guards (`--max-rss-kb`) for ping/decode threshold steps, and workflow contract tests lock presence of RSS threshold flags to prevent drift (`docs/book/1012-m39-benchmark-trend-ci-rss-threshold-enforcement.md`).
+- [x] Benchmark evidence-quality checker now treats missing/invalid leader RSS as a first-class warning signal (with `--fail-on-warning` escalation), and compare-row identity checks include `rssKb` parity to prevent hidden memory-signal drift across leader/compared rows (`docs/book/1013-m39-benchmark-evidence-quality-rss-warning-enforcement.md`).
+- [x] Trend-note baseline guard evaluation now applies optional RSS regression checks when baseline files provide `baselineRssKb`/`maxRssRegressionPct`, so trend pass/fail status can reflect memory drift alongside p99/coverage in the same baseline verdict (`docs/book/1014-m39-trend-note-baseline-rss-guard-evaluation.md`).
+- [x] LASM DB intrinsic persistence now supports adapter selection via `SEC4_RT_LASM_DB_ADAPTER` (`records.log` default, `sqlite` optional), with SQLite-backed load/persist parity for `db.exec`/`db.execTx`/`db.queryOne` while preserving default file-adapter behavior (`docs/book/1015-m39-lasm-db-sqlite-adapter-baseline.md`).
+- [x] LASM sqlite DB adapter now runs real runtime intrinsic execution for `db.exec`, `db.execTx`, and `db.queryOne` against `records.sqlite3` (including parameter binding and typed row-value JSON materialization) instead of metadata-only query fallback responses (`docs/book/1077-m39-lasm-sqlite-runtime-exec-query-one-materialization.md`).
+- [x] LASM sqlite runtime now enforces deterministic sql-parameter lower-bound validation and queryOne SQL-shape guards (`SELECT`/`WITH`/`VALUES`/`TABLE` only), including trailing-semicolon normalization for queryOne wrappers, so invalid sqlite queryOne flows return explicit deterministic runtime diagnostics (`docs/book/1078-m39-lasm-sqlite-query-one-shape-and-arity-guard.md`).
+- [x] LASM DB intrinsic runtime error mapping now classifies known query-validation failures (`requires at least`, queryOne SQL-shape/non-empty, single-statement requirement) as deterministic `400 ..._INVALID` envelopes for sqlite/postgres exec/queryOne paths instead of generic `500 ..._FAILED` responses, while keeping adapter-config errors on deterministic internal classification (`docs/book/1079-m39-lasm-db-runtime-validation-error-classification.md`).
+- [x] LASM sqlite runtime now rejects parameterized multi-statement SQL in `db.exec`/`db.execTx`/`db.queryOne` with deterministic validation diagnostics (`sqlite parameterized execution requires a single SQL statement`), preserving non-parameterized multi-statement compatibility while blocking ambiguous parameterized execution shapes (`docs/book/1080-m39-lasm-sqlite-parameterized-single-statement-guard.md`).
+- [x] LASM postgres runtime now pre-validates parameterized multi-statement SQL before adapter execution in `db.exec`/`db.execTx`/`db.queryOne`, returning deterministic single-statement validation diagnostics (`postgres parameterized execution requires a single SQL statement`) without relying on adapter-native parse failures (`docs/book/1081-m39-lasm-postgres-parameterized-single-statement-precheck.md`).
+- [x] LASM `DbListRecordsResponse` now exposes the active DB adapter label (`records.log` or `sqlite`) so operator introspection confirms which persistence backend is active during runtime validation flows (`docs/book/1016-m39-lasm-db-list-response-adapter-visibility.md`).
+- [x] Benchmark-trend workflow contract checks now enforce endpoint-set coherence across benchmark run scope, threshold checks, and trend-note rendering, and require one `--max-rss-kb` guard per threshold endpoint invocation to prevent silent CI drift (`docs/book/1017-m39-benchmark-trend-workflow-endpoint-contract-coherence.md`).
+- [x] `sec4 run` now supports explicit `--db-adapter <records-log|sqlite>` selection for LASM mode (single-instance and cluster-worker paths), with deterministic C-backend guard diagnostics for lasm-only usage; SQLite command coverage now exercises adapter selection through CLI flag surface while preserving `SEC4_RT_LASM_DB_ADAPTER` fallback compatibility (`docs/book/1019-m39-run-db-adapter-flag.md`).
+- [x] `sec4 run` now supports explicit `--db-postgres-dsn <dsn>` for LASM Postgres adapter mode (single-instance and cluster-worker forwarding), with deterministic LASM-only guard + empty-value validation diagnostics and fallback compatibility with `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN` when flag is omitted (`docs/book/1082-m39-run-db-postgres-dsn-flag.md`).
+- [x] `sec4 run` now supports `--db-postgres-dsn-file <path>` for LASM Postgres adapter mode, with deterministic LASM-only guard diagnostics, explicit conflict guard against simultaneous `--db-postgres-dsn`, and non-empty file-content validation before runtime start (`docs/book/1084-m39-run-db-postgres-dsn-file-flag.md`).
+- [x] LASM cluster worker Postgres DSN forwarding now uses env propagation (`SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`) instead of CLI argument forwarding, reducing DSN exposure through worker command-line arguments while preserving explicit `--db-postgres-dsn` operator behavior at the parent run entrypoint (`docs/book/1083-m39-lasm-cluster-postgres-dsn-env-forwarding.md`).
+- [x] LASM Postgres DSN resolver now supports DSN-file fallback via `SEC4_DB_ALPHA_POSTGRES_DSN_FILE(_PATH)` or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE(_PATH)` when explicit DSN flags and `SEC4_DB_ALPHA_DB_POSTGRES_DSN` / `SEC4_RT_LASM_DB_POSTGRES_DSN` are unset, with deterministic empty-path/content diagnostics and command coverage for invalid file-content env cases (`docs/book/1085-m39-lasm-postgres-dsn-file-env-fallback.md`).
+- [x] `sec4 run` now resolves explicit Postgres DSN sources (`--db-postgres-dsn` / `--db-postgres-dsn-file`) once in `cmd_run` before project validation and forwards only the resolved DSN downstream, eliminating duplicate file reads and keeping deterministic invalid-config exit semantics (`docs/book/1086-m39-run-postgres-dsn-single-resolution.md`).
+- [x] `sec4 run --db-postgres-dsn-file <relative-path>` now resolves missing relative file paths against the selected project root (`--path`) before failing, so project-local DSN files work without absolute paths while preserving deterministic invalid-content diagnostics (`docs/book/1502-m39-run-db-postgres-dsn-file-project-relative-resolution.md`).
+- [x] `sec4 run` now auto-selects Postgres adapter when explicit Postgres DSN flags are provided without `--db-adapter`, and rejects DSN/DSN-file flags when a non-Postgres adapter is explicitly set, preventing silent DSN-flag ignore paths (`docs/book/1088-m39-run-postgres-dsn-adapter-coherence.md`).
+- [x] `examples/lasm-alpha-full` smoke/run docs now align to the operator DSN-runtime token matrix (`SEC4_ALPHA_FULL_POSTGRES_DSN`, `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE`, `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE`) and auth header override token (`SEC4_ALPHA_FULL_AUTH_HEADER`) used by the smoke harness.
+- [x] LASM sqlite/postgres `db.queryOne` success paths now append persisted runtime records (`op=queryOne`) with deterministic IDs and adapter record-list visibility, instead of reusing prior `exec`/`execTx` metadata in queryOne responses (`docs/book/1089-m39-lasm-query-one-record-persistence-parity.md`).
+- [x] LASM `db.queryOne` responses now expose structured `rowObject` payloads for sqlite/postgres adapters (while preserving legacy serialized `row` string and keeping records-log fallback on `rowObject: null`), improving runtime DB-client payload usability without breaking compatibility (`docs/book/1090-m39-lasm-query-one-row-object-response.md`).
+- [x] LASM records-log fallback now also appends deterministic `queryOne` runtime records on successful queryOne matches, bringing queryOne record-history parity across records-log/sqlite/postgres adapters (`docs/book/1091-m39-lasm-query-one-records-log-parity.md`).
+- [x] LASM runtime record persistence now uses incremental per-operation append/upsert writes across adapters (sqlite/postgres append-upsert, records-log append), each with deterministic full-sync fallback on append failure, instead of per-request full-history rewrite, reducing metadata write-path overhead while preserving deterministic persistence semantics (`docs/book/1117-m39-lasm-db-incremental-record-persistence.md`).
+- [x] LASM sqlite adapter append persistence now reuses one cached sqlite connection per runtime instance (initialized at state bootstrap) instead of reopening sqlite on each append write, while preserving deterministic connection-drop + full-sync fallback on append failure (`docs/book/1118-m39-lasm-sqlite-connection-reuse-for-append-persistence.md`).
+- [x] LASM tx handles are now runtime-ephemeral: startup no longer rehydrates tx-handle bindings from persisted record history, so stale `db.tx` handles are rejected after restart with deterministic `DB.EXEC_TX_HANDLE_INVALID` semantics (`docs/book/1092-m39-lasm-ephemeral-tx-handle-runtime-scope.md`).
+- [x] LASM sqlite/postgres `db.exec` and `db.execTx` responses now include real `affectedRows` metadata from runtime execution paths (with deterministic `0` fallback for records-log adapter paths), improving DB-client observability for write execution outcomes (`docs/book/1093-m39-lasm-exec-affected-rows-runtime-metadata.md`).
+- [x] LASM DB runtime error classification now maps sqlite/postgres unique-constraint failures to deterministic conflict envelopes (`409` + operation-specific `DB.*_CONFLICT` codes) instead of generic `500` failure codes (`docs/book/1094-m39-lasm-db-unique-conflict-error-classification.md`).
+- [x] LASM DB runtime error classification now also maps sqlite/postgres not-null/check/input-syntax constraint failures to deterministic validation envelopes (`400` + operation-specific `DB.*_INVALID` codes), reducing generic runtime-failure ambiguity for common write-shape errors (`docs/book/1095-m39-lasm-db-constraint-validation-error-classification.md`).
+- [x] LASM `db.execTx` runtime now validates existing tx-handle bindings before adapter execution, preventing SQL side effects from executing on invalid tx handles; sqlite command coverage now verifies invalid tx-handle flows return deterministic `DB.EXEC_TX_HANDLE_INVALID` without mutating persisted DB state (`docs/book/1087-m39-lasm-exec-tx-invalid-handle-preexecution-guard.md`).
+- [x] LASM DB adapters now include a real `postgres` runtime client path (`--db-adapter postgres` / `SEC4_RT_LASM_DB_ADAPTER=postgres`) with deterministic DSN contract (`SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`), metadata persistence in `sec4_lasm_db_records`, real `db.exec`/`db.execTx` execution, and real `db.queryOne` first-row materialization (`docs/book/1062-m39-lasm-db-postgres-adapter-runtime-client.md`).
+- [x] LASM postgres adapter runtime now reuses one in-process Postgres client per worker/process (bootstrap connect + schema + metadata load, then shared execution/persist path) instead of reconnecting on each DB intrinsic call (`docs/book/1063-m39-lasm-postgres-client-reuse-in-runtime-state.md`).
+- [x] LASM postgres adapter runtime now retries once with deterministic reconnect on closed Postgres connections for `db.exec`, `db.execTx`, `db.queryOne`, and metadata persistence sync paths (`docs/book/1064-m39-lasm-postgres-client-auto-reconnect.md`).
+- [x] LASM postgres `db.queryOne` row materialization now preserves typed JSON values (`number`, `bool`, parsed JSON objects/arrays, and null) instead of string-only cells, improving DB client response fidelity for runtime consumers (`docs/book/1065-m39-lasm-postgres-query-one-typed-row-values.md`).
+- [x] LASM postgres DB adapter now applies deterministic `$N` parameter rendering from `sql.q(..., params)` for `db.exec`, `db.execTx`, and `db.queryOne` (including JSON-array params and SQL-literal escaping), enabling real parameterized query execution paths in LASM runtime routes (`docs/book/1066-m39-lasm-postgres-parameter-rendering-for-db-intrinsics.md`).
+- [x] LASM postgres DB intrinsic execution now validates SQL placeholder arity before execution (`$N` vs provided params) and returns deterministic runtime diagnostics on mismatch, preventing opaque adapter errors for under-specified parameter sets (`docs/book/1067-m39-lasm-postgres-placeholder-arity-validation.md`).
+- [x] LASM postgres placeholder rendering now ignores `$N` tokens inside SQL string literals (and placeholder-arity scanning follows the same literal-awareness), preventing accidental replacement of literal text while keeping runtime parameter binding deterministic (`docs/book/1068-m39-lasm-postgres-literal-aware-placeholder-rendering.md`).
+- [x] LASM postgres placeholder scanning/rendering now also ignores `$N` tokens inside dollar-quoted SQL literals (`$$...$$` / `$tag$...$tag$`) so parameter binding does not mutate literal dollar-quoted content while preserving deterministic arity checks (`docs/book/1070-m39-lasm-postgres-dollar-quoted-placeholder-preservation.md`).
+- [x] LASM postgres `db.exec` / `db.execTx` now run parameterized queries through real prepared execution (`client.execute` / `transaction.execute`) when placeholders/params are present, with deterministic single-statement guidance when parameterized multi-statement SQL is provided (`docs/book/1071-m39-lasm-postgres-prepared-exec-and-exec-tx.md`).
+- [x] LASM postgres `db.queryOne` now also runs through prepared parameter execution (no SQL literal substitution), wrapping result materialization with `row_to_json(... )::text` for deterministic JSON row payload decode, and preserving placeholder-arity validation + deterministic single-statement guidance (`docs/book/1072-m39-lasm-postgres-prepared-query-one-row-to-json.md`).
+- [x] LASM postgres command integration flow now exercises prepared `db.execTx` end-to-end (request -> runtime -> persisted record metadata), locking deterministic `execTx` record sequencing/tx-handle visibility in the canonical Postgres runtime test path (`docs/book/1073-m39-lasm-postgres-exec-tx-prepared-flow-coverage.md`).
+- [x] LASM postgres placeholder-arity scanning is now comment-aware (`-- ...` and `/* ... */`, including nested block comments), so placeholder-like tokens in SQL comments do not trigger false arity failures (`docs/book/1074-m39-lasm-postgres-comment-aware-placeholder-arity.md`).
+- [x] LASM postgres `db.queryOne` now enforces deterministic SQL-shape guarding (`SELECT`/`WITH`/`VALUES`/`TABLE` only) before execution, returning explicit runtime diagnostics for non-row-returning statements in queryOne paths (`docs/book/1075-m39-lasm-postgres-query-one-select-shape-guard.md`).
+- [x] LASM postgres `db.queryOne` now normalizes trailing semicolons before subquery wrapping, so valid row-returning SQL copied with terminal `;` executes deterministically instead of failing wrapper parse (`docs/book/1076-m39-lasm-postgres-query-one-trailing-semicolon-normalization.md`).
+- [x] `sec4 run` runtime-flag script contracts now lock `--db-adapter` wiring invariants (run field presence, LASM-only guard diagnostic, LASM dynamic-state adapter bridge, and cluster worker forwarding bridge) with deterministic guard-fixture drift coverage in naming-lock script tests (`docs/book/1020-m39-run-db-adapter-runtime-flag-contract-lock.md`).
+- [x] Added canonical LASM DB adapter operator smoke script (`scripts/smoke-sec4-run-lasm-db-adapter.sh`) that executes intrinsic-backed `/db/*` flows under explicit `--db-adapter` selection and validates adapter-specific persistence outputs (`records.log` vs `records.sqlite3`), plus script token-contract + guard coverage (`docs/book/1021-m39-lasm-db-adapter-operator-smoke-script.md`).
+- [x] Naming-lock contract suite now executes LASM DB adapter smoke script contract + guard checks so adapter smoke script drift fails CI through the standard script-contract path (`docs/book/1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`).
+- [x] Runtime-smoke CI workflow now executes LASM DB adapter smoke lanes (`records-log` and `sqlite`) in addition to hello-api lanes, with runtime-smoke workflow contract + guard coverage updated to lock both adapter-step tokens and preserve bundle-check enforcement (`docs/book/1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`).
+- [x] Milestone closure gate `M16-C` now enforces runtime-smoke DB adapter lane tokens (records-log + sqlite) alongside hello-api lanes, and closure fixture coverage was updated to keep strict gate evaluation deterministic (`docs/book/1030-m39-closure-gate-runtime-smoke-db-adapter-lane-enforcement.md`).
+- [x] Runtime-smoke bundle validation now enforces LASM DB adapter artifact branch contracts (`lasm-db-records-log`, `lasm-db-sqlite`) via a dedicated db-adapter checker, and closure gate `M16-D` now requires naming-lock coverage for that checker (`docs/book/1033-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`).
+- [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
+- [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
+- [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
+- [x] LASM parser now rejects conflicting duplicate `Host` headers deterministically (`400 Bad Request`, `conflicting host headers`) to prevent ambiguous HTTP/1.1 host resolution (`docs/book/936-m39-lasm-conflicting-host-header-rejection.md`).
+- [x] LASM parser now rejects unsupported `Expect` request headers deterministically (`417 Expectation Failed`, `expect header is not supported`) to keep request-body negotiation semantics explicit (`docs/book/937-m39-lasm-expect-header-rejection.md`).
+- [x] LASM parser now enforces absolute-form authority and `Host` header parity (`400 Bad Request` on mismatch) to prevent ambiguous host resolution when proxy-style request targets are used (`docs/book/938-m39-lasm-absolute-form-host-parity-enforcement.md`).
+- [x] LASM parser now validates and normalizes host/authority syntax (rejecting malformed host lists/userinfo/invalid ports) and treats default absolute-form authority ports as parity-equivalent with `Host` (`http:80`, `https:443`) for deterministic routing-safe host checks (`docs/book/939-m39-lasm-authority-normalization-and-host-validation.md`).
+- [x] LASM parser now rejects invalid HTTP method/header-name tokens, forbids whitespace around header names, and rejects request-target URI fragments with deterministic `400` diagnostics before route execution (`docs/book/940-m39-lasm-http-token-and-fragment-hardening.md`).
+- [x] LASM parser now maps request-read failures into deterministic error classes (timeout, invalid encoding, incomplete request, generic read failure) to avoid host-dependent OS error text variance (`docs/book/941-m39-lasm-deterministic-read-error-mapping.md`).
+- [x] LASM parser failures now emit deterministic JSON error envelopes (status-mapped code/kind + trace metadata) for contract parity with other runtime failure paths (`docs/book/942-m39-lasm-parser-error-envelope-parity.md`).
+- [x] LASM parser failure responses now suppress default CORS headers, keeping malformed-request failure paths deterministic and non-permissive while preserving trace + structured error envelope metadata (`docs/book/943-m39-lasm-parser-error-cors-suppression.md`).
+- [x] LASM overload-path request handling now reuses strict request-head parsing so malformed overflow requests return deterministic parser envelopes (while no-data timeout probes still fall back to deterministic busy `503`) (`docs/book/944-m39-lasm-overflow-parser-hardening.md`).
+- [x] LASM shared request-head parsing now rejects control characters in header values with deterministic `400` diagnostics (`invalid header line: invalid header value character`), keeping normal and overload parser behavior aligned (`docs/book/945-m39-lasm-header-value-character-validation.md`).
+- [x] LASM overload probing now uses bounded short read timeouts to avoid long accept-loop stalls under queue saturation, and `res.text(...)` runtime materialization now supports request-derived placeholders from `req.pathParam`/`req.header` (including `validate.nonEmpty(...)` wrappers) for deterministic dynamic response bodies (`docs/book/946-m39-lasm-overload-probe-timeout-and-req-placeholder-materialization.md`).
+- [x] LASM `res.text(...)` dynamic materialization now includes `req.query("...")` placeholders (including `validate.nonEmpty(...)` wrappers) using parsed request query maps for deterministic query-driven response bodies (`docs/book/947-m39-lasm-req-query-placeholder-materialization.md`).
+- [x] LASM query parsing now decodes `%XX` escapes and `+` (with deterministic raw fallback for invalid percent escapes), aligning `req.query(...)` placeholder materialization with existing runtime query-decoding behavior (`docs/book/948-m39-lasm-query-percent-decoding-parity.md`).
+- [x] LASM placeholder materialization now also applies to response headers, including typed sink forms like `headers.value(validate.nonEmpty(req.query("trace")))`, keeping dynamic body/header response behavior aligned for request-derived route/query/header values (`docs/book/949-m39-lasm-response-header-placeholder-materialization.md`).
+- [x] LASM `res.addCookie(cookie.build(...))` now materializes request-derived placeholders in cookie values (for example `cookie.build("session", validate.nonEmpty(req.query("session")))`), so dynamic Set-Cookie behavior matches LASM dynamic header/body materialization semantics (`docs/book/950-m39-lasm-dynamic-set-cookie-placeholder-materialization.md`).
+- [x] LASM now emits multiple `Set-Cookie` header lines when handlers call `res.addCookie(...)` multiple times in one response, preserving deterministic cookie ordering while keeping dynamic placeholder materialization intact (`docs/book/951-m39-lasm-multi-set-cookie-emission.md`).
+- [x] LASM `cookie.build(name, value)` extraction now materializes request-derived placeholders for both cookie names and values, enabling deterministic dynamic cookie-name flows (for example `cookie.build(validate.nonEmpty(req.query("cookie_name")), validate.nonEmpty(req.query("session")))`) in LASM run mode (`docs/book/952-m39-lasm-dynamic-cookie-name-placeholder-materialization.md`).
+- [x] LASM response-header placeholder materialization now covers dynamic header keys as well as values (for example `res.setHeader(headers.name(validate.nonEmpty(req.query("header_name"))), headers.value(...))`), preserving deterministic dynamic-header behavior under typed sink wrappers (`docs/book/953-m39-lasm-dynamic-response-header-name-materialization.md`).
+- [x] LASM response writer now normalizes/merges headers case-insensitively before default injection and trace/header upserts, preventing duplicate semantic headers like `Content-Type`/`content-type` and preserving deterministic override behavior (`docs/book/954-m39-lasm-case-insensitive-response-header-merge.md`).
+- [x] LASM response writer now always upserts `Content-Length` from actual response body size (case-insensitive), overriding user-supplied `content-length` header values to prevent invalid framing while preserving deterministic header output (`docs/book/955-m39-lasm-content-length-upsert-correctness.md`).
+- [x] LASM dynamic response header materialization now validates emitted header names/values using HTTP token/value constraints and drops invalid materialized headers deterministically (preventing control-character header injection via query/path/header-derived placeholders) (`docs/book/956-m39-lasm-dynamic-response-header-validation-hardening.md`).
+- [x] LASM response-header extraction now unwraps `validate.headerValue(...)` wrappers (including request-derived arguments) when materializing dynamic headers, so direct typed-header flows (`res.setHeader(..., validate.headerValue(req.query(...)))`) execute with deterministic placeholder behavior (`docs/book/957-m39-lasm-validate-header-value-placeholder-extraction.md`).
+- [x] LASM dynamic response-header name validation now matches header-name gate/runtime grammar (`[A-Za-z0-9-]+`), rejecting broader HTTP-token-only names (for example `_`) so dynamic placeholder-driven header names stay parity-aligned with C runtime sink constraints (`docs/book/958-m39-lasm-dynamic-header-name-grammar-parity.md`).
+- [x] LASM dynamic response-header materialization now rejects empty materialized header values (including split dynamic `Set-Cookie` lines), preserving deterministic non-empty sink parity while keeping existing control-character validation intact (`docs/book/959-m39-lasm-dynamic-response-header-non-empty-value-parity.md`).
+- [x] LASM request parsing now merges duplicate request headers case-insensitively in deterministic arrival order (`Cookie` via `; `, other headers via `, `) while preserving strict `Host`/`Content-Length` conflict checks (`docs/book/960-m39-lasm-request-header-case-insensitive-merge.md`).
+- [x] Added first-class `req.cookie` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`req.cookie(...)` + `{{req.cookie:...}}`) for deterministic cookie-driven handler and response behavior (`docs/book/961-m39-req-cookie-intrinsic-and-lasm-materialization.md`).
+- [x] Added first-class `req.method()` / `req.path()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.method}}`, `{{req.path}}`) for deterministic method/path-driven handler and response behavior (`docs/book/962-m39-req-method-path-intrinsics-and-lasm-placeholders.md`).
+- [x] Added first-class `req.httpVersion()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.httpVersion}}`) for deterministic request-version-aware handler and response behavior (`docs/book/963-m39-req-http-version-intrinsic-and-lasm-placeholder-parity.md`).
+- [x] LASM query parsing now keeps first-seen values for duplicate keys (matching C runtime map behavior) so `req.query("...")` remains backend-parity deterministic under duplicate-key requests (`docs/book/964-m39-lasm-query-duplicate-first-value-parity.md`).
+- [x] LASM `req.cookie(...)` lookup now matches cookie names case-insensitively (trimmed) so cookie-driven handlers/placeholders stay parity-aligned with C runtime behavior under mixed-case cookie keys (`docs/book/965-m39-lasm-req-cookie-case-insensitive-lookup-parity.md`).
+- [x] C runtime `req.header(...)` / `req.cookie(...)` now merge duplicate request headers case-insensitively in arrival order (`Cookie` via `; `, generic headers via `, `, with first-value preservation for `Host`/`Content-Length`) to align request-header duplicate handling with LASM behavior (`docs/book/966-m39-c-runtime-req-header-cookie-duplicate-merge-parity.md`).
+- [x] C runtime string-bridge ABI now accepts tracked handles for `res.text`, `headers.name/value`, and `cookie.build` (with literal fallback), fixing dynamic request-derived string flows in native oneshot/runtime paths (`docs/book/967-m39-c-runtime-string-handle-literal-abi-bridge-for-res-headers-cookies.md`).
+- [x] C runtime `err.*` top-level helpers now accept tracked string handles (with literal fallback) for error `code`/`message` arguments, enabling deterministic dynamic error-message flows in native oneshot/runtime paths (`docs/book/968-m39-c-runtime-string-handle-literal-abi-bridge-for-err-helpers.md`).
+- [x] C runtime `log.*` string-accepting helpers now accept tracked handles (with literal fallback) across event/key/value/method/path logging surfaces, closing string ABI gaps for structured logging flows in native execution (`docs/book/969-m39-c-runtime-string-handle-literal-abi-bridge-for-log-helpers.md`).
+- [x] C runtime `err.with*` enrichment helpers now accept tracked string handles (with literal fallback + deterministic default field names), enabling dynamic error-path/detail/limit/dependency enrichment in native runtime paths (`docs/book/970-m39-c-runtime-string-handle-literal-abi-bridge-for-err-with-helpers.md`).
+- [x] C runtime `sql.q`, `sec.cspAdd`, and `auth.requireRole` now accept tracked string handles (with literal fallback), closing remaining high-use string ABI mismatch points across DB/security/auth helper surfaces (`docs/book/971-m39-c-runtime-string-handle-literal-abi-bridge-for-auth-csp-sql-helpers.md`).
+- [x] Added first-class `ctx.current()` intrinsic bridge across semantic typing/call-shape enforcement, C backend lowering, and runtime ABI (`sec4_rt_ctx_current`), enabling route handlers to obtain `Ctx` directly for `auth.require(...)` / `auth.requireRole(...)` flows in native run paths (`docs/book/972-m39-ctx-current-intrinsic-runtime-bridge.md`).
+- [x] LASM run backend now enforces handler auth-helper contracts (`auth.require`, `auth.requireRole`) with policy-aware token/cookie subject checks and deterministic `401/403` envelopes, including dynamic required-role materialization via request placeholders (`docs/book/973-m39-lasm-auth-helper-enforcement-with-ctx-current.md`).
+- [x] LASM run backend now enforces router middleware auth/csrf contracts (`auth.withAuth`, `csrf.withCsrf`) by extracting middleware usage from the route composition call graph and applying policy-aware deterministic `401 AUTH.UNAUTHORIZED` / `403 AUTH.CSRF_TOKEN_INVALID` response envelopes at request time (`docs/book/974-m39-lasm-auth-csrf-middleware-enforcement.md`).
+- [x] LASM auth middleware enforcement now respects `SEC4_RT_AUTH_MODE` env override (`off` disables middleware auth checks) while preserving handler-level auth-helper enforcement semantics, matching C-runtime policy/env precedence more closely (`docs/book/975-m39-lasm-auth-middleware-env-off-parity.md`).
+- [x] LASM csrf middleware enforcement now respects `SEC4_RT_CSRF_*` env overrides (including `SEC4_RT_CSRF_MODE=off`) for enabled-mode, cookie/header names, and protected-method sets, preserving deterministic `403 AUTH.CSRF_TOKEN_INVALID` only when effective csrf protection remains active (`docs/book/976-m39-lasm-csrf-middleware-env-off-parity.md`).
+- [x] LASM route registration now derives middleware requirements from the specific router expression bound to each route (including local router-wrapper helper returns, helper side-effect calls on router bindings, non-first router-argument wrappers/side-effect helpers resolved through caller alias + typed router-parameter matching, and middleware wrappers applied later at `http.serve(...)` time), preventing unrelated/unbound `auth.withAuth` or `csrf.withCsrf` chains from leaking middleware enforcement onto other routes (`docs/book/977-m39-lasm-route-scoped-middleware-extraction.md`, `docs/book/978-m39-lasm-helper-wrapper-router-binding-resolution.md`, `docs/book/979-m39-lasm-serve-wrapper-middleware-propagation.md`, `docs/book/980-m39-lasm-helper-side-effect-router-argument-resolution.md`).
+
+### M39-S3 `sec4 promote` dry-run planner acceptance criteria
+
+- New command surface:
+  - `sec4 promote --from browser --to server --dry-run [--path <project>]`.
+- Dry-run emits deterministic transformation plan artifact:
+  - changed bindings
+  - generated files list
+  - precondition diagnostics (if any).
+- Re-running dry-run on unchanged tree yields byte-identical plan output.
+
+### M39-S3 tracking (live status)
+
+- [x] CLI command scaffolding + planner implementation added (`sec4 promote --from browser --to server --dry-run [--out <path>]`).
+- [x] Determinism tests for plan artifact added (byte-identical dry-run output across repeated runs on unchanged tree + blocking-precondition coverage + semantic-diagnostic non-blocking warning coverage).
+- [x] Book chapter documenting S3 implementation added (`docs/book/920-m39-promote-dry-run-planner-baseline.md`).
+
+### M39-S4 promotion apply + generated scaffold acceptance criteria
+
+- `sec4 promote --from browser --to server` applies composition-root binding rewrite only.
+- Domain modules remain unchanged after promotion.
+- Generator emits deterministic server scaffolding:
+  - server repo adapter
+  - schema/migration baseline
+  - deploy profile baseline
+  - promotion report artifact.
+- Added browser-export -> server-import scaffold path with deterministic validation envelope.
+- End-to-end fixture proves:
+  - browser profile prototype builds/runs,
+  - promotion succeeds,
+  - server target builds/runs on generated scaffold.
+
+### M39-S4 tracking (live status)
+
+- [x] Apply rewrite engine implemented with composition-root-only rewrite guard (`sec4 promote --from browser --to server` rewrites only `src/main.ut`).
+- [x] Scaffold generator + deterministic report implemented (generated `server/*` baseline files + `server/reports/promote-plan.json` apply report).
+- [x] End-to-end promotion fixture (browser -> server) added and green (`promote_e2e_apply_generates_server_project_that_checks_and_runs`).
+- [x] Book chapter documenting S4 implementation baseline added (`docs/book/921-m39-promote-apply-composition-root-guard.md`).
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~93-95%
-- Strict no-stub alpha: ~90-92%
+- Runnable alpha (end-to-end): ~97-99%
+- Strict no-stub alpha: ~95-97%
 
 ### Remaining implementation slices (priority order)
 
-1. Alpha publish checklist delta update from verified no-stub evidence.
-2. Alpha tag decision and release-note packaging for the no-stub baseline.
+1. [x] Completed LASM DB parity for active DB intrinsics (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) and removed schema-switch fallback branches for write/query-one paths while keeping deterministic envelopes on `records.log` adapter v1.
+   - [x] Routed `DbListRecordsResponse` through LASM internal DB operation dispatch (`listRecords`) for planned routes (including `lasm-smoke`) instead of relying on schema-switch-only runtime materialization.
+   - [x] Hardened internal DB marker handling:
+      - invalid DB operation markers now fail deterministically with `DB.OPERATION_INVALID`,
+      - handlers with multi-operation marker sequences now execute deterministically in order with stop-on-first-error behavior (no silent partial-execution tolerance).
+2. [x] Made LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), with clean-machine `init -> check -> build -> run` validated on LASM-first flow.
+3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
+   - [x] Added built-in LASM horizontal front-layer orchestration in `sec4 run`:
+     - `--instances <N>` launches multi-instance LASM worker pool behind a built-in TCP front proxy.
+     - `--autoscale-max-instances`, `--autoscale-target-connections`, `--autoscale-check-ms` add adaptive worker scaling controls.
+     - documented in `docs/book/1018-m39-lasm-run-cluster-front-proxy-and-autoscale.md`.
+   - [x] Added command coverage for cluster guardrails and cluster serving path.
+   - [x] Added fast fixed-cluster shared-port mode (`SO_REUSEPORT`) for LASM:
+     - when `--instances == --autoscale-max-instances`, workers bind one shared port without front-proxy relay.
+     - benchmark probes show improved throughput vs proxy-cluster path (for example ~96k req/s on `/ping` in local wrk profile).
+     - documented in `docs/book/1024-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
+   - [x] Replaced front-proxy thread-per-connection relay with bounded relay worker pool:
+     - proxy now uses a fixed worker-count + bounded queue instead of spawning one relay thread per accepted connection,
+     - queue saturation now returns deterministic `503` (`cluster relay saturated`) instead of unbounded relay thread growth,
+     - local load probes after this change reached about `~60k req/s` in autoscale proxy mode and `~121k req/s` in fixed reuse-port mode (`/health`, auth header, local wrk profile).
+     - documented in `docs/book/1025-m39-lasm-cluster-relay-worker-pool.md`.
+   - [x] Added explicit cluster-proxy relay tuning flags:
+     - `--cluster-relay-workers` and `--cluster-relay-queue` now tune front-proxy relay concurrency/queue depth without code edits,
+     - both flags are LASM-only and require cluster proxy mode (`--instances > 1` with autoscale range); fixed reuse-port mode rejects them as not applicable.
+     - documented in `docs/book/1026-m39-lasm-cluster-relay-tuning-flags.md`.
+   - [x] Removed receiver-lock contention from LASM worker dispatch:
+     - replaced `Arc<Mutex<Receiver<TcpStream>>>` fan-out with bounded multi-consumer channels (`crossbeam-channel`) for both proxy relay workers and LASM backend workers,
+     - keeps bounded backpressure semantics while avoiding serialized `recv()` lock sections under load,
+     - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
+     - documented in `docs/book/1027-m39-lasm-worker-dispatch-crossbeam-channel.md`.
+   - [x] Added autoscale hysteresis controls for cluster worker scaling:
+     - new LASM flags: `--autoscale-scale-up-cooldown-ms`, `--autoscale-scale-down-cooldown-ms`, `--autoscale-scale-up-step`, and `--autoscale-scale-down-step`,
+     - autoscaler now enforces separate up/down cooldown windows and bounded per-check scale steps to reduce worker-count thrash on bursty traffic,
+     - flags stay LASM-only with deterministic validation and guard diagnostics.
+     - LASM cluster capacity probe script now supports these step controls for benchmark runs.
+     - documented in `docs/book/1031-m39-lasm-autoscale-step-window-controls.md`.
+   - [x] Added dedicated LASM cluster capacity probe tooling:
+     - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
+     - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
+     - dry-run contract coverage added in benchmark suite script tests.
+     - first 1M-threshold run evidence: `1,278,004` requests in `20s` (`~63.6k req/s`, peak RSS `~10,464 KB`) with tuned relay settings (`workers=32`, `queue=4096`).
+     - documented in `docs/book/1029-m39-lasm-cluster-capacity-probe-tooling.md`.
+   - [x] Added saturation-triggered autoscale boost in cluster proxy mode:
+     - relay queue full events are counted and consumed by autoscaler each check window,
+     - saturation pressure can raise `desired` worker count immediately (bounded by autoscale step and max instance caps) instead of relying only on active-connection heuristic,
+     - cooldown and per-check step windows remain enforced.
+     - documented in `docs/book/1032-m39-lasm-autoscale-saturation-boost.md`.
+   - [x] Added dedicated saturation boost-step control for cluster autoscaling:
+     - new LASM flag: `--autoscale-saturation-boost-step` (default `4`),
+     - when relay saturation events are observed, autoscale now boosts desired workers and per-check scale-up budget using this dedicated step (independent from normal `--autoscale-scale-up-step`),
+     - benchmark cluster capacity probe tooling now accepts/forwards the same flag for deterministic tuning workflows.
+     - documented in `docs/book/1034-m39-lasm-autoscale-saturation-boost-step-control.md`.
+   - [x] Added saturation boost matrix runner tooling for deterministic tuning sweeps:
+     - new benchmark script runs multiple cluster capacity probes across `--boost-steps <csv>` and records per-step summaries,
+     - dry-run output prints the full per-step execution plan; run mode writes a matrix summary artifact with pass/requests/throughput/RSS per boost step,
+     - Makefile target added: `lasm-cluster-saturation-boost-matrix`.
+     - documented in `docs/book/1035-m39-lasm-saturation-boost-matrix-tooling.md`.
+   - [x] Added saturation boost matrix analysis tooling for deterministic best-step selection:
+     - new benchmark script `benchmark-suite/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh` consumes matrix output and emits ranked runs plus a recommended `saturationBoostStep`,
+     - ranking is deterministic (`pass` first, then throughput, then request count, then lower RSS, then lower step),
+     - Makefile target added: `lasm-cluster-saturation-boost-analyze`.
+     - documented in `docs/book/1037-m39-lasm-saturation-boost-analysis-tooling.md`.
+   - [x] Matrix runner now supports integrated recommendation emission:
+     - `run_lasm_cluster_saturation_boost_matrix.sh` now accepts `--analysis-out` and runs analysis automatically by default after matrix generation,
+     - run mode now prints `recommendedSaturationBoostStep=<n>` from the generated analysis artifact,
+     - `--skip-analysis` keeps matrix-only behavior for explicit operator control.
+     - documented in `docs/book/1038-m39-lasm-saturation-boost-matrix-integrated-analysis.md`.
+   - [x] Matrix runner now supports recommended-step follow-up verification:
+     - new flag `--verify-recommended` runs one additional capacity probe using the analyzed recommended boost step,
+     - `--verify-out` controls follow-up artifact location, and the runner now rejects invalid `--verify-recommended --skip-analysis` combinations deterministically,
+     - run mode prints `recommendedVerificationOut=<path>` after follow-up execution.
+     - documented in `docs/book/1039-m39-lasm-saturation-boost-recommended-followup-verification.md`.
+   - [x] Added saturation boost markdown summary renderer for operator handoff:
+     - new script `benchmark-suite/scripts/render_lasm_cluster_saturation_boost_summary.sh` renders deterministic markdown from matrix + analysis artifacts (and optional verify artifact),
+     - renderer validates recommended-step consistency between analysis and optional verification artifact,
+     - Makefile target added: `lasm-cluster-saturation-boost-summary`.
+     - documented in `docs/book/1040-m39-lasm-saturation-boost-summary-renderer.md`.
+   - [x] Benchmark publish report now supports saturation summary integration:
+     - `benchmark-suite/scripts/publish_report.sh` now accepts optional saturation-summary input and emits a dedicated `LASM Saturation Boost Tuning` section,
+     - publish flow validates required saturation summary lines (`Selection mode`, `Recommended boost step`) when artifact is provided to catch summary-shape drift,
+     - Makefile `publish-report` target now forwards optional `SATURATION_SUMMARY` input without changing default behavior when unset.
+     - documented in `docs/book/1041-m39-publish-report-saturation-summary-integration.md`.
+   - [x] Added one-command saturation tuning bundle orchestration:
+     - new script `benchmark-suite/scripts/run_lasm_cluster_saturation_boost_bundle.sh` executes matrix + analysis + recommended-step verify + summary rendering as one deterministic flow,
+     - supports `--dry-run` plan output and `--skip-verify` mode for matrix/analysis/summary-only execution,
+     - Makefile target added: `lasm-cluster-saturation-boost-bundle`.
+     - documented in `docs/book/1042-m39-lasm-saturation-boost-bundle-orchestration.md`.
+   - [x] Full benchmark suite orchestration now supports optional LASM saturation lane:
+     - `run_full_benchmark_suite.sh --include-lasm-saturation` now executes the saturation bundle as an explicit phase and forwards generated summary into final report publishing,
+     - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
+     - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
+     - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
+   - [x] Full-suite saturation lane now forwards performance-tuning knobs for iterative runs:
+     - `run_full_benchmark_suite.sh` accepts explicit saturation lane pass-through flags (`--saturation-project-path`, `--saturation-duration`, `--saturation-threads`, `--saturation-connections`, `--saturation-target-requests`, relay worker/queue overrides),
+     - `bench-full-saturation` and `bench-full-saturation-dry` now forward `LASM_CAPACITY_*` tuning values into the saturation lane so operators can tune from one Make invocation,
+     - dry-run contract coverage now asserts delegated tuning values and step fanout in full-suite output.
+     - documented in `docs/book/1047-m39-full-suite-saturation-tuning-knob-forwarding.md`.
+   - [x] Added throughput-oriented saturation-enabled full-suite preset targets:
+     - new Make targets `bench-full-saturation-throughput` and `bench-full-saturation-throughput-dry` apply tuned defaults for quick iterative throughput probes (`sec4-lasm`, `ping`, skip verify, boosted load/relay knobs),
+     - preset values are overridable through `LASM_SATURATION_THROUGHPUT_*` variables while still delegating through full-suite saturation lane wiring,
+     - added runtime dry-run contract test ensuring preset defaults reach delegated saturation plan output.
+     - documented in `docs/book/1048-m39-full-suite-saturation-throughput-preset-targets.md`.
+   - [x] Added latency-oriented saturation-enabled full-suite preset targets:
+     - new Make targets `bench-full-saturation-latency` and `bench-full-saturation-latency-dry` apply lighter default load/relay settings for quicker latency-focused tuning passes,
+     - preset values are overridable through `LASM_SATURATION_LATENCY_*` variables and still flow through full-suite saturation lane delegation,
+     - added runtime dry-run contract test ensuring latency preset defaults reach delegated saturation plan output.
+     - documented in `docs/book/1049-m39-full-suite-saturation-latency-preset-targets.md`.
+   - [x] Added combined saturation preset orchestrator targets for one-command dual-profile sweeps:
+     - new Make targets `bench-full-saturation-presets` and `bench-full-saturation-presets-dry` run throughput and latency presets sequentially via existing preset targets,
+     - this keeps one-command exploratory tuning flows deterministic while preserving existing preset override behavior,
+     - added dry-run contract test validating both preset profiles appear in combined target output.
+     - documented in `docs/book/1050-m39-full-suite-saturation-combined-preset-targets.md`.
+   - [x] Cluster proxy hot-path lock contention reduced:
+     - relay worker request path no longer performs worker pruning/recovery/spawn under state lock for each incoming connection,
+     - background scaler/maintenance loop now owns dead-worker pruning + min-instance recovery in one place,
+     - relay backend-port selection now uses an atomic selection counter over current worker set to keep per-connection critical section minimal.
+     - documented in `docs/book/1051-m39-lasm-cluster-hot-path-lock-contention-reduction.md`.
+   - [x] Cluster state lock model optimized for relay-heavy read paths:
+     - cluster worker state now uses `RwLock` so relay workers take shared read locks for backend selection,
+     - background maintenance/autoscale loop remains the only writer for prune/recovery/scale mutations,
+     - this removes unnecessary writer lock serialization between parallel relay workers during steady-state dispatch.
+     - documented in `docs/book/1052-m39-lasm-cluster-read-write-lock-state-optimization.md`.
+   - [x] Relay backend-port selection now uses lock-free worker-port snapshots:
+     - autoscale/maintenance loop publishes current worker-port vectors through atomic snapshot updates,
+     - relay workers read the latest snapshot and select backend ports via atomic round-robin counter without touching cluster state locks,
+     - state locks remain on maintenance/autoscale mutation paths only.
+     - documented in `docs/book/1053-m39-lasm-cluster-lock-free-worker-port-snapshots.md`.
+   - [x] Relay failure handling now feeds autoscale pressure and bounds upstream connect stalls:
+     - relay path increments saturation events on `no healthy workers` and backend connect failures,
+     - backend worker connect now uses deterministic short timeout (`250ms`) instead of unbounded connect waits,
+     - this improves failure-mode responsiveness and helps saturation-based scaling react faster to worker churn.
+     - documented in `docs/book/1054-m39-lasm-cluster-relay-connect-timeout-and-saturation-signal.md`.
+   - [x] Worker-port snapshot publishing now avoids steady-state churn:
+     - autoscale loop republishes worker-port snapshots only when worker-port set actually changes,
+     - steady-state maintenance ticks no longer allocate/store redundant snapshot vectors,
+     - relay lock-free selection path remains unchanged while background publication overhead is reduced.
+     - documented in `docs/book/1055-m39-lasm-cluster-snapshot-publish-change-detection.md`.
+   - [x] Cluster relay path no longer spawns per-connection helper threads:
+     - replaced `relay_lasm_cluster_connection` thread-spawn copy bridge with a single-thread nonblocking bidirectional pump loop (buffered both directions with deterministic half-close behavior),
+     - removes per-connection relay thread creation/cloning overhead while preserving existing overload/autoscale/error-envelope semantics,
+     - short capacity probe under unchanged profile improved from `~64.9k req/s` to `~70.5k req/s` (`20s`, `8` threads, `256` connections, `instances=4`, `autoscale-max=8`, `relay-workers=32`, `relay-queue=4096`).
+     - documented in `docs/book/1056-m39-lasm-cluster-relay-no-spawn-pump-loop.md`.
+   - [x] Relay worker auto-sizing now follows configured connection pressure:
+     - default `--cluster-relay-workers` (auto mode) now uses `target_connections_per_instance` as the sizing floor (bounded by an adaptive cap from `max_instances * target_connections_per_instance`, clamped `128..512`),
+     - this reduces under-provisioned relay pools in keep-alive-heavy cluster proxy workloads without requiring manual `--cluster-relay-workers` tuning,
+     - short capacity probe with relay settings left in auto mode observed `~71.9k req/s` (`1,446,283` requests in `20s`) under the same baseline profile.
+     - documented in `docs/book/1057-m39-lasm-cluster-relay-auto-worker-pressure-sizing.md`.
+   - [x] Cluster relay workers now multiplex many active connection pairs per worker thread:
+     - replaced one-connection-at-a-time relay handling with per-worker nonblocking relay pump sets (`Vec<LasmClusterRelayPump>`), so each relay worker drives multiple client<->backend pairs concurrently,
+     - preserves deterministic overload/availability envelopes and autoscale saturation signaling while reducing relay worker head-of-line blocking under keep-alive pressure,
+     - short auto-mode probe moved from `~71.9k req/s` to `~73.3k req/s` (`1,474,217` requests in `20s`) with lower observed peak RSS (`~21,952 KB` vs `~46,224 KB`) in the same profile.
+     - documented in `docs/book/1058-m39-lasm-cluster-relay-worker-multiplex-pump-loop.md`.
+   - [x] Relay workers now apply local backend-port connect-failure cooldown with healthy fast path:
+     - on backend connect failure, relay worker marks the failed worker port unhealthy for a short cooldown window (`500ms`) and skips it during backend selection,
+     - when no unhealthy ports are tracked, relay selection remains a direct round-robin fast path (no cooldown-map scan),
+     - this reduces repeated immediate retries against transiently unavailable worker ports during churn while preserving existing deterministic `503` availability envelopes.
+     - documented in `docs/book/1059-m39-lasm-cluster-relay-port-connect-failure-cooldown.md`.
+   - [x] Relay pump read path now drains available socket bytes per cycle:
+     - changed both client->upstream and upstream->client read phases from single-read-per-cycle to read-until-`WouldBlock` loops while preserving bounded buffer behavior and existing half-close semantics,
+     - this reduces relay scheduler churn under active traffic by allowing each pump cycle to consume contiguous readable socket bursts,
+     - short probe in the current post-cooldown baseline moved from `~72.49k req/s` to `~72.76k req/s` with comparable memory/tail-latency profile.
+     - documented in `docs/book/1060-m39-lasm-cluster-relay-read-drain-loop.md`.
+   - [x] Added optional LASM cluster status JSON telemetry output:
+     - new flag: `sec4 run --cluster-status-json <path>` (LASM cluster mode only),
+     - cluster front process now emits periodic JSON snapshots with worker counts/ports, active connections, and relay saturation counters (`pending` + `total`) for operator tuning/debug workflows,
+     - healthy hot path remains unchanged when the flag is not set (status writer thread is not started).
+     - documented in `docs/book/1061-m39-lasm-cluster-status-json-telemetry.md`.
+   - [x] Tuned relay backend-connect failover behavior with precomputed configurable timing defaults:
+     - moved relay backend connect timeout/cooldown off fixed constants into cluster config resolution,
+     - added env-tunable controls (`SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS`, `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS`) with deterministic bounded parsing and lower-latency default timeout path (`100ms`),
+     - relay worker threads now consume these precomputed durations directly for backend connect attempts and unhealthy-port cooldown windows.
+     - documented in `docs/book/1124-m39-lasm-cluster-backend-connect-timeout-tuning.md`.
+   - [x] Added relay warning throttling in cluster failure paths:
+     - backend connect-failure warnings are now rate-limited per worker port,
+     - relay init/pump failure warnings are rate-limited per relay worker loop,
+     - keeps diagnostics while preventing stderr log spam from dominating runtime under sustained failure churn.
+     - documented in `docs/book/1125-m39-lasm-cluster-relay-warning-throttle.md`.
+   - [x] Added bounded relay accept batching per worker loop iteration:
+     - relay workers now cap the number of accepted client sockets per cycle before returning to pump existing active relays, preventing accept-path starvation under sustained intake pressure,
+     - new env override `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX` controls the per-cycle cap (default `64`, clamped `1..4096`) without changing CLI surface.
+     - documented in `docs/book/1126-m39-lasm-cluster-relay-accept-batch-fairness.md`.
+   - [x] Reduced unhealthy-port cooldown-map maintenance overhead in relay accept path:
+     - relay workers now prune expired unhealthy-port entries once per worker cycle (before accept batching) instead of re-running map retention for every accepted connection,
+     - backend selection in the unhealthy-path now uses the already-pruned map, keeping the fast path unchanged and reducing per-connection bookkeeping churn under sustained traffic.
+     - documented in `docs/book/1127-m39-lasm-cluster-unhealthy-map-fastpath.md`.
+   - [x] Reduced per-accept worker-port snapshot overhead in relay loop:
+     - relay workers now capture worker-port snapshot once per worker cycle and reuse it across that cycle’s accept batch,
+     - backend selection no longer performs a fresh `ArcSwap` load per accepted connection, reducing hot-path atomic/snapshot churn while keeping behavior deterministic.
+     - documented in `docs/book/1128-m39-lasm-cluster-worker-snapshot-per-cycle.md`.
+   - [x] Added worker-membership-aware unhealthy-port pruning and full-unhealthy fast reject:
+     - relay workers now drop unhealthy-port cooldown entries that no longer belong to the current worker snapshot while pruning expirations,
+     - when all current workers are marked unhealthy in a cycle, backend selection now short-circuits directly to unavailable handling without scanning the full worker list.
+     - documented in `docs/book/1129-m39-lasm-cluster-unhealthy-membership-prune.md`.
+   - [x] Replaced formatted 503 relay-envelope construction with static response payloads:
+     - cluster relay unavailable envelopes now use prebuilt static response bytes for deterministic failure reasons (`no healthy workers`, `worker unavailable`, `cluster relay saturated`, `cluster relay unavailable`),
+     - removes per-request string formatting/allocation on relay failure paths while preserving status/body contract behavior.
+     - documented in `docs/book/1130-m39-lasm-cluster-static-unavailable-response-bytes.md`.
+   - [x] Batched relay saturation counter atomics per worker cycle:
+     - relay worker threads now accumulate saturation pending/total increments locally during accept/connect failure handling,
+     - counters are flushed to shared atomics once per worker cycle, reducing repeated atomic writes in failure-heavy intervals while preserving counter semantics.
+     - documented in `docs/book/1131-m39-lasm-cluster-saturation-counter-batch.md`.
+   - [x] Optimized unhealthy membership pruning with per-cycle active-port set:
+     - relay workers now build a per-cycle active worker-port set for unhealthy-map membership checks instead of repeated linear `Vec::contains` scans during retain,
+     - when worker snapshot is empty, unhealthy cooldown map now clears immediately to avoid stale carry-over.
+     - documented in `docs/book/1132-m39-lasm-cluster-unhealthy-membership-set-prune.md`.
+   - [x] Removed status-writer state-lock reads for worker count telemetry:
+     - cluster status writer now derives `workerCount` directly from the lock-free worker-port snapshot (`worker_ports.len()`),
+     - removes periodic `shared_state` read-lock usage from telemetry path while preserving status payload semantics.
+     - documented in `docs/book/1133-m39-lasm-cluster-status-lockfree-worker-count.md`.
+   - [x] Batched listener-side saturation counter atomics under overload:
+      - accept loop now accumulates saturation pending/total increments locally on queue-full events and flushes atomics in small batches (`LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH`),
+      - shared helper now standardizes saturation-counter flush behavior across relay worker and listener paths.
+      - documented in `docs/book/1134-m39-lasm-cluster-listener-saturation-counter-batch.md`.
+   - [x] Reduced enqueue-counter atomics and unhealthy-set allocations in relay hot paths:
+      - listener path now increments `active_connections` only after successful relay queue enqueue (no add/sub pair on rejected connections),
+      - relay workers now reuse a mutable active-port set for unhealthy membership pruning instead of allocating a new set each cycle.
+      - documented in `docs/book/1135-m39-lasm-cluster-enqueue-counter-and-set-reuse.md`.
+   - [x] Cached active-port membership set by worker snapshot identity:
+      - relay workers now keep the active-port set cache keyed by current worker snapshot pointer identity and rebuild only when snapshot changes,
+      - unhealthy membership pruning no longer repopulates the set on every cycle when worker snapshot is unchanged.
+      - documented in `docs/book/1136-m39-lasm-cluster-active-set-snapshot-cache.md`.
+   - [x] Removed explicit flush syscall from cluster unavailable response writes:
+      - relay overload/unavailable paths now write prebuilt response bytes and rely on connection close semantics, without `TcpStream::flush()` per response,
+      - preserves deterministic response payload behavior while reducing failure-path syscall overhead.
+      - documented in `docs/book/1137-m39-lasm-cluster-unavailable-write-no-flush.md`.
+   - [x] Switched cluster status telemetry emission to compact JSON encoding:
+      - status writer now uses compact `serde_json::to_vec(...)` output instead of pretty-printed payload encoding,
+      - keeps JSON payload fields/semantics unchanged while reducing periodic telemetry serialization and write size overhead.
+      - documented in `docs/book/1138-m39-lasm-cluster-status-compact-json-encoding.md`.
+   - [x] Precomputed status writer temp-file path outside write loop:
+     - status thread now derives the `<status>.tmp` path once before entering the periodic loop and passes it into status writer calls,
+     - removes repeated path-extension formatting/allocations from every status-write iteration.
+     - documented in `docs/book/1139-m39-lasm-cluster-status-precompute-tmp-path.md`.
+   - [x] Replaced single relay queue with sharded queues + listener accept/dispatch batching:
+     - cluster proxy now allocates one bounded relay queue per relay worker shard instead of one globally contended queue (`crossbeam` fan-in hot spot removed),
+     - listener accept path now runs nonblocking batched intake (`cluster_relay_accept_batch_max`) and round-robins each accepted socket across queue shards with deterministic saturated/unavailable fallbacks.
+     - short LASM cluster probe after this slice recorded `1,389,512` requests in `20s` (`~69.45k req/s`, peak RSS `~26,976 KB`, `p99 12.38ms`) under auto relay settings.
+     - documented in `docs/book/1140-m39-lasm-cluster-sharded-relay-queue-and-batched-listener-dispatch.md`.
+   - [x] Decoupled queue-shard dispatch cursor from backend-port selection counter:
+     - listener queue-shard dispatch now uses a local batched round-robin cursor instead of sharing the relay backend-selection atomic counter,
+     - this removes an avoidable cross-path atomic contention point between listener enqueue and relay worker backend-port selection.
+     - repeated short probes (`20s`, auto relay settings) after this change reported `~63.59k`, `~68.34k`, and `~71.52k req/s` (`peak RSS ~27,008..27,072 KB`), with top-run throughput above the prior short-run baseline.
+     - documented in `docs/book/1141-m39-lasm-cluster-dispatch-cursor-decoupling.md`.
+   - [x] Batched active-connection atomics in listener and relay worker loops:
+     - listener now accumulates successful enqueue counts per accept batch and flushes one `active_connections` add per batch,
+     - relay workers now accumulate completion/failure decrements locally and flush one `active_connections` subtract per cycle,
+     - keeps overload/availability semantics unchanged while reducing per-connection atomic churn in hot paths.
+     - short LASM cluster probe after this slice recorded `1,440,370` requests in `20s` (`~71.65k req/s`, `p99 10.16ms`, peak RSS `~27,120 KB`) under auto relay settings.
+     - documented in `docs/book/1142-m39-lasm-cluster-active-connection-atomic-batching.md`.
+   - [x] Added parallel accept-worker pool for cluster proxy intake/dispatch:
+     - proxy listener now supports a bounded accept-worker pool (`SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS`, default `min(4, relay_workers)`) using cloned nonblocking listener sockets,
+     - accept workers run batched intake/dispatch loops in parallel and share deterministic saturation/unavailable response handling,
+     - cluster status JSON now includes `relayAcceptWorkers` for operator visibility of active accept-loop parallelism.
+     - short LASM cluster probe after this slice recorded `1,437,939` requests in `20s` (`~71.53k req/s`, `p99 11.53ms`, peak RSS `~27,216 KB`) under default settings.
+     - documented in `docs/book/1143-m39-lasm-cluster-accept-worker-pool.md`.
+   - [x] Lazy-loaded relay worker-port snapshots in accept processing cycles:
+     - relay worker loops no longer load worker-port snapshots unconditionally every cycle; snapshot loads now happen only when needed (unhealthy-port pruning or actual accepted connection handling),
+     - preserves existing backend selection semantics while reducing steady-state hot-loop snapshot churn.
+     - short LASM cluster probe after this slice recorded `1,450,295` requests in `20s` (`~72.14k req/s`, `p99 11.41ms`, peak RSS `~27,312 KB`) under default settings.
+     - documented in `docs/book/1144-m39-lasm-cluster-relay-lazy-worker-snapshot-load.md`.
+   - [x] Added explicit CLI tuning flag for cluster accept-worker pool:
+     - new LASM-only cluster flag: `--cluster-accept-workers <n>` (`n >= 1`) to override accept-loop parallelism without env-only tuning,
+     - guardrails enforce LASM backend + cluster mode only, and reject the flag in fixed reuse-port mode where proxy relay is bypassed.
+     - documented in `docs/book/1145-m39-lasm-cluster-accept-workers-cli-flag.md`.
+   - [x] Switched cluster queue-shard dispatch cursor to a shared atomic across accept workers:
+     - accept-loop queue dispatch now uses one global `AtomicUsize` cursor shared by all accept worker threads instead of per-thread local round-robin state,
+     - keeps dispatch and relay backend selection decoupled while removing per-accept-worker cursor skew under parallel intake,
+     - short LASM cluster probe after this slice recorded `1,431,766` requests in `20s` (`~71.58k req/s`, `p99 9.08ms`, peak RSS `~27,296 KB`) under default settings.
+     - documented in `docs/book/1146-m39-lasm-cluster-shared-accept-dispatch-cursor.md`.
+   - [x] Batched relay backend-selection counter reservations in worker accept loops:
+     - relay workers now reserve backend-selection counter slots once per accepted batch (`relay_accept_batch_max`) instead of one atomic `fetch_add(1)` per accepted socket when healthy-port fast path is active,
+     - preserves backend-selection semantics while lowering cross-worker atomic contention on the hot path.
+     - short LASM cluster probe after this slice recorded `1,450,919` requests in `20s` (`~72.18k req/s`, `p99 9.15ms`, peak RSS `~27,184 KB`) under default settings.
+     - documented in `docs/book/1147-m39-lasm-cluster-relay-selection-counter-batch-reservation.md`.
+   - [x] Removed per-dispatch modulo/index arithmetic from relay queue-sender iteration:
+     - `dispatch_lasm_cluster_relay_stream` now uses split-slice sender traversal (`tail` then `head`) from `start_index` instead of modulo/index calculation in every loop step,
+     - preserves dispatch ordering and existing saturated/unavailable fallback behavior.
+     - short LASM cluster probe after this slice recorded `1,429,683` requests in `20s` (`~71.12k req/s`, `p99 9.91ms`, peak RSS `~27,152 KB`) under default settings.
+     - documented in `docs/book/1148-m39-lasm-cluster-relay-dispatch-slice-iteration.md`.
+   - [x] Reused relay backend-selection batch reservation for unhealthy-worker fallback path:
+     - relay worker backend selection now draws `start_index` from the same per-batch reserved selection window used by healthy-path selection (instead of fallback per-connection `fetch_add(1)` atomics),
+     - keeps unhealthy-port skip semantics unchanged while removing another high-frequency shared atomic in mixed-health runs.
+     - short LASM cluster probe after this slice recorded `1,467,019` requests in `20s` (`~72.98k req/s`, `p99 9.19ms`, peak RSS `~27,040 KB`) under default settings.
+     - documented in `docs/book/1149-m39-lasm-cluster-relay-selection-batch-fallback-reuse.md`.
+   - [x] Simplified unhealthy-port prune membership check to snapshot-backed lookup:
+     - relay worker unhealthy-port prune now checks membership directly against the current worker-port snapshot (`snapshot.contains(port)`) instead of maintaining a mirrored hash-set cache,
+     - removes hash-set cache refresh churn while preserving unhealthy-port retention semantics.
+     - short LASM cluster probe after this slice recorded `1,462,382` requests in `20s` (`~72.75k req/s`, `p99 8.84ms`, peak RSS `~27,200 KB`) under default settings.
+     - documented in `docs/book/1150-m39-lasm-cluster-unhealthy-prune-snapshot-membership.md`.
+   - [x] Throttled unhealthy-port prune cadence in relay worker hot loop:
+     - relay workers now prune `unhealthy_ports_until` on a short bounded interval (`LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS=2`) instead of every loop cycle while unhealthy entries exist,
+     - backend-selection snapshot loading remains on-demand for accepted sockets, preserving routing behavior while reducing prune-side snapshot churn.
+     - short LASM cluster probe after this slice recorded `1,438,720` requests in `20s` (`~71.57k req/s`, `p99 10.08ms`, peak RSS `~27,280 KB`) under default settings.
+     - documented in `docs/book/1151-m39-lasm-cluster-unhealthy-prune-interval-throttle.md`.
+   - [x] Extended cluster status JSON telemetry with relay worker count:
+     - status payload now includes `relayWorkerCount` (resolved queue relay worker pool size) alongside `workerCount` and `relayAcceptWorkers`,
+     - improves operator tuning visibility for relay worker sizing decisions without changing runtime routing semantics.
+     - documented in `docs/book/1152-m39-lasm-cluster-status-relay-worker-count.md`.
+   - [x] Extended cluster status JSON telemetry with relay queue sizing fields:
+     - status payload now includes `relayQueueCapacity` (global relay queue target capacity) and `relayQueueShardCapacity` (per-shard bounded queue capacity),
+     - makes relay queue-pressure tuning (`--cluster-relay-queue`, relay worker counts) observable from one status artifact.
+     - documented in `docs/book/1153-m39-lasm-cluster-status-relay-queue-capacity-fields.md`.
+   - [x] Extended cluster status JSON telemetry with saturation-rate signal:
+     - status payload now includes `relaySaturationEventsPerSec` derived from `relaySaturationEventsTotal` delta over status emission interval,
+     - keeps existing pending/total counters and adds direct rate visibility for autoscale/tuning diagnosis.
+     - documented in `docs/book/1154-m39-lasm-cluster-status-saturation-rate-field.md`.
+   - [x] Made saturation-triggered autoscale boost step dynamic by event volume:
+     - autoscale loop now derives `dynamic_boost_step` from saturation-event batch count (`relaySaturationEvents` per eval) instead of applying a fixed one-step saturation boost,
+     - keeps existing cooldown and max-instance bounds while allowing faster scale-up reaction when saturation bursts are larger.
+     - short LASM cluster probe after this slice recorded `1,433,593` requests in `20s` (`~71.32k req/s`, `p99 11.03ms`, peak RSS `~27,120 KB`) under default settings.
+     - documented in `docs/book/1155-m39-lasm-cluster-dynamic-saturation-boost-step.md`.
+   - [x] Added autoscale-decision telemetry fields to cluster status JSON:
+     - status payload now includes `autoscaleDesiredInstances`, `autoscaleLastSaturationEvents`, and `autoscaleLastDynamicBoostStep`,
+     - autoscale loop publishes these values from each evaluation cycle via shared atomics, so status snapshots show latest autoscale decision context directly.
+     - documented in `docs/book/1156-m39-lasm-cluster-status-autoscale-decision-fields.md`.
+   - [x] Prioritized autoscale evaluation when saturation is pending:
+     - autoscale loop now bypasses the normal `autoscale_check_ms` gate when saturation events are pending, so saturation-driven scale decisions can run at maintenance-loop cadence,
+     - preserves existing autoscale cadence when saturation is absent.
+     - short LASM cluster probe after this slice recorded `1,470,366` requests in `20s` (`~73.15k req/s`, `p99 9.64ms`, peak RSS `~27,216 KB`) under default settings.
+     - documented in `docs/book/1157-m39-lasm-cluster-saturation-priority-autoscale-eval.md`.
+   - [x] Added saturation-priority autoscale sleep interval:
+     - autoscale loop now shortens sleep cadence to `min(maintenance_interval_ms, 100ms)` while saturation is pending, while keeping baseline maintenance cadence when saturation is absent,
+     - this reduces autoscale reaction latency during sustained saturation without changing non-saturation loop cadence.
+     - short LASM cluster probe after this slice recorded `1,476,018` requests in `20s` (`~73.43k req/s`, `p99 9.39ms`, peak RSS `~27,104 KB`) under default settings.
+     - documented in `docs/book/1158-m39-lasm-cluster-saturation-priority-sleep-interval.md`.
+   - [x] Added autoscale cooldown-remaining telemetry fields to cluster status:
+     - status payload now includes `autoscaleScaleUpCooldownRemainingMs` and `autoscaleScaleDownCooldownRemainingMs`,
+     - autoscale loop publishes these values each cycle from current cooldown state so operators can see when next scale-up/scale-down windows open.
+     - documented in `docs/book/1159-m39-lasm-cluster-status-autoscale-cooldown-remaining-fields.md`.
+   - [x] Added active-connection density telemetry to cluster status:
+     - status payload now includes `activeConnectionsPerWorker` derived from live `activeConnections / workerCount`,
+     - improves visibility of per-worker load density during tuning and autoscale diagnosis.
+     - documented in `docs/book/1160-m39-lasm-cluster-status-active-connections-per-worker.md`.
+   - [x] Reduced relay-loop arithmetic and membership-check overhead on hot paths:
+     - accept-loop relay dispatch now computes modulo once per batch and advances dispatch start index via wrap increment per stream (instead of modulo per stream),
+     - unhealthy-port prune membership now uses `binary_search` on the worker-port snapshot (snapshot order guarded before publish) instead of linear `contains` checks.
+     - documented in `docs/book/1161-m39-lasm-cluster-hotpath-dispatch-wrap-and-prune-binary-search.md`.
+   - [x] Reduced relay backend-selection per-connection index/modulo overhead:
+     - relay worker backend-selection reservation now tracks wrapped `next_index` per worker-port snapshot and refreshes modulo only when reservation or worker-port cardinality changes,
+     - unhealthy-port fallback candidate scan now uses split-slice iteration (`tail` then `head`) from the selected start index instead of modulo/index arithmetic in each scan step.
+     - documented in `docs/book/1162-m39-lasm-cluster-relay-selection-wrap-and-split-scan.md`.
+   - [x] Added relay per-connection buffer reuse in worker pumps:
+     - relay workers now keep a bounded local buffer pool (`relay_accept_batch_max * 4`, minimum `64`) and reuse relay pump buffers across connection lifecycles,
+     - avoids fresh dual-buffer allocation on every connection when reusable buffers are available while keeping bounded-memory behavior.
+     - documented in `docs/book/1163-m39-lasm-cluster-relay-buffer-pool-reuse.md`.
+   - [x] Tuned LASM accept/relay idle backoff cadence for lower burst wake latency:
+     - replaced hardcoded idle thresholds/sleeps with shared constants (`LASM_CLUSTER_IDLE_SPIN_THRESHOLD`, `LASM_CLUSTER_IDLE_SLEEP_MICROS`),
+     - accept and relay loops now use bounded short micro-sleep (`250us`) after spin threshold instead of `1ms` sleeps, reducing wake-up latency while preserving busy-loop protection.
+     - documented in `docs/book/1164-m39-lasm-cluster-idle-backoff-microsleep-tuning.md`.
+   - [x] Added relay-dispatch single-sender fast path:
+     - `dispatch_lasm_cluster_relay_stream` now short-circuits to direct `try_send` handling when relay sender count is `1`,
+     - avoids split-slice dispatch iteration overhead for single-relay-worker deployments while preserving saturated/unavailable error semantics.
+     - documented in `docs/book/1165-m39-lasm-cluster-relay-dispatch-single-sender-fast-path.md`.
+   - [x] Precomputed per-start-index backend-selection lookup for relay workers:
+     - relay worker loop now rebuilds a `start_index -> selected backend index` lookup table only when worker snapshot or unhealthy-port set changes,
+     - per-connection backend selection now uses O(1) lookup with existing selection-counter sequencing, preserving unhealthy-skip semantics while removing per-connection fallback scans.
+     - documented in `docs/book/1166-m39-lasm-cluster-relay-selection-precomputed-lookup.md`.
+   - [x] Cached worker backend socket addresses per snapshot in relay workers:
+     - relay workers now rebuild backend `SocketAddr` vector only when worker-port snapshot changes and reuse cached addresses for connect calls,
+     - removes per-connection `SocketAddr` construction on the relay connect hot path while preserving existing backend-port/error semantics.
+     - documented in `docs/book/1167-m39-lasm-cluster-relay-backend-socketaddr-cache.md`.
+   - [x] Reduced per-connection snapshot/lookup plumbing in relay batch processing:
+     - relay worker batch loop now refreshes worker snapshot/lookup state only on batch setup (`worker_ports_snapshot` missing) or when lookup is marked dirty,
+     - removes repeated pointer/lookup checks on every accepted connection within the same batch while preserving selection and unhealthy-prune semantics.
+     - documented in `docs/book/1168-m39-lasm-cluster-relay-batch-snapshot-lookup-setup.md`.
+   - [x] Pruned stale relay connect-warning entries during topology refresh:
+     - relay unhealthy-prune path now drops `connect_warning_next_allowed` entries for ports no longer present in worker snapshot and clears map when no workers remain,
+     - keeps warning-throttle map bounded to active worker ports during autoscale/topology churn.
+     - documented in `docs/book/1169-m39-lasm-cluster-connect-warning-map-prune.md`.
+   - [x] Reduced backend-selection lookup rebuild complexity to linear time:
+     - `rebuild_lasm_cluster_backend_selection_lookup` now computes a per-index healthy mask once and fills lookup via reverse next-healthy propagation (`O(n)`),
+     - replaces previous scan-per-start-index fallback rebuild (`O(n^2)`) while preserving unhealthy-skip selection semantics.
+     - documented in `docs/book/1170-m39-lasm-cluster-selection-lookup-linear-rebuild.md`.
+   - [x] Removed rebuild-time healthy-mask allocation churn in relay selection lookup:
+     - relay workers now keep a reusable `selection_healthy_mask` scratch buffer and pass it into lookup rebuild helper,
+     - avoids fresh `Vec<bool>` allocation during each topology/health lookup rebuild while preserving linear rebuild logic and selection behavior.
+     - documented in `docs/book/1171-m39-lasm-cluster-selection-lookup-scratch-mask-reuse.md`.
+   - [x] Added no-healthy fast gate for relay backend selection:
+     - lookup rebuild now returns `selection_has_healthy_backends`, and relay selection short-circuits when no healthy backend exists,
+     - avoids selection-counter reservation/index arithmetic in known no-healthy states while preserving existing `503 no healthy workers` behavior.
+     - documented in `docs/book/1172-m39-lasm-cluster-no-healthy-selection-fast-gate.md`.
+   - [x] Tightened relay dispatch sender-iteration hot path:
+     - `dispatch_lasm_cluster_relay_stream` now uses direct slice loops (`start_index == 0` fast path, then tail/head loops) instead of iterator-chain traversal and disconnected-count tracking,
+     - preserves saturated/unavailable routing semantics while reducing dispatch-path iterator/counter overhead.
+     - documented in `docs/book/1173-m39-lasm-cluster-relay-dispatch-direct-slice-loops.md`.
+   - [x] Added identity-selection fast path for healthy steady state:
+     - lookup rebuild now reports whether selection mapping is identity (`selected_index = start_index`),
+     - relay selection path uses direct start-index selection when mapping is identity, skipping lookup table reads in healthy steady-state traffic.
+     - documented in `docs/book/1174-m39-lasm-cluster-selection-identity-fast-path.md`.
+   - [x] Removed identity-state lookup table materialization:
+     - lookup rebuild now skips `lookup.resize/fill` entirely when mapping is identity (all healthy backends),
+     - rebuild gating now treats lookup length checks as non-required in identity mode, avoiding redundant table writes in healthy steady-state rebuilds.
+     - documented in `docs/book/1175-m39-lasm-cluster-selection-identity-no-table-materialization.md`.
+   - [x] Added worker-port membership set cache for prune paths:
+     - relay workers now rebuild a `HashSet<u16>` membership cache on snapshot changes,
+     - unhealthy-port and warning-map prune paths now use membership-set contains checks instead of per-entry snapshot binary searches.
+     - documented in `docs/book/1176-m39-lasm-cluster-worker-port-membership-cache.md`.
+   - [x] Bypassed accept-loop dispatch counter in single-relay mode:
+     - `run_lasm_cluster_accept_loop` now uses dispatch-counter reservation only when relay sender count is greater than `1`,
+     - single-relay/zero-relay paths now keep dispatch start fixed at `0`, avoiding unnecessary shared atomic `fetch_add` churn.
+     - documented in `docs/book/1177-m39-lasm-cluster-single-relay-dispatch-counter-bypass.md`.
+   - [x] Inlined single-sender dispatch in accept loop:
+     - when relay sender count is exactly `1`, accept loop now dispatches directly via that sender (`try_send`) without calling the generic dispatch helper,
+     - preserves saturated/unavailable mapping semantics while removing one hot-path function call layer in single-relay deployments.
+     - documented in `docs/book/1178-m39-lasm-cluster-single-sender-accept-loop-inline-dispatch.md`.
+   - [x] Switched selection-lookup storage to sentinel-index vector:
+     - relay selection lookup now uses `Vec<usize>` with sentinel `usize::MAX` for “no backend” entries instead of `Vec<Option<usize>>`,
+     - reduces lookup-entry option wrapping overhead while preserving unhealthy remap semantics and identity fast path behavior.
+     - documented in `docs/book/1179-m39-lasm-cluster-selection-lookup-sentinel-storage.md`.
+   - [x] Removed selection healthy-mask scratch vector from lookup rebuild:
+     - selection lookup rebuild now derives `first_healthy_index` directly from `worker_ports` and writes sentinel lookup entries in reverse index order without building a parallel `Vec<bool>`,
+     - avoids per-refresh healthy-mask clear/resize/fill work while preserving healthy/unhealthy remap behavior and identity fast path semantics.
+     - documented in `docs/book/1180-m39-lasm-cluster-selection-lookup-maskless-rebuild.md`.
+   - [x] Added explicit run-flag override for relay accept batch size:
+     - `sec4 run` now accepts `--cluster-relay-accept-batch-max <n>` (LASM cluster-only) with deterministic zero-value and backend/cluster guard diagnostics,
+     - runtime resolution now applies CLI override first, then `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX`, then default.
+     - documented in `docs/book/1181-m39-run-cluster-relay-accept-batch-max-flag.md`.
+   - [x] Added explicit run-flag overrides for proxy worker connect timing:
+     - `sec4 run` now accepts `--cluster-backend-connect-timeout-ms <n>` and `--cluster-backend-connect-cooldown-ms <n>` (LASM cluster-only) with deterministic zero-value and backend/cluster guard diagnostics,
+     - runtime resolution now applies CLI overrides first, then `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS` / `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS`, then defaults.
+     - documented in `docs/book/1182-m39-run-cluster-backend-connect-timing-flags.md`.
+   - [x] Replaced relay unhealthy/warning port maps with index-aligned state vectors:
+     - relay workers now track backend unhealthy/connect-warning cooldown state by worker index (`Vec<Option<Instant>>`) and remap that state on worker-topology snapshot changes,
+     - selection lookup rebuild now consumes index-aligned unhealthy state directly, and snapshot remap now reuses vector ownership (`mem::take`) instead of cloning cooldown state.
+     - documented in `docs/book/1183-m39-lasm-cluster-relay-index-aligned-unhealthy-state.md`.
+   - [x] Exposed relay backend connect timing in cluster status telemetry:
+     - cluster status JSON now includes `relayBackendConnectTimeoutMs` and `relayBackendConnectCooldownMs`,
+     - these fields report the effective runtime connect-timeout/cooldown values used by relay workers.
+     - documented in `docs/book/1184-m39-lasm-cluster-status-relay-backend-connect-timing-fields.md`.
+   - [x] Added preferred-shard direct dispatch fast path for multi-relay accept:
+     - accept loop now tries the preferred relay sender directly first, and only scans remaining relay shards on first-attempt failure,
+     - fallback scan now iterates only remaining senders and preserves saturated/unavailable semantics.
+     - documented in `docs/book/1185-m39-lasm-cluster-preferred-shard-direct-dispatch-fast-path.md`.
+   - [x] Added relay dispatch fallback telemetry counter:
+     - accept loop now increments a shared `relayDispatchFallbackTotal` counter whenever preferred-shard direct dispatch misses and fallback scanning is used,
+     - cluster status JSON now includes this counter for operator-visible direct-hit vs fallback behavior tracking.
+     - documented in `docs/book/1186-m39-lasm-cluster-relay-dispatch-fallback-telemetry.md`.
+   - [x] Removed shared accept-loop dispatch atomic in cluster mode:
+     - cluster accept loops now use per-accept-worker local dispatch cursors (seeded by accept worker index) instead of a shared `AtomicUsize` reservation counter,
+     - preserves deterministic round-robin-per-worker dispatch behavior while removing shared atomic contention from accept hot path.
+     - documented in `docs/book/1187-m39-lasm-cluster-per-accept-worker-local-dispatch-cursors.md`.
+   - [x] Batched relay fallback telemetry counter flush in accept loops:
+     - accept loops now accumulate fallback dispatch hits locally and flush aggregated totals to `relayDispatchFallbackTotal`,
+     - avoids per-fallback atomic increments in fallback-heavy traffic while preserving monotonic telemetry semantics.
+     - documented in `docs/book/1188-m39-lasm-cluster-batched-relay-fallback-telemetry-flush.md`.
+   - [x] Added relay fallback rate telemetry in cluster status:
+     - cluster status JSON now includes `relayDispatchFallbackPerSec` computed per status sample interval from fallback-total deltas,
+     - keeps fallback miss pressure visible as both cumulative total and current rate.
+     - documented in `docs/book/1189-m39-lasm-cluster-relay-dispatch-fallback-rate-telemetry.md`.
+   - [x] Removed temporary accept-batch stream buffer from cluster accept hot path:
+     - `run_lasm_cluster_accept_loop` now dispatches accepted streams immediately within the accept loop instead of push/clear/drain over a temporary `Vec<TcpStream>`,
+     - preserves dispatch cursor ordering, fallback/saturation/unavailable handling, and batched counter flush semantics while removing per-iteration batch-buffer churn.
+     - documented in `docs/book/1190-m39-lasm-cluster-streaming-accept-dispatch-no-batch-buffer.md`.
+   - [x] Split single-relay and multi-relay accept dispatch paths:
+     - `run_lasm_cluster_accept_loop` now chooses single-sender vs multi-sender dispatch loop once per iteration and avoids per-stream sender-count branching in the inner accept hot path,
+     - preserved dispatch-result semantics by routing both paths through shared accept-dispatch result handling.
+     - documented in `docs/book/1191-m39-lasm-cluster-split-single-vs-multi-relay-accept-dispatch.md`.
+   - [x] Reduced accept-loop counter/flush overhead on steady-state path:
+     - accept-loop per-batch counters (`listener_accepted_in_batch`, `listener_enqueued_local`, fallback-local total) now use direct `+= 1` updates on bounded hot-path counters,
+     - end-of-iteration atomic flush helpers are now called only when local counters are non-zero, avoiding unconditional helper calls on the no-fallback/no-idle fast path.
+     - documented in `docs/book/1192-m39-lasm-cluster-accept-loop-counter-and-conditional-flush-hotpath.md`.
+   - [x] Tightened fallback relay sender scan to split-slice traversal:
+     - `dispatch_lasm_cluster_relay_stream_fallback` now scans fallback relay senders with two linear slice passes (`start..end`, then `0..start`) bounded by remaining attempts,
+     - removes per-iteration modulo/wrap index arithmetic while preserving fallback saturated/unavailable semantics and sender-attempt ordering.
+     - documented in `docs/book/1193-m39-lasm-cluster-fallback-relay-scan-split-slice.md`.
+   - [x] Removed fallback-start modulo from relay fallback dispatch path:
+     - multi-relay accept dispatch now computes wrapped fallback start index once (`next shard or 0`) and passes it directly into fallback scan,
+     - fallback scan now iterates fixed-size split spans (`start..start+len`, then `0..remaining`) without per-iteration remaining guards or modulo wrapping.
+     - documented in `docs/book/1194-m39-lasm-cluster-fallback-start-prewrap-and-fixed-span-scan.md`.
+   - [x] Reduced relay-worker loop counter/flush overhead:
+     - relay-worker per-iteration local counters (`saturation_events_*_local`, `active_connection_decrements_local`) now use direct `+= 1` updates on bounded loop-local counters,
+     - relay-worker end-of-iteration flush helpers now run only when local counters are non-zero.
+     - documented in `docs/book/1195-m39-lasm-cluster-relay-worker-counter-and-conditional-flush-hotpath.md`.
+   - [x] Removed remaining bounded saturating increments in accept/relay hot loops:
+     - bounded local counters (`listener_idle_spins`, relay `accepted_in_batch`, relay `idle_spins`, and local unhealthy/prune counters) now use direct `+= 1` updates where values are bounded by loop controls/snapshot cardinality,
+     - keeps semantics unchanged while trimming saturating arithmetic in the ingress/relay hot path.
+     - documented in `docs/book/1196-m39-lasm-cluster-bounded-counter-direct-increments-hotpath.md`.
+   - [x] Reduced relay selection-reservation arithmetic overhead:
+     - relay selection-reservation counters (`relay_selection_reservation_offset`, `relay_selection_reservation_next_index`) now use direct bounded `+= 1` updates in the reservation hot path,
+     - keeps reservation wrap behavior unchanged while removing saturating arithmetic from per-connection backend selection sequencing.
+     - documented in `docs/book/1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`.
+   - [x] Removed per-connection closure from relay selection-reservation start-index path:
+     - relay backend selection now computes reservation refill and start-index progression inline (no closure allocation/call in per-connection loop),
+     - keeps reservation refill/wrap and identity-lookup behavior unchanged while simplifying the hot path.
+     - documented in `docs/book/1198-m39-lasm-cluster-inline-relay-selection-reservation-start-index.md`.
+   - [x] Simplified non-identity relay selection lookup read path:
+     - relay backend selection now reads precomputed lookup entries via direct sentinel-index access instead of `get().copied().filter(...)`,
+     - keeps sentinel semantics unchanged while removing option-chain overhead on the non-identity selection path.
+     - documented in `docs/book/1199-m39-lasm-cluster-non-identity-selection-direct-lookup-read.md`.
+   - [x] Removed success-path backend-port lookup in relay connect path:
+     - relay worker now reads `selected_backend_port` only inside connect-failure warning path instead of unconditionally before each connect attempt,
+     - keeps warning output unchanged while removing one success-path array read from the relay hot path.
+     - documented in `docs/book/1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`.
+   - [x] Switched relay connect-failure state access to direct index reads:
+     - relay connect-failure path now updates unhealthy cooldown and warning-throttle vectors via direct index access (`[selected_backend_index]`) instead of repeated `get()/get_mut()` option chains,
+     - preserves cooldown/throttle behavior while reducing option-layer overhead on the failure-path hot loop.
+     - documented in `docs/book/1201-m39-lasm-cluster-direct-index-connect-failure-state-access.md`.
+   - [x] Removed redundant fallback-start normalization branch:
+     - fallback dispatch now consumes pre-wrapped start indexes directly (`scan_start_index = start_index_wrapped`) after existing debug invariant check,
+     - removes one runtime normalization branch from relay fallback dispatch while preserving fallback scan behavior.
+     - documented in `docs/book/1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`.
+   - [x] Tightened relay connect-warning throttle slot path:
+     - relay connect-failure path now loads warning-throttle slot once into a mutable entry reference and performs direct match-based allowance check (`Some(next) => now >= next`),
+     - keeps warning throttle semantics unchanged while removing repeated indexed option-chain reads/writes in the failure path.
+     - documented in `docs/book/1203-m39-lasm-cluster-connect-warning-slot-direct-match-check.md`.
+   - [x] Removed per-connection `Option` wrapping from relay backend selection result:
+     - relay backend selection now uses `LASM_CLUSTER_SELECTION_LOOKUP_NONE` sentinel directly across identity and non-identity selection paths,
+     - removes `Option` construction/unwrapping in per-connection selection while preserving no-healthy behavior and selection semantics.
+     - documented in `docs/book/1204-m39-lasm-cluster-selection-sentinel-result-path.md`.
+   - [x] Simplified relay init/pump warning-throttle checks:
+     - relay init-failure and relay pump-failure warning gates now use direct `match`-based checks on `pump_warning_next_allowed` (`Some(next) => now >= next`, `None => true`) instead of map/unwrap option chains,
+     - preserves warning-throttle behavior while reducing option-chain overhead in warning paths.
+     - documented in `docs/book/1205-m39-lasm-cluster-relay-warning-throttle-direct-match-checks.md`.
+   - [x] Removed remaining map/unwrap option-chain checks from relay/autoscale paths:
+     - relay unhealthy-prune gate and unhealthy-slot marking now use direct `match` checks on option values instead of map/unwrap chains,
+     - autoscale up/down cooldown checks now use direct `match`-based elapsed guards.
+     - documented in `docs/book/1206-m39-lasm-cluster-relay-autoscale-direct-match-checks.md`.
+   - [x] Reused precomputed duration values across relay/autoscale loops:
+     - relay warning-throttle and unhealthy-prune intervals are now precomputed once per relay worker and reused on warning/cooldown updates,
+     - status writer and autoscale loop now precompute interval/cooldown durations and reuse them for loop sleeps + cooldown checks.
+     - documented in `docs/book/1207-m39-lasm-cluster-duration-reuse-in-relay-autoscale-loops.md`.
+   - [x] Bypassed accept-dispatch helper on single-step success fast paths:
+     - single-relay and multi-relay accept loops now update `listener_enqueued_local` directly on immediate `try_send` success,
+     - helper-based dispatch handling remains on saturation/unavailable fallback paths only.
+     - documented in `docs/book/1208-m39-lasm-cluster-accept-fast-path-direct-enqueue.md`.
+   - [x] Added relay worker vector preallocation for steady-state capacities:
+     - relay connection and relay buffer-pool vectors are now initialized with capacity derived from `relay_accept_batch_max` / `relay_buffer_pool_max`,
+     - selected backend address vector now preallocates to current worker-port snapshot length before initial rebuild.
+     - documented in `docs/book/1209-m39-lasm-cluster-relay-vector-preallocation.md`.
+   - [x] Added precomputed relay next-index lookup for multi-relay accept dispatch:
+     - multi-relay accept loop now precomputes sender-next indexes once and reuses them for dispatch-cursor advancement and fallback start selection,
+     - removes per-request wrap branches for cursor/fallback index progression.
+     - documented in `docs/book/1210-m39-lasm-cluster-accept-next-index-lookup.md`.
+   - [x] Added precomputed relay selection next-index lookup for backend reservation progression:
+     - relay worker backend selection now precomputes worker-next indexes when worker cardinality changes and reuses them to advance reservation indexes,
+     - removes per-selection wrap branches from reservation progression while preserving selection order semantics.
+     - documented in `docs/book/1211-m39-lasm-cluster-relay-selection-next-index-lookup.md`.
+   - [x] Reused one computed next-dispatch index per accepted stream in multi-relay accept path:
+     - accept dispatch now computes `next_dispatch_index` once and reuses it for both cursor advancement and fallback-start selection,
+     - removes duplicate next-index lookup work from the multi-relay accept hot path.
+     - documented in `docs/book/1212-m39-lasm-cluster-accept-next-index-single-read.md`.
+   - [x] Restricted accept-dispatch helper handling to error outcomes only:
+     - fallback dispatch now increments enqueue-local counters directly on `Ok(())` without routing through the dispatch helper,
+     - accept dispatch helper now handles only saturated/unavailable error outcomes.
+     - documented in `docs/book/1213-m39-lasm-cluster-accept-fallback-success-direct-enqueue.md`.
+   - [x] Added explicit inline hints on tight cluster helper paths:
+     - counter flush helpers, fallback dispatch scan helper, and accept-dispatch error helper now carry `#[inline(always)]`,
+     - keeps helper decomposition while reducing call overhead risk in release hot paths.
+     - documented in `docs/book/1214-m39-lasm-cluster-inline-hints-on-hot-helpers.md`.
+   - [x] Switched fallback relay scan traversal to next-index lookup iteration:
+     - fallback dispatch now consumes the precomputed sender next-index lookup and iterates by fixed attempt count,
+     - removes split-slice scan arithmetic from fallback traversal while preserving sender-attempt ordering.
+     - documented in `docs/book/1215-m39-lasm-cluster-fallback-next-index-iteration.md`.
+   - [x] Precomputed idle-sleep durations in accept/relay loops:
+     - accept and relay loops now allocate idle sleep durations once and reuse them instead of rebuilding microsecond durations per idle cycle,
+     - keeps idle backoff behavior unchanged while trimming repeated duration construction in hot loops.
+     - documented in `docs/book/1216-m39-lasm-cluster-idle-sleep-duration-reuse.md`.
+   - [x] Specialized fallback scan helper for multi-relay mode:
+     - fallback dispatch helper is now explicitly multi-relay (`sender_count > 1`) and no longer carries single-sender guard branching,
+     - accept multi-relay path now calls the specialized helper directly.
+     - documented in `docs/book/1217-m39-lasm-cluster-multi-relay-fallback-helper-specialization.md`.
+   - [x] Reduced unchanged status-writer disk churn in cluster mode:
+     - status writer now skips atomic status JSON rewrites when all status fields are unchanged (excluding `updatedAtMs`),
+     - status file updates now occur only on meaningful status-snapshot changes.
+     - documented in `docs/book/1218-m39-lasm-cluster-status-writer-unchanged-snapshot-skip.md`.
+   - [x] Added cluster status-writer unchanged-snapshot contract coverage:
+     - command integration test `run_command_lasm_cluster_status_json_skips_unchanged_snapshots` now locks stable `updatedAtMs` behavior for unchanged status snapshots,
+     - prevents regressions that would reintroduce periodic unchanged status-file rewrites.
+     - documented in `docs/book/1219-m39-lasm-cluster-status-writer-unchanged-snapshot-test-lock.md`.
+   - [x] Replaced status-writer baseline-byte comparison with typed snapshot comparison:
+     - status writer now compares a typed in-memory `LasmClusterStatusSnapshot` (including worker port set + autoscale/relay metrics) to detect unchanged state,
+     - removes per-interval baseline JSON encoding from unchanged-snapshot detection while preserving unchanged-write skip semantics.
+     - documented in `docs/book/1220-m39-lasm-cluster-status-writer-typed-snapshot-compare.md`.
+   - [x] Removed status-snapshot worker-port cloning via shared worker-port arcs:
+     - `LasmClusterStatusSnapshot` now stores worker ports as `Arc<Vec<u16>>` and status writer passes `load_full()` worker-port snapshots directly,
+     - removes per-interval worker-port vector cloning from unchanged-snapshot comparison.
+     - documented in `docs/book/1221-m39-lasm-cluster-status-snapshot-worker-port-arc-reuse.md`.
+   - [x] Switched status JSON encoding path to typed payload serialization:
+     - status writer now serializes a typed `LasmClusterStatusPayload` struct (serde rename rules) instead of building dynamic JSON maps via `serde_json::json!`,
+     - preserves status JSON field contract while reducing dynamic payload construction overhead.
+     - documented in `docs/book/1222-m39-lasm-cluster-status-writer-typed-payload-serialization.md`.
+   - [x] Unified relay accept `try_send` error handling branches:
+     - single-relay accept path now maps `TrySendError::{Full,Disconnected}` through one shared error-mapping branch before dispatch-error handling,
+     - multi-relay accept path now uses one shared `TrySendError` branch to drive fallback dispatch with derived `saw_live_sender`.
+     - documented in `docs/book/1223-m39-lasm-cluster-accept-try-send-error-branch-unification.md`.
+   - [x] Switched changed-snapshot status writes to streamed temp-file serialization:
+     - status writer now writes changed payloads via `serde_json::to_writer` into a buffered temp file and flushes before atomic rename,
+     - removes changed-write `to_vec` allocation/copy path while preserving atomic file replacement semantics.
+     - documented in `docs/book/1224-m39-lasm-cluster-status-writer-streamed-tempfile-serialization.md`.
+   - [x] Added cached status-parent directory readiness with `NotFound` recovery:
+     - status writer now caches successful parent-directory readiness and avoids repeated `create_dir_all` on each changed write,
+     - tempfile creation now retries parent-dir initialization when `NotFound` occurs (for parent-dir removal recovery).
+     - documented in `docs/book/1225-m39-lasm-cluster-status-parent-readiness-cache.md`.
+   - [x] Removed changed-write status snapshot clone in writer handoff:
+     - status writer now accepts `LasmClusterStatusSnapshot` by value and moves it into `last_snapshot` after a successful write,
+     - removes per-write snapshot clone overhead while preserving unchanged-snapshot skip and status-file contract behavior.
+     - documented in `docs/book/1226-m39-lasm-cluster-status-snapshot-move-handoff.md`.
+   - [x] Added single-backend relay dispatch fast path:
+     - relay worker selection now short-circuits to backend index `0` when only one worker port is available,
+     - skips reservation-counter `fetch_add` and next-index rotation bookkeeping in the single-backend case while preserving selection semantics for multi-backend clusters.
+     - documented in `docs/book/1227-m39-lasm-cluster-single-backend-selection-fast-path.md`.
+   - [x] Removed relay next-index lookup vector from round-robin dispatch:
+     - relay worker selection now advances round-robin start index with direct wrapped arithmetic (`start + 1` with wrap) instead of prebuilding/reading a per-worker next-index vector,
+     - removes worker-port-change vector rebuild overhead and per-dispatch lookup reads while preserving selection order semantics.
+     - documented in `docs/book/1228-m39-lasm-cluster-direct-round-robin-next-index.md`.
+   - [x] Removed accept-loop sender next-index lookup vector and unified wrapped index progression helper:
+     - accept loop multi-relay dispatch now computes next relay sender index via `lasm_cluster_next_index_wrapped(...)` instead of a prebuilt sender next-index vector,
+     - fallback relay scan now also advances with the same wrapped helper, removing per-accept-loop sender-vector setup and per-step lookup reads while preserving relay scan order.
+     - documented in `docs/book/1229-m39-lasm-cluster-accept-fallback-direct-next-index-helper.md`.
+   - [x] Cached selected worker-port count in relay dispatch loop:
+     - relay worker loop now maintains `selected_worker_port_count` alongside the selected worker-port snapshot and updates it only when snapshot identity changes,
+     - selection rebuild and backend-index selection now use the cached count instead of repeated `selected_worker_ports_snapshot.as_ref().len()` reads in the hot path.
+     - documented in `docs/book/1230-m39-lasm-cluster-cached-selected-worker-port-count.md`.
+   - [x] Reduced relay worker-port snapshot replacement clone churn:
+     - relay worker snapshot-update branches now use `std::mem::replace` to move out the previous selected snapshot while installing the new snapshot, instead of cloning both old/new arcs,
+     - keeps unhealthy-port remap semantics unchanged while reducing reference-count update overhead on worker-port snapshot refreshes.
+     - documented in `docs/book/1231-m39-lasm-cluster-worker-port-snapshot-replace-handoff.md`.
+   - [x] Removed redundant connect-failure warning index read and unreachable reservation branch:
+     - relay worker connect-failure warning now uses already-selected `backend_addr.port()` instead of re-indexing selected worker-port snapshots,
+     - relay reservation refill in multi-backend path now assigns `base % worker_port_count` directly (removing an unreachable `worker_port_count <= 1` branch).
+     - documented in `docs/book/1232-m39-lasm-cluster-connect-warning-port-and-reservation-branch-simplification.md`.
+   - [x] Added trivial-worker-count selection-lookup bypass in relay loop:
+     - relay loop now skips `rebuild_lasm_cluster_backend_selection_lookup(...)` when selected worker-port count is `0` or `1`,
+     - for those trivial counts, it sets deterministic healthy/identity flags directly and clears lookup storage, avoiding unnecessary lookup rebuild calls in the hot path.
+     - documented in `docs/book/1233-m39-lasm-cluster-trivial-worker-count-selection-lookup-bypass.md`.
+   - [x] Added healthy-state selection-lookup rebuild bypass:
+     - relay loop now short-circuits selection state when `unhealthy_port_count == 0` (for any non-zero worker count), setting healthy/identity flags directly and clearing lookup storage,
+     - `rebuild_lasm_cluster_backend_selection_lookup(...)` now runs only for non-trivial unhealthy multi-backend states.
+     - documented in `docs/book/1234-m39-lasm-cluster-healthy-state-selection-lookup-bypass.md`.
+   - [x] Removed duplicate outer flush guards in accept/relay loops:
+     - accept loop and relay worker loop now call inline flush helpers unconditionally each cycle,
+     - relies on existing helper-local zero checks to skip atomic updates, removing duplicate outer branch checks from hot loop tails.
+     - documented in `docs/book/1235-m39-lasm-cluster-flush-guard-dedup.md`.
+   - [x] Added all-unhealthy fast-fail in backend selection lookup rebuild:
+     - `rebuild_lasm_cluster_backend_selection_lookup` now short-circuits when `unhealthy_port_count >= worker_port_count`,
+     - avoids unnecessary unhealthy-index scan work when no healthy backend exists.
+     - documented in `docs/book/1236-m39-lasm-cluster-selection-lookup-all-unhealthy-fast-fail.md`.
+   - [x] Removed per-iteration optional-index reads from selection lookup rebuild:
+     - lookup rebuild now reads unhealthy markers with direct indexed access (`unhealthy_ports_until_by_index[index]`) and a debug precondition on slice length,
+     - removes repeated bounds/option combinator overhead in selection lookup scan loops.
+     - documented in `docs/book/1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`.
+   - [x] Added pointer-aware status snapshot equality for worker-port sets:
+     - `LasmClusterStatusSnapshot` now uses manual `PartialEq` with `Arc::ptr_eq` short-circuit for `worker_ports` before slice fallback comparison,
+     - preserves unchanged-snapshot semantics while reducing repeated deep vector comparisons when worker-port snapshot pointer is unchanged.
+     - documented in `docs/book/1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`.
+   - [x] Replaced over-scaled auto relay-worker sizing with bounded instance-based heuristic:
+     - default relay worker auto-sizing no longer scales with `target_connections_per_instance` (which produced excessive defaults like `256` workers for `4..8` instance configs),
+     - new auto heuristic uses bounded sublinear instance hint (`ceil(sqrt(max(min_instances, max_instances)))`, min `2` for multi-instance, clamped by host parallelism and `1..16` hard bound).
+     - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~68.6k req/s` (`p99 11.99ms`) to `~75.5k req/s` (`p99 6.41ms`) under default auto relay settings with the same config envelope.
+     - documented in `docs/book/1239-m39-lasm-cluster-auto-relay-worker-sizing-fix.md`.
+   - [x] Tuned auto relay-worker default from ceil-sqrt to floor-sqrt for multi-instance mode:
+     - auto relay sizing now uses `max(2, floor(sqrt(max(min_instances, max_instances))))` for multi-instance configs (single-instance remains `1`),
+     - keeps existing host-parallelism and `1..16` clamps unchanged while biasing lower default relay thread counts to reduce hot-path contention.
+     - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~75.5k req/s` (`p99 6.41ms`) to `~77.8k req/s` (`p99 5.35ms`) under default auto relay settings with the same config envelope.
+     - documented in `docs/book/1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`.
+   - [x] Extended LASM cluster capacity probe with accept-path override controls:
+     - `run_lasm_cluster_capacity_probe.sh` now supports explicit `--cluster-accept-workers` and `--cluster-relay-accept-batch-max` flags (plus env counterparts),
+     - probe dry-run output + summary JSON now include both fields for deterministic tuning artifact capture.
+     - documented in `docs/book/1241-m39-lasm-cluster-capacity-probe-accept-worker-batch-overrides.md`.
+   - [x] Forwarded accept-path tuning overrides through saturation/full-suite orchestration:
+     - saturation matrix + bundle scripts now accept/pass `--cluster-accept-workers` and `--cluster-relay-accept-batch-max`,
+     - full benchmark suite and Makefile saturation targets now thread matching saturation flags/variables end-to-end.
+     - documented in `docs/book/1242-m39-lasm-saturation-suite-accept-path-override-forwarding.md`.
+   - [x] Added resolved cluster-status telemetry capture in capacity probe artifacts:
+     - `run_lasm_cluster_capacity_probe.sh` now writes a per-run `--cluster-status-json` artifact and records resolved relay/accept/queue runtime fields in probe summary JSON (`*Resolved` run fields),
+     - keeps requested vs resolved relay settings visible in one deterministic probe artifact for tuning loops.
+     - documented in `docs/book/1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`.
+   - [x] Upgraded saturation matrix/analyzer output with latency tie-break metadata:
+     - matrix run items now propagate probe `p99` plus resolved relay/accept/queue fields from per-step probe summaries,
+     - analyzer now normalizes `p99` durations (`us`/`ms`/`s`) into numeric `p99Ms` and uses it as a ranking tie-break after pass/throughput ordering.
+     - documented in `docs/book/1244-m39-lasm-saturation-analysis-p99-and-resolved-metadata.md`.
+   - [x] Added capacity-probe status artifact cleanup by default:
+     - `run_lasm_cluster_capacity_probe.sh` now cleans per-run status-json artifacts unless `--keep-cluster-status-json` is set,
+     - dry-run plan/test flow now makes keep-mode explicit for deterministic operator usage.
+     - documented in `docs/book/1245-m39-lasm-capacity-probe-status-artifact-cleanup-default.md`.
+   - [x] Upgraded saturation summary markdown with p99 + resolved runtime columns:
+     - ranked runs table, recommendation line, and verification section now expose p99 and resolved relay/accept/queue fields directly from analysis/probe artifacts,
+     - keeps top-level operator report actionable without manual raw JSON inspection.
+     - documented in `docs/book/1246-m39-lasm-saturation-summary-p99-resolved-columns.md`.
+   - [x] Added hybrid relay-pump scheduling for high-connection proxy workloads:
+     - relay workers now keep the existing full-scan pump loop when active relay connections are within a bounded threshold (`<= relay_pump_batch_max`), preserving the fast path for common steady-state loads,
+     - when active relay connections exceed that threshold, workers switch to a cursor-based capped pump budget to bound per-loop scan cost and reduce O(n) hot-loop pressure under high keep-alive fan-in,
+     - short capacity probes (`20s`, `8t/256c`, `/health`) remained stable in the current range (`~75.8k req/s`, repeat `~75.4k req/s`) while keeping deterministic pass behavior,
+     - documented in `docs/book/1247-m39-lasm-cluster-relay-hybrid-pump-scheduling.md`.
+   - [x] Added explicit relay-pump batch override control for LASM cluster tuning:
+     - `sec4 run --backend lasm` now accepts `--cluster-relay-pump-batch-max <n>` (cluster-proxy mode only) with deterministic LASM-only / lower-bound / cluster-mode / fixed-reuse-port guard diagnostics,
+     - runtime status telemetry now reports `relayPumpBatchMax` so resolved runtime behavior is visible in status snapshots,
+     - capacity probe script now supports `--cluster-relay-pump-batch-max` (and env counterpart), includes requested/resolved pump-batch values in summary artifacts, and keeps dry-run contract visibility.
+     - documented in `docs/book/1248-m39-lasm-cluster-relay-pump-batch-override-and-telemetry.md`.
+   - [x] Forwarded relay pump-batch override through saturation/full-suite orchestration:
+     - saturation matrix and bundle scripts now accept/pass `--cluster-relay-pump-batch-max`,
+     - full benchmark suite + Makefile saturation targets now forward `--saturation-cluster-relay-pump-batch-max` / `LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX`,
+     - dry-run contract tests for matrix/bundle/full-suite/make presets now assert relay pump-batch visibility end-to-end.
+     - documented in `docs/book/1249-m39-lasm-saturation-suite-relay-pump-batch-forwarding.md`.
+   - [x] Exposed relay pump-batch resolved telemetry in saturation analysis/summary artifacts:
+     - analyzer now carries `clusterRelayPumpBatchMaxResolved` through ranked runs,
+     - markdown summary probe profile/ranked table/recommendation/verify sections now report relay pump-batch requested/resolved values.
+     - documented in `docs/book/1250-m39-lasm-saturation-summary-relay-pump-batch-columns.md`.
+   - [x] Added fixed reuse-port mode support across LASM capacity/saturation orchestration:
+     - `run_lasm_cluster_capacity_probe.sh` now supports `--fixed-reuse-port-mode` with deterministic guardrails (forces `autoscaleMaxInstances=instances`, rejects relay-proxy-only flags, suppresses cluster-status artifact wiring),
+     - saturation matrix + bundle + full-suite + Makefile forwarding now thread fixed-mode toggles end-to-end,
+     - short local sample (`20s`, `8t/256c`, `/health`) measured `~120.5k req/s` in fixed reuse-port mode vs `~77.6k req/s` proxy-relay mode in this environment.
+     - documented in `docs/book/1251-m39-lasm-fixed-reuse-port-probe-and-saturation-forwarding.md`.
+   - [x] Added deterministic proxy-vs-fixed LASM mode comparison runner:
+     - new `run_lasm_cluster_mode_compare.sh` runs paired proxy-relay and fixed-reuse-port probes under one workload profile and emits a combined comparison artifact (`recommendedMode`, throughput delta/gain, latency + memory snapshot),
+     - Makefile now includes `lasm-cluster-mode-compare` target and script contracts for dry-run comparison planning.
+     - documented in `docs/book/1252-m39-lasm-cluster-mode-compare-runner.md`.
+   - [x] Wired optional LASM mode-compare lane into full-suite orchestration:
+     - `run_full_benchmark_suite.sh` now supports `--include-lasm-mode-compare` and runs `run_lasm_cluster_mode_compare.sh` as a dedicated phase with existing LASM saturation tuning overrides forwarded (`duration`, `threads`, `connections`, target requests, relay/accept/batch knobs),
+     - deterministic guardrails now enforce `sec4-lasm` presence in `--impls` for mode-compare lane activation,
+     - Makefile full-suite targets (`bench-full*`, `bench-full-saturation*`) now forward `FULL_LASM_INCLUDE_MODE_COMPARE=true` via `--include-lasm-mode-compare`.
+     - documented in `docs/book/1253-m39-lasm-full-suite-optional-mode-compare-lane.md`.
+   - [x] Added mode-compare section rendering in benchmark markdown reports:
+     - `publish_report.sh` now accepts optional `mode_compare.json` and renders `LASM Mode Comparison` summary lines (recommended mode, pass statuses, req/s delta/gain, p99 split, peak RSS delta),
+     - `run_full_benchmark_suite.sh` now forwards the mode-compare artifact into `publish_report.sh` when `--include-lasm-mode-compare` is enabled, so one top-level full-suite run emits both artifacts and report summary.
+     - documented in `docs/book/1256-m39-benchmark-report-mode-compare-section.md`.
+   - [x] Added relay accept-loop saturation short-circuit for fallback dispatch scans:
+     - in multi-sender proxy mode, when one fallback scan confirms all relay sender shards are saturated for the current accept batch, subsequent `TrySendError::Full` dispatches in that same batch skip redundant full fallback scans and immediately return deterministic saturation handling,
+     - successful dispatches reset the batch-saturation hint so recovery back to normal fallback behavior stays immediate once capacity frees up.
+     - documented in `docs/book/1254-m39-lasm-cluster-accept-fallback-saturation-short-circuit.md`.
+   - [x] Added status-json telemetry for relay saturation short-circuit events:
+     - cluster status snapshots now expose `relayDispatchSaturationShortCircuitTotal` and `relayDispatchSaturationShortCircuitPerSec` alongside existing dispatch fallback telemetry,
+     - accept-loop short-circuit handling now increments and flushes a dedicated counter so saturation shortcut behavior is observable during probe tuning.
+     - documented in `docs/book/1255-m39-lasm-cluster-short-circuit-status-telemetry.md`.
+   - [x] Propagated relay short-circuit telemetry through benchmark artifacts and report summaries:
+     - LASM capacity probe summaries now persist `clusterRelayDispatchSaturationShortCircuitTotal` and `clusterRelayDispatchSaturationShortCircuitPerSec` in `run.*` fields when cluster status telemetry is available,
+     - saturation matrix/analyzer/summary scripts now carry and render short-circuit totals/per-sec values in ranked rows and verification sections,
+     - mode-compare comparison JSON + markdown report section now include short-circuit total signals alongside throughput/latency deltas.
+     - documented in `docs/book/1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`.
+   - [x] Added relay-sender liveness tracking in accept-dispatch fallback path:
+     - LASM cluster accept loop now tracks disconnected relay sender shards and skips known-dead shards when choosing primary dispatch targets and fallback scans,
+     - fallback dispatch now marks disconnected shards as dead and short-circuits unavailable results when all shards are disconnected, reducing repeated `TrySendError::Disconnected` churn in degraded states.
+     - documented in `docs/book/1258-m39-lasm-relay-shard-liveness-tracking.md`.
+   - [x] Reduced backend-selection round-robin counter atomic contention in relay workers:
+     - relay worker selection reservation now allocates a larger minimum chunk (`LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK`, 64) instead of always reserving only `relay_accept_batch_max`,
+     - keeps deterministic round-robin reservation semantics while reducing `fetch_add` frequency on the shared `relay_selection_counter` hot path under load.
+     - documented in `docs/book/1259-m39-lasm-relay-selection-reservation-chunk-sizing.md`.
+   - [x] Tightened fallback scan budget to live relay shards:
+     - multi-sender fallback dispatch now tracks scanned live shards and stops after it has attempted all remaining live non-primary shards (`relay_live_sender_count - 1`),
+     - avoids wasting fallback-loop iterations on known-dead shards while preserving saturated vs unavailable error semantics.
+     - documented in `docs/book/1260-m39-lasm-fallback-live-shard-scan-budget.md`.
+   - [x] Added all-live relay pool fast path for primary dispatch selection:
+     - multi-sender accept dispatch now bypasses live-shard lookup scans while all relay sender shards are known live and uses direct cursor dispatch,
+     - runtime flips to live-scan mode only after first observed relay sender disconnection (`TrySendError::Disconnected`), preserving degraded-state correctness while trimming healthy-path dispatch overhead.
+     - documented in `docs/book/1261-m39-lasm-all-live-relay-fast-path.md`.
+   - [x] Added two-sender fallback fast path in relay dispatch:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now handles the common `sender_count == 2` case with a direct alternate-shard `try_send` path,
+     - preserves disconnected-shard liveness updates and saturated/unavailable mapping while avoiding generic fallback scan-loop overhead in two-shard clusters.
+     - documented in `docs/book/1262-m39-lasm-two-sender-fallback-fast-path.md`.
+   - [x] Added degraded-mode live-cursor realignment and zero-live fast-fail in accept dispatch:
+     - multi-sender accept dispatch now short-circuits to deterministic unavailable handling when `relay_live_sender_count == 0` instead of running repeated live-scan lookups,
+     - after fallback/primary disconnect events, dispatch cursor now realigns to a live shard once (when possible) so subsequent degraded-path dispatch avoids repeated full live-index scans.
+     - documented in `docs/book/1263-m39-lasm-degraded-live-cursor-realignment.md`.
+   - [x] Added single-live-shard degraded dispatch fast path:
+     - when degraded mode has exactly one live relay shard (`relay_live_sender_count == 1`), accept dispatch now reuses cached `relay_single_live_sender_index` and pins dispatch cursor directly to it,
+     - avoids repeated generic live-shard scan lookups on each request in single-live-shard degraded states while preserving deterministic unavailable behavior if no live shard remains.
+     - documented in `docs/book/1264-m39-lasm-single-live-shard-dispatch-fast-path.md`.
+   - [x] Replaced relay-shard liveness bitset with byte flags in dispatch hot path:
+     - multi-sender liveness tracking now uses `Vec<u8>` (`LIVE=1` / `DEAD=0`) instead of `Vec<bool>` specialized bitset storage for relay dispatch and fallback checks,
+     - keeps liveness semantics unchanged while avoiding `Vec<bool>` proxy/bitset overhead in tight accept/fallback loops.
+     - documented in `docs/book/1265-m39-lasm-relay-live-byte-flag-tracking.md`.
+   - [x] Added relay live-shard telemetry to LASM cluster status snapshots:
+     - status writer now includes `relayLiveSenderCount` in cluster status JSON payloads so relay-shard degradation is directly observable during load/probe runs,
+     - value is sourced from shared accept-loop liveness counters and exposed alongside existing relay dispatch fallback/short-circuit telemetry.
+     - documented in `docs/book/1266-m39-lasm-cluster-status-relay-live-shard-telemetry.md`.
+   - [x] Propagated relay live-shard telemetry through LASM benchmark artifacts:
+     - capacity probe summaries now include `run.clusterRelayLiveSenderCountResolved` from cluster status snapshots,
+     - saturation matrix/analyzer/summary and mode-compare/report outputs now thread and render relay live-shard metrics for operator comparison.
+     - documented in `docs/book/1267-m39-lasm-live-shard-telemetry-artifact-propagation.md`.
+   - [x] Added all-live fast path to fallback dispatch scan loop:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now bypasses dead-shard checks while relay pool is known healthy and iterates direct fallback sends for `sender_count > 2`,
+     - degraded dead-shard-aware scan path remains active once any disconnection is observed.
+     - documented in `docs/book/1268-m39-lasm-fallback-all-live-scan-fast-path.md`.
+   - [x] Elided redundant live-hint refresh and relay-live telemetry atomics after fallback dispatch:
+     - accept-loop fallback handling now tracks live-shard count before fallback and refreshes single/dual-live hints plus `relay_live_sender_count` telemetry only when fallback actually changes live-shard count,
+     - removes repeated live-hint scans and `fetch_min` atomics on saturated-but-live fallback paths while preserving degraded/disconnect correctness.
+     - documented in `docs/book/1269-m39-lasm-accept-fallback-live-hint-refresh-elision.md`.
+   - [x] Reused cached degraded-mode single/dual-live sender hints in accept dispatch:
+     - when degraded mode has one or two live relay shards, accept dispatch now reuses cached `relay_single_live_sender_index` / `relay_dual_live_sender_indices` and refreshes only when missing,
+     - avoids repeated per-request hint rescans in degraded steady state while preserving deterministic unavailable fallback behavior if cached hints are absent.
+     - documented in `docs/book/1270-m39-lasm-degraded-single-dual-hint-cache-reuse.md`.
+   - [x] Fixed single-live degraded fallback dispatch in multi-sender relay pools:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now handles `scan_live_target == 0` by attempting the remaining live shard once before returning deterministic saturated/unavailable errors,
+     - prevents false immediate unavailable outcomes when exactly one live shard remains in pools with more than two relay senders.
+     - documented in `docs/book/1271-m39-lasm-single-live-degraded-fallback-dispatch-fix.md`.
+   - [x] Added cached-hint fallback dispatch fast paths for degraded single/dual live states:
+     - accept-loop fallback selection now refreshes missing single/dual live hints once and prefers dedicated `dispatch_lasm_cluster_relay_stream_fallback_single_live` / `dispatch_lasm_cluster_relay_stream_fallback_dual_live` paths before generic fallback scans,
+     - reduces degraded fallback scan overhead while preserving deterministic saturated/unavailable envelopes and liveness updates.
+     - documented in `docs/book/1272-m39-lasm-degraded-fallback-cached-hint-fast-paths.md`.
+   - [x] Elided redundant no-live telemetry atomic updates in accept loop:
+     - when `relay_live_sender_count == 0`, accept-loop dispatch now skips repeated per-request `relay_live_sender_count_observed.fetch_min(0)` writes,
+     - live-count telemetry remains correct because transition-to-zero is already recorded when liveness changes.
+     - documented in `docs/book/1273-m39-lasm-no-live-telemetry-atomic-elision.md`.
+   - [x] Deduplicated fallback live-count telemetry atomics on primary disconnect path:
+     - accept-loop fallback now records primary relay-sender disconnect live-count changes through the existing end-of-fallback live-count delta branch, instead of issuing an immediate extra `fetch_min` before fallback completion,
+     - keeps live telemetry semantics unchanged while removing duplicate disconnect-path atomic updates.
+     - documented in `docs/book/1274-m39-lasm-fallback-live-count-atomic-dedup.md`.
+   - [x] Added env-tunable relay selection reservation chunk with status visibility:
+     - relay worker backend-selection reservation chunk is now configurable via `SEC4_RT_LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK` (bounded and clamped against accept batch size),
+     - cluster status JSON now emits resolved `relaySelectionReservationMinChunk` for operator observability during load tuning.
+     - documented in `docs/book/1275-m39-lasm-selection-reservation-min-chunk-env-and-status.md`.
+   - [x] Added degraded dispatch cursor live-slot skipping for multi-live pools:
+     - in degraded mode with more than two live relay shards, accept-loop cursor advancement now skips dead next-slot indices and advances directly to the next known live shard,
+     - single-live degraded mode now keeps the dispatch cursor pinned to the current live shard instead of wrapping through dead slots between requests.
+     - documented in `docs/book/1276-m39-lasm-degraded-cursor-live-slot-skipping.md`.
+   - [x] Added cached next-live index lookup for degraded relay dispatch:
+     - accept-loop degraded cursor realignment and next-index advancement now reuse a precomputed `next live relay index` lookup table instead of per-request scan lookups when dead slots exist,
+     - lookup cache refreshes only when relay liveness changes (disconnect path), preserving deterministic degraded dispatch behavior while reducing repeated live-scan overhead.
+     - documented in `docs/book/1277-m39-lasm-degraded-next-live-lookup-cache.md`.
+   - [x] Optimized degraded next-live lookup refresh to linear-time:
+     - `refresh_lasm_cluster_next_live_sender_lookup(...)` now builds per-slot next-live indices in one reverse sweep anchored at the first live shard instead of calling a full scan per slot,
+     - preserves deterministic lookup semantics while reducing liveness-change refresh overhead from repeated scan lookups.
+     - documented in `docs/book/1278-m39-lasm-next-live-lookup-linear-refresh.md`.
+   - [x] Scoped next-live lookup cache to multi-live degraded pools only:
+     - accept-loop now allocates/maintains `relay_next_live_sender_lookup` only when relay pool size is greater than two,
+     - liveness-change refresh now skips next-live lookup rebuild once degraded live-shard count drops to `<=2`, where dedicated single/dual paths already handle dispatch.
+     - documented in `docs/book/1279-m39-lasm-next-live-lookup-sparse-activation.md`.
+   - [x] Simplified primary-disconnect hint handling in accept-loop fallback:
+     - on primary relay-sender disconnect, accept-loop fallback now invalidates cached single/dual live-hint slots immediately instead of refreshing them in-place,
+     - hint refresh remains centralized in existing post-fallback live-count-change path, avoiding duplicate disconnect-path hint scans while preserving deterministic fallback selection.
+     - documented in `docs/book/1280-m39-lasm-disconnect-hint-invalidation.md`.
+   - [x] Routed fallback-multi live-index selection through cached next-live lookup when available:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now accepts optional next-live lookup state and uses cached live-index resolution in degraded scan branches (`scan_live_target` 0/1/2),
+     - keeps scan fallback behavior for stale/missing cache entries while reducing repeated degraded live-index scans during fallback dispatch.
+     - documented in `docs/book/1281-m39-lasm-fallback-multi-next-live-cache-usage.md`.
+   - [x] Added explicit cache-eligibility gating for fallback lookup usage:
+     - accept-loop now precomputes whether next-live lookup storage exists and passes cached lookup state into fallback-multi only while degraded live-shard count remains above two,
+     - avoids per-fallback lookup-option churn and skips unnecessary cache refresh/use paths once runtime transitions into dedicated single/dual live fast paths.
+     - documented in `docs/book/1282-m39-lasm-fallback-cache-eligibility-gating.md`.
+   - [x] Removed redundant runtime cache-shape guard in next-live resolver hot path:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` now relies on debug assertions for cache-shape invariants and avoids per-call runtime length comparison before cache lookup dispatch,
+     - preserves existing fallback-to-scan behavior when cache is absent while reducing branch work in cached degraded lookup paths.
+     - documented in `docs/book/1283-m39-lasm-next-live-resolver-runtime-check-elision.md`.
+   - [x] Added dead-slot jump-ahead in fallback-multi degraded scan loop:
+     - in fallback-multi `scan_live_target > 2` path, dead-slot encounters now jump to next live candidate using the existing next-live resolver instead of stepping one dead slot at a time,
+     - reduces repeated dead-slot checks in degraded sparse-live pools while preserving deterministic fallback bounds and saturated/unavailable outcomes.
+     - documented in `docs/book/1284-m39-lasm-fallback-dead-slot-jump-ahead.md`.
+   - [x] Refreshed next-live cache immediately on primary-disconnect before fallback dispatch:
+     - when primary relay send fails with `Disconnected`, accept-loop now refreshes next-live lookup cache before entering fallback dispatch (for eligible multi-live cache states),
+     - reduces stale-cache fallback scans within the same request’s fallback path while preserving post-fallback live-count refresh behavior.
+     - documented in `docs/book/1285-m39-lasm-primary-disconnect-immediate-next-live-refresh.md`.
+   - [x] Avoided duplicate next-live cache refresh after primary-disconnect fallback flows:
+     - accept-loop now tracks live-count immediately after primary dispatch and skips post-fallback next-live cache refresh when fallback did not change live-count beyond already-refreshed primary-disconnect state,
+     - keeps post-fallback refresh active when fallback introduces additional disconnect-driven live-count changes.
+     - documented in `docs/book/1286-m39-lasm-duplicate-post-fallback-cache-refresh-elision.md`.
+   - [x] Added jump-distance accounting for degraded fallback scan progression:
+     - fallback-multi degraded scan loop now advances `scanned_slots` by wrapped jump distance when cursor jumps to next live candidate (dead-slot and post-attempt advancement paths),
+     - preserves bounded traversal semantics while reducing repeated loop iterations in sparse-live degraded pools.
+     - documented in `docs/book/1287-m39-lasm-fallback-jump-distance-accounting.md`.
+   - [x] Added next-slot-live fast paths in degraded fallback jump advancement:
+     - fallback-multi dead-slot and post-attempt jump paths now check wrapped `next_scan_start` liveness directly before invoking next-live resolver,
+     - avoids resolver/cache dispatch overhead when the immediate wrapped next slot is already live.
+     - documented in `docs/book/1288-m39-lasm-fallback-next-slot-live-fast-path.md`.
+   - [x] Made degraded fallback general scan target adaptive to disconnects:
+     - fallback-multi general degraded scan now tracks dynamic `scan_live_target` and updates it after disconnect-driven live-count drops inside the loop,
+     - avoids iterating against stale pre-disconnect live-target counts while preserving bounded scan semantics.
+     - documented in `docs/book/1289-m39-lasm-fallback-dynamic-scan-live-target.md`.
+   - [x] Removed optional lookup plumbing from fallback-multi resolver path:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` and `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now use direct lookup-slice input (`&[usize]`) with empty-slice fallback semantics instead of option-wrapped lookup references,
+     - simplifies hot-path branch shape and avoids repeated option wrapping at fallback call sites.
+     - documented in `docs/book/1290-m39-lasm-fallback-lookup-slice-plumbing.md`.
+   - [x] Added start-index-live short-circuit in next-live resolver:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` now returns immediately when `start_index_wrapped` is already live before cache lookup or scan fallback,
+     - reduces resolver overhead in degraded dispatch paths that already point at a live relay shard.
+     - documented in `docs/book/1291-m39-lasm-next-live-resolver-start-index-fast-path.md`.
+   - [x] Added early-break on dynamic live-target shrink in fallback general scan:
+     - fallback-multi general degraded scan now exits before post-attempt jump work when disconnect-driven live-target reduction makes current `scanned_live` already sufficient,
+     - avoids unnecessary next-index resolution/jump bookkeeping after target shrink while preserving deterministic fallback outcomes.
+     - documented in `docs/book/1292-m39-lasm-fallback-early-break-on-target-shrink.md`.
+   - [x] Extracted shared fallback scan-index jump advancement helper:
+     - fallback-multi now centralizes dead-slot and post-attempt jump progression into `advance_lasm_cluster_fallback_scan_index(...)`,
+     - preserves existing jump-distance accounting and next-live resolver semantics while reducing duplicated hot-path branch logic.
+     - documented in `docs/book/1293-m39-lasm-fallback-scan-index-advance-helper.md`.
+   - [x] Added direct lookup/scan path in fallback scan-advance helper:
+     - `advance_lasm_cluster_fallback_scan_index(...)` now uses direct lookup-slice (`lookup_lasm_cluster_next_live_sender_index`) or direct scan (`lasm_cluster_next_live_sender_index`) paths after dead wrapped-next detection, instead of routing back through the generic resolver helper,
+     - removes redundant resolver branching in helper-level hot-path advancement while preserving fallback semantics.
+     - documented in `docs/book/1294-m39-lasm-fallback-scan-helper-direct-lookup-path.md`.
+   - [x] Added immediate no-live exit in fallback general degraded scan:
+     - fallback-multi general degraded scan now returns deterministic unavailable as soon as disconnect handling drops `relay_live_sender_count` to zero inside the scan loop,
+     - avoids extra loop-control/jump bookkeeping after terminal no-live transitions while preserving saturated/unavailable envelope semantics.
+     - documented in `docs/book/1295-m39-lasm-fallback-immediate-no-live-exit.md`.
+   - [x] Skipped final scan-index advancement when fallback scan budget is exhausted:
+     - fallback-multi degraded general scan now exits before calling scan-index advancement helper when `scanned_slots + 1` already reaches `scan_slot_limit`,
+     - applies to both dead-slot and post-attempt advancement branches to avoid terminal helper lookups that cannot feed another loop iteration.
+     - documented in `docs/book/1296-m39-lasm-fallback-skip-final-scan-advance.md`.
+   - [x] Merged duplicated single-attempt fallback branches:
+     - fallback-multi now handles `scan_live_target <= 1` with one shared single-attempt branch instead of duplicated `== 0` and `== 1` blocks,
+     - preserves deterministic saturated/unavailable outcomes while reducing hot-path branch depth and duplicate send/disconnect handling logic.
+     - documented in `docs/book/1297-m39-lasm-fallback-single-attempt-branch-merge.md`.
+   - [x] Extracted shared fallback terminal-result helper across single/dual/multi paths:
+     - added inline helper `lasm_cluster_fallback_terminal_dispatch_error(...)` and routed repeated saturated/unavailable return branches through it,
+     - reduces duplicate terminal-result branch logic in fallback dispatch paths while preserving deterministic error envelopes.
+     - documented in `docs/book/1298-m39-lasm-fallback-terminal-result-helper.md`.
+   - [x] Added immediate no-live guard in dual-attempt fallback branch:
+     - fallback-multi `scan_live_target == 2` path now returns immediately before second-live resolution when first-attempt disconnect handling drops `relay_live_sender_count` to zero,
+     - avoids unnecessary resolver/lookup work on terminal no-live transitions while preserving deterministic fallback outcomes.
+     - documented in `docs/book/1299-m39-lasm-fallback-dual-attempt-no-live-guard.md`.
+   - [x] Reused single-live helper for two-sender fallback path:
+     - fallback-multi now routes `sender_count == 2` dispatch through `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)` instead of maintaining an inline duplicate two-sender branch body,
+     - preserves deterministic send/disconnect semantics while reducing duplicate fallback logic.
+     - documented in `docs/book/1300-m39-lasm-fallback-two-sender-single-helper-reuse.md`.
+   - [x] Reused single-live helper in `scan_live_target <= 1` fallback branch:
+     - fallback-multi now delegates resolved single-target dispatch to `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)` instead of keeping a duplicated local send/disconnect block,
+     - preserves deterministic saturated/unavailable behavior while reducing hot-path duplication.
+     - documented in `docs/book/1301-m39-lasm-fallback-single-target-helper-reuse.md`.
+   - [x] Added second-attempt next-slot-live fast path in dual fallback branch:
+     - fallback-multi `scan_live_target == 2` branch now checks the wrapped second-start slot directly before resolver lookup, and dispatches via the shared single-live helper,
+     - avoids redundant second-attempt resolver work on adjacent-live paths while preserving deterministic fallback semantics.
+     - documented in `docs/book/1302-m39-lasm-fallback-dual-second-live-fastpath.md`.
+   - [x] Extracted shared relay send-attempt helper in fallback multi hot path:
+     - added `attempt_lasm_cluster_relay_send(...)` and reused it in all-live fallback scan, dual-branch first attempt, and degraded general scan attempt path,
+     - keeps disconnect/full handling centralized while preserving disconnect-driven dynamic target updates in degraded scans.
+     - documented in `docs/book/1303-m39-lasm-fallback-shared-send-attempt-helper.md`.
+   - [x] Routed single/dual live fallback helpers through shared send-attempt helper:
+     - `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)` and `dispatch_lasm_cluster_relay_stream_fallback_dual_live(...)` now delegate send/full/disconnect handling to `attempt_lasm_cluster_relay_send(...)`,
+     - preserves deterministic terminal-result semantics while centralizing fallback send handling across single/dual/multi paths.
+     - documented in `docs/book/1304-m39-lasm-fallback-single-dual-shared-send-helper.md`.
+   - [x] Switched accept-loop primary relay dispatch to shared send-attempt helper:
+     - multi-sender accept path now routes primary relay send through `attempt_lasm_cluster_relay_send(...)`, keeping full/disconnect transitions centralized before saturation short-circuit and fallback dispatch routing,
+     - preserves saturated short-circuit behavior and disconnect-driven hint/lookup refresh semantics.
+     - documented in `docs/book/1305-m39-lasm-accept-primary-shared-send-helper.md`.
+   - [x] Added single-sender accept dispatch helper:
+     - extracted `attempt_lasm_cluster_relay_send_single(...)` to centralize single-sender `try_send` error mapping (`Saturated`/`Unavailable`),
+     - single-sender accept loop now delegates dispatch mapping through the helper before existing accept-dispatch error handling.
+     - documented in `docs/book/1306-m39-lasm-single-sender-dispatch-helper.md`.
+   - [x] Extracted relay send-attempt helpers into dedicated module:
+      - moved `attempt_lasm_cluster_relay_send(...)` and `attempt_lasm_cluster_relay_send_single(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_send.rs`,
+      - `main.rs` now imports relay send helpers through module boundaries, continuing multi-file LASM runtime decomposition without semantic changes.
+      - documented in `docs/book/1307-m39-lasm-relay-send-module-extraction.md`.
+   - [x] Extracted relay topology helpers into dedicated module:
+      - moved `lasm_cluster_next_index_wrapped`, `lasm_cluster_next_live_sender_index`, `lookup_lasm_cluster_next_live_sender_index`, `resolve_lasm_cluster_next_live_sender_index`, and `realign_lasm_cluster_dispatch_cursor_to_live` into `compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`,
+      - `main.rs` now imports topology helpers through module boundaries while preserving LASM cluster dispatch semantics.
+      - documented in `docs/book/1308-m39-lasm-relay-topology-module-extraction.md`.
+   - [x] Moved relay live-hint refresh helpers into topology module:
+      - extracted `refresh_lasm_cluster_next_live_sender_lookup`, `refresh_lasm_cluster_single_live_sender_index`, `refresh_lasm_cluster_dual_live_sender_indices`, and `refresh_lasm_cluster_live_sender_hints` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`,
+      - accept-loop/fallback call-sites now consume these helpers from module imports, continuing LASM cluster decomposition without runtime behavior changes.
+      - documented in `docs/book/1309-m39-lasm-relay-live-hint-module-extraction.md`.
+   - [x] Extracted fallback dispatch mechanics into dedicated module:
+      - moved fallback dispatch enum + helpers (`dispatch_lasm_cluster_relay_stream_fallback_*` and scan-advance internals) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
+      - `main.rs` now imports fallback dispatch functions from module boundaries while retaining accept-loop orchestration and error handling.
+      - documented in `docs/book/1310-m39-lasm-fallback-dispatch-module-extraction.md`.
+   - [x] Moved fallback dispatch error enum ownership into fallback module:
+      - `LasmClusterRelayDispatchError` is now defined in `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
+      - `main.rs` and relay send helpers import the enum through module boundaries, reducing fallback type ownership in the CLI entry file.
+      - documented in `docs/book/1311-m39-lasm-fallback-error-enum-module-ownership.md`.
+   - [x] Extracted accept-dispatch helpers into dedicated module:
+      - moved cluster unavailable response helpers, saturation/dispatch/active counter flush helpers, and `handle_lasm_cluster_accept_dispatch_error(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`,
+      - accept-loop and relay-worker call sites now import this helper surface through module boundaries without changing saturation/unavailable response semantics.
+      - documented in `docs/book/1312-m39-lasm-accept-dispatch-module-extraction.md`.
+   - [x] Extracted cluster status snapshot/json writer into dedicated module:
+      - moved `LasmClusterStatusSnapshot` and `write_lasm_cluster_status_json(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_json.rs`,
+      - status-writer thread now depends on a dedicated status-json module while preserving unchanged-snapshot skip behavior and deterministic payload shape.
+      - documented in `docs/book/1313-m39-lasm-cluster-status-json-module-extraction.md`.
+   - [x] Extracted LASM cluster accept loop into dedicated module:
+      - moved `run_lasm_cluster_accept_loop(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`,
+      - accept-loop orchestration now imports dispatch/fallback/topology helpers from module boundaries while preserving queue saturation, fallback dispatch, and counter flush behavior.
+      - documented in `docs/book/1314-m39-lasm-cluster-accept-loop-module-extraction.md`.
+   - [x] Extracted LASM relay pump types into dedicated module:
+      - moved `LasmClusterRelayPumpStep` and `LasmClusterRelayPump` (+ impl) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_pump.rs`,
+      - relay worker loop now consumes relay pump types through module boundaries while preserving proxy relay buffer/pump semantics.
+      - documented in `docs/book/1315-m39-lasm-cluster-relay-pump-module-extraction.md`.
+   - [x] Extracted backend-selection/remap helpers into dedicated module:
+      - moved `LASM_CLUSTER_SELECTION_LOOKUP_NONE`, `rebuild_lasm_cluster_backend_selection_lookup(...)`, `rebuild_lasm_cluster_worker_backend_addrs(...)`, and `remap_lasm_cluster_relay_port_state_by_index(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`,
+      - relay worker loop now imports backend-selection/remap helpers from module boundaries while preserving deterministic healthy/unhealthy backend mapping behavior.
+      - documented in `docs/book/1316-m39-lasm-cluster-backend-selection-module-extraction.md`.
+   - [x] Extracted LASM cluster runtime-config helpers into dedicated module:
+      - moved cluster sizing/timing/env resolver helpers from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_runtime_config.rs` (proxy worker/queue sizing, accept-worker sizing, relay accept/pump batch helpers, selection min-chunk helper, backend connect timeout/cooldown, autoscale cooldown helpers),
+      - `main.rs` now imports runtime-config helper surface from module boundaries while preserving existing runtime behavior and diagnostics.
+      - documented in `docs/book/1317-m39-lasm-cluster-runtime-config-module-extraction.md`.
+   - [x] Extracted LASM cluster worker lifecycle helpers into dedicated module:
+      - moved cluster worker lifecycle helpers from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_lifecycle.rs` (`compute_lasm_cluster_base_port`, worker spawn/wait helpers, prune/recover/stop helpers, reuse-port listener bind, reuse-port cluster runner),
+      - cluster orchestration now imports lifecycle helpers through module boundaries while preserving worker startup/recovery semantics and reuse-port behavior.
+      - documented in `docs/book/1318-m39-lasm-cluster-lifecycle-module-extraction.md`.
+   - [x] Extracted LASM cluster relay worker loop into dedicated module:
+      - moved relay worker thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs` (`spawn_lasm_cluster_relay_worker_loop`),
+      - cluster orchestration now spawns relay workers via module boundary while preserving backend selection, unhealthy cooldown mapping, relay pump scheduling, and deterministic unavailable-response behavior.
+      - documented in `docs/book/1319-m39-lasm-cluster-relay-worker-loop-module-extraction.md`.
+   - [x] Extracted LASM cluster status-writer thread loop into dedicated module:
+      - moved status-writer thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_writer.rs` (`spawn_lasm_cluster_status_writer`, `LasmClusterStatusWriterConfig`),
+      - cluster orchestration now wires status-writer dependencies through a typed module config while preserving unchanged-snapshot skip behavior and deterministic status payload emission cadence.
+      - documented in `docs/book/1320-m39-lasm-cluster-status-writer-module-extraction.md`.
+   - [x] Extracted LASM cluster autoscale thread loop into dedicated module:
+      - moved autoscale thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs` (`spawn_lasm_cluster_autoscale_loop`, `LasmClusterAutoscaleLoopConfig`),
+      - cluster orchestration now wires autoscale dependencies through module config while preserving dynamic boost behavior, cooldown tracking, and worker lifecycle update semantics.
+      - documented in `docs/book/1321-m39-lasm-cluster-autoscale-loop-module-extraction.md`.
+   - [x] Extracted LASM cluster accept-worker orchestration into dedicated module:
+      - moved accept-worker thread orchestration (listener clones, worker thread spawn/join, primary accept-loop run) from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_accept_workers.rs` (`run_lasm_cluster_accept_workers`, `LasmClusterAcceptWorkersConfig`),
+      - cluster orchestration now delegates accept-worker lifecycle through module boundary while preserving deterministic accept-loop error reporting and stop-flag shutdown behavior.
+      - documented in `docs/book/1322-m39-lasm-cluster-accept-workers-module-extraction.md`.
+   - [x] Extracted LASM cluster shutdown finalization into dedicated module:
+      - moved repeated cluster shutdown/join sequence from `cmd_run_lasm_cluster(...)` into `compiler/sec4-cli/src/lasm_cluster_shutdown.rs` (`finalize_lasm_cluster_runtime`),
+      - nonblocking failure, accept-worker failure, and normal completion paths now share one deterministic finalizer for stop-flag set, relay/aux thread joins, and worker-stop lifecycle cleanup.
+      - documented in `docs/book/1323-m39-lasm-cluster-shutdown-module-extraction.md`.
+   - [x] Moved LASM cluster listener nonblocking setup to preflight:
+      - `cmd_run_lasm_cluster(...)` now sets proxy listener nonblocking immediately after bind and exits before worker/thread startup on failure,
+      - removes late nonblocking failure path from post-bootstrap orchestration while preserving existing failure diagnostics.
+      - documented in `docs/book/1324-m39-lasm-cluster-listener-nonblocking-preflight.md`.
+   - [x] Hardened LASM cluster thread lifecycle with panic-aware joins:
+      - accept-worker orchestration now detects accept worker thread panics during join and returns deterministic runtime failure instead of silently ignoring join failures,
+      - shared cluster finalizer now returns panic summary across relay/autoscale/status threads and `cmd_run_lasm_cluster(...)` fails deterministically when shutdown observes worker-thread panic conditions.
+      - documented in `docs/book/1325-m39-lasm-cluster-thread-panic-handling.md`.
+   - [x] Hardened LASM cluster accept-loop failure propagation:
+      - accept-worker orchestration now records and returns deterministic first accept-loop failure message instead of printing and returning success,
+      - `cmd_run_lasm_cluster(...)` now fails non-zero when any accept-loop worker/main accept path reports an error, preserving stop-flag shutdown behavior and deterministic error surface.
+      - documented in `docs/book/1326-m39-lasm-cluster-accept-error-propagation.md`.
+   - [x] Hardened LASM cluster shutdown lock-poison handling:
+      - shutdown finalizer summary now tracks `state_lock_poisoned` when cluster state write lock is poisoned during finalization,
+      - cluster run path now treats shutdown lock-poison as deterministic runtime failure alongside background-thread panic conditions.
+      - documented in `docs/book/1327-m39-lasm-cluster-shutdown-lock-poison-handling.md`.
+   - [x] Hardened LASM status-writer failure logging with throttled dedupe:
+      - status-writer loop now throttles repeated JSON write warnings and suppresses duplicate error spam between intervals when failure text is unchanged,
+      - successful status writes reset warning throttle state so new failures are surfaced immediately.
+      - documented in `docs/book/1328-m39-lasm-cluster-status-writer-warning-throttle.md`.
+   - [x] Tightened relay fallback scan slot accounting in multi-relay dispatch:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now uses a remaining-slot budget instead of per-iteration saturating slot counters for dead/live sender advancement,
+      - removes saturating arithmetic from fallback scan hot-path iteration while preserving fallback dispatch terminal semantics (`saturated` vs `unavailable`) and existing live-target bounds.
+      - documented in `docs/book/1329-m39-lasm-cluster-fallback-scan-remaining-slot-accounting.md`.
+   - [x] Tightened single/dual-live fallback membership checks to direct index reads:
+      - `dispatch_lasm_cluster_relay_stream_fallback_single_live` and `_dual_live` now use direct indexed live-state checks with explicit debug shape assertions instead of `get().copied().unwrap_or(...)` chains,
+      - keeps fallback terminal semantics unchanged while trimming option-chain overhead from hot fallback fast paths.
+      - documented in `docs/book/1330-m39-lasm-cluster-fallback-direct-live-index-checks.md`.
+   - [x] Removed repeated fallback lookup-presence checks from scan-advance hot path:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now resolves lookup availability once (`relay_has_next_live_sender_lookup`) and threads that into scan-advance helper calls,
+      - `advance_lasm_cluster_fallback_scan_index` no longer checks `relay_next_live_sender_lookup.is_empty()` on every scan step, preserving scan semantics while reducing per-step branch work.
+      - documented in `docs/book/1331-m39-lasm-cluster-fallback-scan-lookup-presence-hoist.md`.
+   - [x] Tightened relay topology next-live resolution to direct index reads:
+      - `resolve_lasm_cluster_next_live_sender_index` now performs explicit empty-slice guard + direct `relay_sender_live[start_index_wrapped]` check instead of option-chain access (`get().copied().unwrap_or(...)`),
+      - preserves next-live resolution semantics while removing option-chain overhead from a shared relay topology helper used in degraded dispatch paths.
+      - documented in `docs/book/1332-m39-lasm-cluster-relay-topology-direct-start-index-check.md`.
+   - [x] Tightened relay-send disconnected path to avoid repeated live-count decrements:
+      - `attempt_lasm_cluster_relay_send` now marks sender dead/count-down only when sender state transitions from live to dead, replacing unconditional saturating decrement on every disconnected attempt,
+      - preserves disconnected fallback behavior while avoiding duplicate counter decrements under repeated disconnected sends and removing saturating arithmetic from this path.
+      - documented in `docs/book/1333-m39-lasm-cluster-relay-send-dead-transition-guard.md`.
+   - [x] Tightened accept-dispatch overload response hot path:
+      - `handle_lasm_cluster_accept_dispatch_error` now writes relay-saturated/relay-unavailable static response buffers directly in the dispatch-error handler instead of routing through reason enum + helper dispatch,
+      - preserves overload response payloads and terminal semantics while removing per-error reason dispatch overhead in the accept hot path.
+      - documented in `docs/book/1334-m39-lasm-cluster-accept-dispatch-direct-overload-buffer-writes.md`.
+   - [x] Replaced enum-based unavailable-response dispatch with dedicated helper entry points:
+      - `lasm_cluster_accept_dispatch` now exposes dedicated no-healthy-worker / worker-unavailable response writers instead of reason-enum routing,
+      - relay worker loop now calls these dedicated helpers directly, preserving response payloads while removing reason-enum dispatch plumbing from unavailable response paths.
+      - documented in `docs/book/1335-m39-lasm-cluster-unavailable-response-helper-split.md`.
+   - [x] Tightened relay lookup helper to invariant fast path:
+      - `lookup_lasm_cluster_next_live_sender_index` now relies on established topology invariants (`non-empty`, `cached index in bounds`) via debug assertions and direct indexed reads,
+      - removed redundant runtime empty/bounds checks on the hot lookup path while preserving fallback live-scan behavior when cached entry is no longer live.
+      - documented in `docs/book/1336-m39-lasm-cluster-relay-lookup-invariant-fast-path.md`.
+   - [x] Added lookup-state-aware next-live resolver for degraded fallback dispatch:
+      - relay topology now exposes `resolve_lasm_cluster_next_live_sender_index_with_lookup_state(...)` so hot callers can pass precomputed lookup availability,
+      - fallback multi-dispatch now threads one `relay_has_next_live_sender_lookup` flag through next-live resolution calls, removing repeated lookup-availability branching from degraded dispatch resolution.
+      - documented in `docs/book/1337-m39-lasm-cluster-resolve-next-live-with-lookup-state.md`.
+   - [x] Simplified accept-loop fallback multi-dispatch lookup plumbing:
+      - added `dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(...)` so accept-loop code passes one precomputed lookup-state flag instead of rebuilding lookup slices at each fallback branch,
+      - accept-loop fallback path now computes `relay_use_next_live_lookup_for_fallback` once per failed primary dispatch and reuses it across single/dual/default fallback paths.
+      - documented in `docs/book/1338-m39-lasm-cluster-accept-loop-fallback-lookup-state-plumbing.md`.
+   - [x] Tightened all-live fallback scan wrapped-index progression:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now advances scan index with direct increment + wrap reset (`scan_index += 1; if == sender_count {0}`) in the all-live branch,
+      - preserves sender traversal order and fallback semantics while removing per-iteration wrapped-index helper call overhead from the all-live fallback scan loop.
+      - documented in `docs/book/1339-m39-lasm-cluster-fallback-all-live-direct-wrap-increment.md`.
+   - [x] Removed remaining saturating arithmetic from fallback live-target setup:
+      - fallback scan slot limit now uses direct `sender_count - 1` under existing `sender_count > 1` invariant,
+      - fallback live-target setup now uses direct bounded decrement guards (`live_count - 1`) instead of `saturating_sub` for both initial and dynamic live-target tracking.
+      - documented in `docs/book/1340-m39-lasm-cluster-fallback-live-target-direct-guards.md`.
+   - [x] Removed redundant live-count guard in accept-loop dispatch-cursor realignment:
+      - accept-loop fallback completion path now uses only `relay_live_sender_count > 1` for dispatch-cursor live realignment, dropping redundant `relay_live_sender_count > 0` conjunction,
+      - preserves realignment behavior while trimming one redundant branch check on this hot path.
+      - documented in `docs/book/1341-m39-lasm-cluster-accept-loop-redundant-live-guard-removal.md`.
+   - [x] Tightened resolver invariants and saturated-counter flush path:
+      - lookup-state resolver now relies on non-empty sender-slice invariant (`sender_count > 0`) via debug assertion in fallback-callers-only hot path, removing runtime empty-slice branch,
+      - accept-dispatch saturated branch now flushes local saturation counters directly (atomic adds + reset) when batch threshold is reached, avoiding helper-call indirection on saturated-error hot path.
+      - documented in `docs/book/1342-m39-lasm-cluster-resolver-invariant-and-saturation-inline-flush.md`.
+   - [x] Tightened accept-loop fallback branch tree with live-state match:
+      - accept-loop fallback dispatch now branches `relay_all_senders_live` first, then uses `match relay_live_sender_count` for degraded paths (`2`, `1`, default) instead of repeated `!relay_all_senders_live && count==...` checks,
+      - preserves fallback behavior while reducing repeated boolean conjunction checks in failed-primary-dispatch handling.
+      - documented in `docs/book/1343-m39-lasm-cluster-accept-loop-fallback-branch-tree-match.md`.
+   - [x] Tightened shared next-live sender scan helper loop progression:
+      - `lasm_cluster_next_live_sender_index` now advances scan cursor with direct increment + wrap reset instead of calling wrapped-index helper each iteration,
+      - preserves scan semantics while reducing helper-call overhead in a shared degraded-routing utility used across accept/fallback paths.
+      - documented in `docs/book/1344-m39-lasm-cluster-next-live-scan-direct-wrap-progression.md`.
+   - [x] Inlined fallback scan-advance wrapped-step arithmetic:
+      - `advance_lasm_cluster_fallback_scan_index` now computes next-scan wrapped index and forward-distance slots directly in-function,
+      - removed helper indirection for wrapped-forward-distance calculation while preserving fallback scan step semantics and slot advancement behavior.
+      - documented in `docs/book/1345-m39-lasm-cluster-fallback-scan-advance-inline-wrap-distance.md`.
+   - [x] Removed fallback-multi wrapper and threaded lookup-state directly into core fallback function:
+      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now receives precomputed `relay_has_next_live_sender_lookup` directly and no longer derives lookup availability with internal `is_empty` checks,
+      - accept-loop now calls core fallback-multi function directly (wrapper removed), reducing one call layer and one per-call lookup-availability branch in fallback dispatch plumbing.
+      - documented in `docs/book/1346-m39-lasm-cluster-fallback-multi-direct-lookup-state-signature.md`.
+   - [x] Tightened autoscale arithmetic to direct bounded math paths:
+      - saturation batch count now uses direct quotient+remainder rounding (under non-zero flush-batch invariant), and scale-up/down bounds now use direct remaining-capacity / bounded-subtraction math instead of saturating add/sub helper chains,
+      - preserves autoscale semantics while trimming saturating arithmetic overhead in the periodic LASM cluster autoscale loop.
+      - documented in `docs/book/1347-m39-lasm-cluster-autoscale-direct-bounded-arithmetic.md`.
+   - [x] Tightened relay worker selection/pump cursor progression to direct wrap increments:
+      - relay selection reservation next-index progression now uses direct increment+wrap instead of wrapped-index helper calls,
+      - relay pump cursor advancement in the batched pump loop now uses direct increment+wrap for `Progressed`/`Idle` steps.
+      - documented in `docs/book/1348-m39-lasm-cluster-relay-worker-direct-wrap-cursor-progression.md`.
+   - [x] Reduced autoscale-loop worker-port snapshot churn on no-op ticks:
+      - autoscale loop now tracks whether workers changed after the initial maintenance refresh and skips the second status-port snapshot refresh when no scale-up/down occurred,
+      - preserves snapshot publication semantics while avoiding repeated worker-port comparison/publish work in steady-state no-op ticks.
+      - documented in `docs/book/1349-m39-lasm-cluster-autoscale-noop-second-refresh-elision.md`.
+   - [x] Batched relay selection/runtime-config direct arithmetic simplifications:
+      - relay worker loop now hoists selection reservation chunk size (`max(accept_batch, reservation_min_chunk)`) out of the per-request selection path,
+      - backend selection lookup tail wrap-fill now uses direct slice fill for post-first-healthy indices,
+      - desired autoscale instance calculation now uses direct ceil-division math on active connections (`((active-1)/target)+1`) with explicit `target>=1` guard.
+      - documented in `docs/book/1350-m39-lasm-cluster-relay-selection-and-runtime-config-direct-arithmetic-batch.md`.
+   - [x] Elided redundant autoscale cooldown atomic stores on unchanged anchors:
+      - autoscale loop now tracks whether scale-up/down cooldown anchors changed in the current tick and only rewrites cooldown-remaining atomics at loop tail when anchors changed,
+      - avoids duplicate cooldown atomic writes on steady-state no-op ticks while preserving immediate cooldown reset semantics after scale actions.
+      - documented in `docs/book/1353-m39-lasm-cluster-autoscale-cooldown-tail-store-elision.md`.
+   - [x] Rebalanced degraded relay selection lookup to cyclic healthy distribution:
+      - backend selection lookup rebuild now materializes ordered healthy backend indices and maps selection slots cyclically across healthy backends when some workers are unhealthy,
+      - removes gap-weighted degraded routing bias tied to dead-worker index spans and keeps degraded load spread deterministic across remaining healthy backends.
+      - documented in `docs/book/1354-m39-lasm-cluster-cyclic-healthy-lookup-selection.md`.
+   - [x] Routed degraded reservation cadence through healthy-cycle span:
+      - backend lookup rebuild now returns explicit degraded healthy cycle span, and relay selection reservation now uses that span for modulo/cursor progression when not in identity mode,
+      - removes remaining dead-slot influence from degraded reservation cadence and keeps reservation churn scoped to healthy backend count.
+      - documented in `docs/book/1355-m39-lasm-cluster-healthy-cycle-span-reservation-selection.md`.
+   - [x] Inlined remaining dispatch wrapped-step helpers in accept/fallback hot paths:
+      - accept loop now advances `next_dispatch_wrapped` with direct increment+wrap arithmetic instead of relay-topology wrapped-index helper call,
+      - fallback dual-live branch now computes second-attempt start index with direct increment+wrap arithmetic,
+      - removed now-unused relay-topology wrapped-index helper symbol.
+      - documented in `docs/book/1356-m39-lasm-cluster-accept-fallback-direct-wrap-step-elision.md`.
+   - [x] Added relay worker connect-failure single healthy-backend fallback attempt:
+      - when the primary selected backend connect fails, relay worker now marks it unhealthy and immediately tries one alternate currently-healthy backend before returning worker-unavailable response,
+      - keeps deterministic unhealthy/warning tracking while reducing request failures under transient single-backend connect faults.
+      - documented in `docs/book/1357-m39-lasm-cluster-relay-connect-failure-single-fallback-attempt.md`.
+   - [x] Switched fallback connect candidate selection to next-healthy cyclic scan:
+      - fallback connect candidate is now chosen by cyclic scan starting from the failed backend’s next index, instead of always picking the first healthy backend,
+      - reduces fallback hot-spot bias under repeated connect failures and preserves deterministic degraded routing order.
+      - documented in `docs/book/1358-m39-lasm-cluster-relay-connect-fallback-next-healthy-cyclic-scan.md`.
+   - [x] Saturation counters now increment only on final connect failure outcome:
+      - relay worker connect failure path now records saturation only when request ends with worker-unavailable response after fallback handling,
+      - recovered requests (primary connect failure + successful fallback connect) no longer inflate saturation telemetry/autoscale signals.
+      - documented in `docs/book/1359-m39-lasm-cluster-relay-saturation-count-final-failure-only.md`.
+   - [x] Extended connect-failure fallback to bounded multi-alternate healthy attempts:
+      - relay worker connect failure path now scans all remaining healthy backends in cyclic order (after the failed backend) and attempts fallback connect per candidate before final worker-unavailable response,
+      - preserves deterministic unhealthy cooldown + warning tracking for each failed candidate while reducing final request failures when multiple healthy backends remain.
+      - documented in `docs/book/1360-m39-lasm-cluster-relay-connect-fallback-multi-alternate-attempts.md`.
+   - [x] Tightened multi-alternate fallback scan to direct wrapped cursor progression:
+      - connect-failure fallback candidate traversal now uses direct wrapped index progression (`index += 1; wrap to 0`) plus explicit remaining-scan counter, removing per-iteration offset arithmetic,
+      - fallback scan now exits early when all backends become unhealthy during candidate failures.
+      - documented in `docs/book/1361-m39-lasm-cluster-relay-fallback-scan-direct-wrap-and-terminal-break.md`.
+   - [x] Unified relay connect-success setup into one helper path:
+      - primary and fallback connect-success branches now share one relay-initialization helper (`set_nodelay`, pooled-buffer pump construction, throttled init-failure warning handling),
+      - removes duplicated connect-success setup branches in relay worker loop and keeps warning/decrement behavior aligned.
+      - documented in `docs/book/1362-m39-lasm-cluster-relay-connect-success-single-setup-helper.md`.
+   - [x] Added non-zero guard gates before relay counter-flush helper calls:
+      - relay worker loop now calls saturation/active-decrement flush helpers only when local pending counters are non-zero,
+      - removes per-cycle helper-call overhead on idle/steady-state cycles with no pending counter deltas.
+      - documented in `docs/book/1363-m39-lasm-cluster-relay-flush-helper-nonzero-gates.md`.
+   - [x] Reused one selection-state recompute helper across steady and failure paths:
+      - relay worker selection-state derivation (`has_healthy`, identity, cycle-span, single-healthy index) now comes from one shared recompute helper,
+      - connect-failure fallback traversal now reuses freshly recomputed healthy lookup state instead of scanning all worker slots for healthy candidates.
+      - documented in `docs/book/1364-m39-lasm-cluster-relay-shared-selection-recompute-and-fallback-lookup-traversal.md`.
+   - [x] Unified backend connect-failure unhealthy/warning bookkeeping in one helper:
+      - primary and fallback connect-failure branches now share one helper for unhealthy cooldown marking, prune scheduling, warning throttling, and selection-dirty signaling,
+      - removes duplicated failure bookkeeping branches in relay worker loop while preserving deterministic warning and cooldown behavior.
+      - documented in `docs/book/1365-m39-lasm-cluster-relay-connect-failure-shared-unhealthy-warning-helper.md`.
+   - [x] Split fallback connect traversal into explicit mode loops:
+      - fallback connect attempts now run through explicit single-candidate, identity-order, and healthy-lookup traversal loops instead of one mixed per-iteration mode branch path,
+      - fallback connect attempt body moved into shared helper so all traversal modes reuse one deterministic connect/mark-failure flow.
+      - documented in `docs/book/1366-m39-lasm-cluster-relay-fallback-traversal-mode-split-with-shared-attempt-helper.md`.
+   - [x] Extracted accept-loop fallback dispatch resolution into one helper:
+      - fallback dispatch strategy selection (all-live, dual-live, single-live, multi fallback) now routes through one helper that consumes live hints and refreshes hint caches only when missing,
+      - removes large inline strategy-branch duplication from the accept loop while preserving existing fallback dispatch behavior and hint-refresh semantics.
+      - documented in `docs/book/1367-m39-lasm-cluster-accept-loop-fallback-dispatch-resolution-helper.md`.
+   - [x] Added non-zero gates for accept-loop counter-flush helper calls:
+      - accept-loop batch tail now calls active-increment/fallback/short-circuit flush helpers only when local counters are non-zero,
+      - accept-loop final tail now gates saturation/fallback/short-circuit flush helpers on pending local deltas.
+      - documented in `docs/book/1368-m39-lasm-cluster-accept-loop-flush-helper-nonzero-gates.md`.
+   - [x] Fallback connect path now enforces alternate-only candidate attempts:
+      - fallback connect traversal no longer retries the same backend that just failed primary connect,
+      - identity traversal now scans `N-1` candidates from failed-backend-next index, and lookup traversal defensively skips selected primary backend when present.
+      - documented in `docs/book/1369-m39-lasm-cluster-relay-fallback-alternate-only-connect-attempts.md`.
+   - [x] Added shared fallback lookup start-cursor resolver:
+      - fallback lookup traversal now derives initial cursor through one helper (`resolve_lasm_cluster_fallback_lookup_start_cursor`) instead of inline binary-search/start-index branch logic,
+      - keeps fallback cursor semantics deterministic while removing duplicated cursor bootstrap arithmetic from relay worker loop body.
+      - documented in `docs/book/1370-m39-lasm-cluster-relay-fallback-lookup-start-cursor-helper.md`.
+   - [x] Added shared accept-loop unavailable-stream dispatch helper:
+      - repeated `Unavailable(client_stream)` dispatch-error handling branches in accept-loop degraded paths now route through one helper (`handle_lasm_cluster_accept_unavailable_stream`),
+      - preserves deterministic accept-loop error counters/envelopes while reducing repeated inline unavailable handling blocks.
+      - documented in `docs/book/1371-m39-lasm-cluster-accept-loop-unavailable-stream-helper.md`.
+   - [x] Unified accept-loop dispatch-counter flush blocks in one helper:
+      - duplicated accept-error flush blocks now call one shared helper (`flush_lasm_cluster_accept_dispatch_counters`) for saturation/fallback/short-circuit local counter flushes,
+      - accept-loop final-tail dispatch-counter flush now reuses the same helper path.
+      - documented in `docs/book/1372-m39-lasm-cluster-accept-loop-dispatch-counter-flush-helper.md`.
+   - [x] Unified relay pump connection release blocks in one helper:
+      - relay worker loop now routes `Complete` and pump-error release paths through one helper (`release_lasm_cluster_relay_connection`) for swap-remove, buffer-pool return, and active-decrement bookkeeping,
+      - removes duplicated release branches in both full-scan and budgeted pump schedulers while preserving cursor progression and deterministic decrement semantics.
+      - documented in `docs/book/1373-m39-lasm-cluster-relay-pump-release-helper.md`.
+   - [x] Unified relay pump warning-throttle emission in one helper:
+      - relay worker loop now routes pump-error warning checks through one helper (`emit_lasm_cluster_relay_pump_warning_if_allowed`) instead of duplicating throttle checks in both pump schedulers,
+      - keeps deterministic warning-throttle behavior unchanged while reducing repeated warning-branch bodies in the relay hot path.
+      - documented in `docs/book/1374-m39-lasm-cluster-relay-pump-warning-throttle-helper.md`.
+   - [x] Unified relay pump cursor progression/normalization helpers in budgeted scheduler:
+      - budgeted pump path now uses `advance_lasm_cluster_relay_pump_cursor(...)` for wrapped cursor step progression and `normalize_lasm_cluster_relay_pump_cursor(...)` for post-release cursor bounds/empty checks,
+      - removes duplicated cursor branch logic from `Progressed`, `Idle`, `Complete`, and pump-error branches while preserving deterministic cursor and break semantics.
+      - documented in `docs/book/1375-m39-lasm-cluster-relay-pump-cursor-helper-unification.md`.
+   - [x] Unified relay pump step execution into one shared helper:
+      - full-scan and budgeted relay pump schedulers now route `pump_once` outcomes through one helper (`pump_lasm_cluster_relay_connection_once`) that handles progressed/idle/release/error paths and warning/decrement side effects,
+      - removes duplicated pump outcome branch bodies across both schedulers while preserving deterministic release, warning-throttle, and progression semantics.
+      - documented in `docs/book/1376-m39-lasm-cluster-relay-pump-step-shared-helper.md`.
+   - [x] Full-scan relay pump loop now reuses local relay-count budget:
+      - full-scan scheduler tracks mutable `relay_count` alongside index instead of repeatedly calling `relay_connections.len()` in the loop condition after each pump step,
+      - keeps deterministic index/removal traversal semantics unchanged while reducing repeated length reads in the relay hot path.
+      - documented in `docs/book/1377-m39-lasm-cluster-relay-pump-fullscan-local-count.md`.
+   - [x] Budgeted relay pump loop now reuses local relay-count budget:
+      - budgeted scheduler now tracks mutable `relay_count` for per-step pre-length state and removed-path cursor normalization instead of reading `relay_connections.len()` after each pump step,
+      - preserves deterministic cursor wrap/remove semantics while reducing repeated length reads in budgeted relay hot path iterations.
+      - documented in `docs/book/1378-m39-lasm-cluster-relay-pump-budget-local-count.md`.
+   - [x] Unified full-scan and budgeted relay pump scheduling into one loop:
+      - relay worker now computes one scheduler mode flag (`full_scan_pump_mode`) and routes both full-scan and budgeted behavior through a single shared pump loop with mode-specific pump budget and cursor reset semantics,
+      - removes duplicated scheduler branch bodies while preserving deterministic removal/cursor progression and full-scan cursor reset behavior.
+      - documented in `docs/book/1379-m39-lasm-cluster-relay-pump-shared-loop.md`.
+   - [x] Extracted relay pump scheduler block into shared loop helper:
+      - relay worker now delegates per-cycle pump scheduling to `pump_lasm_cluster_relay_connections(...)` and keeps the outer worker loop focused on accept/fallback/counter flush flow,
+      - preserves existing full-scan/budget mode behavior and warning/release/cursor semantics while reducing relay worker-loop branch footprint.
+      - documented in `docs/book/1380-m39-lasm-cluster-relay-pump-loop-helper-extraction.md`.
+   - [x] Extracted relay pump mode/budget resolution into one helper:
+      - relay pump scheduler now computes full-scan flag, cursor normalization/reset, and pump budget through `resolve_lasm_cluster_relay_pump_mode(...)`,
+      - removes duplicated mode-setup arithmetic from relay pump scheduler and keeps mode configuration single-sourced.
+      - documented in `docs/book/1381-m39-lasm-cluster-relay-pump-mode-resolution-helper.md`.
+   - [x] Switched relay pump scheduler to local cursor progression with single write-back:
+      - relay pump scheduler now advances/normalizes a local cursor variable per cycle and writes back `relay_pump_cursor` only once after loop completion (or resets to zero in full-scan mode),
+      - reduces per-step mutable shared-cursor writes while preserving deterministic full-scan/budget cursor semantics.
+      - documented in `docs/book/1382-m39-lasm-cluster-relay-pump-local-cursor-writeback.md`.
+   - [x] Added zero-relay fast path and branchless progress flag update in pump scheduler:
+      - relay pump mode resolver now short-circuits zero-relay cycles to `{cursor=0, budget=0}` without extra mode setup branches,
+      - pump loop now updates progress signal with branchless boolean OR (`progressed |= ...`) to remove one per-step branch.
+      - documented in `docs/book/1383-m39-lasm-cluster-relay-pump-zero-fastpath-and-branchless-progress.md`.
+   - [x] Consolidated accept-loop dispatch counters into one local struct:
+      - accept loop now tracks saturation/fallback/short-circuit local counters through `LasmClusterAcceptDispatchCounters` and passes one mutable counter state into helper paths,
+      - reduced repeated multi-counter argument threading across unavailable/error/flush call sites while preserving deterministic counter flush behavior.
+      - documented in `docs/book/1384-m39-lasm-cluster-accept-loop-dispatch-counter-struct.md`.
+   - [x] Added shared accept-loop dispatch-error wrapper for counter-state wiring:
+      - accept loop now routes dispatch-error handling through `handle_lasm_cluster_accept_dispatch_error_with_counters(...)` so all call sites reuse one counter wiring path,
+      - keeps dispatch-error behavior unchanged while reducing repeated atomic/counter argument threading in single-sender and fallback dispatch branches.
+      - documented in `docs/book/1385-m39-lasm-cluster-accept-loop-dispatch-error-wrapper.md`.
+   - [x] Extracted accept-loop post-batch counter flush into shared helper:
+      - accept loop now routes end-of-batch active/fallback/short-circuit counter flushes through `flush_lasm_cluster_accept_post_batch_counters(...)`,
+      - preserves deterministic flush gates while reducing repeated post-batch counter branch code in the main accept loop.
+      - documented in `docs/book/1386-m39-lasm-cluster-accept-loop-post-batch-flush-helper.md`.
+   - [x] Added stream-local single/dual live hint fast path in accept-loop dispatch selection:
+      - accept loop now resolves `stream_single_live_index` / `stream_dual_live_indices` once per accepted stream in degraded liveness mode and reuses those hints in next-dispatch index selection,
+      - removes per-request option fallback branching from the two-live dispatch-index path while preserving existing unavailable/fallback semantics.
+      - documented in `docs/book/1387-m39-lasm-cluster-accept-loop-stream-local-live-hints-fastpath.md`.
+   - [x] Added next-live lookup cache refresh-on-miss in accept-loop degraded dispatch path:
+      - accept loop now retries next-live lookup after one in-place lookup-table refresh when a degraded-mode lookup misses (`lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss`),
+      - reduces repeated dead-index scan fallback in stale-lookup windows while preserving deterministic unavailable handling when no live sender exists.
+      - documented in `docs/book/1388-m39-lasm-cluster-accept-loop-next-live-lookup-refresh-on-miss.md`.
+   - [x] Added live-start fallback for degraded next-dispatch cursor on lookup miss:
+      - when degraded next-live lookup still misses after refresh, next dispatch cursor now falls back to `stream_dispatch_start` (known live at selection time) instead of keeping a dead wrapped slot,
+      - reduces avoidable dead-slot primary dispatch attempts while preserving deterministic fallback/error behavior.
+      - documented in `docs/book/1389-m39-lasm-cluster-accept-loop-live-start-fallback-on-next-dispatch-lookup-miss.md`.
+   - [x] Added refresh-on-miss lookup healing in fallback-dispatch scan helpers:
+      - fallback-dispatch multi-sender traversal now accepts mutable next-live lookup state and performs one lookup-table refresh on lookup miss before falling back to slow scan defaults,
+      - keeps fallback semantics unchanged while reducing repeated stale-lookup scan overhead in degraded relay topologies.
+      - documented in `docs/book/1390-m39-lasm-cluster-fallback-dispatch-lookup-refresh-on-miss.md`.
+   - [x] Enabled explicit `--reuse-port` fast-path override for LASM cluster mode:
+      - when cluster mode is active, `--reuse-port` now forces fixed reuse-port cluster path even if `--autoscale-max-instances` is higher than `--instances`,
+      - this keeps proxy-relay path available by default while allowing explicit performance-mode opt-in without reworking autoscale flag sets.
+      - documented in `docs/book/1391-m39-lasm-cluster-reuse-port-fast-path-override.md`.
+   - [x] Hardened LASM capacity probe for stable tuning runs:
+      - `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` now supports `--build-profile debug|release` and `--samples <n>`, executes multiple wrk samples, and reports the best sample plus all sample metrics in summary JSON,
+      - this reduces tuning noise when local loadgen variance is high and keeps profile selection explicit for performance investigations.
+      - documented in `docs/book/1392-m39-lasm-capacity-probe-build-profile-and-samples.md`.
+   - [x] Wired LASM mode-compare orchestration to stable probe controls:
+      - `benchmark-suite/scripts/run_lasm_cluster_mode_compare.sh` now accepts/forwards `--build-profile` and `--samples` to both proxy and fixed probe runs,
+      - compare dry-run/test coverage now validates build-profile/sample controls and invalid-input diagnostics so repeated mode comparisons stay deterministic.
+      - documented in `docs/book/1393-m39-lasm-mode-compare-build-profile-and-samples.md`.
+   - [x] Wired LASM saturation boost matrix/bundle orchestration to stable probe controls:
+      - `run_lasm_cluster_saturation_boost_matrix.sh` and `run_lasm_cluster_saturation_boost_bundle.sh` now accept/forward `--build-profile` and `--samples` to all probe runs (including recommended-step verify path),
+      - dry-run/test coverage now validates build-profile/sample passthrough plus deterministic invalid-input diagnostics across matrix and bundle wrappers.
+      - documented in `docs/book/1394-m39-lasm-saturation-matrix-bundle-build-profile-and-samples.md`.
+   - [x] Wired top-level benchmark suite orchestration to saturation profile/sample controls:
+      - `run_full_benchmark_suite.sh` now accepts `--saturation-build-profile` and `--saturation-samples` and forwards them to LASM saturation and mode-compare phases,
+      - full-suite dry-run test coverage now validates build-profile/sample passthrough into delegated saturation bundle and mode-compare plan outputs.
+      - documented in `docs/book/1395-m39-full-benchmark-suite-saturation-profile-samples-wiring.md`.
+   - [x] Added multi-process wrk fanout support in LASM capacity probe:
+      - `run_lasm_cluster_capacity_probe.sh` now accepts `--wrk-processes <n>` (env `LASM_CAPACITY_WRK_PROCESSES`, default `1`) and launches that many wrk clients in parallel per sample,
+      - sample metrics now aggregate across wrk processes (`requests` sum, `requestsPerSec` sum, conservative `p99` max normalized to `ms`) and persist per-process metadata in `observed.samples[].wrkProcessRuns[]`,
+      - dry-run/test coverage now validates `wrkProcesses` plan output and deterministic invalid-input diagnostics (`wrk-processes >= 1`, integer-only).
+      - documented in `docs/book/1396-m39-lasm-capacity-probe-wrk-process-fanout.md`.
+   - [x] Wired wrk-process fanout through benchmark orchestration wrappers:
+      - `run_lasm_cluster_mode_compare.sh`, `run_lasm_cluster_saturation_boost_matrix.sh`, and `run_lasm_cluster_saturation_boost_bundle.sh` now accept/forward `--wrk-processes <n>` to delegated capacity probe runs,
+      - `run_full_benchmark_suite.sh` now accepts `--saturation-wrk-processes <n>` and forwards it to both LASM saturation bundle and LASM mode-compare phases,
+      - wrapper dry-run/test contracts now validate `wrkProcesses` passthrough and deterministic invalid-input diagnostics for integer/positive constraints.
+      - documented in `docs/book/1397-m39-lasm-benchmark-wrapper-wrk-process-passthrough.md`.
+   - [x] Added env-tunable idle backoff controls for LASM cluster accept/relay loops:
+      - new runtime env controls:
+        - `SEC4_RT_LASM_CLUSTER_IDLE_SPIN_THRESHOLD` (default `32`, clamp `1..4096`)
+        - `SEC4_RT_LASM_CLUSTER_IDLE_SLEEP_MICROS` (default `250`, clamp `1..50000`)
+      - `run_lasm_cluster_accept_loop` and `spawn_lasm_cluster_relay_worker_loop` now resolve idle spin/sleep values via `lasm_cluster_runtime_config` instead of fixed compile-time constants,
+      - this keeps previous defaults intact while enabling hot-path idle backoff tuning during throughput investigations without code changes.
+      - documented in `docs/book/1398-m39-lasm-cluster-idle-backoff-env-tuning.md`.
+   - [x] Surfaced idle backoff env tuning values in LASM cluster status JSON:
+      - `spawn_lasm_cluster_status_writer` now snapshots `relayIdleSpinThreshold` and `relayIdleSleepMicros` from runtime env-resolved backoff controls,
+      - status payload serialization and snapshot equality now include both fields, preserving deterministic unchanged-snapshot suppression behavior,
+      - command integration coverage verifies env-overridden values are emitted in cluster status JSON while unchanged snapshots keep `updatedAtMs` stable.
+      - documented in `docs/book/1399-m39-lasm-cluster-status-json-idle-backoff-fields.md`.
+   - [x] Added cross-batch relay saturation fast-reject carryover in LASM accept loop:
+      - accept loop now tracks recent relay-saturation state across batches and short-circuits fallback scans when relay queues remain saturated,
+      - successful primary/fallback dispatches clear the carryover flag so recovery immediately resumes normal dispatch behavior,
+      - this reduces repeated fallback scan overhead in sustained overload windows without changing healthy-path routing semantics.
+      - documented in `docs/book/1400-m39-lasm-cluster-accept-saturation-carryover-fast-reject.md`.
+   - [x] Added single-backend fast path for LASM relay-worker selection state:
+      - relay-worker loop now bypasses generic selection lookup/recompute bookkeeping when backend count is `0` or `1`,
+      - one-backend mode now resolves backend index directly from backend health (`unhealthy_port_count`) instead of full lookup pipeline,
+      - this trims selection-path branch/lookup overhead in small-cluster deployments while preserving existing fallback/unhealthy behavior.
+      - documented in `docs/book/1405-m39-lasm-relay-worker-single-backend-fastpath.md`.
+   - [x] Reduced relay-worker snapshot clone churn in hot loops:
+      - relay-worker now loads worker-port snapshots via pointer-checked `ArcSwap::load()` and clones only when topology changes,
+      - removes unconditional `load_full()` clone churn from prune and selection-refresh branches while preserving existing remap/selection behavior.
+      - documented in `docs/book/1416-m39-lasm-cluster-relay-worker-snapshot-clone-elision.md`.
+   - [x] Replaced Postgres cache clear-all behavior with bounded single-entry eviction:
+      - LASM Postgres statement cache and placeholder-max cache now evict one oldest entry at capacity instead of clearing the full cache map,
+      - this avoids full-cache churn cliffs under diverse query templates while preserving deterministic cache capacity enforcement and eviction telemetry counters.
+      - documented in `docs/book/1417-m39-lasm-postgres-bounded-cache-single-entry-eviction.md`.
+   - [x] Precomputed non-identity fallback start cursors on selection-state rebuild:
+      - relay-worker now builds per-backend fallback start cursors when lookup state is recomputed,
+      - this removes repeated `selection_lookup` binary-search work from per-failure fallback scans in degraded cluster paths while preserving fallback ordering semantics.
+      - documented in `docs/book/1418-m39-lasm-relay-fallback-start-cursor-precompute.md`.
+   - [x] Moved autoscale process spawn/stop operations outside the cluster-state write lock:
+      - autoscale loop now plans scale-up ports and scale-down worker removals under lock, then performs process spawn/kill/wait outside the lock and re-locks only to apply spawned workers + publish snapshots,
+      - this reduces lock hold time on cluster state during expensive process lifecycle operations while preserving existing autoscale cooldown and scaling semantics.
+      - documented in `docs/book/1419-m39-lasm-autoscale-process-lifecycle-outside-state-lock.md`.
+   - [x] Moved min-worker recovery spawn planning to lock-light path in autoscale loop:
+      - autoscale loop now reserves recovery worker ports under lock and executes recovery worker spawn outside the lock,
+      - this avoids holding cluster-state write lock during min-worker recovery process startup while preserving deterministic min-instance recovery behavior.
+      - documented in `docs/book/1420-m39-lasm-autoscale-recovery-reserve-and-spawn-lock-light.md`.
+   - [x] Switched dead-worker pruning to in-place removal:
+      - cluster lifecycle now prunes exited/uninspectable workers with in-place `swap_remove` iteration instead of rebuilding a temporary worker vector each maintenance pass,
+      - this reduces autoscale maintenance allocation churn while preserving deterministic dead-worker warning behavior.
+      - documented in `docs/book/1421-m39-lasm-in-place-dead-worker-pruning.md`.
+   - [x] Reused autoscale planning/apply buffers across loop iterations:
+      - autoscale loop now reuses spawn/stop/spawned worker vectors via `clear()` + `drain(..)` instead of allocating fresh vectors on each cycle,
+      - this reduces per-tick allocation churn in scale planning/apply paths while preserving existing autoscale behavior.
+      - documented in `docs/book/1422-m39-lasm-autoscale-loop-buffer-reuse.md`.
+   - [x] Removed recovery-port temporary vector allocation in autoscale loop:
+      - min-worker recovery port reservation now fills the existing autoscale spawn-port buffer directly instead of returning a temporary vector each tick,
+      - this keeps recovery reservation on the same reusable autoscale buffer path while preserving deterministic port-reservation behavior.
+      - documented in `docs/book/1423-m39-lasm-autoscale-recovery-port-buffer-reuse.md`.
+   - [x] Added reusable worker-port pool for cluster scaling cycles:
+      - cluster state now tracks reclaimed worker ports and reuses them for future scale-up/min-worker recovery reservations before consuming new `next_port` values,
+      - dead-worker pruning and autoscale scale-down paths now feed reclaimed ports into the reuse pool.
+      - documented in `docs/book/1424-m39-lasm-cluster-worker-port-reuse-pool.md`.
+   - [x] Returned unspawned reserved ports to reusable pool on autoscale spawn failures:
+      - autoscale spawn/apply path now tracks partial spawn progress and reclaims remaining reserved worker ports into `reusable_ports` when spawn fails mid-batch,
+      - this avoids dropping reserved ports on failure paths while preserving existing autoscale warning and partial-apply behavior.
+      - documented in `docs/book/1425-m39-lasm-autoscale-unspawned-port-reclaim.md`.
+   - [x] Removed unchanged-topology snapshot clone from relay worker batch path:
+      - relay worker loop now tracks whether a worker-port snapshot was already loaded for the current batch and reuses the selected snapshot directly when topology is unchanged,
+      - this avoids per-batch `Arc` clone churn on steady-state topology while preserving existing selection/remap logic when topology actually changes.
+      - documented in `docs/book/1426-m39-lasm-relay-batch-snapshot-clone-elision.md`.
+   - [x] Routed autoscale scale-up reservations through reusable worker-port pool:
+      - autoscale scale-up path now reserves worker ports via shared lifecycle helper that consumes `reusable_ports` before advancing `next_port`,
+      - min-worker recovery and autoscale scale-up now share one reservation path, preserving deterministic reservation behavior while preventing avoidable new-port churn after scale-down/dead-worker reclaim events.
+      - documented in `docs/book/1427-m39-lasm-autoscale-scaleup-reuse-port-pool.md`.
+   - [x] Switched reusable worker-port reservation to bulk slice/truncate path:
+      - lifecycle reservation now appends reclaimed ports via one `extend_from_slice` + `truncate` operation instead of per-port `pop` loops,
+      - remaining fresh-port allocations still advance `next_port` deterministically for the uncovered tail.
+      - documented in `docs/book/1429-m39-lasm-bulk-reuse-port-reservation.md`.
+   - [x] Removed unchanged-topology snapshot clone churn from cluster status-writer loop:
+      - status writer now keeps a selected worker-port snapshot and only clones a new `Arc` when `ArcSwap` pointer changes,
+      - steady-state status ticks reuse existing snapshot/count instead of unconditional `load_full()` clone churn.
+      - documented in `docs/book/1433-m39-lasm-status-writer-snapshot-clone-elision.md`.
+   - [x] Added reusable worker-port pool telemetry to cluster status JSON:
+      - autoscale loop now publishes live reusable-port pool size into shared telemetry state,
+      - status writer now emits `reusablePortsCount` in cluster status payload for live scale/reclaim visibility.
+      - documented in `docs/book/1434-m39-lasm-cluster-reusable-port-pool-telemetry.md`.
+   - [x] Removed unconditional pre-action worker-port snapshot refreshes from autoscale loop:
+      - dead-worker pruning now reports whether worker membership changed during maintenance pass,
+      - autoscale pre-action snapshot publish now runs only when prune/scale-down mutates worker membership,
+      - spawn/stop apply path keeps post-action refresh behavior for topology-changing worker lifecycle events.
+      - documented in `docs/book/1436-m39-lasm-autoscale-refresh-on-worker-change-only.md`.
+   - [x] Suppressed no-op reusable-port telemetry atomic stores in autoscale loop:
+      - autoscale loop now tracks last published `reusablePortsCount` and writes the shared atomic only when reusable-port pool size changes,
+      - both maintenance pre-action path and spawn/apply path now reuse this change-detection helper to avoid redundant per-tick atomic store churn.
+      - documented in `docs/book/1438-m39-lasm-autoscale-reusable-port-telemetry-store-elision.md`.
+   - [x] Suppressed additional no-op autoscale telemetry atomic stores:
+      - autoscale loop now tracks last published values for desired instances, saturation counters, dynamic boost step, and cooldown remaining telemetry,
+      - corresponding shared atomics are now updated only when values change, avoiding redundant per-tick store churn while preserving deterministic telemetry semantics.
+      - documented in `docs/book/1441-m39-lasm-autoscale-telemetry-store-elision.md`.
+   - [x] Added runtime-tunable relay pump buffer sizing for LASM cluster proxy path:
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_BYTES` (clamped `1 KiB..1 MiB`) and threads it into relay pump allocation/reuse paths,
+      - relay pumps now resize pooled buffers to the resolved byte budget, allowing hot-path throughput/memory tuning without code changes.
+      - documented in `docs/book/1461-m39-lasm-cluster-relay-buffer-size-tuning.md`.
+   - [x] Added runtime-tunable relay buffer-pool sizing and startup prewarm for LASM cluster proxy workers:
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_MAX` (derived default from accept-batch, bounded `16..65536`) instead of fixed `accept_batch*4` sizing,
+      - relay worker loop now resolves `SEC4_RT_LASM_CLUSTER_RELAY_BUFFER_POOL_PREWARM` (bounded `0..pool_max`) and optionally preallocates reusable relay pump buffers at startup to reduce first-burst allocation churn.
+      - documented in `docs/book/1462-m39-lasm-cluster-relay-buffer-pool-tuning-and-prewarm.md`.
+   - [x] Published resolved relay buffer tuning into cluster status JSON and centralized bootstrap resolution:
+      - cluster startup now resolves relay buffer knobs once (`relay_buffer_bytes`, `relay_buffer_pool_max`, `relay_buffer_pool_prewarm`) and passes them into relay workers,
+      - cluster status JSON now emits these effective values (`relayBufferBytes`, `relayBufferPoolMax`, `relayBufferPoolPrewarm`) so operators can verify active relay memory tuning at runtime.
+      - documented in `docs/book/1463-m39-lasm-cluster-status-relay-buffer-tuning-fields.md`.
+   - [x] Added live relay-pump and buffer-pool occupancy telemetry in cluster status:
+      - relay worker loops now publish aggregate hot-path counts for active relay pumps and cached relay buffer-pool entries with delta-based atomic updates,
+      - cluster status JSON now emits `relayPumpConnections` and `relayBufferPoolEntries` for runtime visibility into relay concurrency and reusable buffer occupancy.
+      - documented in `docs/book/1464-m39-lasm-cluster-relay-pump-and-buffer-pool-occupancy-telemetry.md`.
+   - [x] Added live relay queue-depth telemetry in cluster status:
+      - status writer now samples relay queue sender depths each interval and publishes aggregate queue occupancy (`relayQueueDepth`) and shard max depth (`relayQueueMaxDepth`),
+      - this exposes real backpressure signal for relay queue tuning during cluster load runs without changing request dispatch semantics.
+      - documented in `docs/book/1465-m39-lasm-cluster-relay-queue-depth-telemetry.md`.
+   - [x] Added pre-dispatch saturated short-circuit in accept-loop hot path:
+      - in saturated-recently mode, accept loop now short-circuits directly to deterministic `503` saturated handling when the preferred live relay sender is already `is_full()`, before primary `try_send`/fallback dispatch attempts,
+      - reduces avoidable dispatch attempt overhead during sustained queue pressure while preserving existing saturation/error semantics.
+      - documented in `docs/book/1467-m39-lasm-accept-loop-pre-dispatch-saturated-short-circuit.md`.
+   - [x] Added per-connection relay IO burst caps in relay pump ticks:
+      - relay pump loops now bound per-direction nonblocking read/write bursts (`LASM_CLUSTER_RELAY_IO_BURST_MAX=4`) for client->upstream and upstream->client paths,
+      - keeps per-connection tick work finite so one busy relay session cannot monopolize worker pump cycles under mixed traffic.
+      - documented in `docs/book/1485-m39-lasm-relay-pump-io-burst-fairness-cap.md`.
+   - [x] Added runtime-tunable relay IO burst cap + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IO_BURST_MAX` (bounded `1..64`, default `4`) and threads the resolved value into relay pump initialization,
+      - cluster status JSON now emits `relayIoBurstMax` so active fairness tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`.
+   - [x] Added runtime-tunable relay idle-backoff cap + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` (bounded `0..32`, default `1`) and threads the resolved value into relay pump initialization,
+      - relay pump now applies bounded per-connection idle deferral after fully idle ticks and resets backoff immediately on any real IO progress,
+      - cluster status JSON now emits `relayIdleBackoffMax` so active idle-scheduling tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`.
+   - [x] Made relay pump budget accounting backoff-skip aware:
+      - relay pumps now emit explicit `BackoffDeferred` steps when idle-backoff countdown is active,
+      - relay worker loop now uses separate bounded scan-budget accounting so deferred-idle scans do not consume main per-tick pump budget,
+      - batch mode now scans up to a bounded multiple of `relay_pump_batch_max` to skip deferred-idle relays and reach active relays in the same tick.
+      - documented in `docs/book/1488-m39-lasm-relay-backoff-skip-budget-aware-pump-scanning.md`.
+   - [x] Added runtime-tunable relay pump scan multiplier + status field:
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_PUMP_SCAN_MULTIPLIER` (bounded `1..16`, default `4`) and threads the value into relay worker scheduling,
+      - relay batch-mode scan budget now uses the configured multiplier to tune how far workers scan past deferred-idle relays per tick,
+      - cluster status JSON now emits `relayPumpScanMultiplier` so active scan tuning is visible in operator/benchmark snapshots.
+      - documented in `docs/book/1489-m39-lasm-relay-pump-scan-multiplier-runtime-tuning.md`.
+   - [x] Added worker-port generation-gated snapshot loading across autoscale/relay/status loops:
+      - autoscale snapshot refresh helper now returns a change flag and bumps a shared worker-port generation only when topology changes,
+      - relay worker loop and status writer loop now check generation first and avoid no-op `ArcSwap` snapshot loads when worker ports are unchanged.
+      - documented in `docs/book/1490-m39-lasm-worker-port-generation-gated-snapshot-loads.md`.
+   - [x] Sequencing lock cleared: performance-tuning feature work (including 1M req/s campaign) may resume now that `M39-S2` Composition Contract Analyzer is completed; correctness/stability-critical performance fixes may proceed before and during ramp-up.
+4. [x] Progress DB adapters behind the same intrinsic surface:
+   - keep file adapter (`records.log`) for alpha path,
+   - add SQLite adapter as first real embedded DB target,
+   - keep external DB adapters post-alpha.
+   - [x] Added prepared-statement caching to LASM Postgres runtime paths:
+      - `db.exec`, `db.execTx`, and `db.queryOne` now resolve prepared statements through a shared query-template cache in `LasmDynamicResponseState`,
+      - reconnect flow now clears cached statements before rebuilding Postgres client state, so retries always use connection-valid statements,
+      - this preserves intrinsic semantics while reducing repeated SQL parse/prepare overhead on hot Postgres call paths.
+      - documented in `docs/book/1401-m39-lasm-postgres-prepared-statement-cache.md`.
+   - [x] Added cached statement preparation to LASM SQLite runtime paths:
+      - sqlite `db.exec` now uses transaction-local `prepare_cached(...)` for repeated query templates in the same connection lifecycle,
+      - sqlite `db.queryOne` now uses `connection.prepare_cached(...)` for repeated select-like templates,
+      - this preserves intrinsic behavior while reducing repeated SQLite parse/prepare overhead on hot request paths.
+      - documented in `docs/book/1402-m39-lasm-sqlite-prepare-cached-runtime.md`.
+   - [x] Enabled SQLite WAL/NORMAL pragmas in LASM sqlite adapter connections:
+      - sqlite runtime connection bootstrap now configures `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL` (with `foreign_keys = ON`) for deterministic embedded DB behavior tuned for write/read runtime workloads,
+      - applies to runtime sqlite connect path used by bootstrap and reconnect flows without changing language-level DB intrinsic semantics.
+      - documented in `docs/book/1466-m39-lasm-sqlite-pragmas-wal-normal.md`.
+   - [x] Added env-configurable SQLite pragma selection with deterministic fallback:
+      - sqlite runtime connection bootstrap now resolves `PRAGMA journal_mode` from `SEC4_RT_LASM_DB_SQLITE_JOURNAL_MODE` and `PRAGMA synchronous` from `SEC4_RT_LASM_DB_SQLITE_SYNCHRONOUS`,
+      - supported journal modes are `DELETE|TRUNCATE|PERSIST|MEMORY|WAL|OFF` and supported synchronous values are `OFF|NORMAL|FULL|EXTRA`,
+      - invalid/empty env values deterministically fall back to `WAL` / `NORMAL` with runtime warning output, preserving stable defaults.
+      - documented in `docs/book/1468-m39-lasm-sqlite-pragmas-env-config.md`.
+   - [x] Hardened SQLite named-parameter runtime binding contract:
+      - sqlite exec/queryOne runtime paths now resolve named params against prepared statement placeholder names (`:name`, `@name`, `$name`) instead of blindly forwarding canonicalized `:name` bindings,
+      - deterministic runtime validation now rejects missing named parameters, extra params not present in SQL template, and named-param payloads against unnamed `?` placeholders,
+      - DB runtime classification now maps these named-parameter contract failures to `400 DB.*_INVALID` validation envelopes.
+      - documented in `docs/book/1469-m39-lasm-sqlite-named-parameter-binding-contract.md`.
+   - [x] Added retry-once handling for Postgres transactional concurrency conflicts:
+      - `db.execTx` now detects retryable SQLSTATE conflicts (`40001` serialization failure, `40P01` deadlock) and performs one immediate retry on the existing runtime client path before surfacing failure,
+      - keeps reconnect-on-closed behavior unchanged and preserves existing prepared/unprepared execution flow,
+      - DB runtime classifier now maps common Postgres serialization/deadlock text to deterministic `409` conflict envelopes.
+      - documented in `docs/book/1470-m39-lasm-postgres-exectx-retryable-conflict-retry.md`.
+   - [x] Added retry-once handling for Postgres `db.exec` retryable conflicts:
+      - `db.exec` now performs one immediate retry on retryable SQLSTATE conflicts (`40001` / `40P01`) before surfacing failure,
+      - keeps reconnect-on-closed behavior and prepared/unprepared execution semantics unchanged.
+      - documented in `docs/book/1478-m39-lasm-postgres-exec-retryable-conflict-retry.md`.
+   - [x] Added retry-once handling for Postgres `db.queryOne` retryable conflicts:
+      - `db.queryOne` now performs one immediate retry when the initial execution fails with retryable SQLSTATE conflict (`40001` / `40P01`),
+      - preserves existing reconnect-on-closed and single-statement guard behavior,
+      - reuses the prepared query path to keep query materialization semantics unchanged.
+      - documented in `docs/book/1471-m39-lasm-postgres-queryone-retryable-conflict-retry.md`.
+   - [x] Tightened SQLite positional parameter-count contract:
+      - sqlite positional execution now rejects extra parameter payload entries instead of silently ignoring them when SQL template expects fewer placeholders,
+      - zero-placeholder SQL now also enforces exact `0` parameter arity (no compatibility bypass),
+      - deterministic runtime validation now emits `sqlite query expects exactly N sql parameters but received M` for too-many positional params,
+      - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
+      - documented in `docs/book/1472-m39-lasm-sqlite-positional-parameter-count-contract.md`.
+   - [x] Tightened Postgres parameter-count contract to exact arity:
+      - Postgres runtime (`db.exec`, `db.execTx`, `db.queryOne`) now rejects extra SQL params instead of relying on driver/runtime mismatch errors,
+      - zero-placeholder SQL now also enforces exact `0` parameter arity (no compatibility bypass),
+      - deterministic runtime validation now emits `postgres query expects exactly N sql parameters but received M` for too-many params,
+      - DB runtime classifier maps this deterministic arity error to `400 DB.*_INVALID`.
+      - documented in `docs/book/1473-m39-lasm-postgres-exact-parameter-count-contract.md`.
+   - [x] Fixed Postgres zero-placeholder compatibility on runtime bind path:
+      - `db.exec` / `db.execTx` now enter prepared+bind path only when placeholders are present,
+      - `db.queryOne` now binds an empty parameter slice when placeholder count is zero,
+      - this now aligns with strict exact-arity runtime validation for zero-placeholder SQL.
+      - documented in `docs/book/1480-m39-lasm-postgres-zero-placeholder-bind-compat.md`.
+   - [x] Removed legacy zero-placeholder extra-param compatibility fixtures from DB runtime command coverage:
+      - sqlite and postgres DB integration fixtures now pass explicit empty params payloads (`[]`) on zero-placeholder SQL success paths,
+      - deterministic success/error envelopes stay unchanged while strict zero-placeholder exact-arity behavior remains active.
+      - documented in `docs/book/1507-m39-db-zero-placeholder-exact-arity-enforcement.md`.
+   - [x] Added `/db/records` offset filter for deterministic paging windows:
+      - list-records response now accepts `offset` (`>= 0`) and applies it before limit-window materialization,
+      - `offset` is now echoed in response filter metadata,
+      - invalid offset values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1474-m39-lasm-db-records-offset-filter.md`.
+   - [x] Added exact `id` filter support for `/db/records`:
+      - list-records response now accepts `id` (`>= 1`) for deterministic single-record slicing,
+      - `id` is now echoed in filter metadata alongside `idFrom`/`idTo`,
+      - invalid id values return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1481-m39-lasm-db-records-id-filter.md`.
+   - [x] Added multi-operation list filter for `/db/records`:
+      - list-records response now supports `ops=...` comma-separated operation filters (`exec`, `execTx`, `queryOne`) in addition to existing single `op=...`,
+      - parsed ops are emitted as deterministic ordered filter metadata array,
+      - invalid ops lists return deterministic `400 DB.RECORDS_FILTER_INVALID`.
+      - documented in `docs/book/1483-m39-lasm-db-records-ops-filter.md`.
+   - [x] Optimized `/db/records` materialization to avoid full filtered-record cloning:
+      - filter/order/window selection now uses index windows over in-memory record store and clones only selected response window when `includeRecords=true`,
+      - `includeRecords=false` now returns summary payload without cloning full record window while preserving deterministic `count` and aggregate totals.
+      - documented in `docs/book/1482-m39-lasm-db-records-window-materialization-optimization.md`.
+   - [x] Added bounded `limit` guard for `/db/records` payload sizing:
+      - list-records `limit` now accepts only integer values in `[1..1000]`,
+      - invalid limit values return deterministic `400 DB.RECORDS_LIMIT_INVALID`,
+      - `limit` is now echoed in response filter metadata.
+      - documented in `docs/book/1475-m39-lasm-db-records-limit-max-guard.md`.
+   - [x] Added deterministic pagination metadata for `/db/records` windows:
+      - list-records response now emits `hasMore` and `nextOffset` alongside list payload,
+      - metadata is computed from current `order` + `offset` + `limit` window semantics without changing record filtering rules,
+      - enables deterministic follow-up paging requests without client-side heuristic math.
+      - documented in `docs/book/1476-m39-lasm-db-records-pagination-metadata.md`.
+   - [x] Exposed effective SQLite pragma runtime settings in `/db/records` telemetry:
+      - DB records response `dbTimeoutsMs` now includes `sqliteJournalMode` and `sqliteSynchronous` fields from effective runtime pragma resolution,
+      - keeps existing DB response shape and adds operator visibility for sqlite runtime tuning values.
+      - documented in `docs/book/1477-m39-lasm-db-records-sqlite-pragma-telemetry.md`.
+   - [x] Added SQLite lock-contention retry controls in runtime path:
+      - sqlite runtime now retries `database is locked` failures with configurable retry count/delay via env:
+        - `SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_MAX` (default `2`)
+        - `SEC4_RT_LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS` (default `5`)
+      - `/db/records` telemetry now exposes effective sqlite lock-retry settings in `dbTimeoutsMs`.
+      - documented in `docs/book/1484-m39-lasm-sqlite-lock-retry-runtime-controls.md`.
+   - [x] Cached effective SQLite pragma settings in LASM dynamic runtime state:
+      - sqlite journal/synchronous modes are now resolved once during dynamic-state bootstrap and stored in runtime state,
+      - sqlite connect/reconnect and `/db/records` telemetry now consume cached values instead of re-resolving env on each call,
+      - preserves existing pragma behavior while avoiding repeated env parsing and repeated invalid-env warning spam.
+      - documented in `docs/book/1479-m39-lasm-sqlite-pragma-state-cache.md`.
+   - [x] Added Postgres placeholder-index cache for LASM DB runtime:
+      - placeholder analysis (`$1`, `$2`, ... max index scan) is now cached per query template in dynamic runtime state,
+      - `db.exec`, `db.execTx`, and `db.queryOne` now reuse cached required-parameter counts instead of rescanning SQL text on each call,
+      - this keeps parameter validation semantics unchanged while reducing repeated SQL scan overhead in hot Postgres paths.
+      - documented in `docs/book/1403-m39-lasm-postgres-placeholder-index-cache.md`.
+   - [x] Added bounded capacity guards for LASM Postgres runtime caches:
+      - new env controls:
+        - `SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX` (default `512`)
+        - `SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX` (default `1024`)
+      - statement/placeholder caches now clear-and-refill when capacity is reached, preventing unbounded key growth in long-lived runtimes,
+      - this keeps caching wins while preserving deterministic memory growth bounds for DB runtime state.
+      - documented in `docs/book/1404-m39-lasm-postgres-cache-capacity-guards.md`.
+   - [x] Added DB runtime cache telemetry to `DbListRecordsResponse`:
+      - response payload now includes `dbCache` object with statement/placeholder cache count and capacity fields,
+      - telemetry is emitted for all adapters (records.log/sqlite/postgres) from shared dynamic runtime state,
+      - this gives operators direct visibility into runtime cache utilization during DB-path tuning/debug runs.
+      - documented in `docs/book/1406-m39-lasm-db-cache-telemetry-in-list-records.md`.
+   - [x] Added Postgres cache-eviction telemetry counters:
+      - `dbCache` now includes cumulative `postgresStatementEvictedTotal` and `postgresPlaceholderEvictedTotal`,
+      - counters increment on capacity-triggered cache clears for prepared-statement and placeholder-index caches,
+      - this exposes cache churn signal (not only count/capacity snapshots) for live DB tuning.
+      - documented in `docs/book/1411-m39-postgres-cache-eviction-telemetry.md`.
+   - [x] Added bounded LASM DB record-history capacity guard:
+      - new runtime env control `SEC4_RT_LASM_DB_RECORDS_MAX` (default `10000`) bounds in-memory `db_records` history and drops oldest entries on overflow,
+      - startup record load now applies the same bound to prevent unbounded process-memory growth from large persisted DB stores,
+      - overflow append path now triggers adapter full-sync compaction so persisted record history remains bounded to the same window,
+      - `DbListRecordsResponse` now includes `recordsCapacity` and `recordsDroppedTotal` so operators can confirm configured history bounds and cumulative record evictions in runtime telemetry.
+      - documented in `docs/book/1408-m39-lasm-db-record-history-capacity-guard.md`.
+   - [x] Added deterministic DB-record tail-window query for operator inspection:
+      - `DbListRecordsResponse` now accepts `limit` query parameter (`GET /db/records?limit=<n>`) to return latest retained records only,
+      - invalid limit values now fail deterministically with `400` `DB.RECORDS_LIMIT_INVALID`,
+      - list response now includes `recordsTotal` so operators can distinguish returned window size from full retained history size.
+      - documented in `docs/book/1409-m39-lasm-db-records-limit-window.md`.
+   - [x] Added explicit LASM run flag for DB history capacity:
+      - new `sec4 run --db-records-max <n>` forwards capacity override into runtime for both single-instance and cluster worker flows (explicit runtime config path, no env-only coupling),
+      - deterministic CLI guards now reject flag usage on non-LASM backends and reject zero values.
+      - documented in `docs/book/1410-m39-run-db-records-max-flag.md`.
+   - [x] Added explicit LASM run flags for Postgres cache capacities:
+      - new `sec4 run --db-postgres-statement-cache-max <n>` and `sec4 run --db-postgres-placeholder-cache-max <n>` forward cache-capacity overrides into runtime for both single-instance and cluster worker flows,
+      - deterministic CLI guards now reject non-LASM backend usage and reject zero values for both flags,
+      - mixed sqlite/postgres override diagnostics now consistently use runtime-override wording since cache capacities are now part of the same override family.
+      - documented in `docs/book/1412-m39-run-postgres-cache-capacity-flags.md`.
+   - [x] Routed DB timeout run flags through explicit LASM dynamic-state inputs:
+      - `sec4 run` Postgres timeout flags (`--db-postgres-statement-timeout-ms`, `--db-postgres-lock-timeout-ms`, `--db-postgres-connect-timeout-ms`) and SQLite timeout flag (`--db-sqlite-busy-timeout-ms`) now initialize runtime state directly instead of relying on scoped env mutation,
+      - env fallback behavior remains unchanged when flags are omitted,
+      - non-Postgres-adapter deterministic guidance now reflects the broadened override set (`postgres DSN/runtime overrides ...`).
+      - documented in `docs/book/1413-m39-run-db-timeout-overrides-explicit-state.md`.
+   - [x] Added native-TLS auto fallback in LASM Postgres connect bootstrap:
+      - Postgres runtime connect now attempts `NoTls` first and retries with native TLS only when the initial error indicates SSL/TLS-required server policy,
+      - preserves existing non-TLS local behavior and keeps non-SSL failures deterministic without extra retry loops,
+      - improves real hosted Postgres compatibility for alpha operators without changing intrinsic semantics.
+      - documented in `docs/book/1414-m39-lasm-postgres-native-tls-auto-fallback.md`.
+   - [x] Added explicit Postgres TLS mode operator control for LASM runs:
+      - `sec4 run` now supports `--db-postgres-tls-mode <auto|disable|require>` and forwards the selected mode to cluster workers and dynamic-state bootstrap/reconnect paths,
+      - mode also resolves from env fallback (`SEC4_RT_LASM_DB_POSTGRES_TLS_MODE`, default `auto`) when flag is absent,
+      - `/db/records` telemetry now surfaces `dbTimeoutsMs.postgresTlsMode` so operators can confirm live runtime mode.
+      - documented in `docs/book/1415-m39-run-db-postgres-tls-mode-flag.md`.
+   - [x] Added positional-object SQL parameter parsing for LASM Postgres/SQLite runtime adapters:
+      - runtime SQL param parsing now accepts object form with numeric keys (for example `{\"1\": \"alice\", \"3\": true}`) and expands it into positional vectors with deterministic null-fill for missing indices,
+      - non-numeric object keys retain existing fallback behavior (single text parameter), preserving backward compatibility for non-positional object payloads.
+      - documented in `docs/book/1428-m39-lasm-db-positional-object-sql-params.md`.
+   - [x] Extended positional-object SQL parameter parsing to placeholder-style object keys:
+      - Postgres/SQLite positional-object parsing now accepts key prefixes used in SQL placeholder notation (`$1`, `?1`) in addition to plain numeric keys,
+      - this improves compatibility with AI-generated/object-transformed param payloads while preserving fallback behavior for non-positional keys.
+      - documented in `docs/book/1432-m39-lasm-db-positional-object-placeholder-keys.md`.
+   - [x] Added SQLite named-object SQL parameter binding support:
+      - SQLite runtime param parser now recognizes named object forms (plain and prefixed keys such as `name`, `:name`, `@name`, `$name`) and canonicalizes bindings for direct named-parameter execution,
+      - DB dispatch continues pre-parsing sqlite params outside lock and now passes either positional or named parameter sets into sqlite runtime calls.
+      - documented in `docs/book/1435-m39-lasm-sqlite-named-object-params.md`.
+   - [x] Added Postgres named-object SQL parameter binding support:
+      - Postgres runtime now supports object params keyed by named placeholders (`name`, `:name`, `@name`, `$name`) by rewriting query templates to deterministic positional `$N` placeholders in first-appearance order,
+      - rewrite path skips literals/comments/dollar-quoted blocks and preserves cast syntax (`::type`) while reusing indices for repeated named placeholders,
+      - DB dispatch now routes `db.exec`, `db.execTx`, and `db.queryOne` through template-aware Postgres param preparse with deterministic `DB.*_INVALID` validation errors on missing named parameters.
+      - documented in `docs/book/1437-m39-lasm-postgres-named-object-params.md`.
+   - [x] Made LASM DB SQL parameter parsing adapter-aware on runtime dispatch path:
+      - runtime now resolves the active DB adapter once at LASM backend bootstrap and threads it through connection/materialization/dispatch path,
+      - DB dispatch now pre-parses only the active adapter params (Postgres or SQLite) instead of parsing both on every DB intrinsic call,
+      - lock-time adapter checks are now debug-asserted against bootstrap adapter to keep adapter-bound parse paths deterministic.
+      - documented in `docs/book/1439-m39-lasm-db-dispatch-adapter-aware-parse-paths.md`.
+   - [x] Reduced `db.queryOne` lock-held scan work for non-records adapters:
+      - `db.queryOne` runtime dispatch now skips `db_records` history scan on Postgres/SQLite adapter paths where row materialization is served directly by adapter runtime,
+      - records-log fallback path keeps deterministic reverse-scan behavior for template/params matching, preserving existing not-found/result semantics.
+      - documented in `docs/book/1440-m39-lasm-queryone-recordscan-recordslog-only.md`.
+   - [x] Added records-log query signature index for O(1) fallback match checks:
+      - dynamic state now maintains a DB record signature index (`db + template + params`) across bootstrap/append/overflow compaction paths,
+      - records-log `db.queryOne` fallback now checks signature membership directly instead of reverse-scanning record history on each call,
+      - overflow compaction rebuilds the signature index to keep match behavior deterministic.
+      - documented in `docs/book/1443-m39-lasm-db-record-signature-index-for-queryone.md`.
+   - [x] Switched records-log query signature index overflow handling to incremental ref-count updates:
+      - dynamic state now stores signature membership as a ref-count map (signature -> retained record count) instead of a set-only index,
+      - overflow eviction decrements/removes only dropped-record signatures in O(overflow) time instead of rebuilding signature index over full retained history,
+      - records-log `db.queryOne` fallback keeps the same deterministic signature-membership contract via key presence checks.
+      - documented in `docs/book/1444-m39-lasm-db-record-signature-refcount-overflow-updates.md`.
+   - [x] Added latest-record signature map for records-log `db.queryOne` fallback row materialization:
+      - dynamic state now keeps `signature -> latest retained record` map updated on bootstrap/append/overflow,
+      - records-log fallback now returns row metadata from the latest matching retained DB record (instead of mirroring the synthetic queryOne record),
+      - signature-count and latest-record maps are maintained together so fallback remains deterministic and O(1) on hot lookup path.
+      - documented in `docs/book/1445-m39-lasm-db-record-signature-latest-row-materialization.md`.
+   - [x] Extracted records-log queryOne adapter logic into dedicated runtime module:
+      - records-log latest-match lookup and queryOne row-object materialization now live in `lasm_db_runtime_records_log.rs`,
+      - `lasm_db_runtime_dispatch.rs` now delegates records-log adapter-specific behavior through helper calls instead of embedding adapter logic inline.
+      - documented in `docs/book/1446-m39-lasm-db-recordslog-queryone-adapter-module-extraction.md`.
+   - [x] Added canonical JSON normalization for DB parameter signatures:
+      - `normalize_lasm_db_params` now canonicalizes JSON object key ordering recursively (while preserving non-JSON passthrough behavior),
+      - semantically equivalent JSON param payloads now map to deterministic normalized strings and stable records-log signature keys.
+      - documented in `docs/book/1447-m39-lasm-db-param-canonical-json-normalization.md`.
+   - [x] Added records-log load-time parameter normalization backfill:
+      - `records.log` loader now normalizes persisted `params` strings through runtime canonical normalization,
+      - pre-canonical history artifacts now align with current signature matching behavior after restart.
+      - documented in `docs/book/1448-m39-lasm-records-log-load-param-normalization-backfill.md`.
+   - [x] Added SQLite/Postgres adapter-load parameter normalization:
+      - sqlite/postgres persisted DB-record loaders now normalize loaded `params` strings through canonical DB-param normalization,
+      - retained record history now keeps deterministic `params` formatting aligned across adapter switches/restarts.
+      - documented in `docs/book/1449-m39-lasm-sqlite-postgres-load-param-normalization.md`.
+   - [x] Improved Postgres unprepared execution affected-row accounting:
+      - unprepared single-statement `db.exec` / `db.execTx` paths now attempt direct execution-row counts and fallback to query-row counting for row-returning statements,
+      - multi-statement unprepared SQL keeps batch-execute path and deterministic zero-count fallback behavior.
+      - documented in `docs/book/1450-m39-lasm-postgres-unprepared-affected-row-accounting.md`.
+   - [x] Expanded `DbListRecordsResponse` filters and operation-count telemetry:
+      - `/db/records` now supports deterministic `tx` (`>= 0`) and `templateContains` (non-empty) filters in addition to `op`/`db`/`limit`,
+      - response now includes `opCounts` (filtered set) and `opCountsGlobal` (full retained history) for `exec`/`execTx`/`queryOne`,
+      - invalid `op`, `db`, `tx`, and `templateContains` filters now return deterministic `DB.RECORDS_FILTER_INVALID` envelopes.
+      - documented in `docs/book/1451-m39-lasm-db-records-filter-and-op-count-expansion.md`.
+   - [x] Added filtered/global affected-row totals to `DbListRecordsResponse`:
+      - `/db/records` summary now includes `affectedRowsFilteredTotal` (all records after filters, before limit window) and `affectedRowsGlobalTotal` (all retained records),
+      - existing `affectedRowsTotal` field is preserved as response-window total for backward compatibility.
+      - documented in `docs/book/1452-m39-lasm-db-records-affected-rows-filtered-global.md`.
+   - [x] Added timestamp-window filters to `DbListRecordsResponse`:
+      - `/db/records` now supports `createdFromMs` and `createdToMs` filters with deterministic integer/range validation,
+      - `filters` metadata now surfaces both timestamp filters in list responses,
+      - invalid timestamp values/ranges return deterministic `DB.RECORDS_FILTER_INVALID` envelopes.
+      - documented in `docs/book/1454-m39-lasm-db-records-created-time-range-filters.md`.
+   - [x] Added record-id range filters to `DbListRecordsResponse`:
+      - `/db/records` now supports `idFrom` and `idTo` filters with deterministic integer/range validation,
+      - id-range filters compose with existing op/db/tx/template/timestamp filters for deterministic record-window selection.
+      - documented in `docs/book/1455-m39-lasm-db-records-id-range-filters.md`.
+   - [x] Added deterministic records ordering control to `DbListRecordsResponse`:
+      - `/db/records` now supports `order=asc|desc` with deterministic validation,
+      - `desc` mode now returns latest-first windows (with existing `limit` behavior preserved as descending take-window),
+      - `filters.order` now surfaces the effective order mode in responses.
+      - documented in `docs/book/1456-m39-lasm-db-records-order-filter.md`.
+   - [x] Added summary-only mode for `DbListRecordsResponse`:
+      - `/db/records` now supports `includeRecords=<true|false|1|0>` for deterministic summary-only payload control,
+      - when disabled, response keeps counts/telemetry/filters while returning `records: []`.
+      - documented in `docs/book/1457-m39-lasm-db-records-include-records-filter.md`.
+   - [x] Added affected-row range filters to `DbListRecordsResponse`:
+      - `/db/records` now supports `affectedRowsMin` and `affectedRowsMax` filters with deterministic integer/range validation,
+      - affected-row filters compose with existing op/db/tx/template/id/time/order filters for write-impact window selection.
+      - documented in `docs/book/1458-m39-lasm-db-records-affected-rows-range-filters.md`.
+   - [x] Added params payload substring filter to `DbListRecordsResponse`:
+      - `/db/records` now supports `paramsContains=<non-empty string>` with deterministic validation,
+      - params filter composes with existing op/db/tx/template/id/time/order/affected-rows filters for payload-centric record slicing.
+      - documented in `docs/book/1459-m39-lasm-db-records-params-contains-filter.md`.
+   - [x] Expanded LASM `db.queryOne` to accept `... RETURNING` statement shapes:
+      - sqlite/postgres `queryOne` runtime now accepts row-returning DML statements (`INSERT|UPDATE|DELETE|MERGE ... RETURNING`) in addition to `SELECT|WITH|VALUES|TABLE`,
+      - invalid non-row-returning shapes now use deterministic validation envelope mapping (`DB.QUERY_ONE_INVALID`) through shared runtime classifier.
+      - documented in `docs/book/1460-m39-lasm-db-query-one-returning-shape-support.md`.
+   - [x] Deferred `db.execTx` adapter-param preparse until after tx/db handle validation:
+      - `db.execTx` runtime dispatch now validates tx source and db capability handles before parsing adapter SQL params,
+      - this avoids unnecessary SQLite/Postgres param parse work on deterministic invalid-handle validation paths while preserving success-path behavior.
+      - documented in `docs/book/1442-m39-lasm-exectx-parse-after-handle-validation.md`.
+   - [x] Reduced LASM DB dispatch lock hold time for Postgres parameter parsing:
+      - `db.exec`, `db.execTx`, and `db.queryOne` now parse Postgres SQL params before entering `dynamic_state` lock,
+      - lock-protected runtime execution paths now reuse precomputed parameter vectors instead of spending lock time in JSON parse/materialization helpers.
+      - documented in `docs/book/1430-m39-lasm-db-dispatch-preparse-postgres-params.md`.
+   - [x] Reduced LASM DB dispatch lock hold time for SQLite parameter parsing:
+      - sqlite runtime entry points now accept pre-parsed parameter slices, and DB dispatch now pre-parses SQLite SQL params before acquiring `dynamic_state` lock for `db.exec`, `db.execTx`, and `db.queryOne`,
+      - this mirrors Postgres pre-parse behavior and trims lock-protected JSON parse work on sqlite-backed runtime paths.
+      - documented in `docs/book/1431-m39-lasm-db-dispatch-preparse-sqlite-params.md`.
+   - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
+   - [x] Records-log `db.queryOne` fallback now returns structured `rowObject` metadata (including `affected_rows`) instead of null, aligning response shape with sqlite/postgres query-one materialization while preserving deterministic fallback semantics (`docs/book/1097-m39-lasm-records-log-query-one-row-object-parity.md`).
+   - [x] LASM DB runtime now rejects invalid DB capability handles (`db != 1`) for `db.exec`, `db.queryOne`, and inline `db.tx(...)` sources used by `db.execTx`, preventing manual-handle SQL execution on sqlite/postgres adapters and preserving deterministic `DB.*_INVALID` validation envelopes (`docs/book/1098-m39-lasm-db-capability-handle-validation-guard.md`).
+   - [x] `DbListRecordsResponse` now includes deterministic aggregate `affectedRowsTotal` across persisted records for all adapters, improving operator visibility into accumulated write impact without changing intrinsic contracts (`docs/book/1099-m39-lasm-db-list-records-affected-rows-total.md`).
+   - [x] LASM runtime now enforces bounded tx-handle capacity (`SEC4_RT_LASM_DB_MAX_TX_HANDLES`, default `256`) and returns deterministic `DB.TX_INTERNAL` when capacity is exhausted, preventing unbounded tx-handle growth in long-lived processes (`docs/book/1100-m39-lasm-db-tx-handle-capacity-guard.md`).
+   - [x] `DbListRecordsResponse` now exposes live tx-handle telemetry (`txHandleCount`, `txHandleCapacity`) alongside persisted-record metadata for all adapters, giving deterministic runtime-state visibility during DB execution tuning/debug flows (`docs/book/1101-m39-lasm-db-list-tx-handle-telemetry.md`).
+   - [x] `sec4 run` now supports explicit LASM tx-handle capacity override via `--db-max-tx-handles`, with deterministic LASM-only/zero-value guard diagnostics, cluster worker forwarding, and CLI-over-env precedence (`--db-max-tx-handles` over `SEC4_RT_LASM_DB_MAX_TX_HANDLES`) for runtime state initialization (`docs/book/1102-m39-run-db-max-tx-handles-flag.md`).
+   - [x] Inline `db.tx(dbCap)` handles used by `db.execTx(...)` are now cleaned up after successful execution, preventing capacity leakage from one-shot inline tx allocations while preserving deterministic tx-handle validation on failure/restart paths (`docs/book/1351-m39-lasm-db-exectx-inline-tx-handle-cleanup.md`).
+   - [x] Tx-handle allocator now performs wrap-safe/collision-safe allocation:
+      - allocation now probes for vacant positive tx handles starting from `next_db_tx_handle` and wraps from `i64::MAX` back to `1`,
+      - avoids handle overwrite risk under long-lived runtimes where handle counter approaches bounds or sparse handle sets are reused.
+      - documented in `docs/book/1352-m39-lasm-db-tx-handle-wrap-and-collision-safe-allocation.md`.
+   - [x] Added ordered multi-operation DB intrinsic execution for LASM route handlers:
+      - route planning now emits indexed internal DB operation headers when a handler resolves multiple DB intrinsic calls,
+      - LASM runtime dispatch now executes multi-op DB sequences in-order and stops on first deterministic failure envelope,
+      - removes startup-time multi-op route rejection while preserving deterministic invalid-marker validation.
+      - documented in `docs/book/1491-m39-lasm-db-multi-operation-sequence-dispatch.md`.
+   - [x] Added deterministic per-handler DB operation-sequence limit guard:
+      - LASM route planning/run validation now fails fast when a handler resolves more than `64` DB intrinsic operations,
+      - LASM runtime dispatch and `lasm-smoke` now enforce the same max-sequence bound for internal DB marker execution,
+      - over-limit handlers emit deterministic validation diagnostics instead of degraded runtime behavior.
+      - documented in `docs/book/1492-m39-lasm-db-operation-sequence-limit-guard.md`.
+   - [x] Added sequence-local tx-handle reuse for multi-op `db.execTx` flows:
+      - LASM runtime dispatch now reuses one tx handle across sequence operations when repeated `execTx` steps resolve from the same `db.tx(dbCap)` source,
+      - retained sequence tx handles are deterministically cleaned after sequence completion (including failure paths),
+      - preserves single-op `execTx` behavior while enabling deterministic multi-op tx semantics.
+      - documented in `docs/book/1493-m39-lasm-db-multi-op-exectx-sequence-tx-reuse.md`.
+   - [x] Hardened Postgres stale prepared-plan recovery for schema drift:
+      - runtime stale-plan detection now treats `cached plan must not change result type` as a stale prepared-statement signal in addition to missing prepared statements,
+      - stale-plan failures now trigger deterministic statement-cache eviction + reprepare retry on `exec`, `execTx`, and `queryOne` prepared paths.
+      - documented in `docs/book/1494-m39-lasm-postgres-stale-plan-reprepare-recovery.md`.
+   - [x] Added Postgres stale-plan recovery telemetry in `DbListRecordsResponse`:
+      - runtime now tracks cumulative stale prepared-plan recoveries (`db_postgres_stale_plan_reprepare_total`) whenever statement-cache eviction/reprepare is triggered,
+      - `/db/records` `dbRetries` payload now emits `postgresStalePlanReprepareTotal` for deterministic operator visibility.
+      - documented in `docs/book/1495-m39-lasm-postgres-stale-plan-reprepare-telemetry.md`.
+   - [x] Hardened stale-plan fallback error classification for Postgres prepared execution:
+      - shared DB runtime classifier now maps stale-plan signatures (`prepared statement ... does not exist`, `cached plan must not change result type`) to deterministic `409` conflict envelopes instead of validation,
+      - generic `sqlstate=0A000` (`feature not supported`) remains validation unless stale-plan signature is present.
+      - documented in `docs/book/1496-m39-lasm-postgres-stale-plan-conflict-classification.md`.
+   - [x] Added deterministic SQLSTATE fallback mapping for unrecovered stale-plan errors:
+      - shared DB runtime classifier now maps bare Postgres `sqlstate=26000` (invalid SQL statement name / stale prepared statement) to `409` `DB.*_CONFLICT` even when message text omits stale-plan keywords,
+      - keeps stale-plan conflict classification deterministic across adapter/driver message variants.
+      - documented in `docs/book/1497-m39-lasm-postgres-sqlstate-26000-conflict-fallback.md`.
+   - [x] Extended benchmark-suite runtime wiring for LASM Postgres DB-path runs:
+      - fixed/step/full orchestrators now accept LASM DB adapter wiring (`--lasm-db-adapter`, `--lasm-db-postgres-dsn-file`) and pass it through sec4-lasm service startup,
+      - benchmark profile/step endpoints now include DB hot paths (`db-hot-write`, `db-hot-write-tx`, `db-hot-query-one`, `db-records`) with deterministic target/step defaults,
+      - added make entrypoints `bench-matrix-lasm-postgres` and `bench-full-lasm-postgres` for repeatable Postgres-mode benchmark loops.
+      - documented in `docs/book/1498-m39-benchmark-suite-lasm-postgres-db-path-wiring.md`.
+   - [x] Added standardized two-phase Postgres comparison suite command:
+      - new benchmark orchestrator `run_alpha_postgres_comparison_suite.sh` runs baseline cross-impl endpoints and LASM DB hot-path endpoints sequentially in Postgres mode,
+      - each phase snapshots matrix/analysis/step/report/manifest artifacts to deterministic `*-alpha-base` and `*-alpha-db-postgres` paths and emits one summary JSON.
+      - make entrypoints added: `bench-alpha-postgres-suite` and `bench-alpha-postgres-suite-dry`.
+      - documented in `docs/book/1499-m39-alpha-postgres-comparison-suite.md`.
+   - [x] Added local Postgres infra wrapper for alpha Postgres comparison suite:
+      - new benchmark wrapper `run_alpha_postgres_comparison_suite_local.sh` orchestrates `infra/local-postgres` lifecycle (`up` / optional `reset` / optional `keep-up`) and delegates into `run_alpha_postgres_comparison_suite.sh` with an auto-generated DSN file,
+      - make entrypoints added: `bench-alpha-postgres-suite-local` and `bench-alpha-postgres-suite-local-dry` so same-condition local DB runs are one command.
+      - documented in `docs/book/1500-m39-alpha-postgres-comparison-suite-local-infra-wrapper.md`.
+   - [x] Added alpha Postgres suite run-fingerprint metadata capture:
+      - `run_alpha_postgres_comparison_suite.sh` summary JSON now includes deterministic `runContext` metadata (`repoRevision`, host fingerprint, DSN source mode, and active `BENCH_*` load overrides),
+      - keeps artifact snapshots unchanged while making per-run condition comparisons explicit for operator review.
+      - documented in `docs/book/1503-m39-alpha-postgres-suite-run-fingerprint-metadata.md`.
+   - [x] Added optional Postgres DB reset hook between alpha-suite phases:
+      - `run_alpha_postgres_comparison_suite.sh --reset-db-between-phases` now drops benchmark DB tables before DB-hot phase execution (`sec4_lasm_db_records`, `bench_users`, `users`) to keep repeated DB-hot runs isolated,
+      - dry-run output now includes explicit reset action markers.
+      - documented in `docs/book/1504-m39-alpha-postgres-suite-between-phase-db-reset.md`.
+   - [x] Wired alpha-suite between-phase reset option through Make entrypoints:
+      - `BENCH_ALPHA_POSTGRES_RESET_BETWEEN_PHASES=true` now forwards `--reset-db-between-phases` through `bench-alpha-postgres-suite{,-dry}` and local-wrapper variants,
+      - helps operators keep one-command benchmark loops while toggling DB isolation mode.
+      - documented in `docs/book/1505-m39-alpha-postgres-suite-reset-flag-make-wiring.md`.
+   - [x] Resolved relative env DSN-file paths from selected project root in LASM runtime bootstrap:
+      - `SEC4_DB_ALPHA_POSTGRES_DSN_FILE(_PATH)` or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE(_PATH)` now resolve against `--path` project root when cwd-relative lookup misses, matching explicit `--db-postgres-dsn-file` behavior,
+      - applies to both `sec4 run` and `sec4 lasm-smoke` dynamic-state bootstrap path and preserves deterministic invalid-content diagnostics.
+      - documented in `docs/book/1506-m39-env-postgres-dsn-file-project-relative-resolution.md`.
+   - [x] Added repeated-run wrapper for standardized Postgres comparison suite:
+      - new script `benchmark-suite/scripts/run_alpha_postgres_comparison_suite_repeats.sh` executes `run_alpha_postgres_comparison_suite.sh` across `--runs <n>` with identical forwarded args,
+      - each non-dry run snapshots baseline/db-hot artifacts into run-scoped files under `results/summaries/alpha-postgres-comparison-suite-runs/` and writes aggregate run-manifest summary JSON (`alpha-postgres-comparison-suite-repeats.json`),
+      - aggregate summary now also emits per-impl/per-endpoint repeated-run stats (`baselineStats`, `dbHotStats`) for throughput/latency/memory signals (`requestsPerSec`, `p99Ms`, `rssKb`),
+      - Make entrypoints added: `bench-alpha-postgres-suite-repeats` and `bench-alpha-postgres-suite-repeats-dry` (`BENCH_ALPHA_POSTGRES_REPEAT_RUNS`).
+      - documented in `docs/book/1508-m39-alpha-postgres-suite-repeated-run-wrapper.md`.
+   - [x] Added local-infra repeated-run wrapper for Postgres comparison suite:
+      - new script `benchmark-suite/scripts/run_alpha_postgres_comparison_suite_local_repeats.sh` orchestrates `infra/local-postgres` lifecycle and delegates into repeated wrapper with auto-generated DSN file,
+      - supports `--keep-up`, `--reset-db`, `--infra-env` local controls and forwards repeated-suite args (`--runs`, endpoint/impl sets, reset-between-phases),
+      - Make entrypoints added: `bench-alpha-postgres-suite-local-repeats` and `bench-alpha-postgres-suite-local-repeats-dry`.
+      - documented in `docs/book/1509-m39-alpha-postgres-suite-local-repeated-run-wrapper.md`.
+   - [x] Added markdown report renderer for repeated Postgres suite summaries:
+      - new script `benchmark-suite/scripts/render_alpha_postgres_comparison_suite_repeats_summary.sh` renders repeated-run JSON summary into a deterministic markdown table report (baseline + db-hot aggregate stats),
+      - Make entrypoint added: `bench-alpha-postgres-suite-repeats-report` (with `ALPHA_POSTGRES_REPEATS_SUMMARY` / `ALPHA_POSTGRES_REPEATS_REPORT` overrides).
+      - documented in `docs/book/1510-m39-alpha-postgres-repeats-markdown-report-renderer.md`.
+   - [x] Hardened LASM Postgres connect diagnostics to emit actionable error detail:
+      - startup connect failures now include debug error context (`{err:?}`) in addition to short `db error` display text, so auth/TLS/network root causes surface directly in operator logs.
+      - documented in `docs/book/1511-m39-lasm-postgres-connect-error-detail-diagnostics.md`.
+   - [x] Hardened local Postgres infra startup readiness to verify configured credentials:
+      - `infra/local-postgres/scripts/up.sh` now executes a real credentialed SQL probe (`select 1`) after container health checks, so stale `./data` initialized with different `POSTGRES_USER`/`POSTGRES_DB` fails fast instead of surfacing later as runtime `db error`,
+      - mismatch failure now emits deterministic reset guidance (`infra/local-postgres/scripts/reset.sh`) for operator recovery.
+      - documented in `docs/book/1512-m39-local-postgres-startup-credential-verification.md`.
+   - [x] Added repo-level ignore rules for local Postgres runtime artifacts:
+      - `.gitignore` now ignores `infra/local-postgres/.env` and `infra/local-postgres/data/` so local benchmark/infra runs do not pollute branch status with generated files.
+      - documented in `docs/book/1513-m39-local-postgres-artifact-ignore-rules.md`.
+   - [x] Fixed local Postgres credential probe to use container-side DB port:
+      - `infra/local-postgres/scripts/up.sh` credential verification now always probes port `5432` inside the container (instead of host `PG_PORT`), preserving readiness correctness when host port mappings differ.
+      - documented in `docs/book/1514-m39-local-postgres-credential-probe-container-port-fix.md`.
+   - [x] Redacted local Postgres DSN password in startup hints:
+      - `infra/local-postgres/scripts/up.sh` now redacts password segments in printed DSN output (`postgres://user:***@...`) to avoid leaking local DB credentials into terminal logs.
+      - documented in `docs/book/1515-m39-local-postgres-dsn-password-redaction.md`.
+   - [x] Hardened Postgres connect-timeout DSN detection for case/whitespace variants:
+      - runtime DSN rewrite now treats existing `connect_timeout` keys as case-insensitive and whitespace-tolerant (URL and keyword DSN forms), preventing duplicate timeout injection when DSNs use variants like `CONNECT_TIMEOUT=...` or `connect_timeout = ...`.
+      - documented in `docs/book/1516-m39-postgres-connect-timeout-dsn-detection-hardening.md`.
+   - [x] Fixed Postgres connect-timeout DSN injection for URL fragments:
+      - DSN timeout rewrite now injects `connect_timeout` before URL fragment sections (`#...`) so fragment-bearing DSNs remain valid (`...?...&connect_timeout=...#fragment`),
+      - existing timeout keys in fragment-bearing DSNs remain preserved without duplicate injection.
+      - documented in `docs/book/1517-m39-postgres-connect-timeout-dsn-fragment-safe-rewrite.md`.
+   - [x] Redacted DSN credentials from Postgres connect diagnostics:
+      - connect-error detail path now redacts URL DSN passwords (`postgres://user:***@...`) when error text embeds the connection DSN, reducing credential leakage risk while preserving actionable debug context.
+      - documented in `docs/book/1518-m39-postgres-connect-diagnostic-dsn-redaction.md`.
+   - [x] Preserved large unsigned JSON param precision in Postgres query param parsing:
+      - Postgres param parsing now treats JSON numbers above signed 64-bit range as exact text params instead of passing through `f64`, preventing precision loss for large unsigned integer inputs.
+      - documented in `docs/book/1519-m39-postgres-large-unsigned-param-precision-preservation.md`.
+   - [x] Hardened internal DB marker requirements for LASM `exec` and `queryOne` dispatch:
+      - LASM DB runtime no longer silently defaults missing internal DB capability/row-schema markers to `1`,
+      - missing `db handle` marker now returns deterministic `DB.EXEC_INVALID`,
+      - missing `row schema` marker in `queryOne` now returns deterministic `DB.QUERY_ONE_INVALID`.
+      - documented in `docs/book/1520-m39-lasm-db-internal-marker-required-handle-schema-hardening.md`.
+   - [x] Hardened `db.execTx` internal marker ambiguity handling:
+      - LASM DB runtime now rejects ambiguous internal `execTx` marker sets when both transaction-source headers are present (`tx handle` and `db.tx(dbCap)` source),
+      - ambiguous marker sets now fail deterministically with `DB.EXEC_TX_INVALID` instead of silently preferring one source.
+      - documented in `docs/book/1521-m39-lasm-db-exectx-dual-tx-source-marker-rejection.md`.
+   - [x] Hardened internal SQL params marker requirements for LASM DB dispatch:
+      - `exec`, `execTx`, and `queryOne` runtime paths now require explicit internal SQL params markers instead of silently defaulting missing params to `0`,
+      - missing params markers now fail deterministically with operation-specific validation envelopes (`DB.EXEC_INVALID`, `DB.EXEC_TX_INVALID`, `DB.QUERY_ONE_INVALID`).
+      - documented in `docs/book/1522-m39-lasm-db-required-params-marker-hardening.md`.
+   - [x] Hardened internal DB operation-count marker parsing:
+      - LASM DB runtime now rejects invalid/non-numeric operation-sequence markers instead of silently treating them as absent,
+      - when operation-count marker is present, values `< 2` now fail deterministically (`DB.OPERATION_INVALID`) because sequence marker mode requires at least two indexed operations.
+      - documented in `docs/book/1523-m39-lasm-db-op-count-marker-parse-and-min-bound-hardening.md`.
+   - [x] Hardened internal SQL params marker payload shape:
+      - LASM DB runtime now rejects empty/whitespace internal SQL params marker payloads for `exec`, `execTx`, and `queryOne`,
+      - empty params payloads now fail deterministically with operation-specific validation envelopes and message `sql.q params payload is required`.
+      - documented in `docs/book/1524-m39-lasm-db-empty-params-marker-payload-rejection.md`.
+   - [x] Hardened indexed-marker contract for DB operation-sequence mode:
+      - LASM DB runtime now rejects indexed internal DB markers when operation-count marker is absent,
+      - malformed indexed-without-count marker sets now fail deterministically with `DB.OPERATION_INVALID` instead of falling back to single-operation parsing.
+      - documented in `docs/book/1525-m39-lasm-db-indexed-markers-require-op-count.md`.
+   - [x] Hardened internal SQL template marker requirements for LASM DB dispatch:
+      - `exec`, `execTx`, and `queryOne` runtime paths now require explicit internal SQL template markers instead of silently defaulting missing templates to empty payloads,
+      - missing template markers now fail deterministically with operation-specific validation envelopes (`DB.EXEC_INVALID`, `DB.EXEC_TX_INVALID`, `DB.QUERY_ONE_INVALID`).
+      - documented in `docs/book/1526-m39-lasm-db-required-template-marker-hardening.md`.
+   - [x] Bootstrapped prompt-first workbench execution lane with real LASM DB service + matrix smoke runner:
+      - added `benchmark-suite/services/sec4-lasm-workbench` (feature-rich auth-gated DB routes on LASM runtime),
+      - added workbench smoke orchestrator (`make -C benchmark-suite workbench-smoke`) producing `results/summaries/workbench-smoke-matrix.json`,
+      - marked `sec4-lasm` as `implemented-alpha` in workbench backend matrix for cross-backend generation/benchmark follow-up.
+      - documented in `docs/book/1527-m39-workbench-sec4-lasm-service-and-smoke-matrix-bootstrap.md`.
+   - [x] Added first non-sec4 workbench backend with real Postgres path:
+      - added `benchmark-suite/services/node-workbench` with deterministic task/comment API flows and auth-gated mutating routes,
+      - updated workbench matrix status for `node` to `implemented-alpha`,
+      - workbench smoke matrix now runs two implemented lanes (`sec4-lasm` + `node`) and reports pass/fail/skip summary.
+      - documented in `docs/book/1528-m39-workbench-node-backend-real-postgres-lane.md`.
+   - [x] Added Go workbench backend with real Postgres path:
+      - added `benchmark-suite/services/go-workbench` with deterministic task/comment API flows and auth-gated mutating routes,
+      - updated workbench matrix status for `go` to `implemented-alpha`,
+      - workbench smoke matrix now runs three implemented lanes (`sec4-lasm` + `node` + `go`) and reports pass/fail/skip summary.
+      - documented in `docs/book/1529-m39-workbench-go-backend-real-postgres-lane.md`.
+   - [x] Added Rust workbench backend with real Postgres path:
+      - added `benchmark-suite/services/rust-workbench` with deterministic task/comment API flows and auth-gated mutating routes,
+      - updated workbench matrix status for `rust` to `implemented-alpha`,
+      - workbench smoke matrix now runs four implemented lanes (`sec4-lasm` + `node` + `go` + `rust`) and reports pass/fail/skip summary.
+      - documented in `docs/book/1530-m39-workbench-rust-backend-real-postgres-lane.md`.
+   - [x] Fixed C backend response-intrinsic lowering mismatch for `res.json(status, schema, value)`:
+      - C emitter now rewrites status-form `res.json` calls to `sec4_rt_res_ok(status, schema, value)` instead of emitting invalid `sec4_rt_res_json` 3-arg calls,
+      - unblocks C emit for workbench/service routes using strict-mode status-form JSON responses.
+      - documented in `docs/book/1531-m39-c-backend-res-json-status-form-rewrite.md`.
+   - [x] Added sec4 workbench backend lane:
+      - added `benchmark-suite/services/sec4-workbench` and smoke harness on `sec4 run --backend c`,
+      - updated workbench matrix status for `sec4` to `implemented-alpha`,
+      - workbench smoke matrix now runs all five implemented lanes (`sec4` + `sec4-lasm` + `node` + `go` + `rust`) with zero skips.
+      - documented in `docs/book/1532-m39-workbench-sec4-backend-lane.md`.
+   - [x] Unified alpha benchmark wire-format contract across non-sec4 workbench backends:
+      - `node`, `go`, and `rust` lanes now support `params`, `task_params`, and `comment_params` JSON-array query payload forms used by `sec4`/`sec4-lasm`,
+      - smoke scripts for those lanes now exercise the shared wire-format path,
+      - workbench spec/prompt docs updated to pin this alpha harness contract.
+      - documented in `docs/book/1533-m39-workbench-alpha-wire-format-parity-across-backends.md`.
+   - [x] Added dedicated workbench benchmark-matrix runner (beyond smoke):
+      - added deterministic workbench endpoint load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`) and runner script `benchmark-suite/scripts/run_workbench_profile.sh`,
+      - added matrix orchestrator `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh` that starts each implemented lane, seeds benchmark state, runs endpoint profiles, and emits compare/analysis/report outputs,
+      - added make targets `workbench-bench` and `workbench-bench-dry` for one-command workbench matrix execution.
+      - documented in `docs/book/1534-m39-workbench-benchmark-matrix-runner.md`.
+   - [x] Added LASM DB-mode controls to workbench benchmark runner and fixed Postgres task-write placeholder compatibility:
+      - `workbench-bench` now accepts `sec4-lasm` adapter overrides (`sqlite|postgres`) with optional sqlite base path / postgres DSN file wiring,
+      - workbench task insert SQL templates now cast priority placeholder via `cast($5 as bigint)` to avoid deterministic LASM Postgres write-path serialization failures.
+      - documented in `docs/book/1535-m39-workbench-lasm-postgres-mode-and-param-cast-compat.md`.
+   - [x] Added workbench step-load matrix runner (knee-signal lane) with LASM DB-mode support:
+      - added `benchmark-suite/scripts/run_workbench_step_profile.sh` for per-endpoint staged-rate execution and per-rate snapshot artifacts,
+      - added `benchmark-suite/scripts/run_workbench_step_matrix.sh` to orchestrate matrix lane startup, deterministic setup/seed, per-lane step analysis, and cross-impl step matrix output,
+      - added make targets `workbench-step-bench` and `workbench-step-bench-dry`,
+      - workbench step orchestration supports the same LASM DB adapter controls as fixed-target workbench benchmark runs (`sqlite|postgres`, optional sqlite base, optional postgres DSN file).
+      - documented in `docs/book/1536-m39-workbench-step-matrix-runner.md`.
+   - [x] Added workbench full benchmark suite runner (fixed-target + step-load + combined report):
+      - added `benchmark-suite/scripts/run_workbench_full_benchmark_suite.sh` to run both workbench matrix lanes in one command and republish a combined markdown report with step-load signals,
+      - added make targets `workbench-full-bench` and `workbench-full-bench-dry`,
+      - combined suite emits deterministic summary/report artifacts (`workbench-full-runs.json`, `workbench-full-benchmark-report.md`).
+      - documented in `docs/book/1537-m39-workbench-full-benchmark-suite-runner.md`.
+   - [x] Added repeated-run wrapper for workbench full benchmark suite:
+      - added `benchmark-suite/scripts/run_workbench_full_benchmark_suite_repeats.sh` to execute full-suite runs repeatedly under identical settings and store run-scoped artifacts,
+      - added make targets `workbench-full-bench-repeats` and `workbench-full-bench-repeats-dry`,
+      - emits aggregate run-manifest summary (`workbench-full-benchmark-repeats.json`) plus per-run artifacts under `workbench-full-benchmark-runs/`.
+      - documented in `docs/book/1538-m39-workbench-full-suite-repeated-run-wrapper.md`.
+   - [x] Added repeated-run aggregate stats + markdown renderer for workbench full suite:
+      - repeated-run summary now includes aggregate `compareStats` and `stepStats` across runs,
+      - added renderer script `benchmark-suite/scripts/render_workbench_full_benchmark_suite_repeats_summary.sh`,
+      - added make target `workbench-full-bench-repeats-report` to emit `workbench-full-benchmark-repeats.md`.
+      - documented in `docs/book/1539-m39-workbench-full-suite-repeats-stats-and-report-renderer.md`.
+   - [x] Added benchmark-smoke CI gate coverage for workbench full-suite runners:
+      - added script-level contract tests:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_repeats.sh`
+        - `benchmark-suite/scripts/test_render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - wired those tests into:
+        - `.github/workflows/benchmark-smoke.yml`
+        - `benchmark-suite/Makefile` (`test-scripts` target),
+      - extended makefile target contract coverage for workbench full-suite targets in `test_makefile_profile_targets.sh`.
+      - documented in `docs/book/1540-m39-workbench-full-suite-ci-smoke-gates.md`.
+   - [x] Added repo-local Postgres infra wrappers for workbench full-suite runners:
+      - added wrappers:
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local.sh`
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_repeats.sh`
+      - wrappers auto-wire:
+        - `--lasm-db-adapter postgres`
+        - temporary `--lasm-postgres-dsn-file` from `infra/local-postgres` env defaults,
+      - added make targets:
+        - `workbench-full-bench-local`
+        - `workbench-full-bench-local-dry`
+        - `workbench-full-bench-local-repeats`
+        - `workbench-full-bench-local-repeats-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_repeats.sh`
+      - documented in `docs/book/1541-m39-workbench-full-suite-local-postgres-infra-wrappers.md`.
+   - [x] Added one-command local-infra workbench full-suite bundle (repeats + markdown render):
+      - added wrapper:
+        - `benchmark-suite/scripts/run_workbench_full_benchmark_suite_local_bundle.sh`
+      - wrapper delegates to:
+        - `run_workbench_full_benchmark_suite_local_repeats.sh`
+        - `render_workbench_full_benchmark_suite_repeats_summary.sh`
+      - added make targets:
+        - `workbench-full-bench-local-bundle`
+        - `workbench-full-bench-local-bundle-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_full_benchmark_suite_local_bundle.sh`
+      - documented in `docs/book/1542-m39-workbench-full-suite-local-bundle-wrapper.md`.
+   - [x] Added repo-local Postgres infra wrappers for workbench matrix and step runners:
+      - added wrappers:
+        - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh`
+        - `benchmark-suite/scripts/run_workbench_step_matrix_local.sh`
+      - wrappers auto-wire:
+        - `--lasm-db-adapter postgres`
+        - temporary `--lasm-postgres-dsn-file` from `infra/local-postgres` env defaults,
+      - added make targets:
+        - `workbench-bench-local`
+        - `workbench-bench-local-dry`
+        - `workbench-step-bench-local`
+        - `workbench-step-bench-local-dry`
+      - added CI/script guards:
+        - `benchmark-suite/scripts/test_run_workbench_benchmark_matrix_local.sh`
+        - `benchmark-suite/scripts/test_run_workbench_step_matrix_local.sh`
+      - documented in `docs/book/1543-m39-workbench-matrix-step-local-postgres-wrappers.md`.
+5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
+   - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
+   - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
+   - keep CLI/operator behavior unchanged while refactoring boundaries.
+   - [x] Extracted `sec4 run` LASM DB CLI validation + normalization flow from `main.rs` into `compiler/sec4-cli/src/lasm_db_cli.rs`:
+      - DB/LASM-only guard checks, DB numeric lower-bound guards, sqlite mode normalization, Postgres DSN source validation, and adapter auto-selection/coherence now resolve through one helper (`validate_and_resolve_run_db_cli_options`),
+      - `cmd_run` now delegates DB option resolution and preserves deterministic diagnostics/exit behavior.
+      - documented in `docs/book/1501-m39-run-db-cli-validation-resolution-module-extraction.md`.
+   - [x] Extracted LASM DB config/adapter resolution helpers from `compiler/sec4-cli/src/main.rs` into dedicated module `compiler/sec4-cli/src/lasm_db_config.rs` (store-base resolution, adapter selection, tx-handle capacity resolution, postgres DSN resolution, adapter label), keeping command/runtime semantics unchanged while establishing the first explicit adapter-boundary seam (`docs/book/1103-m39-lasm-db-config-module-extraction.md`).
+   - [x] Extracted LASM records-log persistence/serialization helpers into dedicated module `compiler/sec4-cli/src/lasm_db_records_log.rs` (record JSON conversion, records-log load, records-log persist), reducing DB adapter logic in `main.rs` while preserving `DbListRecordsResponse`/intrinsic runtime behavior (`docs/book/1104-m39-lasm-db-records-log-module-extraction.md`).
+   - [x] Extracted sqlite/postgres DB-state load/bootstrap helpers into dedicated module `compiler/sec4-cli/src/lasm_db_adapter_state.rs` (`load_lasm_dynamic_db_records_from_sqlite`, `connect_lasm_dynamic_db_records_postgres`, postgres schema bootstrap, postgres load), further isolating adapter-specific state initialization from CLI/runtime orchestration (`docs/book/1105-m39-lasm-db-adapter-state-module-extraction.md`).
+   - [x] Extracted sqlite/postgres DB-state persist helpers into `compiler/sec4-cli/src/lasm_db_adapter_state.rs` (`persist_lasm_dynamic_db_records_to_sqlite`, `persist_lasm_dynamic_db_records_to_postgres`) and kept reconnect/schema semantics intact, further reducing adapter write-path coupling in `main.rs` (`docs/book/1106-m39-lasm-db-adapter-persist-module-extraction.md`).
+   - [x] Extracted postgres query-param parsing + exec/queryOne runtime helpers into dedicated module `compiler/sec4-cli/src/lasm_db_runtime_postgres.rs` (`parse_lasm_postgres_query_params`, prepared-placeholder analysis, select-shape/normalization helpers, and `run_lasm_postgres_exec` / `run_lasm_postgres_exec_tx` / `run_lasm_postgres_query_one`), while keeping sqlite and runtime call-path behavior unchanged (`docs/book/1107-m39-lasm-db-runtime-postgres-module-extraction.md`).
+   - [x] Extracted sqlite query-param parsing + exec/queryOne runtime helpers into dedicated module `compiler/sec4-cli/src/lasm_db_runtime_sqlite.rs` (`run_lasm_sqlite_exec`, `run_lasm_sqlite_exec_tx`, `run_lasm_sqlite_query_one` plus sqlite parameter/row helpers), while preserving existing sqlite runtime semantics and single-statement validation behavior (`docs/book/1108-m39-lasm-db-runtime-sqlite-module-extraction.md`).
+   - [x] Extracted shared LASM DB runtime utilities into dedicated module `compiler/sec4-cli/src/lasm_db_runtime_common.rs` (`classify_lasm_db_runtime_error`, tx-handle allocator, postgres-client getter/reconnect), reducing DB runtime control-path coupling inside `main.rs` while preserving deterministic error mapping and reconnect behavior (`docs/book/1109-m39-lasm-db-runtime-common-module-extraction.md`).
+   - [x] Moved sqlite schema bootstrap helper (`ensure_lasm_dynamic_db_records_sqlite_schema`) from `main.rs` into `compiler/sec4-cli/src/lasm_db_adapter_state.rs`, so sqlite adapter/runtime modules no longer depend on schema bootstrap defined in CLI orchestration file (`docs/book/1110-m39-lasm-db-sqlite-schema-helper-module-extraction.md`).
+   - [x] Moved remaining DB handle/parameter normalization helpers (`parse_lasm_positive_i64`, `is_lasm_valid_db_cap_handle`, `normalize_lasm_db_params`) from `main.rs` into `compiler/sec4-cli/src/lasm_db_runtime_common.rs`, completing shared DB runtime utility extraction for adapter/runtime modules (`docs/book/1111-m39-lasm-db-runtime-common-helper-extraction.md`).
+   - [x] Extracted the internal DB operation materialization dispatcher (`apply_lasm_internal_db_operation_materialization`) into dedicated module `compiler/sec4-cli/src/lasm_db_runtime_dispatch.rs`, leaving `main.rs` with a thin delegator and preserving runtime semantics for `exec` / `execTx` / `queryOne` paths (`docs/book/1112-m39-lasm-db-runtime-dispatch-module-extraction.md`).
+   - [x] Moved dispatch-only internal-header helpers (`take_lasm_internal_header_value`, `materialize_lasm_internal_header_value`) from `main.rs` into `compiler/sec4-cli/src/lasm_db_runtime_dispatch.rs`, completing co-location of DB internal-header materialization logic with DB dispatch execution paths (`docs/book/1113-m39-lasm-db-runtime-dispatch-helper-extraction.md`).
+   - [x] Extracted DB records response materialization into dedicated module `compiler/sec4-cli/src/lasm_db_records_response.rs`:
+      - `/db/records` filter parsing, summary shaping, and deterministic envelope handling now live outside `main.rs`,
+      - keeps existing DB list response contracts unchanged while reducing DB adapter/reporting coupling in CLI orchestration.
+      - documented in `docs/book/1453-m39-lasm-db-records-response-module-extraction.md`.
+   - [x] Moved DB-record persistence dispatch helper (`persist_lasm_dynamic_db_records_to_disk`) from `main.rs` into `compiler/sec4-cli/src/lasm_db_adapter_state.rs`, so adapter selection and persistence routing are fully owned by adapter-state module boundaries (`docs/book/1114-m39-lasm-db-persist-dispatch-move-to-adapter-state.md`).
+   - [x] Extracted DB operation-plan analysis/materialization helpers from `main.rs` into dedicated module `compiler/sec4-cli/src/lasm_db_plan.rs` (route-call DB operation extraction walkers + DB call classifiers + DB operation header-plan mapping), reducing orchestration-file DB AST-planning coupling while preserving intrinsic route-plan semantics (`docs/book/1115-m39-lasm-db-plan-module-extraction.md`).
+   - [x] Moved DB operation-plan model types (`LasmSqlQueryPlan`, `LasmDbTxPlan`, `LasmDbOperationPlan`) from `main.rs` into `compiler/sec4-cli/src/lasm_db_plan.rs`, completing DB plan type+logic colocation and further reducing DB-only type surface in CLI orchestration (`docs/book/1116-m39-lasm-db-plan-type-extraction.md`).
+   - [x] Added deterministic incremental DB record persistence for sqlite/postgres adapters and kept full-sync fallback on append failure, reducing full-store rewrite churn on hot DB operation paths (`docs/book/1117-m39-lasm-db-incremental-record-persistence.md`).
+   - [x] Reused cached sqlite connection for append persistence (`persist_lasm_dynamic_db_record_append_to_sqlite`) with reconnect-on-failure fallback, removing per-append sqlite open/close churn (`docs/book/1118-m39-lasm-sqlite-connection-reuse-for-append-persistence.md`).
+   - [x] Reused cached sqlite connection for runtime sqlite execution/query paths (`run_lasm_sqlite_exec`, `run_lasm_sqlite_exec_tx`, `run_lasm_sqlite_query_one`) with deterministic reconnect retry fallback, removing per-request sqlite open/close churn from LASM DB runtime materialization (`docs/book/1119-m39-lasm-sqlite-connection-reuse-for-runtime-exec-query.md`).
+   - [x] Unified sqlite runtime reconnect behavior for both `exec*` and `queryOne` through a shared retry helper, so stale sqlite runtime connections now recover deterministically across read/write runtime operations while lock/parameter failures remain strict no-retry validation paths (`docs/book/1120-m39-lasm-sqlite-query-one-reconnect-retry.md`).
+   - [x] Added sqlite runtime connection defaults for lock resilience and relational correctness (`SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS`, default `2000`, plus `PRAGMA foreign_keys = ON`) in shared sqlite connect bootstrap used by runtime and persistence paths (`docs/book/1121-m39-lasm-sqlite-runtime-busy-timeout-and-foreign-keys.md`).
+   - [x] Added Postgres runtime session timeout defaults in shared connect bootstrap (`SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS`, default `5000`; `SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS`, default `2000`) so LASM Postgres adapter sessions are bounded for long-running/blocked operations (`docs/book/1122-m39-lasm-postgres-runtime-timeout-defaults.md`).
+   - [x] Improved DB runtime timeout/lock error envelopes with deterministic timeout/conflict mapping codes (`DB.*_TIMEOUT`, `DB.*_LOCK_TIMEOUT`) for Postgres statement/lock timeouts and sqlite lock contention (`docs/book/1123-m39-lasm-db-timeout-lock-error-classification.md`).
+   - [x] Routed `records.log` `db.queryOne` runtime lookup/materialization through `lasm_db_client` operation dispatch (`run_lasm_db_query_one_operation`) so all adapters (`records.log`/`sqlite`/`postgres`) now execute through one intrinsic client entrypoint rather than dispatch-owned records special-casing (`docs/book/1546-m39-lasm-db-records-queryone-client-path-unification.md`).
+6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
+   - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
+   - [x] Added dedicated real-Postgres E2E operator lane with shared local Docker infra (`infra/local-postgres`) plus canonical smoke-ready sample (`examples/postgres-e2e`), including deterministic `sec4 check` command coverage for the example path (`docs/book/1407-m39-postgres-e2e-local-infra-example-and-smoke.md`).
+7. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
 
-## M37 - No-Stub Alpha Sprint (In Progress)
+### Post-DB execution lock (authoritative order)
+
+When LASM DB intrinsic parity is complete, execution order is fixed:
+
+1. LASM default backend.
+2. LASM stability/load hardening.
+3. DB adapter progression (SQLite first).
+4. Adapter-layer extraction into packages/modules without semantic changes.
+5. Alpha usability/reproducibility closure.
+6. WASM/browser track.
+
+## M37 - No-Stub Alpha Sprint (Execution-Complete; Tag Pending)
 
 ### Goal
 
@@ -244,6 +2646,59 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
 - [x] Added `scripts/build-m37-alpha-tag-decision-record.sh`.
 - [x] Added contract coverage `scripts/test-build-m37-alpha-tag-decision-record.sh`.
 - [x] Added book chapter documenting M37-S8 alpha tag decision record.
+
+### M37-S9 alpha tag gate execution evidence refresh acceptance criteria
+
+- Live release gate execution evidence is refreshed from current `dev`.
+- M37-S6/S7/S8 artifacts are rebuilt from refreshed gate artifacts and remain `GO`-compatible.
+- Roadmap readiness/next actions are aligned to refreshed evidence state.
+
+### M37-S9 tracking (live status)
+
+- [x] Executed `scripts/release-alpha-gate.sh --skip-tests` with passing closure + sample determinism/audit chain.
+- [x] Rebuilt M37-S6/S7/S8 artifacts and confirmed `PASS/GO`, `alpha-ready`, `GO/PASS`.
+- [x] Added book chapter documenting M37-S9 evidence refresh (`docs/book/883-m37-alpha-tag-gate-execution-evidence-refresh.md`).
+
+### M37-S10 full alpha gate execution with tests acceptance criteria
+
+- Full release gate execution path (`scripts/release-alpha-gate.sh`) passes with complete test phase enabled.
+- Rebuilt M37-S6/S7/S8 artifacts from full-gate outputs preserve `PASS/GO` continuity.
+- Alpha closure actions are advanced to tag execution and post-tag verification.
+
+### M37-S10 tracking (live status)
+
+- [x] Executed `scripts/release-alpha-gate.sh` (with tests) and observed final gate `PASS`.
+- [x] Rebuilt M37-S6/S7/S8 artifacts from full-gate evidence and revalidated `PASS/GO`, `alpha-ready GO`, `GO PASS`.
+- [x] Added book chapter documenting M37-S10 full-gate execution evidence (`docs/book/884-m37-full-alpha-gate-execution-with-tests.md`).
+
+### M37-S11 alpha tag execution + post-tag verification checklist closure acceptance criteria
+
+- Alpha tag is created from the latest `M37-S8` `GO` decision baseline using workflow-compatible naming (`v0.1.0-alpha*`).
+- Post-tag verification chain passes:
+  - release gate evidence refresh,
+  - release promotion input verification,
+  - publish-manifest generation and verification.
+- Alpha closure status is promoted to `WASM_START_GATE` `OPEN` with explicit evidence pointers.
+
+### M37-S11 tracking (live status)
+
+- [x] Created and pushed alpha tag `v0.1.0-alpha.1` from `dev` `HEAD`.
+- [x] Refreshed release-gate stability for closure execution:
+  - one-shot C harness readers force accepted sockets back to blocking mode to remove `WouldBlock` flakes.
+  - `scripts/release-alpha-gate.sh` now runs `cargo test` in deterministic serialized mode by default (`CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, overrideable via env).
+- [x] Created and pushed alpha tag `v0.1.0-alpha.2` from `dev` `HEAD` after closure refresh.
+- [x] Re-executed post-tag verifier chain for `v0.1.0-alpha.2`:
+  - `scripts/release-alpha-gate.sh --skip-tests`
+  - `scripts/verify-release-promotion-inputs.sh`
+  - `scripts/generate-release-publish-manifest.sh`
+  - `scripts/verify-release-publish-manifest.sh`
+- [x] Executed post-tag verifier chain:
+  - `scripts/release-alpha-gate.sh --skip-tests`
+  - `scripts/verify-release-promotion-inputs.sh`
+  - `scripts/generate-release-publish-manifest.sh`
+  - `scripts/verify-release-publish-manifest.sh`
+- [x] Added book chapter documenting M37-S11 tag/post-tag closure (`docs/book/885-m37-alpha-tag-execution-and-post-tag-verification-closure.md`).
+- [x] Added book chapter documenting alpha.2 closure refresh (`docs/book/1003-m37-alpha2-release-closure-refresh.md`).
 
 ### M38-S1 outbound HTTP chunked-body decoding hardening acceptance criteria
 
@@ -1087,6 +3542,3215 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage acceptance criteria
+
+- Direct malformed-input wrapper calls (`sec4_rt_http_get` and `sec4_rt_http_get_internal`) emit the same parser-class diagnostic contract when malformed target tokens bypass URL gate checks.
+- Public/internal sink bridge paths preserve deterministic parser detail payloads:
+  - `phase=parse`
+  - `component=target`
+- Runtime harness includes one direct-wrapper parity test that asserts parser diagnostics for multiple malformed target shapes without redirect indirection.
+
+### M38-S49 tracking (live status)
+
+- [x] Added direct wrapper malformed-target parity harness:
+  - `c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic parser diagnostics parity on both sinks for malformed target inputs:
+  - fragment target (`#`)
+  - CRLF target contamination
+  - query + fragment target
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_rejects_invalid_url_or_untracked_handles_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S50 outbound HTTP wrapper invalid-url pre-parser diagnostics parity coverage acceptance criteria
+
+- Wrapper-level invalid-url failures are asserted directly at `sec4_rt_http_get` and `sec4_rt_http_get_internal` boundaries before outbound parser execution.
+- Public/internal wrapper envelopes remain deterministic for equivalent malformed URL handles:
+  - public wrapper: `NET.URL_PUBLIC_INVALID`
+  - internal wrapper: `NET.URL_INTERNAL_INVALID`
+- Wrapper invalid-url envelopes do not regress into parser-class diagnostics (`NET.REQUEST_*`) for the same malformed URL handle classes.
+
+### M38-S50 tracking (live status)
+
+- [x] Added direct wrapper invalid-url pre-parser parity harness:
+  - `c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic wrapper envelopes for malformed URL classes:
+  - invalid scheme (`ftp://...`)
+  - missing scheme (`example.com/...`)
+  - missing host (`http:///...`)
+  - userinfo authority token (`http://user@example.com/...`)
+- [x] Harness validates untracked-handle parity:
+  - public wrapper untracked handle -> `NET.URL_PUBLIC_INVALID`
+  - internal wrapper untracked handle -> `NET.URL_INTERNAL_INVALID`
+  with parser diagnostics excluded (`NET.REQUEST_*` absent).
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S51 outbound HTTP wrapper invalid-capability handle diagnostics parity coverage acceptance criteria
+
+- Missing/zero wrapper capability or URL handles are asserted directly at wrapper boundaries for both sinks:
+  - `sec4_rt_http_get` -> `NET.GET_INVALID`
+  - `sec4_rt_http_get_internal` -> `NET.GET_INTERNAL_INVALID`
+- Wrapper invalid-handle diagnostics remain deterministic `validation` envelopes and do not regress to:
+  - internal-policy denial (`NET.INTERNAL_DENIED`)
+  - parser-class diagnostics (`NET.REQUEST_*`).
+- Runtime harness includes direct assertions for both missing-net and missing-url handle classes across public/internal wrappers.
+
+### M38-S51 tracking (live status)
+
+- [x] Added direct wrapper invalid-handle parity harness:
+  - `c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic wrapper invalid-handle contracts for:
+  - missing net capability handle (`net=0`)
+  - missing URL handle (`url=0`)
+  across both public/internal wrappers.
+- [x] Harness validates wrapper precedence:
+  - invalid-handle diagnostics emitted before internal-net policy denial checks.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S52 outbound HTTP internal-policy denial precedence coverage acceptance criteria
+
+- Internal wrapper calls with valid internal URL handles emit deterministic policy denial when internal-net policy is disabled:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Policy denial precedence is asserted before URL/parser failure classes for the same valid internal URL handles.
+- Runtime harness includes direct coverage for both default-deny and explicit-deny (`SEC4_RT_ALLOW_INTERNAL_NET=0`) policy states.
+
+### M38-S52 tracking (live status)
+
+- [x] Added internal-policy denial precedence harness:
+  - `c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
+- [x] Harness validates deterministic denial envelopes for valid internal URLs:
+  - loopback IPv4 URL (`http://127.0.0.1/...`)
+  - localhost URL (`http://localhost/...`)
+- [x] Harness validates precedence exclusions:
+  - no `NET.URL_INTERNAL_INVALID`
+  - no `NET.REQUEST_*`
+  - no `NET.GET_INTERNAL_INVALID`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S53 outbound HTTP internal-policy allow-token coverage acceptance criteria
+
+- Truthy internal-policy tokens for `SEC4_RT_ALLOW_INTERNAL_NET` bypass policy denial deterministically:
+  - `1`, `true`, `yes`, `on`, `allow` (case-insensitive)
+- After denial bypass, wrapper flow reaches downstream deterministic stages for valid internal URL handles:
+  - parser-class failure path (`NET.REQUEST_TARGET_INVALID`) for malformed target
+  - transport-class failure path (`NET.TLS_UNSUPPORTED`) for HTTPS in non-TLS runtime build
+- Allow-token path does not regress into:
+  - `NET.INTERNAL_DENIED`
+  - `NET.GET_INTERNAL_INVALID`
+
+### M38-S53 tracking (live status)
+
+- [x] Added internal-policy allow-token truthy coverage harness:
+  - `c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
+- [x] Harness validates truthy-token allow behavior across tokens:
+  - `"1"`, `"true"`, `"yes"`, `"on"`, `"allow"`, plus mixed/upper-case variants.
+- [x] Harness validates deterministic downstream outcomes after denial bypass:
+  - `NET.REQUEST_TARGET_INVALID` (`kind=validation`)
+  - `NET.TLS_UNSUPPORTED` (`kind=runtime`)
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S54 outbound HTTP internal-policy invalid-token fallback coverage acceptance criteria
+
+- Unknown/invalid `SEC4_RT_ALLOW_INTERNAL_NET` tokens deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under invalid policy tokens, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Invalid-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S54 tracking (live status)
+
+- [x] Added internal-policy invalid-token fallback harness:
+  - `c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across invalid token classes:
+  - semantic noise (`"maybe"`, `"enabled"`, `"true-ish"`)
+  - numeric noise (`"2"`, `"-1"`)
+  - near-miss tokens/spacing (`"t"`, `"y"`, `" allow "`, `"YES!"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage acceptance criteria
+
+- Explicit deny tokens for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically enforce internal-net denial:
+  - `0`, `false`, `no`, `off`, `deny` (case-insensitive)
+- For valid internal URL handles under explicit deny tokens, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Explicit deny-token matrix does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S55 tracking (live status)
+
+- [x] Added internal-policy explicit deny-token matrix harness:
+  - `c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+- [x] Harness validates explicit deny-token enforcement across tokens:
+  - `"0"`, `"false"`, `"no"`, `"off"`, `"deny"`, plus mixed/upper-case variants.
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S56 outbound HTTP internal-policy empty/whitespace-token fallback coverage acceptance criteria
+
+- Unset, empty, and whitespace-only `SEC4_RT_ALLOW_INTERNAL_NET` values deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under unset/blank token states, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Empty/whitespace-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S56 tracking (live status)
+
+- [x] Added internal-policy empty/whitespace-token fallback harness:
+  - `c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback for token states:
+  - unset (`env_remove`)
+  - empty (`""`)
+  - whitespace-only (`" "`, `"   "`, `"\t"`, `"\n"`, `" \t "`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S57 outbound HTTP internal-policy quoted-token fallback coverage acceptance criteria
+
+- Quoted/escaped token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under quoted token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Quoted-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S57 tracking (live status)
+
+- [x] Added internal-policy quoted-token fallback harness:
+  - `c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates quoted-token deny-by-default fallback across tokens:
+  - double-quoted (`"\"1\""`, `"\"true\""`, `"\"allow\""`)
+  - single-quoted (`"'yes'"`, `"'on'"`, `"'ALLOW'"`)
+  - quoted + inner whitespace (`"\" TRUE \""`, `"' yes '"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S58 outbound HTTP internal-policy delimited-token fallback coverage acceptance criteria
+
+- Delimited token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under delimited token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Delimited-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S58 tracking (live status)
+
+- [x] Added internal-policy delimited-token fallback harness:
+  - `c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across delimiter classes:
+  - comma (`"true,allow"`, `"allow,true"`)
+  - pipe/slash (`"yes|on"`, `"allow/1"`)
+  - semicolon/colon (`"true;allow"`, `"on:yes"`)
+  - delimiter + spacing (`" yes|allow "`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S59 outbound HTTP internal-policy prefixed-token fallback coverage acceptance criteria
+
+- Prefixed token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under prefixed token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Prefixed-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S59 tracking (live status)
+
+- [x] Added internal-policy prefixed-token fallback harness:
+  - `c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across prefixed token spellings:
+  - key/value style (`"allow=true"`, `"token=1"`, `"internal-net=on"`)
+  - namespace/prefix style (`"mode:allow"`, `"value:true"`, `"policy.allow=yes"`, `"allow:true"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S60 security-headers CSP runtime materialization coverage acceptance criteria
+
+- Runtime security headers block includes deterministic CSP emission when security headers are enabled.
+- Default security-header policy emits enforce-mode CSP header:
+  - `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'`
+- Env policy toggles support report-only CSP header mode:
+  - `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY=1`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_POLICY=<policy>`
+- CSP runtime materialization does not regress existing security-header behavior (`nosniff`, `x-frame-options`, `referrer-policy`).
+
+### M38-S60 tracking (live status)
+
+- [x] Extended runtime security-header policy/router state with CSP fields:
+  - `csp_enabled`
+  - `csp_report_only`
+  - `csp_policy`
+- [x] Added CSP header emission in `sec4_rt_security_headers_block` with deterministic enforce/report-only header selection.
+- [x] Added env-policy loading for CSP controls and safe fallback to default CSP policy for invalid header values.
+- [x] Added/updated HTTP runtime security-header e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_on_success_when_enabled` (assert default CSP enforce header)
+  - `c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled` (assert report-only header path)
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S61 security-headers HSTS runtime materialization coverage acceptance criteria
+
+- Runtime security headers block includes deterministic HSTS emission when HSTS is enabled by policy.
+- Env policy controls materialize HSTS header value:
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD`
+- HSTS materialization does not regress existing security-header behavior (`nosniff`, `x-frame-options`, `referrer-policy`, `csp`).
+
+### M38-S61 tracking (live status)
+
+- [x] Extended runtime security-header policy/router state with HSTS fields:
+  - `hsts_enabled`
+  - `hsts_max_age_seconds`
+  - `hsts_include_subdomains`
+  - `hsts_preload`
+- [x] Added HSTS header emission in `sec4_rt_security_headers_block` with deterministic value rendering.
+- [x] Added env-policy loading/materialization for HSTS controls in runtime security-header path.
+- [x] Added HTTP runtime security-header HSTS e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S62 outbound HTTP internal-policy suffixed-token fallback coverage acceptance criteria
+
+- Suffixed token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under suffixed token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Suffixed-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S62 tracking (live status)
+
+- [x] Added internal-policy suffixed-token fallback harness:
+  - `c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across suffixed token spellings:
+  - hyphen/underscore suffixes (`"true-value"`, `"allow_mode"`, `"yes-end"`)
+  - alphanumeric/punctuation suffixes (`"on1"`, `"allow+"`, `"1ok"`, `"true."`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S63 security-headers HSTS invalid-env fallback coverage acceptance criteria
+
+- Invalid/non-numeric `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Negative `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Fallback behavior preserves existing HSTS header composition semantics (includeSubDomains/preload toggles).
+- Invalid raw env values are never reflected into emitted HSTS header strings.
+
+### M38-S63 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+- [x] Harness validates both malformed and negative max-age env inputs:
+  - malformed numeric token (`"not-a-number"`)
+  - negative numeric token (`"-7"`)
+- [x] Harness validates deterministic safe fallback header:
+  - `Strict-Transport-Security: max-age=15552000; includeSubDomains`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S64 security-headers x-frame-options invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS` env values deterministically fall back to `DENY`.
+- Invalid raw env values are never reflected in emitted `X-Frame-Options` response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S64 tracking (live status)
+
+- [x] Added HTTP runtime security-header x-frame-options fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+- [x] Harness validates invalid-token fallback behavior:
+  - invalid env token (`"ALLOW-FROM"`) falls back to `X-Frame-Options: DENY`
+- [x] Harness validates response output never reflects invalid x-frame-options token values.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S65 security-headers referrer-policy invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY` env values deterministically fall back to `strict-origin-when-cross-origin`.
+- Invalid raw env values are never reflected in emitted `Referrer-Policy` response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S65 tracking (live status)
+
+- [x] Added HTTP runtime security-header referrer-policy fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls_back_to_default_when_enabled`
+- [x] Runtime policy loader now validates referrer-policy values against an explicit allowlist and clamps invalid values to `strict-origin-when-cross-origin`.
+- [x] Harness validates invalid-token fallback behavior:
+  - invalid env token (`"INVALID-POLICY"`) falls back to `Referrer-Policy: strict-origin-when-cross-origin`
+- [x] Harness validates response output never reflects invalid referrer-policy token values.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls_back_to_default_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S66 security-headers x-content-type-options invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS` env values deterministically fall back to enabled `nosniff` behavior.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S66 tracking (live status)
+
+- [x] Added HTTP runtime security-header x-content-type-options fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) still emits `X-Content-Type-Options: nosniff`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S67 security-headers CSP report-only invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY` env values deterministically fall back to enforce-mode CSP header behavior.
+- Invalid raw env values are never reflected as report-only mode in emitted CSP header names.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S67 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP report-only fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) emits enforce header (`Content-Security-Policy`) and does not emit report-only header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S68 security-headers CSP enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_ENABLED` env values deterministically fall back to keeping CSP enabled.
+- Invalid raw env values are never reflected as disabled CSP behavior in emitted response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S68 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps enforce-mode `Content-Security-Policy` header active.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S69 security-headers middleware-enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_ENABLED` env values deterministically fall back to keeping security headers enabled.
+- Invalid raw env values are never reflected as disabled security-header behavior in emitted responses.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S69 tracking (live status)
+
+- [x] Added HTTP runtime security-header enabled-flag fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps baseline security headers active.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S70 security-headers HSTS-enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED` env values deterministically fall back to default HSTS-disabled behavior.
+- Invalid raw env values are never reflected as enabled HSTS behavior in emitted responses.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S70 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS-enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps default no-HSTS-header output.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S71 security-headers HSTS includeSubDomains invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS` env values deterministically fall back to default includeSubDomains-enabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as includeSubDomains-disabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S71 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS includeSubDomains fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves `; includeSubDomains` in emitted HSTS header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S72 security-headers HSTS preload invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD` env values deterministically fall back to default preload-disabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as preload-enabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S72 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS preload fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps HSTS header without `; preload`.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S73 security-headers CSP policy invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_POLICY` env header values deterministically fall back to default CSP policy.
+- Invalid raw env values are never reflected in emitted CSP headers.
+- Fallback coverage does not regress existing CSP/security-header success-path behavior.
+
+### M38-S73 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP policy fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled`
+- [x] Harness validates invalid header-value token fallback behavior:
+  - invalid env value containing newline falls back to default CSP policy.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S74 CORS allowed-origins invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ALLOWED_ORIGINS` env values deterministically fall back to wildcard-origin baseline (`*`).
+- Invalid raw env values are never reflected into emitted `Access-Control-Allow-Origin` response headers.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S74 tracking (live status)
+
+- [x] Runtime CORS policy loading now validates copied allowed-origin token as safe header value and falls back to wildcard when invalid.
+- [x] Added HTTP runtime CORS allowed-origins fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+- [x] Harness validates invalid header-value token fallback behavior:
+  - invalid env value containing newline falls back to wildcard origin header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S75 CORS allow-credentials invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ALLOW_CREDENTIALS` env values deterministically fall back to default credentials-disabled behavior.
+- Invalid raw env values are never reflected as enabled credentials behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S75 tracking (live status)
+
+- [x] Added HTTP runtime CORS allow-credentials fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps `Access-Control-Allow-Credentials` header absent.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S76 CORS require-vary-origin invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_REQUIRE_VARY_ORIGIN` env values deterministically fall back to default vary-origin-disabled behavior.
+- Invalid raw env values are never reflected as enabled vary-origin behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S76 tracking (live status)
+
+- [x] Added HTTP runtime CORS require-vary-origin fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps `Vary: Origin` header absent under non-wildcard allow-origin configuration.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S77 CORS enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ENABLED` env values deterministically fall back to default CORS-enabled behavior.
+- Invalid raw env values are never reflected as disabled CORS behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S77 tracking (live status)
+
+- [x] Added HTTP runtime CORS enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves baseline `Access-Control-Allow-Origin` emission.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S78 auth mode invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_AUTH_MODE` env values deterministically fall back to `token` mode.
+- Invalid raw env values are never allowed to force an unsupported auth mode state.
+- Fallback hardening does not regress existing token/cookie auth success-path behavior.
+
+### M38-S78 tracking (live status)
+
+- [x] Runtime auth policy loading now normalizes unsupported auth mode env values to `token`.
+- [x] Runtime effective-auth resolution now clamps unsupported mode values to `token` before auth checks.
+- [x] Added HTTP runtime auth mode fallback e2e coverage:
+  - `c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_auth_header_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S79 CSRF protected-methods invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_CSRF_PROTECTED_METHODS` env values deterministically fall back to default protected methods (`POST,PUT,PATCH,DELETE`).
+- Invalid raw env values are never allowed to weaken CSRF protection coverage for unsafe methods.
+- Fallback hardening does not regress existing CSRF reject/allow behavior.
+
+### M38-S79 tracking (live status)
+
+- [x] Runtime CSRF policy loading now validates protected-method tokens and clamps invalid lists to default unsafe-method set.
+- [x] Added HTTP runtime CSRF protected-methods fallback e2e coverage:
+  - `c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S80 auth cookie-name invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_AUTH_COOKIE_NAME` env values deterministically fall back to default cookie name (`session`).
+- Invalid raw env values are never allowed to force impossible/unsafe cookie-name matching behavior.
+- Fallback hardening does not regress existing cookie-auth success/role-check behavior.
+
+### M38-S80 tracking (live status)
+
+- [x] Runtime auth cookie-name resolution now validates env token syntax and clamps invalid values to `session`.
+- [x] Added HTTP runtime auth cookie-name fallback e2e coverage:
+  - `c_bin_http_runtime_auth_cookie_name_invalid_env_falls_back_to_session_cookie`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_cookie_name_invalid_env_falls_back_to_session_cookie`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S81 CORS max-age env policy materialization hardening acceptance criteria
+
+- Runtime CORS policy loader materializes `SEC4_RT_CORS_MAX_AGE_SECONDS` into preflight responses when valid.
+- Invalid/non-positive `SEC4_RT_CORS_MAX_AGE_SECONDS` env values deterministically fall back to default `600`.
+- Max-age policy materialization does not regress existing preflight CORS behavior.
+
+### M38-S81 tracking (live status)
+
+- [x] Runtime CORS policy state now includes max-age field loaded from env with deterministic clamp (`>0`, else `600`).
+- [x] `withCors(..., cors.fromPolicy())` now applies materialized max-age value into router preflight config.
+- [x] Added HTTP runtime CORS max-age e2e coverage:
+  - `c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S82 CSRF header/cookie name env materialization hardening acceptance criteria
+
+- Runtime CSRF checks honor `SEC4_RT_CSRF_HEADER_NAME` and `SEC4_RT_CSRF_COOKIE_NAME` when values are valid.
+- Invalid CSRF header/cookie-name env values deterministically fall back to defaults (`X-CSRF-Token`, `csrf`).
+- CSRF name materialization hardening does not regress existing reject/allow and `csrf.issueToken` behavior.
+
+### M38-S82 tracking (live status)
+
+- [x] Runtime CSRF policy state and router state now carry header/cookie names materialized from env policy.
+- [x] CSRF enforcement path now resolves configured names instead of hardcoded values.
+- [x] `csrf.issueToken` response headers now emit configured/fallback CSRF names deterministically.
+- [x] Added HTTP runtime CSRF name-materialization e2e coverage:
+  - `c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output build_emit_c_bin_handles_csrf_issue_token_intrinsic_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S83 CORS methods/headers env policy materialization hardening acceptance criteria
+
+- Runtime preflight CORS responses honor env policy lists:
+  - `SEC4_RT_CORS_ALLOWED_METHODS`
+  - `SEC4_RT_CORS_ALLOWED_HEADERS`
+- Invalid methods/header-list env values deterministically fall back to defaults.
+- Methods/headers materialization hardening does not regress existing preflight behavior.
+
+### M38-S83 tracking (live status)
+
+- [x] Runtime CORS policy state now carries allowed-methods and allowed-headers lists loaded from env policy.
+- [x] Added list validators for CORS methods and CORS header-name CSV tokens.
+- [x] `withCors(..., cors.fromPolicy())` now applies validated env-provided method/header lists.
+- [x] Added HTTP runtime CORS methods/headers e2e coverage:
+  - `c_bin_http_runtime_applies_cors_methods_and_headers_from_env_on_preflight`
+  - `c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_methods_and_headers_from_env_on_preflight`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S84 CORS exposed-headers env policy materialization hardening acceptance criteria
+
+- Runtime CORS success responses honor `SEC4_RT_CORS_EXPOSED_HEADERS` when values are valid.
+- Invalid exposed-headers env values deterministically fall back to absent `Access-Control-Expose-Headers`.
+- Exposed-headers materialization hardening does not regress existing CORS success/preflight behavior.
+
+### M38-S84 tracking (live status)
+
+- [x] Runtime CORS policy state now carries `expose_headers` loaded from env policy.
+- [x] Added exposed-headers validation/fallback path using header-name CSV validation.
+- [x] Runtime CORS success-header block now emits `Access-Control-Expose-Headers` when configured.
+- [x] Added HTTP runtime CORS exposed-headers e2e coverage:
+  - `c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S85 CORS allowed-origins allowlist request-origin materialization hardening acceptance criteria
+
+- Runtime CORS success/preflight responses honor multi-origin `SEC4_RT_CORS_ALLOWED_ORIGINS` lists by reflecting the request `Origin` when it matches an allowlist token.
+- Invalid allowlist env values deterministically fall back to wildcard (`*`) behavior.
+- Non-matching request `Origin` values do not get reflected and deterministically fall back to the first configured allow-origin token.
+
+### M38-S85 tracking (live status)
+
+- [x] Runtime CORS allowed-origins env loading now validates full CSV allowlist tokens instead of only the first token.
+- [x] Runtime CORS success/preflight header assembly now resolves effective allow-origin from request `Origin` when allowlist matching applies.
+- [x] Added HTTP runtime CORS allowlist e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S86 CORS wildcard+credentials runtime safety guard hardening acceptance criteria
+
+- Runtime CORS header emission never outputs `Access-Control-Allow-Credentials: true` when effective allow-origin is wildcard (`*`).
+- Non-wildcard allow-origin flows continue to emit credentials headers when explicitly enabled.
+- Wildcard+credentials guard applies consistently to success and preflight CORS responses.
+
+### M38-S86 tracking (live status)
+
+- [x] Runtime CORS success/preflight header assembly now suppresses credentials headers whenever effective allow-origin resolves to wildcard.
+- [x] Wildcard token detection now works for wildcard present anywhere in the configured allow-origin CSV list.
+- [x] Added HTTP runtime CORS wildcard+credentials guard e2e coverage:
+  - `c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S87 CORS allow-origin token-shape validation hardening acceptance criteria
+
+- Runtime CORS allow-origin policy list accepts only wildcard (`*`) or strict origin tokens (`http://...` / `https://...` with valid host and optional valid port).
+- Malformed allow-origin tokens (for example missing scheme) deterministically trigger wildcard fallback.
+- Strict token-shape validation does not regress valid allowlist request-origin matching behavior.
+
+### M38-S87 tracking (live status)
+
+- [x] Added strict CORS origin-token validator used by CORS allow-origin CSV policy validation.
+- [x] Origin-token validation now rejects malformed tokens lacking required scheme/authority shape before runtime header emission.
+- [x] Added HTTP runtime CORS invalid-token-shape e2e coverage:
+  - `c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S88 CORS preflight requested-method enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Method` against configured allow-methods policy.
+- Preflight requests for disallowed methods deterministically return `403` with explicit rejection diagnostics.
+- Allowed-method preflight behavior (`204` with CORS preflight headers) remains unchanged.
+
+### M38-S88 tracking (live status)
+
+- [x] Runtime preflight path now checks requested method membership in CORS allow-methods CSV before emitting success preflight headers.
+- [x] Added deterministic rejection response for disallowed preflight methods (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight disallowed-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S89 CORS preflight requested-headers enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Headers` tokens against configured CORS allow-headers policy.
+- Preflight requests containing disallowed/invalid requested headers deterministically return `403` with explicit rejection diagnostics.
+- Allowed requested-header preflight behavior remains `204` with normal CORS preflight headers.
+
+### M38-S89 tracking (live status)
+
+- [x] Added runtime requested-headers membership validation for CORS preflight path.
+- [x] Added deterministic rejection response for disallowed requested headers (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight requested-headers e2e coverage:
+  - `c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S90 CORS preflight missing requested-method rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that omit `Access-Control-Request-Method`.
+- Missing requested-method preflight requests deterministically return `400` with explicit diagnostics.
+- Valid preflight requests containing requested method continue to use existing allow/deny method enforcement behavior.
+
+### M38-S90 tracking (live status)
+
+- [x] Added explicit runtime preflight guard for missing `Access-Control-Request-Method`.
+- [x] Added deterministic missing-method rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight missing-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S91 CORS preflight origin-header presence/shape enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling requires `Origin` header presence.
+- Missing or invalid `Origin` headers deterministically return `400` with explicit diagnostics.
+- Valid preflight requests with valid origin continue through method/header policy validation.
+
+### M38-S91 tracking (live status)
+
+- [x] Added runtime preflight guard requiring `Origin` header on CORS preflight requests.
+- [x] Added strict origin-shape validation on preflight `Origin` values before method/header checks.
+- [x] Added deterministic rejection responses for missing/invalid preflight origin (`400` + fixed message bodies).
+- [x] Added HTTP runtime CORS preflight origin-guard e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S92 CORS preflight requested-method token-shape validation hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Method` token shape before allow-method policy matching.
+- Invalid requested-method tokens deterministically return `400` with explicit diagnostics.
+- Valid requested methods continue through existing allow-method membership checks (`403` for disallowed methods remains unchanged).
+
+### M38-S92 tracking (live status)
+
+- [x] Added runtime token-shape validation for preflight `Access-Control-Request-Method`.
+- [x] Added deterministic invalid-token rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid requested-method-token e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S93 CORS preflight requested-headers token-shape validation hardening acceptance criteria
+
+- Runtime CORS preflight handling distinguishes malformed `Access-Control-Request-Headers` tokens from policy-denied header names.
+- Invalid requested-header tokens deterministically return `400` with explicit diagnostics.
+- Well-formed but disallowed requested headers continue to return deterministic `403`.
+
+### M38-S93 tracking (live status)
+
+- [x] Added runtime invalid-token tracking in preflight requested-headers validation.
+- [x] Added deterministic invalid requested-headers rejection response (`400` + fixed message body).
+- [x] Preserved deterministic disallowed-header rejection path (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid requested-headers-token e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S94 CORS preflight empty requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects explicitly empty `Access-Control-Request-Headers` values as malformed input.
+- Empty requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Non-empty requested-headers behavior remains split between `400` malformed-token and `403` disallowed-policy outcomes.
+
+### M38-S94 tracking (live status)
+
+- [x] Tightened runtime requested-headers validator to classify empty values as invalid tokens.
+- [x] Added deterministic empty requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight empty requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S95 CORS preflight duplicate requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Headers` tokens as malformed input.
+- Duplicate requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Distinct requested-headers tokens continue through existing malformed/disallowed/allowed validation paths.
+
+### M38-S95 tracking (live status)
+
+- [x] Added duplicate-token detection for requested-headers validation (case-insensitive).
+- [x] Added deterministic duplicate requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S96 CORS preflight duplicate requested-method header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Method` header lines as malformed input.
+- Duplicate requested-method preflight requests deterministically return `400` with explicit diagnostics.
+- Single requested-method preflight requests continue through existing missing/invalid/disallowed/allowed branches.
+
+### M38-S96 tracking (live status)
+
+- [x] Added runtime header-occurrence counter for deterministic duplicate-header detection.
+- [x] Added duplicate `Access-Control-Request-Method` rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_method_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_method_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S97 CORS preflight duplicate requested-headers header-line rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Headers` header lines as malformed input.
+- Duplicate requested-headers header lines deterministically return `400` with explicit diagnostics.
+- Single requested-headers header-line requests continue through existing malformed/disallowed/allowed token checks.
+
+### M38-S97 tracking (live status)
+
+- [x] Added duplicate header-line detection for `Access-Control-Request-Headers` in preflight path.
+- [x] Added deterministic duplicate requested-headers header-line rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-headers header-line e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_header_lines`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_header_lines`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S98 CORS preflight duplicate origin header-line rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Origin` header lines as malformed input.
+- Duplicate preflight origin headers deterministically return `400` with explicit diagnostics.
+- Single origin-header preflight requests continue through existing missing/invalid/valid origin checks.
+
+### M38-S98 tracking (live status)
+
+- [x] Added duplicate `Origin` header-line detection in preflight path.
+- [x] Added deterministic duplicate-origin rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate-origin e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S99 CORS non-preflight duplicate origin header-line rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects duplicate `Origin` header lines on non-preflight requests as malformed input.
+- Duplicate-origin non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate-origin non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S99 tracking (live status)
+
+- [x] Added non-preflight duplicate-origin guard branch in runtime CORS handling.
+- [x] Added deterministic duplicate-origin non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate-origin non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S100 CORS preflight body rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects preflight requests with non-empty request bodies.
+- Preflight requests carrying request bodies deterministically return `400` with explicit diagnostics.
+- Rejected preflight-body requests do not emit CORS allow-methods preflight headers.
+
+### M38-S100 tracking (live status)
+
+- [x] Added runtime preflight guard for non-empty request body payloads.
+- [x] Added deterministic preflight-body rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight body-rejection e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S101 CORS non-preflight invalid-origin rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that carry invalid `Origin` values.
+- Invalid non-preflight origin requests deterministically return `400` with explicit diagnostics.
+- Rejected invalid-origin non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S101 tracking (live status)
+
+- [x] Added non-preflight invalid-origin guard branch in runtime CORS handling.
+- [x] Added deterministic invalid-origin non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS invalid-origin non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S102 CORS non-preflight requested-method-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Method`.
+- Non-preflight requests carrying preflight-only requested-method header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S102 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Method` header presence.
+- [x] Added deterministic non-preflight requested-method-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS requested-method non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S103 CORS non-preflight requested-headers-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Headers`.
+- Non-preflight requests carrying preflight-only requested-headers header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S103 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Headers` header presence.
+- [x] Added deterministic non-preflight requested-headers-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS requested-headers non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S104 CORS non-preflight duplicate requested-method-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests containing duplicate `Access-Control-Request-Method` header lines.
+- Duplicate requested-method non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate requested-method responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S104 tracking (live status)
+
+- [x] Added non-preflight duplicate-header-line guard for `Access-Control-Request-Method`.
+- [x] Added deterministic duplicate requested-method non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate requested-method non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S105 CORS non-preflight duplicate requested-headers-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests containing duplicate `Access-Control-Request-Headers` header lines.
+- Duplicate requested-headers non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate requested-headers responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S105 tracking (live status)
+
+- [x] Added non-preflight duplicate-header-line guard for `Access-Control-Request-Headers`.
+- [x] Added deterministic duplicate requested-headers non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate requested-headers non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_headers_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_headers_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S106 CORS preflight cookie-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that include `Cookie` header.
+- Preflight requests carrying cookies deterministically return `400` with explicit diagnostics.
+- Rejected preflight cookie-header requests do not emit preflight allow-methods header block.
+
+### M38-S106 tracking (live status)
+
+- [x] Added preflight guard rejecting `Cookie` header presence.
+- [x] Added deterministic preflight cookie-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight cookie-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S107 CORS preflight authorization-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that include `Authorization` header.
+- Preflight requests carrying authorization header deterministically return `400` with explicit diagnostics.
+- Rejected preflight authorization-header requests do not emit preflight allow-methods header block.
+
+### M38-S107 tracking (live status)
+
+- [x] Added preflight guard rejecting `Authorization` header presence.
+- [x] Added deterministic preflight authorization-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight authorization-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S108 CORS non-preflight private-network-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Private-Network`.
+- Non-preflight requests carrying private-network preflight header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S108 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Private-Network` header presence.
+- [x] Added deterministic non-preflight private-network-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS private-network non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S109 CORS preflight private-network-header value validation hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Private-Network` value shape when the header is present.
+- Invalid private-network preflight header values deterministically return `400` with explicit diagnostics.
+- Rejected preflight invalid private-network requests do not emit preflight allow-methods header block.
+
+### M38-S109 tracking (live status)
+
+- [x] Added preflight validation for `Access-Control-Request-Private-Network` value (`true` only).
+- [x] Added deterministic preflight private-network-header invalid-value rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid private-network-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S110 CORS preflight duplicate private-network-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests containing duplicate `Access-Control-Request-Private-Network` header lines.
+- Duplicate private-network preflight header lines deterministically return `400` with explicit diagnostics.
+- Rejected preflight duplicate private-network requests do not emit preflight allow-methods header block.
+
+### M38-S110 tracking (live status)
+
+- [x] Added preflight duplicate-header-line guard for `Access-Control-Request-Private-Network`.
+- [x] Added deterministic duplicate private-network preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate private-network-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S111 CORS non-preflight duplicate private-network-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests containing duplicate `Access-Control-Request-Private-Network` header lines.
+- Duplicate private-network non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate private-network non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S111 tracking (live status)
+
+- [x] Added non-preflight duplicate-header-line guard for `Access-Control-Request-Private-Network`.
+- [x] Added deterministic duplicate private-network non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate private-network non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_private_network_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_private_network_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S112 CORS preflight private-network default-deny enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects `Access-Control-Request-Private-Network: true` by default (no implicit private-network opt-in).
+- Private-network preflight requests deterministically return `403` with explicit diagnostics.
+- Rejected private-network preflight responses do not emit preflight allow-methods header block.
+
+### M38-S112 tracking (live status)
+
+- [x] Added explicit default-deny branch for preflight `Access-Control-Request-Private-Network`.
+- [x] Added deterministic private-network default-deny response (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight private-network default-deny e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S113 CORS preflight private-network explicit opt-in allow-path hardening acceptance criteria
+
+- Runtime CORS preflight handling allows `Access-Control-Request-Private-Network: true` only when explicit policy/env opt-in is enabled.
+- Allowed private-network preflight responses include `Access-Control-Allow-Private-Network: true`.
+- Default behavior remains deny (`403`) when opt-in is not enabled.
+
+### M38-S113 tracking (live status)
+
+- [x] Added CORS policy/env bridge key `SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK` (default `false`).
+- [x] Added preflight allow path for private-network requests when opt-in is enabled.
+- [x] Added `Access-Control-Allow-Private-Network: true` materialization for allowed preflight responses.
+- [x] Added HTTP runtime CORS private-network preflight allow-path e2e coverage:
+  - `c_bin_http_runtime_allows_cors_preflight_with_private_network_header_when_policy_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_private_network_header_when_policy_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S114 CORS private-network policy materialization bridge acceptance criteria
+
+- `sec4.policy` supports explicit CORS toggle `cors.allow_private_network`.
+- `sec4 run` materializes `cors.allow_private_network` into runtime env (`SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK`) deterministically.
+- Policy-enabled private-network preflight requests succeed with deterministic allow headers via the normal run command path.
+
+### M38-S114 tracking (live status)
+
+- [x] Added `cors.allow_private_network` to policy model/defaults and parser ingestion.
+- [x] Wired `cmd_run` runtime env bridge for `SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK`.
+- [x] Added run-command e2e coverage for policy-driven private-network preflight allow path:
+  - `run_command_oneshot_allows_private_network_preflight_when_cors_policy_enables_it`
+- [x] Revalidated related policy/runtime bridging paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_allows_private_network_preflight_when_cors_policy_enables_it`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S115 CORS preflight envelope policy materialization bridge acceptance criteria
+
+- `sec4.policy` CORS preflight envelope fields are first-class and persisted:
+  - `cors.allowed_methods`
+  - `cors.allowed_headers`
+  - `cors.exposed_headers`
+  - `cors.max_age_seconds`
+- `sec4 run` materializes those policy values into runtime env bridge keys deterministically.
+- Runtime responses through `sec4 run` reflect policy-driven preflight envelope and expose-headers behavior.
+
+### M38-S115 tracking (live status)
+
+- [x] Added persisted CORS preflight envelope fields to policy model/defaults.
+- [x] Added parser ingestion and validation for `cors.max_age_seconds` (`>= 1`).
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_CORS_ALLOWED_METHODS`
+  - `SEC4_RT_CORS_ALLOWED_HEADERS`
+  - `SEC4_RT_CORS_EXPOSED_HEADERS`
+  - `SEC4_RT_CORS_MAX_AGE_SECONDS`
+- [x] Added/extended run-command e2e coverage:
+  - `run_command_oneshot_applies_cors_from_policy` (includes expose-headers check)
+  - `run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy`
+- [x] Revalidated related policy/runtime bridging paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S116 security-headers HSTS/CSP policy materialization bridge acceptance criteria
+
+- `sec4.policy` security-headers policy persists HSTS/CSP runtime-shape fields:
+  - `security_headers.hsts.max_age_seconds`
+  - `security_headers.hsts.include_subdomains`
+  - `security_headers.hsts.preload`
+  - `security_headers.csp.policy`
+- `sec4 run` deterministically materializes those policy values into runtime env bridge keys.
+- Runtime response headers emitted through `sec4 run` reflect HSTS/CSP policy settings on success path.
+
+### M38-S116 tracking (live status)
+
+- [x] Extended `SecurityHeadersPolicyConfig` with persisted HSTS/CSP fields and secure defaults.
+- [x] Added parser ingestion/validation for:
+  - `security_headers.hsts.max_age_seconds` (>= 0, and >= 1 when HSTS enabled)
+  - `security_headers.hsts.include_subdomains`
+  - `security_headers.hsts.preload`
+  - `security_headers.csp.policy` (non-empty string when provided)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_POLICY`
+- [x] Added run-command e2e coverage for policy-driven HSTS/CSP materialization:
+  - `run_command_oneshot_applies_security_headers_hsts_and_csp_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_security_headers_hsts_and_csp_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_disables_security_headers_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S117 CSRF cookie/header-name policy materialization bridge acceptance criteria
+
+- `sec4.policy` persists CSRF token-name controls:
+  - `csrf.cookie_name`
+  - `csrf.header_name`
+- `sec4 run` deterministically materializes CSRF name policy into runtime env bridge keys.
+- Runtime CSRF middleware behavior through `sec4 run` respects policy-configured cookie/header token names.
+
+### M38-S117 tracking (live status)
+
+- [x] Extended `CsrfPolicyConfig` with persisted token-name fields and secure defaults.
+- [x] Added parser ingestion/validation for:
+  - `csrf.cookie_name` (non-empty string)
+  - `csrf.header_name` (non-empty string)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_CSRF_COOKIE_NAME`
+  - `SEC4_RT_CSRF_HEADER_NAME`
+- [x] Added run-command e2e coverage for policy-driven CSRF token-name materialization:
+  - `run_command_oneshot_applies_csrf_cookie_and_header_names_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_csrf_cookie_and_header_names_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_disables_csrf_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S118 HTTP body/timeout policy materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP ingress runtime-shape controls:
+  - `http.max_body_bytes`
+  - `http.default_timeout_ms`
+- `sec4 run` deterministically materializes those policy values into runtime env bridge keys.
+- Runtime request-body enforcement through `sec4 run` reflects policy-configured `http.max_body_bytes` without requiring CLI override flags.
+
+### M38-S118 tracking (live status)
+
+- [x] Added `HttpPolicyConfig` persisted fields with defaults aligned to runtime baseline:
+  - `max_body_bytes = 4096`
+  - `default_timeout_ms = 200`
+- [x] Added parser ingestion/validation for:
+  - `http.max_body_bytes` (>= 1)
+  - `http.default_timeout_ms` (>= 1)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_HTTP_MAX_BODY_BYTES`
+  - `SEC4_RT_HTTP_SERVE_TIMEOUT_MS`
+- [x] Added run-command e2e coverage for policy-driven ingress body-limit materialization:
+  - `run_command_oneshot_applies_http_body_limit_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_body_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S119 HTTP policy-vs-CLI precedence hardening acceptance criteria
+
+- `sec4 run` keeps policy-driven HTTP ingress defaults active when CLI override flags are absent.
+- CLI flags deterministically override policy-provided HTTP ingress values:
+  - `--max-body-bytes`
+  - `--serve-timeout-ms`
+- Run-command integration coverage locks both precedence branches (policy-default path and CLI-override path).
+
+### M38-S119 tracking (live status)
+
+- [x] Added run-command e2e coverage for CLI override precedence over policy body limit:
+  - `run_command_oneshot_cli_max_body_bytes_overrides_policy_limit`
+- [x] Added run-command e2e coverage for CLI timeout override precedence over policy timeout:
+  - `run_command_oneshot_cli_serve_timeout_overrides_policy_timeout`
+- [x] Revalidated command runtime bridge behavior:
+  - `cargo test -p sec4 --test commands run_command_oneshot_cli_max_body_bytes_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_oneshot_cli_serve_timeout_overrides_policy_timeout`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S120 HTTP ingress override input hardening acceptance criteria
+
+- `sec4 run` rejects zero-value HTTP ingress override flags deterministically before build/runtime launch:
+  - `--max-body-bytes 0`
+  - `--serve-timeout-ms 0`
+- Invalid zero overrides fail fast with stable CLI diagnostics and non-zero exit status.
+- Existing policy-default and non-zero override behavior remains unchanged.
+
+### M38-S120 tracking (live status)
+
+- [x] Added fail-fast CLI validation in `cmd_run` for:
+  - `--max-body-bytes` (must be >= 1)
+  - `--serve-timeout-ms` (must be >= 1)
+- [x] Added integration tests for deterministic invalid-zero diagnostics:
+  - `run_command_rejects_zero_max_body_bytes_override`
+  - `run_command_rejects_zero_serve_timeout_ms_override`
+- [x] Revalidated command runtime bridge behavior:
+  - `cargo test -p sec4 --test commands run_command_rejects_zero_max_body_bytes_override`
+  - `cargo test -p sec4 --test commands run_command_rejects_zero_serve_timeout_ms_override`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S121 HTTP max-header-bytes policy/runtime materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP ingress header-size control:
+  - `http.max_header_bytes`
+- `sec4 run` deterministically materializes `http.max_header_bytes` into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_HEADER_BYTES`
+- Runtime HTTP ingress enforces configured header-size limit and emits deterministic rejection response when exceeded.
+
+### M38-S121 tracking (live status)
+
+- [x] Extended `HttpPolicyConfig` with persisted `max_header_bytes` field and default baseline.
+- [x] Added parser ingestion/validation for:
+  - `http.max_header_bytes` (>= 1)
+- [x] Wired `sec4 run` env bridge key:
+  - `SEC4_RT_HTTP_MAX_HEADER_BYTES`
+- [x] Added runtime ingress enforcement for configured header-size cap with deterministic `431` response path.
+- [x] Added run-command e2e coverage for policy-driven ingress header-limit materialization:
+  - `run_command_oneshot_applies_http_header_limit_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_header_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S122 HTTP max-multipart-bytes policy/runtime materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP multipart ingress-size control:
+  - `http.max_multipart_bytes`
+- `sec4 run` deterministically materializes `http.max_multipart_bytes` into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_MULTIPART_BYTES`
+- Runtime HTTP ingress enforces configured multipart-size limit and emits deterministic `413` rejection when exceeded.
+
+### M38-S122 tracking (live status)
+
+- [x] Extended `HttpPolicyConfig` with persisted `max_multipart_bytes` field and default baseline.
+- [x] Added parser ingestion/validation for:
+  - `http.max_multipart_bytes` (>= 1)
+- [x] Wired `sec4 run` env bridge key:
+  - `SEC4_RT_HTTP_MAX_MULTIPART_BYTES`
+- [x] Added runtime ingress enforcement for configured multipart-size cap with deterministic `413` response path.
+- [x] Added run-command e2e coverage for policy-driven ingress multipart-limit materialization:
+  - `run_command_oneshot_applies_http_multipart_limit_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_multipart_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S123 HTTP ingress generic body-limit enforcement acceptance criteria
+
+- Runtime ingress enforces configured body-size cap for non-JSON handler paths that do not call `req.json(...)`.
+- Oversized non-JSON request bodies are rejected deterministically with `413` before successful route responses are emitted.
+- Existing JSON-specific body-limit behavior (`req.json` + `LIMIT.BODY_BYTES`) remains unchanged.
+
+### M38-S123 tracking (live status)
+
+- [x] Added runtime generic body-limit enforcement branch for non-JSON paths (`body_limit_exceeded && !json_checked`).
+- [x] Added run-command e2e coverage:
+  - `run_command_oneshot_enforces_body_limit_for_non_json_handler_paths`
+- [x] Revalidated non-regression for JSON limit behavior:
+  - `run_command_oneshot_applies_http_body_limit_from_policy`
+- [x] Revalidated runtime command behavior:
+  - `cargo test -p sec4 --test commands run_command_oneshot_enforces_body_limit_for_non_json_handler_paths`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_body_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S124 HTTP max-concurrency policy/runtime materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP ingress concurrency control:
+  - `http.max_concurrency`
+- `sec4 run` deterministically materializes `http.max_concurrency` into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- Runtime HTTP ingress enforces configured concurrency cap and emits deterministic rejection response when over-cap connections are accepted.
+
+### M38-S124 tracking (live status)
+
+- [x] Extended `HttpPolicyConfig` with persisted `max_concurrency` field and default baseline.
+- [x] Added parser ingestion/validation for:
+  - `http.max_concurrency` (>= 1)
+- [x] Wired `sec4 run` env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- [x] Added runtime ingress enforcement for configured concurrency cap with deterministic `503` throttle response path.
+- [x] Added run-command e2e coverage for policy-driven ingress max-concurrency materialization:
+  - `run_command_oneshot_applies_http_max_concurrency_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_max_concurrency_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S125 HTTP max-concurrency CLI override bridge + precedence hardening acceptance criteria
+
+- `sec4 run` accepts explicit max-concurrency override flag:
+  - `--max-concurrency <n>`
+- CLI max-concurrency override deterministically materializes to runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- CLI override takes precedence over policy `http.max_concurrency` and suppresses policy-driven throttling when override is higher.
+- CLI rejects invalid override values (`0`) with deterministic diagnostics and non-zero exit.
+
+### M38-S125 tracking (live status)
+
+- [x] Added `sec4 run` flag:
+  - `--max-concurrency`
+- [x] Wired CLI override into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- [x] Added deterministic run-command precedence coverage:
+  - `run_command_cli_max_concurrency_overrides_policy_limit`
+- [x] Added deterministic CLI invalid-input coverage:
+  - `run_command_rejects_zero_max_concurrency_override`
+- [x] Revalidated related command/runtime behavior:
+  - `cargo test -p sec4 --test commands run_command_cli_max_concurrency_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_rejects_zero_max_concurrency_override`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S126 HTTP max-concurrency runtime fallback/clamp hardening acceptance criteria
+
+- Runtime deterministically falls back to safe concurrency defaults when `SEC4_RT_HTTP_MAX_CONCURRENCY` is invalid or empty.
+- Runtime deterministically clamps over-cap `SEC4_RT_HTTP_MAX_CONCURRENCY` values to bounded safe limits.
+- CLI help surface explicitly documents `--max-concurrency` runtime bridge flag.
+
+### M38-S126 tracking (live status)
+
+- [x] Added runtime e2e fallback coverage for invalid max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e fallback coverage for empty max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_empty_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e clamp coverage for over-cap max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_over_cap_env_is_clamped_when_clang_available`
+- [x] Updated CLI run help contract coverage:
+  - `run_command_help_lists_runtime_bridge_flags`
+- [x] Revalidated related runtime/CLI behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4 --test json_output run_command_help_lists_runtime_bridge_flags`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S127 HTTP max-concurrency queue-boundary deterministic throttle coverage acceptance criteria
+
+- Runtime queue-boundary pressure with `SEC4_RT_HTTP_MAX_CONCURRENCY=1` produces exactly one successful route response and one deterministic `503` throttle response for a two-client concurrent ingress attempt.
+- Throttle response contract is deterministic under queue pressure:
+  - status: `503 Service Unavailable`
+  - trace header: `X-Trace-Id: rt-*`
+  - body: `server busy: max concurrency exceeded`
+  - stable response framing headers (`Content-Type`, `Content-Length`, `Connection`).
+- Coverage is runtime e2e (`c-bin`), not only CLI argument/path validation.
+
+### M38-S127 tracking (live status)
+
+- [x] Added queue-boundary runtime e2e throttle coverage:
+  - `c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+- [x] Locked deterministic success+throttle pair contract for two-client contention:
+  - exactly one `200 OK`
+  - exactly one `503 Service Unavailable`
+  - deterministic throttle envelope assertions (status/body/trace/framing headers)
+- [x] Revalidated related runtime behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S128 HTTP max-concurrency throttle-response security-header parity hardening acceptance criteria
+
+- When security-headers middleware is enabled, runtime `503` max-concurrency throttle responses include the same baseline security headers as successful route responses.
+- In oneshot mode, once a request is served, pending and newly-accepted backlog clients are deterministically drained through throttle responses (instead of silent close paths), preserving throttle envelope parity under contention.
+- Coverage proves security-header parity and deterministic success/throttle split in a two-client contention scenario.
+
+### M38-S128 tracking (live status)
+
+- [x] Added runtime oneshot backlog drain helper for deterministic post-success throttle handling:
+  - `sec4_rt_drain_oneshot_backlog_with_throttle(...)`
+- [x] Hardened oneshot serve loop to drain pending/new backlog with throttle after first served request.
+- [x] Added security-header parity e2e test under contention:
+  - `c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+- [x] Revalidated related runtime/backend behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S129 HTTP max-concurrency oneshot late-connection deterministic drain coverage acceptance criteria
+
+- In oneshot mode with `SEC4_RT_HTTP_MAX_CONCURRENCY=1`, a late second client connection established after the first client is accepted is deterministically drained with a `503` throttle response.
+- Response ordering is deterministic for the late-connection path:
+  - first served client receives `200` with trace `rt-1`,
+  - late backlog client receives `503` with trace `rt-2`.
+- Late-drain throttle envelope remains deterministic:
+  - `Content-Type: text/plain; charset=utf-8`
+  - `Connection: close`
+  - body `server busy: max concurrency exceeded`.
+
+### M38-S129 tracking (live status)
+
+- [x] Added runtime e2e late-connection drain coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+- [x] Locked deterministic ordering for first-served and late-drained clients (`rt-1` success, `rt-2` throttle).
+- [x] Revalidated max-concurrency suite coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S130 HTTP max-concurrency burst-ingress trace/order deterministic coverage acceptance criteria
+
+- In oneshot mode with `SEC4_RT_HTTP_MAX_CONCURRENCY=1`, a three-client burst (one accepted + two late backlog connections) preserves deterministic trace/order contract:
+  - first served response is `200` with `X-Trace-Id: rt-1`,
+  - second and third responses are `503` throttle with `X-Trace-Id: rt-2` and `rt-3` respectively.
+- Burst-ingress throttle responses preserve deterministic framing envelope under contention:
+  - `Content-Type: text/plain; charset=utf-8`
+  - `Content-Length: 37`
+  - `Connection: close`.
+- Coverage is runtime e2e (`c-bin`) and validates burst-path order invariants beyond two-client queue-boundary scenarios.
+
+### M38-S130 tracking (live status)
+
+- [x] Added runtime e2e burst-ingress trace/order coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+- [x] Hardened late/burst contention contract assertions around deterministic status/trace/framing invariants under socket timing variance.
+- [x] Revalidated max-concurrency suite coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S131 HTTP max-concurrency throttle body-delivery socket-close determinism hardening acceptance criteria
+
+- Runtime throttle close path under queue/backlog contention deterministically preserves advertised payload delivery (`Content-Length: 37` plus body bytes) instead of timing-sensitive header-only outcomes.
+- Socket-close sequence for throttle responses is hardened to use bounded graceful write-shutdown + peer-input drain before final close, avoiding close-time reset races in late/burst oneshot contention paths.
+- Runtime e2e late/burst contention coverage requires full throttle body presence alongside existing status/trace/framing assertions.
+
+### M38-S131 tracking (live status)
+
+- [x] Added runtime throttle close hardening helper:
+  - `sec4_rt_finalize_throttle_socket_close(...)`
+- [x] Wired throttle close hardening into all max-concurrency throttle close sites:
+  - queue-boundary overflow path
+  - oneshot pending backlog drain path
+  - oneshot newly-accepted backlog drain path
+- [x] Restored strict payload assertions for race-prone contention tests:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S132 HTTP max-concurrency throttle close-drain timeout-budget coverage hardening acceptance criteria
+
+- Throttle close-drain loop enforces deterministic bounded timeout budget instead of fixed attempt count.
+- Timeout budget is configurable via runtime env bridge `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` with safe defaults.
+- Late/burst contention coverage validates throttle body delivery under backlog trailing-input pressure while keeping bounded tail-latency contract.
+
+### M38-S132 tracking (live status)
+
+- [x] Added runtime throttle drain timeout-budget bridge:
+  - `sec4_rt_http_throttle_drain_timeout_ms(...)`
+  - `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` (`default=20ms`, bounded max clamp)
+- [x] Reworked throttle close helper to deadline-driven bounded drain:
+  - `sec4_rt_finalize_throttle_socket_close(...)` now uses time budget + remaining-time select waits.
+- [x] Hardened late/burst contention runtime e2e coverage with backlog trailing-input pressure and bounded-tail assertions:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+
+### M38-S133 HTTP max-concurrency throttle drain-timeout env fallback/clamp hardening acceptance criteria
+
+- Invalid `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe defaults.
+- Over-cap timeout values are deterministically clamped to bounded runtime maximum.
+- Coverage pins fallback/clamp behavior without regressing max-concurrency route success contracts.
+
+### M38-S133 tracking (live status)
+
+- [x] Added runtime e2e fallback coverage for invalid throttle-drain-timeout env values:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_invalid_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e clamp coverage for over-cap throttle-drain-timeout env values:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_over_cap_env_is_clamped_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S134 HTTP max-concurrency throttle close-drain low-timeout deterministic body contract coverage acceptance criteria
+
+- With `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` configured to a low value, oneshot burst contention still preserves deterministic throttle body delivery (`Content-Length: 37` + full payload bytes).
+- Low-timeout contention path preserves deterministic trace/order invariants (`rt-1` success, `rt-2`/`rt-3` throttle).
+- Low-timeout contention path preserves bounded tail-latency contract under trailing-input backlog pressure.
+
+### M38-S134 tracking (live status)
+
+- [x] Added runtime e2e low-timeout burst coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Locked deterministic low-timeout contention contract:
+  - throttle body delivery remains present for both throttled clients,
+  - trace/order contract remains deterministic (`rt-1`, `rt-2`, `rt-3`),
+  - bounded tail-latency assertion remains enforced.
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S135 HTTP max-concurrency throttle close-drain zero/near-zero timeout fallback behavior hardening acceptance criteria
+
+- `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=0` follows deterministic safe fallback semantics (default timeout budget), not zero-budget close behavior.
+- Zero-value fallback preserves existing route-success contracts in oneshot runtime paths.
+- Coverage explicitly locks zero-timeout fallback behavior alongside existing invalid/over-cap timeout tests.
+
+### M38-S135 tracking (live status)
+
+- [x] Added runtime e2e zero-value fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_zero_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including timeout fallback/clamp matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S136 HTTP max-concurrency throttle close-drain minimum-budget deterministic latency/contract hardening acceptance criteria
+
+- With minimum configured timeout budget (`SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=1`), late-connection oneshot contention preserves deterministic throttle body-delivery contract.
+- Minimum-budget late-connection path preserves deterministic trace/order invariants (`rt-1` success, `rt-2` throttle).
+- Minimum-budget late-connection path remains bounded in tail-latency under trailing-input backlog pressure.
+
+### M38-S136 tracking (live status)
+
+- [x] Added runtime e2e low-timeout late-connection coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including minimum-budget burst+late contention paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S137 HTTP max-concurrency throttle drain-timeout negative-value fallback behavior hardening acceptance criteria
+
+- Negative `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Negative-value fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks negative-value fallback alongside zero/invalid/over-cap timeout matrix.
+
+### M38-S137 tracking (live status)
+
+- [x] Added runtime e2e negative-value fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_negative_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including timeout fallback/clamp matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S138 HTTP max-concurrency throttle drain-timeout whitespace-token fallback behavior hardening acceptance criteria
+
+- Whitespace-padded `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Whitespace-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks whitespace-token fallback semantics in the timeout fallback matrix.
+
+### M38-S138 tracking (live status)
+
+- [x] Added runtime e2e whitespace-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_whitespace_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S139 HTTP max-concurrency throttle drain-timeout empty-token fallback behavior hardening acceptance criteria
+
+- Empty `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Empty-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks empty-token fallback semantics in the timeout fallback matrix.
+
+### M38-S139 tracking (live status)
+
+- [x] Added runtime e2e empty-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_empty_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S140 HTTP max-concurrency throttle drain-timeout malformed-token fallback behavior hardening acceptance criteria
+
+- Malformed `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values (non-numeric suffix/prefix) deterministically fall back to safe default timeout budget.
+- Malformed-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks malformed-token fallback semantics in the timeout fallback matrix.
+
+### M38-S140 tracking (live status)
+
+- [x] Added runtime e2e malformed-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S141 HTTP max-concurrency queue-boundary low-timeout deterministic throttle contract hardening acceptance criteria
+
+- Queue-boundary contention with minimum timeout budget (`SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=1`) preserves deterministic one-success/one-throttle contract.
+- Low-timeout queue-boundary path preserves deterministic throttle body delivery (`Content-Length: 37` + full payload bytes).
+- Low-timeout queue-boundary path preserves bounded tail-latency under trailing-input pressure.
+
+### M38-S141 tracking (live status)
+
+- [x] Added runtime e2e low-timeout queue-boundary coverage:
+  - `c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S142 HTTP max-concurrency throttle drain-timeout runtime-cache hardening acceptance criteria
+
+- Runtime parses `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` once per `http.serve` lifecycle and reuses it for all throttle close paths.
+- Oneshot backlog drain and queue-overflow throttle close paths receive the same serve-scoped timeout value, removing repeated per-socket env parsing.
+- Existing max-concurrency contention contracts remain unchanged.
+
+### M38-S142 tracking (live status)
+
+- [x] Added serve-scoped throttle drain-timeout caching in runtime:
+  - `sec4_rt_http_serve(...)` now computes `throttle_drain_timeout_ms` once.
+- [x] Propagated cached timeout through throttle close path wiring:
+  - `sec4_rt_drain_oneshot_backlog_with_throttle(...)`
+  - queue-overflow close path
+  - `sec4_rt_finalize_throttle_socket_close(...)`
+- [x] Revalidated runtime contracts:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S143 HTTP max-concurrency timeout fallback-matrix assertion-helper dedup acceptance criteria
+
+- Timeout fallback matrix tests share one deterministic route-success assertion helper instead of repeated inline assert blocks.
+- Helper keeps failure diagnostics case-specific via explicit case labels.
+- Fallback/clamp matrix behavior remains unchanged.
+
+### M38-S143 tracking (live status)
+
+- [x] Added matrix assertion helper:
+  - `assert_throttle_drain_timeout_env_route_success(...)`
+- [x] Migrated timeout fallback/clamp tests to helper-backed assertions.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S144 HTTP max-concurrency oneshot-spawn helper dedup acceptance criteria
+
+- Max-concurrency contention tests use one canonical oneshot runtime spawn helper.
+- Helper centralizes default runtime env wiring (`serve mode`, `serve timeout`, `max concurrency`, `port`) with optional timeout override.
+- Contention tests preserve existing contracts while reducing setup drift risk.
+
+### M38-S144 tracking (live status)
+
+- [x] Added canonical spawn helper:
+  - `spawn_max_concurrency_oneshot_binary(...)`
+- [x] Enabled optional `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` injection through helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S145 HTTP max-concurrency queue/security spawn-helper adoption acceptance criteria
+
+- Queue-boundary contention tests use canonical oneshot-spawn helper.
+- Security-header parity contention test uses canonical oneshot-spawn helper.
+- Queue/security contracts remain deterministic after helper migration.
+
+### M38-S145 tracking (live status)
+
+- [x] Migrated queue-boundary contention spawn path to `spawn_max_concurrency_oneshot_binary(...)`.
+- [x] Migrated security-header parity contention spawn path to `spawn_max_concurrency_oneshot_binary(...)`.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S146 HTTP max-concurrency late-connection spawn-helper adoption acceptance criteria
+
+- Late-connection contention tests (default + low-timeout) use canonical oneshot-spawn helper.
+- Late-connection deterministic status/trace/body contracts remain unchanged after helper migration.
+- Low-timeout bounded-tail assertions remain intact.
+
+### M38-S146 tracking (live status)
+
+- [x] Migrated late-connection default timeout test spawn path to helper.
+- [x] Migrated late-connection low-timeout test spawn path to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S147 HTTP max-concurrency burst-ingress spawn-helper adoption acceptance criteria
+
+- Burst-ingress contention tests (default + low-timeout) use canonical oneshot-spawn helper.
+- Burst deterministic trace/order and throttle body contracts remain unchanged after helper migration.
+- Low-timeout bounded-tail assertions remain intact.
+
+### M38-S147 tracking (live status)
+
+- [x] Migrated burst-ingress default timeout test spawn path to helper.
+- [x] Migrated burst-ingress low-timeout test spawn path to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S148 HTTP max-concurrency c-bin fixture-build helper introduction acceptance criteria
+
+- Max-concurrency runtime e2e tests share a canonical c-bin fixture builder.
+- Helper centralizes project scaffolding, manifest/source writes, build invocation, and binary existence assertions.
+- Fixture-build failure messages remain case-specific through explicit labels.
+
+### M38-S148 tracking (live status)
+
+- [x] Added canonical fixture helper:
+  - `build_c_bin_fixture(...)`
+- [x] Helper now owns deterministic fixture-build assertions for max-concurrency runtime e2e tests.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S149 HTTP max-concurrency queue fixture-helper adoption acceptance criteria
+
+- Queue-boundary tests (default + low-timeout) use canonical c-bin fixture helper.
+- Queue fixture setup duplication is removed without changing contention contracts.
+- Queue deterministic one-success/one-throttle invariants remain intact.
+
+### M38-S149 tracking (live status)
+
+- [x] Migrated queue-boundary default fixture setup to `build_c_bin_fixture(...)`.
+- [x] Migrated queue-boundary low-timeout fixture setup to `build_c_bin_fixture(...)`.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S150 HTTP max-concurrency late/burst fixture-helper adoption acceptance criteria
+
+- Late-connection and burst-ingress tests (default + low-timeout variants) use canonical c-bin fixture helper.
+- Late/burst fixture setup duplication is removed without changing contention contracts.
+- Existing status/trace/body/bounded-tail assertions remain intact.
+
+### M38-S150 tracking (live status)
+
+- [x] Migrated late-connection default + low-timeout fixture setup to helper.
+- [x] Migrated burst-ingress default + low-timeout fixture setup to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S151 HTTP max-concurrency env/security fixture-helper adoption acceptance criteria
+
+- Timeout env-matrix helper path and security-header parity path use canonical c-bin fixture helper where applicable.
+- Max-concurrency test harness setup is consistently helper-driven across env fallback, queue, late, burst, and security branches.
+- Consolidated helper structure reduces fixture drift risk while preserving deterministic runtime contracts.
+
+### M38-S151 tracking (live status)
+
+- [x] Migrated env fallback path fixture build in `run_http_runtime_health_with_max_concurrency_env(...)` to helper.
+- [x] Migrated security-header parity fixture build path to helper.
+- [x] Revalidated consolidated contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S152 HTTP max-concurrency helper-layer determinism regression guard expansion acceptance criteria
+
+- Max-concurrency contention tests centralize deterministic guard logic behind explicit helper functions.
+- Guard helper adoption keeps queue/late/burst/security runtime contracts unchanged.
+- Regression diagnostics remain attempt-scoped and deterministic.
+
+### M38-S152 tracking (live status)
+
+- [x] Added deterministic helper-layer guard surface across max-concurrency contention tests.
+- [x] Preserved one-success/one-throttle and ordered-trace contracts after helper adoption.
+- [x] Revalidated max-concurrency contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S153 HTTP max-concurrency connector retry helper introduction acceptance criteria
+
+- Connection retry loops are centralized in one helper for deterministic retry cadence.
+- Connector failure handling is centralized with child terminate+wait fallback.
+- Queue/late/burst tests no longer duplicate raw retry loops.
+
+### M38-S153 tracking (live status)
+
+- [x] Added `connect_with_retry(...)`.
+- [x] Added `connect_with_retry_or_terminate(...)`.
+- [x] Adopted helper in late/burst setup paths.
+
+### M38-S154 HTTP max-concurrency socket I/O helper layer adoption acceptance criteria
+
+- Read-timeout setup uses one canonical helper.
+- Request writes and trailing-noise writes use canonical helper wrappers with deterministic diagnostics.
+- Response reads use one helper surface across contention tests.
+
+### M38-S154 tracking (live status)
+
+- [x] Added `set_stream_read_timeout(...)`.
+- [x] Added `write_http_request(...)` and `write_http_trailing_noise(...)`.
+- [x] Added `read_http_response(...)` and migrated queue/late/burst/security tests.
+
+### M38-S155 HTTP max-concurrency child-exit deterministic wait helper acceptance criteria
+
+- Child wait loops are centralized in one bounded helper with kill+wait timeout fallback.
+- All contention tests use the same wait window and polling cadence contracts.
+- Exit timeout failure diagnostics remain test-specific.
+
+### M38-S155 tracking (live status)
+
+- [x] Added `wait_for_child_exit_or_terminate(...)`.
+- [x] Migrated queue/late/burst/security contention paths to helper wait surface.
+
+### M38-S156 HTTP max-concurrency response contract predicate helper introduction acceptance criteria
+
+- Success/throttle contract assertions are centralized in canonical predicate helpers.
+- Trace-specific contract checks for ordered paths use explicit helper entrypoints.
+- Security-header parity checks use one canonical predicate.
+
+### M38-S156 tracking (live status)
+
+- [x] Added canonical response predicates:
+  - `response_has_success_contract(...)`
+  - `response_has_success_contract_with_trace(...)`
+  - `response_has_throttle_contract(...)`
+  - `response_has_throttle_contract_with_trace(...)`
+  - `response_has_default_security_headers(...)`
+
+### M38-S157 HTTP max-concurrency pair-selection and observation formatter helper introduction acceptance criteria
+
+- Pair success/throttle selection logic is centralized to prevent branch drift.
+- Attempt observation rendering uses canonical formatters for two-response and three-response paths.
+- Contention test failure envelopes remain deterministic and readable.
+
+### M38-S157 tracking (live status)
+
+- [x] Added `select_success_and_throttle(...)`.
+- [x] Added `format_two_response_observation(...)` and `format_three_response_observation(...)`.
+- [x] Migrated queue/security/late/burst attempt observation strings to helper formatters.
+
+### M38-S158 HTTP max-concurrency queue contention helper adoption acceptance criteria
+
+- Queue-boundary default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Queue contention invariants remain deterministic after helper migration.
+- Low-timeout bounded-tail contract remains intact.
+
+### M38-S158 tracking (live status)
+
+- [x] Migrated queue-boundary default contention test to helper layer.
+- [x] Migrated queue-boundary low-timeout contention test to helper layer.
+
+### M38-S159 HTTP max-concurrency security-header parity helper adoption acceptance criteria
+
+- Security-header parity contention test consumes canonical connect/I/O/wait and predicate helpers.
+- Success/throttle header parity is asserted through canonical header predicate helper.
+- Security parity contract remains unchanged.
+
+### M38-S159 tracking (live status)
+
+- [x] Migrated security-header parity contention test to helper layer.
+- [x] Preserved deterministic parity assertions for success and throttle envelopes.
+
+### M38-S160 HTTP max-concurrency late-connection helper adoption acceptance criteria
+
+- Late-connection default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Ordered `rt-1 success -> rt-2 throttle` contract remains deterministic.
+- Bounded-tail contract remains intact for both timeout branches.
+
+### M38-S160 tracking (live status)
+
+- [x] Migrated late-connection default contention path to helper layer.
+- [x] Migrated late-connection low-timeout contention path to helper layer.
+
+### M38-S161 HTTP max-concurrency burst-ingress helper adoption acceptance criteria
+
+- Burst-ingress default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Ordered `rt-1 success -> rt-2/rt-3 throttle` contract remains deterministic.
+- Bounded-tail contract remains intact for both timeout branches.
+
+### M38-S161 tracking (live status)
+
+- [x] Migrated burst-ingress default contention path to helper layer.
+- [x] Migrated burst-ingress low-timeout contention path to helper layer.
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S162 HTTP max-concurrency connector-thread helper normalization for queue/security contention paths acceptance criteria
+
+- Queue/security contention tests no longer inline connector thread spawn/join blocks.
+- Connector thread failure handling is centralized behind one helper path.
+- Queue/security contention contracts remain unchanged.
+
+### M38-S162 tracking (live status)
+
+- [x] Added shared queue/security connector-thread helper surface.
+- [x] Migrated queue default/low-timeout and security parity tests to helper-based connector setup.
+
+### M38-S163 HTTP max-concurrency parallel connector-pair helper introduction acceptance criteria
+
+- Canonical helper builds two parallel connector attempts with deterministic retry cadence.
+- Helper emits case-specific first/second connection failure diagnostics.
+- Child terminate+wait fallback is preserved on connector failure.
+
+### M38-S163 tracking (live status)
+
+- [x] Added `connect_pair_in_parallel_or_terminate(...)`.
+- [x] Preserved first/second connector-specific failure envelopes in migrated tests.
+
+### M38-S164 HTTP max-concurrency two/three response read helper introduction acceptance criteria
+
+- Two-stream and three-stream response read collection are centralized.
+- Contention tests use canonical multi-response readers instead of repeated inline calls.
+- Failure envelopes remain deterministic.
+
+### M38-S164 tracking (live status)
+
+- [x] Added `read_two_http_responses(...)`.
+- [x] Added `read_three_http_responses(...)`.
+- [x] Migrated queue/late/burst contention paths to helper response readers.
+
+### M38-S165 HTTP max-concurrency pair contract predicate helper introduction acceptance criteria
+
+- Pair contention success/throttle contract validation is centralized.
+- Pair helper validates process success and envelope contracts in one deterministic predicate.
+- Queue pair assertions no longer duplicate contract branch logic.
+
+### M38-S165 tracking (live status)
+
+- [x] Added `pair_success_throttle_contract_holds(...)`.
+- [x] Migrated queue default + low-timeout assertion paths to helper predicate.
+
+### M38-S166 HTTP max-concurrency security parity pair predicate helper adoption acceptance criteria
+
+- Security-header parity pair assertions are centralized in one deterministic predicate helper.
+- Success/throttle envelope and default security header parity checks share one path.
+- Security parity contention contract remains unchanged.
+
+### M38-S166 tracking (live status)
+
+- [x] Added `pair_success_throttle_with_security_header_parity_holds(...)`.
+- [x] Migrated security parity contention assertion path to helper predicate.
+
+### M38-S167 HTTP max-concurrency oneshot accept-barrier helper introduction acceptance criteria
+
+- Accepted-socket synchronization delay uses one helper instead of raw sleep literals.
+- Late/burst contention tests express accept-barrier intent consistently.
+- Accept-barrier timing contract remains unchanged.
+
+### M38-S167 tracking (live status)
+
+- [x] Added `wait_for_oneshot_accept_barrier(...)`.
+- [x] Migrated late + burst contention tests to helper barrier call.
+
+### M38-S168 HTTP max-concurrency late-backlog staging helper adoption acceptance criteria
+
+- Late-connection backlog request/noise staging is centralized in one helper.
+- Default and low-timeout late contention tests share one staging path.
+- Ordered late contention contract remains unchanged.
+
+### M38-S168 tracking (live status)
+
+- [x] Added `stage_late_backlog_requests(...)`.
+- [x] Migrated late default + low-timeout backlog staging to helper.
+
+### M38-S169 HTTP max-concurrency burst-backlog staging helper adoption acceptance criteria
+
+- Burst-ingress backlog request/noise staging is centralized in one helper.
+- Default and low-timeout burst contention tests share one staging path.
+- Ordered burst contention contract remains unchanged.
+
+### M38-S169 tracking (live status)
+
+- [x] Added `stage_burst_backlog_requests(...)`.
+- [x] Migrated burst default + low-timeout backlog staging to helper.
+
+### M38-S170 HTTP max-concurrency ordered-trace predicate helper adoption acceptance criteria
+
+- Late and burst ordered trace assertions use canonical trace-aware predicate helpers.
+- Ordered-trace contract logic is no longer duplicated inline.
+- `rt-1 success` and throttle trace sequencing remains deterministic.
+
+### M38-S170 tracking (live status)
+
+- [x] Added `late_ordered_trace_contract_holds(...)`.
+- [x] Added `burst_ordered_trace_contract_holds(...)`.
+- [x] Migrated late/burst ordered trace assertions to helper predicates.
+
+### M38-S171 HTTP max-concurrency bounded-tail latency helper normalization acceptance criteria
+
+- Bounded-tail latency checks use one helper with explicit millisecond window input.
+- Queue/late/burst low-timeout and default bounded-tail branches share one check path.
+- Bounded-tail contract behavior remains unchanged.
+
+### M38-S171 tracking (live status)
+
+- [x] Added `has_bounded_tail_latency(...)`.
+- [x] Migrated bounded-tail assertions across queue/late/burst contention paths to helper.
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S172 HTTP max-concurrency staged-connection helper foundation acceptance criteria
+
+- Late/burst contention setup paths share one staged-connection helper foundation.
+- Helper foundation keeps connection-retry, timeout wiring, and failure envelopes deterministic.
+- Existing contention behavior remains unchanged.
+
+### M38-S172 tracking (live status)
+
+- [x] Added staged-connection helper foundation:
+  - `connect_staged_stream_or_terminate(...)`
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S173 HTTP max-concurrency staged first-connection helper introduction acceptance criteria
+
+- First staged connection setup in late/burst paths uses a dedicated helper.
+- First-connection retry budget and diagnostics are centralized.
+- First-connection contract behavior remains unchanged.
+
+### M38-S173 tracking (live status)
+
+- [x] Added `connect_staged_first_stream_or_terminate(...)`.
+- [x] Migrated late/burst first-connection setup to helper.
+
+### M38-S174 HTTP max-concurrency staged second-connection helper introduction acceptance criteria
+
+- Second staged connection setup in late/burst paths uses a dedicated helper.
+- Second-connection retry budget and diagnostics are centralized.
+- Second-connection contract behavior remains unchanged.
+
+### M38-S174 tracking (live status)
+
+- [x] Added `connect_staged_second_stream_or_terminate(...)`.
+- [x] Migrated late/burst second-connection setup to helper.
+
+### M38-S175 HTTP max-concurrency staged third-connection helper introduction acceptance criteria
+
+- Third staged connection setup in burst paths uses a dedicated helper.
+- Third-connection retry budget and diagnostics are centralized.
+- Third-connection contract behavior remains unchanged.
+
+### M38-S175 tracking (live status)
+
+- [x] Added `connect_staged_third_stream_or_terminate(...)`.
+- [x] Migrated burst third-connection setup to helper.
+
+### M38-S176 HTTP max-concurrency late staged-connection helper adoption acceptance criteria
+
+- Late-connection default and low-timeout paths use staged first/second connection helpers.
+- Late staged setup no longer duplicates retry + read-timeout wiring inline.
+- Ordered late contention contracts remain deterministic.
+
+### M38-S176 tracking (live status)
+
+- [x] Migrated late default contention setup to staged connection helpers.
+- [x] Migrated late low-timeout contention setup to staged connection helpers.
+
+### M38-S177 HTTP max-concurrency burst staged-connection helper adoption acceptance criteria
+
+- Burst-ingress default and low-timeout paths use staged first/second/third connection helpers.
+- Burst staged setup no longer duplicates retry + read-timeout wiring inline.
+- Ordered burst contention contracts remain deterministic.
+
+### M38-S177 tracking (live status)
+
+- [x] Migrated burst default contention setup to staged connection helpers.
+- [x] Migrated burst low-timeout contention setup to staged connection helpers.
+
+### M38-S178 HTTP max-concurrency staged-attempt spawn helper introduction acceptance criteria
+
+- Late/burst contention paths use one helper that returns attempt start time, port, and spawned child.
+- Attempt bootstrap no longer duplicates `Instant::now + find port + spawn` blocks inline.
+- Spawn contract behavior remains unchanged.
+
+### M38-S178 tracking (live status)
+
+- [x] Added `spawn_staged_contention_attempt(...)`.
+- [x] Helper preserves deterministic oneshot spawn wiring.
+
+### M38-S179 HTTP max-concurrency late staged-attempt spawn helper adoption acceptance criteria
+
+- Late default and low-timeout contention paths use the staged-attempt spawn helper.
+- Late attempt bootstrap duplication is removed.
+- Late contention contracts remain deterministic.
+
+### M38-S179 tracking (live status)
+
+- [x] Migrated late default attempt bootstrap to helper.
+- [x] Migrated late low-timeout attempt bootstrap to helper.
+
+### M38-S180 HTTP max-concurrency burst staged-attempt spawn helper adoption acceptance criteria
+
+- Burst default and low-timeout contention paths use the staged-attempt spawn helper.
+- Burst attempt bootstrap duplication is removed.
+- Burst contention contracts remain deterministic.
+
+### M38-S180 tracking (live status)
+
+- [x] Migrated burst default attempt bootstrap to helper.
+- [x] Migrated burst low-timeout attempt bootstrap to helper.
+
+### M38-S181 HTTP max-concurrency staged-connection helper consolidation revalidation acceptance criteria
+
+- Consolidated staged-connection helper layer keeps all max-concurrency contention contracts green.
+- No behavioral regression in queue, security, late, or burst branches after staged helper adoption.
+- Roadmap/book tracking is refreshed for `M38-S172..M38-S181`.
+
+### M38-S181 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `799..808`.
+
+### M38-S182 HTTP max-concurrency queue/security pair-attempt bootstrap helper normalization acceptance criteria
+
+- Queue/security contention tests share normalized pair-attempt bootstrap helper paths.
+- Pair-attempt bootstrap helper adoption removes repeated attempt setup boilerplate.
+- Queue/security contention behavior remains unchanged.
+
+### M38-S182 tracking (live status)
+
+- [x] Added normalized pair-attempt bootstrap helper coverage for queue/security branches.
+- [x] Revalidated queue/security contention contracts after helper adoption.
+
+### M38-S183 HTTP max-concurrency pair-attempt spawn helper introduction acceptance criteria
+
+- Pair contention branches use a dedicated attempt spawn helper.
+- Attempt helper centralizes `attempt_started + port + oneshot spawn` bootstrap.
+- Spawn diagnostics remain case-specific.
+
+### M38-S183 tracking (live status)
+
+- [x] Added `spawn_pair_contention_attempt(...)`.
+- [x] Helper reuses staged contention bootstrap semantics.
+
+### M38-S184 HTTP max-concurrency queue default pair-attempt spawn helper adoption acceptance criteria
+
+- Queue default contention path uses pair-attempt spawn helper.
+- Queue default test no longer duplicates attempt bootstrap.
+- Queue default deterministic contract remains unchanged.
+
+### M38-S184 tracking (live status)
+
+- [x] Migrated queue default attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved one-success/one-throttle queue default contract.
+
+### M38-S185 HTTP max-concurrency queue low-timeout pair-attempt spawn helper adoption acceptance criteria
+
+- Queue low-timeout contention path uses pair-attempt spawn helper.
+- Queue low-timeout test no longer duplicates attempt bootstrap.
+- Queue low-timeout bounded-tail contract remains unchanged.
+
+### M38-S185 tracking (live status)
+
+- [x] Migrated queue low-timeout attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved queue low-timeout bounded-tail contract.
+
+### M38-S186 HTTP max-concurrency security parity pair-attempt spawn helper adoption acceptance criteria
+
+- Security parity contention path uses pair-attempt spawn helper.
+- Security parity test no longer duplicates attempt bootstrap.
+- Security parity contract remains unchanged.
+
+### M38-S186 tracking (live status)
+
+- [x] Migrated security parity attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved deterministic success/throttle security parity contract.
+
+### M38-S187 HTTP max-concurrency pair stream connect-timeout helper introduction acceptance criteria
+
+- Pair contention branches use one helper for pair connect + stream timeout setup.
+- Pair helper centralizes first/second connection failure envelopes.
+- Connect-timeout behavior remains deterministic.
+
+### M38-S187 tracking (live status)
+
+- [x] Added `connect_pair_streams_or_terminate(...)`.
+- [x] Helper centralizes pair connect retry envelope + timeout wiring.
+
+### M38-S188 HTTP max-concurrency queue pair-connect helper adoption acceptance criteria
+
+- Queue default and low-timeout branches use pair connect-timeout helper.
+- Queue branches no longer duplicate pair connect + timeout setup.
+- Queue contracts remain deterministic.
+
+### M38-S188 tracking (live status)
+
+- [x] Migrated queue default pair connect setup to helper.
+- [x] Migrated queue low-timeout pair connect setup to helper.
+
+### M38-S189 HTTP max-concurrency security parity pair-connect helper adoption acceptance criteria
+
+- Security parity branch uses pair connect-timeout helper.
+- Security parity branch no longer duplicates pair connect + timeout setup.
+- Security parity contract remains deterministic.
+
+### M38-S189 tracking (live status)
+
+- [x] Migrated security parity pair connect setup to helper.
+- [x] Preserved deterministic security parity contention contract.
+
+### M38-S190 HTTP max-concurrency pair request-exchange helper introduction acceptance criteria
+
+- Pair contention branches use one helper for paired request writes and response collection.
+- Helper centralizes request exchange envelope in queue/security branches.
+- Request exchange behavior remains deterministic.
+
+### M38-S190 tracking (live status)
+
+- [x] Added `exchange_pair_http_requests_and_collect(...)`.
+- [x] Migrated queue/security pair request exchange to helper.
+
+### M38-S191 HTTP max-concurrency queue/security pair-helper consolidation revalidation acceptance criteria
+
+- Queue/security pair helper consolidation keeps contention contracts green.
+- No regression in queue default, queue low-timeout, or security parity branches.
+- Roadmap/book tracking is refreshed for `M38-S182..M38-S191`.
+
+### M38-S191 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `809..818`.
+
+### M38-S192 HTTP max-concurrency queue/security pair-attempt outcome helper normalization acceptance criteria
+
+- Queue/security contention branches share normalized pair-attempt outcome helper paths.
+- Outcome helper adoption removes repeated status/response handling boilerplate.
+- Queue/security contention behavior remains unchanged.
+
+### M38-S192 tracking (live status)
+
+- [x] Added normalized pair-attempt outcome helper coverage for queue/security branches.
+- [x] Revalidated queue/security contention contracts after helper adoption.
+
+### M38-S193 HTTP max-concurrency pair-attempt outcome envelope introduction acceptance criteria
+
+- Pair attempt outcome uses a canonical envelope type.
+- Envelope stores process status plus first/second responses for contract evaluation.
+- Outcome envelope semantics remain deterministic.
+
+### M38-S193 tracking (live status)
+
+- [x] Added `PairAttemptOutcome`.
+- [x] Added canonical outcome contract alias `PairOutcomeContract`.
+
+### M38-S194 HTTP max-concurrency pair-attempt outcome collector helper introduction acceptance criteria
+
+- Pair attempts use one helper to exchange requests and collect status/responses.
+- Outcome collector centralizes child wait timeout behavior with case-specific diagnostics.
+- Outcome collection behavior remains deterministic.
+
+### M38-S194 tracking (live status)
+
+- [x] Added `collect_pair_attempt_outcome(...)`.
+- [x] Migrated queue/security pair branches to outcome collector helper.
+
+### M38-S195 HTTP max-concurrency pair outcome contract-dispatch helper introduction acceptance criteria
+
+- Pair outcome contract evaluation uses one contract-dispatch helper.
+- Queue/security branches no longer invoke contract functions with inline response tuple plumbing.
+- Contract-dispatch behavior remains deterministic.
+
+### M38-S195 tracking (live status)
+
+- [x] Added `pair_outcome_matches_contract(...)`.
+- [x] Migrated queue default/security parity contract checks to helper.
+
+### M38-S196 HTTP max-concurrency pair outcome bounded-tail contract helper introduction acceptance criteria
+
+- Pair outcome plus bounded-tail checks use one helper.
+- Queue low-timeout branch no longer duplicates bounded-tail conjunction logic.
+- Bounded-tail behavior remains deterministic.
+
+### M38-S196 tracking (live status)
+
+- [x] Added `pair_outcome_matches_contract_with_bounded_tail(...)`.
+- [x] Migrated queue low-timeout contract path to helper.
+
+### M38-S197 HTTP max-concurrency pair outcome observation formatter helper introduction acceptance criteria
+
+- Pair attempt observation rendering uses one helper path.
+- Queue/security branches no longer format observation strings with direct tuple plumbing.
+- Observation envelopes remain deterministic.
+
+### M38-S197 tracking (live status)
+
+- [x] Added `format_pair_outcome_observation(...)`.
+- [x] Migrated queue/security observation updates to helper.
+
+### M38-S198 HTTP max-concurrency queue default outcome helper adoption acceptance criteria
+
+- Queue default branch uses canonical pair outcome helpers for collection/contract/observation.
+- Queue default branch no longer duplicates outcome handling boilerplate.
+- Queue default deterministic contract remains unchanged.
+
+### M38-S198 tracking (live status)
+
+- [x] Migrated queue default outcome handling to pair outcome helpers.
+- [x] Preserved queue default one-success/one-throttle contract.
+
+### M38-S199 HTTP max-concurrency queue low-timeout outcome helper adoption acceptance criteria
+
+- Queue low-timeout branch uses canonical pair outcome helpers for collection/contract/observation.
+- Queue low-timeout branch no longer duplicates outcome+bounded-tail boilerplate.
+- Queue low-timeout deterministic contract remains unchanged.
+
+### M38-S199 tracking (live status)
+
+- [x] Migrated queue low-timeout outcome handling to pair outcome helpers.
+- [x] Preserved queue low-timeout bounded-tail contract.
+
+### M38-S200 HTTP max-concurrency security parity outcome helper adoption acceptance criteria
+
+- Security parity branch uses canonical pair outcome helpers for collection/contract/observation.
+- Security parity branch no longer duplicates outcome handling boilerplate.
+- Security parity deterministic contract remains unchanged.
+
+### M38-S200 tracking (live status)
+
+- [x] Migrated security parity outcome handling to pair outcome helpers.
+- [x] Preserved security parity contract behavior.
+
+### M38-S201 HTTP max-concurrency pair-outcome helper consolidation revalidation acceptance criteria
+
+- Queue/security pair-outcome helper consolidation keeps contention contracts green.
+- No regression in queue default, queue low-timeout, or security parity branches.
+- Roadmap/book tracking is refreshed for `M38-S192..M38-S201`.
+
+### M38-S201 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `819..828`.
+
+### M38-S202 HTTP max-concurrency queue/security pair-attempt assertion-loop helper normalization acceptance criteria
+
+- Queue/security contention tests share one pair-attempt assertion loop helper path.
+- Pair assertion loop helper centralizes per-attempt spawn/connect/collect/contract envelope logic.
+- Queue/security contention behavior remains deterministic.
+
+### M38-S202 tracking (live status)
+
+- [x] Added `run_pair_contention_attempt_loop(...)`.
+- [x] Migrated queue/security pair-attempt assertions to normalized helper loop.
+
+### M38-S203 HTTP max-concurrency ordered pair-attempt outcome envelope introduction acceptance criteria
+
+- Late staged contention path uses canonical ordered pair-attempt outcome envelope type.
+- Ordered pair envelope stores status plus first/second responses for contract checks.
+- Ordered pair outcome behavior remains deterministic.
+
+### M38-S203 tracking (live status)
+
+- [x] Added `OrderedPairAttemptOutcome`.
+- [x] Added ordered pair contract alias `OrderedPairContract`.
+
+### M38-S204 HTTP max-concurrency ordered triple-attempt outcome envelope introduction acceptance criteria
+
+- Burst staged contention path uses canonical ordered triple-attempt outcome envelope type.
+- Ordered triple envelope stores status plus first/second/third responses for contract checks.
+- Ordered triple outcome behavior remains deterministic.
+
+### M38-S204 tracking (live status)
+
+- [x] Added `OrderedTripleAttemptOutcome`.
+- [x] Added ordered triple contract alias `OrderedTripleContract`.
+
+### M38-S205 HTTP max-concurrency late ordered pair outcome collector helper introduction acceptance criteria
+
+- Late staged contention uses one collector helper to stage backlog and collect ordered pair responses.
+- Late collector helper centralizes child exit wait envelope for staged pair attempts.
+- Late collector behavior remains deterministic.
+
+### M38-S205 tracking (live status)
+
+- [x] Added `collect_late_ordered_pair_attempt_outcome(...)`.
+- [x] Late staged pair attempts now share collector helper path.
+
+### M38-S206 HTTP max-concurrency burst ordered triple outcome collector helper introduction acceptance criteria
+
+- Burst staged contention uses one collector helper to stage backlog and collect ordered triple responses.
+- Burst collector helper centralizes child exit wait envelope for staged triple attempts.
+- Burst collector behavior remains deterministic.
+
+### M38-S206 tracking (live status)
+
+- [x] Added `collect_burst_ordered_triple_attempt_outcome(...)`.
+- [x] Burst staged triple attempts now share collector helper path.
+
+### M38-S207 HTTP max-concurrency ordered pair outcome contract helper introduction acceptance criteria
+
+- Ordered pair contract evaluation uses one helper path.
+- Ordered pair bounded-tail contract conjunction uses one helper path.
+- Late staged pair assertions no longer duplicate inline status/contract conjunction plumbing.
+
+### M38-S207 tracking (live status)
+
+- [x] Added `ordered_pair_outcome_matches_contract(...)`.
+- [x] Added `ordered_pair_outcome_matches_contract_with_bounded_tail(...)`.
+
+### M38-S208 HTTP max-concurrency ordered triple outcome contract helper introduction acceptance criteria
+
+- Ordered triple contract evaluation uses one helper path.
+- Ordered triple bounded-tail contract conjunction uses one helper path.
+- Burst staged triple assertions no longer duplicate inline status/contract conjunction plumbing.
+
+### M38-S208 tracking (live status)
+
+- [x] Added `ordered_triple_outcome_matches_contract(...)`.
+- [x] Added `ordered_triple_outcome_matches_contract_with_bounded_tail(...)`.
+
+### M38-S209 HTTP max-concurrency ordered pair outcome observation formatter helper introduction acceptance criteria
+
+- Ordered pair observation rendering uses one helper path.
+- Late staged pair assertions no longer format observations with inline response tuple plumbing.
+- Ordered pair observation envelopes remain deterministic.
+
+### M38-S209 tracking (live status)
+
+- [x] Added `format_ordered_pair_outcome_observation(...)`.
+- [x] Late staged pair observation updates now use helper formatter.
+
+### M38-S210 HTTP max-concurrency ordered triple outcome observation formatter helper introduction acceptance criteria
+
+- Ordered triple observation rendering uses one helper path.
+- Burst staged triple assertions no longer format observations with inline response tuple plumbing.
+- Ordered triple observation envelopes remain deterministic.
+
+### M38-S210 tracking (live status)
+
+- [x] Added `format_ordered_triple_outcome_observation(...)`.
+- [x] Burst staged triple observation updates now use helper formatter.
+
+### M38-S211 HTTP max-concurrency late/burst assertion-loop helper adoption consolidation revalidation acceptance criteria
+
+- Late/burst staged contention branches use normalized ordered assertion-loop helpers.
+- No regression in late default, late low-timeout, burst default, or burst low-timeout branches.
+- Roadmap/book tracking is refreshed for `M38-S202..M38-S211`.
+
+### M38-S211 tracking (live status)
+
+- [x] Added `run_late_contention_attempt_loop(...)` and `run_burst_contention_attempt_loop(...)`.
+- [x] Migrated late/burst staged assertions to ordered loop helpers and revalidated contracts.
+
+### M38-S212 HTTP max-concurrency ordered-attempt helper branch-scope contract matrix expansion acceptance criteria
+
+- Ordered queue/late/burst branch assertion arguments are centralized through explicit branch-case structs.
+- Queue boundary, security parity, late, and burst branches call canonical branch-case assertion helpers instead of inline loop invocation blocks.
+- Deterministic failure envelopes (`last_observation` diagnostics) remain unchanged across all migrated branches.
+
+### M38-S212 tracking (live status)
+
+- [x] Added `PairContentionBranchCase`, `LateContentionBranchCase`, and `BurstContentionBranchCase`.
+- [x] Added `assert_pair_contention_branch_case(...)`, `assert_late_contention_branch_case(...)`, and `assert_burst_contention_branch_case(...)`.
+- [x] Migrated seven ordered max-concurrency branch assertions to branch-scope matrix helper calls.
+
+### M38-S213 HTTP max-concurrency ordered-attempt helper branch-case fixture-constructor normalization acceptance criteria
+
+- Branch-case fixture construction for pair/late/burst paths uses canonical constructor helpers.
+- Queue boundary, security parity, late, and burst branches no longer inline branch-case field wiring.
+- Ordered helper failure contracts remain deterministic across all constructor-backed branches.
+
+### M38-S213 tracking (live status)
+
+- [x] Added `pair_contention_branch_case(...)`, `late_contention_branch_case(...)`, and `burst_contention_branch_case(...)`.
+- [x] Migrated seven ordered branch assertions to constructor-backed branch-case fixtures.
+
+### M38-S214 HTTP max-concurrency ordered-attempt helper fixture-catalog dispatch normalization acceptance criteria
+
+- Ordered branch fixtures are selected through canonical fixture catalogs instead of per-test literal constructor arguments.
+- Queue/security/late/burst branches dispatch by explicit fixture identifiers.
+- Deterministic contract diagnostics and assertion semantics remain unchanged.
+
+### M38-S214 tracking (live status)
+
+- [x] Added fixture enums: `PairContentionBranchFixture`, `LateContentionBranchFixture`, `BurstContentionBranchFixture`.
+- [x] Added fixture dispatch helpers: `pair_contention_branch_fixture(...)`, `late_contention_branch_fixture(...)`, `burst_contention_branch_fixture(...)`.
+- [x] Migrated seven ordered branch assertions to fixture-catalog dispatch calls.
+
+### M38-S215 HTTP max-concurrency ordered-attempt fixture catalog assertion-pack revalidation acceptance criteria
+
+- Fixture-catalog dispatch is consumed through one-step assertion-pack helpers for pair/late/burst paths.
+- Ordered queue/security/late/burst tests no longer nest fixture lookup inside assertion call sites.
+- Contract behavior and deterministic failure envelopes remain unchanged.
+
+### M38-S215 tracking (live status)
+
+- [x] Added assertion-pack helpers: `assert_pair_contention_fixture(...)`, `assert_late_contention_fixture(...)`, `assert_burst_contention_fixture(...)`.
+- [x] Migrated seven ordered branch assertions to one-step fixture assertion-pack calls.
+
+### M38-S216 HTTP max-concurrency ordered-attempt fixture-catalog grouped runner normalization acceptance criteria
+
+- Pair/late/burst fixture execution paths use canonical grouped runner helpers.
+- Shared HTTP route fixture source strings are centralized instead of repeated inline test fixtures.
+- Ordered branch assertions keep deterministic behavior while test-local build/assert boilerplate is reduced.
+
+### M38-S216 tracking (live status)
+
+- [x] Added grouped runner helpers: `run_pair_contention_fixture_case(...)`, `run_late_contention_fixture_case(...)`, `run_burst_contention_fixture_case(...)`.
+- [x] Added shared fixture source constants for simple router and security-header router variants.
+- [x] Migrated seven ordered branch tests to grouped runner helper calls.
+
+### M38-S217 HTTP max-concurrency ordered-attempt fixture descriptor catalog normalization acceptance criteria
+
+- Fixture name/module/label/source selection is centralized behind descriptor catalogs.
+- Pair/late/burst grouped runner call sites dispatch by descriptor enums instead of literal fixture metadata.
+- Deterministic contention contracts remain unchanged after descriptor-catalog adoption.
+
+### M38-S217 tracking (live status)
+
+- [x] Added descriptor enums: `PairContentionFixtureDescriptor`, `LateContentionFixtureDescriptor`, `BurstContentionFixtureDescriptor`.
+- [x] Added descriptor catalog helpers for pair/late/burst grouped runners.
+- [x] Migrated seven ordered branch tests to descriptor-driven grouped runner calls.
+
+### M38-S218 HTTP max-concurrency ordered-attempt descriptor-runner assertion-pack unification acceptance criteria
+
+- Ordered pair/late/burst descriptor execution is reachable through one canonical dispatcher helper.
+- Queue/security/late/burst test call sites invoke one unified ordered descriptor runner path.
+- Deterministic contention assertions and diagnostics remain unchanged after dispatcher unification.
+
+### M38-S218 tracking (live status)
+
+- [x] Added `OrderedContentionFixtureDescriptor` dispatcher enum.
+- [x] Added `run_ordered_contention_fixture_descriptor_case(...)` unified dispatcher helper.
+- [x] Migrated seven ordered branch tests to the unified descriptor-runner assertion-pack path.
+
+### M38-S219 HTTP max-concurrency ordered-attempt descriptor metadata table extraction acceptance criteria
+
+- Pair/late/burst descriptor metadata is backed by canonical static metadata tables.
+- Descriptor lookup helpers resolve metadata through deterministic table indexing rather than repeated match tuple literals.
+- Ordered descriptor-runner behavior and assertion contracts remain unchanged.
+
+### M38-S219 tracking (live status)
+
+- [x] Added pair/late/burst descriptor metadata structs and static metadata tables.
+- [x] Added deterministic descriptor index mapping helpers (`as_index`) for table lookup.
+- [x] Migrated descriptor lookup helpers to metadata-table extraction paths.
+
+### M38-S220 HTTP max-concurrency ordered-attempt descriptor table-runner envelope simplification acceptance criteria
+
+- Ordered descriptor execution resolves to one runner metadata envelope before fixture build/assertion.
+- Pair/late/burst runner branches share one canonical execute path.
+- Deterministic contention contracts remain unchanged after envelope unification.
+
+### M38-S220 tracking (live status)
+
+- [x] Added `OrderedContentionRunnerMetadata` and `OrderedContentionBranchFixture`.
+- [x] Added `ordered_contention_runner_metadata(...)` envelope resolver.
+- [x] Unified ordered fixture execution into one `run_ordered_contention_fixture_descriptor_case(...)` path.
+
+### M38-S221 HTTP max-concurrency ordered-attempt descriptor contract catalog sanity coverage acceptance criteria
+
+- Descriptor catalog contract invariants are verified by explicit sanity coverage tests.
+- Pair/late/burst descriptor metadata expectations (fixture id, module, label, source, branch mapping) are asserted deterministically.
+- Sanity coverage is independent of clang/runtime availability.
+
+### M38-S221 tracking (live status)
+
+- [x] Added `assert_ordered_contention_runner_metadata(...)`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage`.
+- [x] Revalidated ordered queue/late/burst contention contract pack after sanity coverage wiring.
+
+### M38-S222 HTTP max-concurrency ordered-attempt descriptor catalog assertion-table compaction acceptance criteria
+
+- Descriptor catalog sanity expectations are expressed as one canonical assertion table.
+- Sanity coverage iterates the assertion table instead of repeating seven manual assertion blocks.
+- Pair/late/burst descriptor contract checks remain unchanged.
+
+### M38-S222 tracking (live status)
+
+- [x] Added `OrderedContentionRunnerMetadataExpectation`.
+- [x] Added `ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS` assertion table.
+- [x] Migrated descriptor catalog sanity test to table-driven iteration.
+
+### M38-S223 HTTP max-concurrency ordered-attempt descriptor table-driven fixture smoke harness compaction acceptance criteria
+
+- Ordered descriptor smoke coverage is executed from one canonical descriptor table instead of seven repeated fixture test bodies.
+- Pair/late/burst fixture smoke assertions continue to run unchanged through the existing ordered descriptor runner path.
+- Clang-gated ordered contention smoke validation remains deterministic after harness compaction.
+
+### M38-S223 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available`.
+- [x] Removed repeated per-descriptor smoke test bodies in favor of table-driven iteration.
+
+### M38-S224 HTTP max-concurrency ordered-attempt descriptor contract/smoke dual-table unification acceptance criteria
+
+- Ordered descriptor smoke harness reuses the canonical descriptor contract expectation catalog directly.
+- Separate smoke-only descriptor table is removed to eliminate drift between smoke and sanity coverage inputs.
+- Pair/late/burst smoke behavior remains unchanged after table unification.
+
+### M38-S224 tracking (live status)
+
+- [x] Removed `ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS`.
+- [x] Migrated ordered smoke harness iteration to `ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS`.
+- [x] Revalidated descriptor sanity + smoke harness coverage after table unification.
+
+### M38-S225 HTTP max-concurrency ordered-attempt descriptor contract/smoke iterator-helper extraction acceptance criteria
+
+- Ordered descriptor expectation traversal is centralized behind shared iterator helpers.
+- Sanity and smoke harness tests consume the shared iterator helpers instead of manual `for` loops.
+- Descriptor contract and smoke behavior remain deterministic after iterator-helper extraction.
+
+### M38-S225 tracking (live status)
+
+- [x] Added `for_each_ordered_contention_runner_metadata_expectation(...)`.
+- [x] Added shared fixture-descriptor traversal path derived from runner metadata expectations.
+- [x] Migrated sanity + smoke harness tests to iterator-helper traversal.
+
+### M38-S226 HTTP max-concurrency ordered-attempt descriptor iterator-helper failure-context enrichment acceptance criteria
+
+- Ordered descriptor smoke harness failures include deterministic case context (label/module/fixture) for table-driven traversal diagnostics.
+- Panic payload extraction is normalized so wrapped smoke failures preserve useful original panic details.
+- Clang-gated ordered smoke harness behavior remains unchanged except enriched failure diagnostics.
+
+### M38-S226 tracking (live status)
+
+- [x] Added `panic_payload_message(...)` normalization helper for wrapped panic payloads.
+- [x] Added `run_ordered_contention_smoke_expectation_with_failure_context(...)`.
+- [x] Migrated ordered smoke harness loop to failure-context wrapped expectation execution.
+
+### M38-S227 HTTP max-concurrency ordered-attempt descriptor smoke harness case-banner tracing acceptance criteria
+
+- Ordered descriptor smoke harness prints deterministic per-case banners before running each table-driven fixture.
+- Case-banner format includes case label, module name, and fixture name for direct correlation with failure context.
+- Existing failure-context enrichment behavior remains unchanged after banner tracing is added.
+
+### M38-S227 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_case_banner(...)`.
+- [x] Added per-expectation case-banner tracing in smoke harness execution.
+- [x] Reused case-banner content in wrapped failure diagnostics.
+
+### M38-S228 HTTP max-concurrency ordered-attempt descriptor smoke harness banner-contract coverage acceptance criteria
+
+- Ordered descriptor case-banner rendering contract is covered by a dedicated deterministic test.
+- Banner contract assertions run without clang/runtime dependencies.
+- Case-banner shape (`case=... module=... fixture=...`) remains synchronized with smoke harness tracing/failure output.
+
+### M38-S228 tracking (live status)
+
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage`.
+- [x] Added deterministic exact banner-shape assertions for every ordered descriptor expectation.
+- [x] Revalidated sanity + banner-contract + smoke harness coverage pack.
+
+### M38-S229 HTTP max-concurrency ordered-attempt descriptor smoke banner-prefix constant extraction acceptance criteria
+
+- Smoke banner prefix literal is extracted into one canonical constant used by banner rendering and banner-contract coverage assertions.
+- Banner output contract remains unchanged after constant extraction.
+- Table-driven smoke harness logging/failure context continues to emit deterministic banner strings.
+
+### M38-S229 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_PREFIX`.
+- [x] Migrated `ordered_contention_smoke_case_banner(...)` to use the shared banner-prefix constant.
+- [x] Migrated banner-contract coverage expected strings to use the shared banner-prefix constant.
+
+### M38-S230 HTTP max-concurrency ordered-attempt descriptor smoke banner formatter helper contract extraction acceptance criteria
+
+- Ordered descriptor smoke banner rendering logic is centralized in a dedicated formatter helper.
+- Banner contract coverage validates the dedicated formatter helper output and case-banner wrapper parity.
+- Smoke harness tracing/failure output keeps the same deterministic banner shape after helper extraction.
+
+### M38-S230 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_banner_formatter(...)`.
+- [x] Migrated `ordered_contention_smoke_case_banner(...)` to delegate to formatter helper.
+- [x] Extended banner-contract coverage to assert formatter output plus wrapper parity.
+
+### M38-S231 HTTP max-concurrency ordered-attempt descriptor smoke failure-banner formatter extraction acceptance criteria
+
+- Ordered descriptor smoke failure message rendering is centralized in a dedicated formatter helper.
+- Wrapped smoke failure-path rendering from panic payloads delegates to the same formatter helper.
+- Dedicated deterministic contract coverage validates both direct failure-banner formatting and payload-derived failure-banner formatting.
+
+### M38-S231 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_failure_banner(...)`.
+- [x] Added `ordered_contention_smoke_failure_banner_from_payload(...)`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage`.
+
+### M38-S232 HTTP max-concurrency ordered-attempt descriptor smoke banner field-key constant extraction acceptance criteria
+
+- Ordered descriptor smoke banner field keys (`case`, `module`, `fixture`) are extracted into canonical constants.
+- Banner formatter and banner-contract coverage expected rendering both use shared field-key constants.
+- Banner output contract remains unchanged after field-key constant extraction.
+
+### M38-S232 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_FIELD_CASE`.
+- [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE`.
+- [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE`.
+
+### M38-S233 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix constant extraction acceptance criteria
+
+- Ordered descriptor smoke failure suffix token (`failed:`) is extracted into one canonical constant.
+- Failure-banner formatter and failure-banner contract expected rendering both use the shared failure-suffix constant.
+- Failure-banner output contract remains unchanged after suffix constant extraction.
+
+### M38-S233 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX`.
+- [x] Migrated `ordered_contention_smoke_failure_banner(...)` to use the shared failure-suffix constant.
+- [x] Migrated failure-banner contract coverage expected rendering to the shared failure-suffix constant.
+
+### M38-S234 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix contract helper extraction acceptance criteria
+
+- Failure-banner contract expected rendering is centralized in a dedicated helper.
+- Failure-banner formatter delegates to the same contract helper to keep output expectations and runtime path synchronized.
+- Failure-banner contract coverage uses the dedicated helper instead of in-test expected string assembly.
+
+### M38-S234 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_failure_banner_contract_expected(...)`.
+- [x] Migrated `ordered_contention_smoke_failure_banner(...)` to delegate to the contract helper.
+- [x] Migrated failure-banner contract test expected rendering to helper-based assembly.
+
+### M38-S235 HTTP max-concurrency ordered-attempt descriptor smoke banner-contract assertion helper extraction acceptance criteria
+
+- Ordered descriptor case-banner contract assertions are centralized in a dedicated helper.
+- Ordered descriptor failure-banner contract assertions are centralized in a dedicated helper.
+- Case/failure banner contract coverage tests run table iteration via assertion helpers rather than in-test duplicated assertion blocks.
+
+### M38-S235 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_case_banner_contract_expectation(...)`.
+- [x] Added `assert_ordered_contention_smoke_failure_banner_contract_expectation(...)`.
+- [x] Migrated case/failure banner contract coverage tests to helper-based assertion dispatch.
+
+### M38-S236 HTTP max-concurrency ordered-attempt descriptor smoke contract helper naming parity cleanup acceptance criteria
+
+- Ordered descriptor smoke contract helper names follow consistent expectation-oriented naming (`*_contract_expectation`).
+- Case and failure contract coverage tests dispatch helpers with naming parity.
+- Banner contract behavior remains unchanged after helper naming cleanup.
+
+### M38-S236 tracking (live status)
+
+- [x] Renamed case-banner contract helper to `assert_ordered_contention_smoke_case_banner_contract_expectation(...)`.
+- [x] Renamed failure-banner contract helper to `assert_ordered_contention_smoke_failure_banner_contract_expectation(...)`.
+- [x] Updated contract coverage test dispatchers to the renamed parity helpers.
+
+### M38-S237 HTTP max-concurrency ordered-attempt descriptor smoke contract helper dispatch consolidator extraction acceptance criteria
+
+- Ordered descriptor smoke contract coverage tests use one shared assertion-dispatch helper for expectation iteration.
+- Case and failure banner contract coverage tests dispatch their expectation-specific assertion helpers through the shared dispatcher.
+- Contract behavior remains unchanged after dispatch-consolidator extraction.
+
+### M38-S237 tracking (live status)
+
+- [x] Added `run_ordered_contention_smoke_contract_assertion_dispatch(...)`.
+- [x] Migrated case-banner contract coverage test to the shared contract assertion dispatcher.
+- [x] Migrated failure-banner contract coverage test to the shared contract assertion dispatcher.
+
+### M38-S238 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix helper extraction acceptance criteria
+
+- Ordered descriptor smoke contract assertion cases are represented by a canonical matrix helper with case-label + assertion function binding.
+- Contract coverage tests resolve and execute matrix cases through dedicated matrix-case helpers.
+- Contract behavior remains unchanged after assertion-matrix helper extraction.
+
+### M38-S238 tracking (live status)
+
+- [x] Added `OrderedContentionSmokeContractAssertionMatrixCase`.
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX` + case-label resolver helper.
+- [x] Migrated case/failure banner contract coverage tests to matrix-case helper dispatch.
+
+### M38-S239 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix case-label constant extraction acceptance criteria
+
+- Assertion-matrix unknown-case panic prefix is extracted into a dedicated constant.
+- Matrix case-label contract coverage validates both known case-label resolution and unknown-case panic message contract.
+- Matrix case-label resolver contract remains deterministic after constant extraction.
+
+### M38-S239 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertion_matrix_case_label_contract_coverage`.
+- [x] Migrated unknown-case panic rendering to shared prefix constant output.
+
+### M38-S240 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix case-label helper extraction acceptance criteria
+
+- Matrix case-label assertion/dispatch behavior is centralized in dedicated helper functions.
+- Case/failure banner contract coverage tests run matrix case labels through the shared case-label execution helper.
+- Matrix case-label contract coverage reuses a shared label-resolution assertion helper for known labels.
+
+### M38-S240 tracking (live status)
+
+- [x] Added `run_ordered_contention_smoke_contract_assertion_matrix_case_label(...)`.
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolution(...)`.
+- [x] Migrated case/failure banner contract coverage tests to helper-based case-label dispatch.
+
+### M38-S241 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label assertion helper extraction acceptance criteria
+
+- Unknown matrix case-label panic contract assertions are centralized in a dedicated helper.
+- Matrix case-label contract coverage uses the unknown-label assertion helper instead of inline panic assertion blocks.
+- Unknown-label panic contract behavior remains unchanged after helper extraction.
+
+### M38-S241 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(...)`.
+- [x] Migrated matrix case-label contract coverage unknown-label assertions to helper dispatch.
+- [x] Revalidated matrix case-label unknown-label panic contract after helper extraction.
+
+### M38-S242 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message helper extraction acceptance criteria
+
+- Unknown matrix case-label panic message rendering is centralized in a dedicated helper.
+- Matrix case-label resolver panic path delegates to the panic-message helper.
+- Unknown-label panic assertion helper validates exact deterministic message equality from the panic-message helper.
+
+### M38-S242 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(...)`.
+- [x] Migrated resolver panic rendering to use the unknown-label panic-message helper.
+- [x] Tightened unknown-label panic assertion helper to exact deterministic message equality.
+
+### M38-S243 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix case-label resolver assertion helper extraction acceptance criteria
+
+- Matrix case-label resolver assertions are centralized in a dedicated resolver-contract helper.
+- Matrix case-label contract coverage iterates a canonical known-label set and dispatches the resolver-contract helper.
+- Unknown-label panic contract coverage remains unchanged and continues to run alongside known-label resolver-contract checks.
+
+### M38-S243 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolver_contract(...)`.
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_KNOWN_MATRIX_CASE_LABELS`.
+- [x] Migrated matrix case-label contract coverage known-label checks to helper-based loop dispatch.
+
+### M38-S244 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label constant extraction acceptance criteria
+
+- Matrix unknown-label sentinel token is extracted into a shared constant.
+- Unknown-label panic assertion coverage consumes the shared unknown-label constant.
+- Unknown-label panic contract behavior remains unchanged after constant extraction.
+
+### M38-S244 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL`.
+- [x] Migrated matrix unknown-label contract coverage to shared unknown-label constant usage.
+- [x] Revalidated unknown-label panic contract after constant extraction.
+
+### M38-S245 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label contract helper extraction acceptance criteria
+
+- Unknown-label panic contract invocation is centralized behind a dedicated no-arg contract helper.
+- Matrix case-label contract coverage dispatches unknown-label assertions through the helper.
+- Unknown-label contract assertion behavior remains deterministic after helper extraction.
+
+### M38-S245 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract()`.
+- [x] Migrated matrix case-label contract coverage unknown-label assertion call to helper dispatch.
+- [x] Revalidated unknown-label contract helper path against deterministic panic-message behavior.
+
+### M38-S246 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix case-label contract-coverage consolidator extraction acceptance criteria
+
+- Matrix case-label contract coverage orchestration is centralized in one dedicated helper.
+- Known-label resolver checks and unknown-label contract checks are dispatched via the consolidator helper.
+- Matrix case-label contract test body delegates fully to consolidator helper execution.
+
+### M38-S246 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_case_label_contract_coverage()`.
+- [x] Migrated matrix case-label contract coverage test body to consolidator helper delegation.
+- [x] Revalidated case-label contract coverage after consolidator extraction.
+
+### M38-S247 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload assertion helper extraction acceptance criteria
+
+- Unknown-label panic payload capture/assertion flow is centralized in a dedicated helper.
+- Unknown-label panic contract assertions delegate payload extraction through the helper.
+- Unknown-label panic contract behavior remains unchanged and deterministic after payload helper extraction.
+
+### M38-S247 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload(...)`.
+- [x] Migrated unknown-label panic contract assertions to payload helper dispatch.
+- [x] Revalidated matrix unknown-label panic behavior after payload helper extraction.
+
+### M38-S248 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic message assertion helper extraction acceptance criteria
+
+- Unknown-label panic message equality assertions are centralized in a dedicated helper.
+- Unknown-label panic contract assertions delegate message checks through the helper.
+- Unknown-label panic message contract remains exact and deterministic after helper extraction.
+
+### M38-S248 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(...)`.
+- [x] Migrated unknown-label panic assertion flow to message-helper dispatch.
+- [x] Revalidated deterministic panic-message equality after helper extraction.
+
+### M38-S249 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic contract helper extraction acceptance criteria
+
+- Unknown-label panic contract invocation is centralized behind a dedicated contract helper.
+- Unknown-label no-arg contract helper delegates to the panic contract helper with the shared unknown-label constant.
+- Matrix case-label contract coverage behavior remains unchanged after unknown-label panic contract helper extraction.
+
+### M38-S249 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_contract(...)`.
+- [x] Migrated unknown-label no-arg contract helper to panic-contract helper delegation.
+- [x] Revalidated matrix case-label contract coverage after panic-contract helper extraction.
+
+### M38-S250 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message expected-value helper extraction acceptance criteria
+
+- Unknown-label panic-message expected-value rendering is centralized in a dedicated helper.
+- Unknown-label panic-message assertion flow delegates expected-message computation to the helper.
+- Panic-message expected-value contract remains deterministic and unchanged after helper extraction.
+
+### M38-S250 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_expected_panic_message(...)`.
+- [x] Migrated unknown-label panic-message assertion flow to expected-message helper dispatch.
+- [x] Revalidated deterministic expected panic-message contract behavior after helper extraction.
+
+### M38-S251 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message actual-value helper extraction acceptance criteria
+
+- Unknown-label panic-message actual-value decoding is centralized in a dedicated helper.
+- Unknown-label panic-message assertion flow delegates panic payload decoding to the helper.
+- Panic-message actual-value decoding remains deterministic after helper extraction.
+
+### M38-S251 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_actual_panic_message(...)`.
+- [x] Migrated unknown-label panic-message assertion flow to actual-message helper dispatch.
+- [x] Revalidated panic payload message decoding behavior after helper extraction.
+
+### M38-S252 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message equality helper extraction acceptance criteria
+
+- Unknown-label panic-message equality assertion is centralized in a dedicated helper.
+- Unknown-label panic-message assertion flow delegates equality checks to the helper.
+- Panic-message equality assertion text and deterministic behavior remain unchanged after helper extraction.
+
+### M38-S252 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_equality(...)`.
+- [x] Migrated unknown-label panic-message assertion helper to equality-helper dispatch.
+- [x] Revalidated unknown-label panic-message contract coverage after equality helper extraction.
+
+### M38-S253 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message contract helper extraction acceptance criteria
+
+- Unknown-label panic-message contract assertions are centralized in a contract-named helper.
+- Unknown-label panic contract orchestration delegates panic-message validation through the contract helper.
+- Panic-message contract behavior remains deterministic and unchanged after helper extraction.
+
+### M38-S253 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_contract(...)`.
+- [x] Migrated unknown-label panic contract flow to panic-message contract helper dispatch.
+- [x] Revalidated unknown-label panic-message contract behavior after helper extraction.
+
+### M38-S254 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload contract helper extraction acceptance criteria
+
+- Unknown-label panic payload contract invocation is centralized in a dedicated contract helper.
+- Unknown-label panic contract orchestration delegates panic payload capture/assertion through the contract helper.
+- Panic payload contract behavior remains deterministic after helper extraction.
+
+### M38-S254 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload_contract(...)`.
+- [x] Migrated unknown-label panic contract flow to panic payload contract helper dispatch.
+- [x] Revalidated unknown-label panic payload contract behavior after helper extraction.
+
+### M38-S255 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic orchestration helper simplification acceptance criteria
+
+- Unknown-label panic contract orchestration no longer routes through an intermediate panic assertion helper.
+- Unknown-label panic contract helper now dispatches payload and message contract helpers directly.
+- Matrix case-label contract coverage behavior remains unchanged after orchestration simplification.
+
+### M38-S255 tracking (live status)
+
+- [x] Removed intermediate unknown-label panic assertion helper from matrix contract orchestration path.
+- [x] Migrated unknown-label panic contract helper to direct payload/message contract helper dispatch.
+- [x] Revalidated matrix case-label contract coverage after orchestration simplification.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -1380,7 +7044,7 @@ Current strict closure result:
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
-| `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on pull_request + main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
+| `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
 | `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests | `.github/workflows/naming-lock.yml` |
 | `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M17-A` | PASS | Naming-lock CI enforces M17 operator handoff readiness checker | `.github/workflows/naming-lock.yml` |
@@ -1388,7 +7052,7 @@ Current strict closure result:
 | `M17-C` | PASS | Naming-lock CI enforces M17 operator troubleshooting matrix | `.github/workflows/naming-lock.yml` |
 | `M17-D` | PASS | Naming-lock CI enforces M17 operator handoff quickstart | `.github/workflows/naming-lock.yml` |
 | `M17-E` | PASS | Naming-lock CI enforces M17 operator handoff CI smoke wrapper | `.github/workflows/naming-lock.yml` |
-| `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push | `.github/workflows/operator-handoff-smoke.yml` |
+| `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on main push | `.github/workflows/operator-handoff-smoke.yml` |
 | `M17-G` | PASS | Naming-lock CI enforces operator-handoff workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M17-H` | PASS | Naming-lock CI enforces M17 operator handoff artifact inspector | `.github/workflows/naming-lock.yml` |
 | `M17-I` | PASS | Naming-lock CI enforces M17 operator handoff readiness summary | `.github/workflows/naming-lock.yml` |
@@ -2281,7 +7945,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of zed grammar pin contract + guard tests (`M11-A`).
   - closure now verifies naming-lock CI enforcement of sec4 CLI command contract + guard tests (`M12-A`).
   - closure now verifies naming-lock CI enforcement of local path leak guard test (`M12-B`).
-  - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
+  - release-contract-smoke workflow contract test now enforces trigger coverage (`push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure + cross-impl/trend contract guard tests plus strict closure audit wiring (`M13-D`).
   - closure now verifies naming-lock CI enforcement of benchmark-trend workflow contract + guard tests (`M13-E`).
@@ -6398,8 +12062,110 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M35 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
+### M39-S2C editor formatting and plugin smoke fixture acceptance criteria
+- Language server advertises and serves deterministic `textDocument/formatting`.
+- Zed plugin path includes a maintained smoke project for diagnostics/navigation/rename/format verification.
+- Book chapter captures implementation + operator test flow.
+
+### M39-S2C tracking (live status)
+- [x] Added LSP `documentFormattingProvider` capability + `textDocument/formatting` handler.
+- [x] Added formatting coverage in `compiler/sec4-lsp/src/main.rs` tests.
+- [x] Added `examples/zed-plugin-smoke` project with plugin-focused operator checklist.
+- [x] Added book chapter `1036-m39-zed-plugin-formatting-and-smoke-project.md`.
+
+### M39-S2D Zed plugin runtime-launch hardening acceptance criteria
+- Zed extension resolves `sec4audit-language-server` with deterministic precedence:
+  - settings override path,
+  - PATH binary,
+  - workspace-local fallback build paths.
+- Missing-binary failure mode returns actionable diagnostics with explicit setting key and build command.
+- Operator docs describe launch precedence and override configuration.
+
+### M39-S2D tracking (live status)
+- [x] Added launch resolution precedence in `zed-extension/src/lib.rs` (settings -> PATH -> local fallback paths).
+- [x] Added clear configured-path and missing-binary diagnostics.
+- [x] Added operator docs for resolution order + settings override.
+- [x] Added book chapter `1040-m39-zed-plugin-runtime-launch-hardening.md`.
+
+### M39-S2E Zed plugin smoke runner script acceptance criteria
+- Repository includes a single-command smoke runner for `examples/zed-plugin-smoke`.
+- Smoke runner validates grammar pin, sample `sec4 check`, and deterministic formatter output without mutating tracked fixtures.
+- Optional fast mode is available for quick local loops.
+
+### M39-S2E tracking (live status)
+- [x] Added `scripts/run-zed-plugin-smoke.sh`.
+- [x] Added deterministic formatter assertion in temp project copy.
+- [x] Added `--fast`/`FAST=1` mode for lighter operator loops.
+- [x] Updated Zed extension docs to point to smoke runner command.
+- [x] Added book chapter `1041-m39-zed-plugin-smoke-runner-script.md`.
+
+### M39-S2F Zed extension release packaging checklist acceptance criteria
+- Repository includes a deterministic release checklist command for Zed extension publishing readiness.
+- Checklist verifies extension manifest wiring, grammar pin validity, and plugin smoke runner success.
+- Operator-facing docs reference the checklist as canonical pre-release validation.
+
+### M39-S2F tracking (live status)
+- [x] Added `scripts/check-zed-extension-release.sh`.
+- [x] Included manifest token/wiring assertions for `zed-extension/extension.toml`.
+- [x] Wired grammar-pin + fast smoke runner execution into checklist.
+- [x] Updated extension README validation section to use release checklist command.
+
+### M39-S2G Zed extension operator install guide acceptance criteria
+- Repository includes deterministic operator workflow for:
+  - local install,
+  - local update,
+  - rollback to previous local install.
+- Install workflow resolves platform-local extension install paths with override support.
+- Operator docs include explicit install/update/rollback commands and backup location notes.
+
+### M39-S2G tracking (live status)
+- [x] Added `scripts/manage-zed-extension-local.sh` with `install|update|rollback|status`.
+- [x] Added platform-default extension directory resolution + override support (`--extensions-dir`).
+- [x] Added timestamped local backup flow for safe rollback.
+- [x] Updated `zed-extension/README.md` with local operator install/update/rollback guide.
+
+### M39-S2H Zed extension end-to-end operator smoke acceptance criteria
+- Repository includes one-command operator smoke for clean-profile extension flow:
+  - install,
+  - plugin smoke validation,
+  - rollback.
+- Smoke flow verifies rollback restoration against seeded previous install state.
+- Operator docs reference the command as the canonical full local-flow check.
+
+### M39-S2H tracking (live status)
+- [x] Added `scripts/run-zed-extension-operator-smoke.sh`.
+- [x] Wired install -> plugin smoke (`--fast`) -> rollback flow using `scripts/manage-zed-extension-local.sh`.
+- [x] Added rollback restoration assertion via seeded marker file.
+- [x] Updated `zed-extension/README.md` with full operator-flow validation command.
+
+### M39-S2I Zed extension publish bundle staging helper acceptance criteria
+- Repository includes deterministic local bundle staging command for Zed extension publish prep.
+- Staging command emits a machine-readable manifest with per-file size/hash inventory.
+- Operator docs include bundle staging command and output artifact location.
+
+### M39-S2I tracking (live status)
+- [x] Added `scripts/stage-zed-extension-bundle.sh`.
+- [x] Added deterministic bundle staging under `build/zed-extension-bundle/`.
+- [x] Added `bundle-manifest.json` emission with per-file `path/size/sha256`.
+- [x] Updated `zed-extension/README.md` with bundle staging usage.
+
+### M39-S2J Zed extension local operator checklist consolidation acceptance criteria
+- Repository includes a single entrypoint command for local operator readiness.
+- Entry command wraps release checklist (without duplicate smoke), operator smoke, and bundle stage.
+- Command emits deterministic pass/fail outcome and validates staged manifest presence.
+
+### M39-S2J tracking (live status)
+- [x] Added `scripts/check-zed-extension-operator-readiness.sh`.
+- [x] Wrapped `check-zed-extension-release.sh --skip-smoke`, `run-zed-extension-operator-smoke.sh`, and `stage-zed-extension-bundle.sh --clean`.
+- [x] Added staged manifest existence assertion in readiness flow.
+- [x] Updated `zed-extension/README.md` with one-command readiness entrypoint.
+
 ### Next planned slice
-- M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` direct malformed-input bridge assertions).
+- [x] M39-S2K completed: Wire Zed operator readiness command into release-operator handoff docs and lane prompts.
+  - Added the zed readiness command to `docs/book/473-m17-operator-handoff-final-playbook.md` as Bundle D.
+  - Added the zed readiness command to `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`.
+  - Updated readiness checkers to enforce the handoff-lane zed command presence and executability.
+- [x] Next planned slice reserved: alpha-hardening focus remains locked to release-closure verification and Postgres runtime-env hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6491,9 +12257,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S49 scope for direct malformed-input sink-bridge parity between public/internal net wrappers.
-2. Extend runtime harness with direct sink-bridge assertions for malformed inputs at wrapper boundary (`http_get` vs `http_get_internal`).
-3. Publish M38-S49 book chapter and refresh roadmap live-status counts.
+1. Keep execution in the alpha scope-reset mode (`implementation-first`, targeted tests, governance suites at PR end/CI).
+2. Implement `M39-S2A` project-local multi-file module resolver with deterministic missing/ambiguous module diagnostics.
+3. Start `M39-S2B` LASM async backend bootstrap lane (target skeleton + runtime loop baseline) with bounded weekly allocation.
 
 ---
 

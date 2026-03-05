@@ -2,7 +2,11 @@
   "version": "0.1",
   "impl": "sec4",
   "endpoint": "decode",
-  "stepRates": [1000, 2000, 3000],
+  "stepRates": [
+    1000,
+    2000,
+    3000
+  ],
   "stepDuration": "30s",
   "steps": [
     {
@@ -17,7 +21,11 @@
         "p99": "6.90ms",
         "max": "18.00ms"
       },
-      "errors": 0
+      "errors": 0,
+      "memory": {
+        "rssKb": null,
+        "sampleSource": "unavailable"
+      }
     },
     {
       "version": "0.1",
@@ -31,7 +39,11 @@
         "p99": "15.70ms",
         "max": "41.00ms"
       },
-      "errors": 0
+      "errors": 0,
+      "memory": {
+        "rssKb": null,
+        "sampleSource": "unavailable"
+      }
     },
     {
       "version": "0.1",
@@ -45,7 +57,11 @@
         "p99": "24.50ms",
         "max": "67.00ms"
       },
-      "errors": 5
+      "errors": 5,
+      "memory": {
+        "rssKb": null,
+        "sampleSource": "unavailable"
+      }
     }
   ]
 }

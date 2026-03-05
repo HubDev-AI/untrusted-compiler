@@ -1,0 +1,154 @@
+// sec4-workbench:
+// Feature-rich benchmark workbench service that executes real DB intrinsics.
+//
+// This service is intentionally benchmark-focused:
+// - real auth gate for mutating endpoints (`auth.require`)
+// - real DB write/read/tx intrinsics (`db.exec`, `db.execTx`, `db.queryOne`)
+// - deterministic operation-history read path (`DbListRecordsResponse`)
+//
+// Request parameter contract in this alpha slice:
+// - DB params are passed through query args as JSON text (for deterministic parsing).
+// - row schema id is passed as `row_schema` query arg for queryOne routes.
+
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn wbSetup() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+
+  // Tasks table.
+  db.exec(
+    db,
+    sql.q(
+      "create table if not exists wb_tasks (id text primary key, title text not null, description text not null default '', status text not null, priority integer not null, created_at_ms bigint not null)",
+      "[]"
+    )
+  );
+
+  // Comments table.
+  db.exec(
+    db,
+    sql.q(
+      "create table if not exists wb_comments (id text primary key, task_id text not null, body text not null, created_at_ms bigint not null)",
+      "[]"
+    )
+  );
+
+  // Labels table.
+  db.exec(
+    db,
+    sql.q(
+      "create table if not exists wb_labels (task_id text not null, name text not null, primary key(task_id, name))",
+      "[]"
+    )
+  );
+
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn wbCreateTask() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(
+    "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
+    params
+  );
+  db.exec(db, query);
+  res.json(201, "DbExecResponse", 0);
+  0
+}
+
+fn wbCreateTaskWithComment() effects { net, db.write, db.tx } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let taskParams = validate.nonEmpty(req.query("task_params"));
+  let commentParams = validate.nonEmpty(req.query("comment_params"));
+  let tx = db.tx(db);
+
+  db.execTx(
+    tx,
+    sql.q(
+      "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
+      taskParams
+    )
+  );
+  db.execTx(
+    tx,
+    sql.q(
+      "insert into wb_comments (id, task_id, body, created_at_ms) values ($1, $2, $3, $4)",
+      commentParams
+    )
+  );
+
+  res.json(201, "DbExecTxResponse", 0);
+  0
+}
+
+fn wbAddComment() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+  db.exec(
+    db,
+    sql.q(
+      "insert into wb_comments (id, task_id, body, created_at_ms) values ($1, $2, $3, $4)",
+      params
+    )
+  );
+  res.json(201, "DbExecResponse", 0);
+  0
+}
+
+fn wbGetTask() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let id = validate.nonEmpty(req.pathParam("id"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(
+    "select id, title, description, status, priority, created_at_ms from wb_tasks where id = $1 limit 1",
+    id
+  );
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn wbListTasksWindow() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(
+    "select id, title, status, priority, created_at_ms from wb_tasks where ($1 = '' or status = $1) order by created_at_ms desc, id desc limit $2 offset $3",
+    params
+  );
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn wbRecords() effects { net } -> Int {
+  // Deterministic operation history for benchmark introspection.
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/health", health);
+
+  http.post(router, "/wb/setup", wbSetup);
+  http.post(router, "/wb/tasks", wbCreateTask);
+  http.post(router, "/wb/tasks/with-comment", wbCreateTaskWithComment);
+  http.post(router, "/wb/tasks/:id/comments", wbAddComment);
+  http.get(router, "/wb/tasks/:id", wbGetTask);
+  http.get(router, "/wb/tasks", wbListTasksWindow);
+  http.get(router, "/wb/records", wbRecords);
+
+  http.serve(8080, router);
+  0
+}

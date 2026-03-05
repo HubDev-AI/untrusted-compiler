@@ -3,6 +3,8 @@
   "endpoint": "ping",
   "baselineP99Ms": 4.3,
   "baselineCoveragePct": 98.0,
+  "baselineRssKb": 36000,
   "maxP99RegressionPct": 20,
-  "maxCoverageDropPct": 5
+  "maxCoverageDropPct": 5,
+  "maxRssRegressionPct": 20
 }

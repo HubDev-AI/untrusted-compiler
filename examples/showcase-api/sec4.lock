@@ -1,0 +1,13 @@
+# Untrusted<T> lockfile v1 (deterministic)
+lock_version = 1
+
+[package]
+name = "showcase-api"
+version = "0.1.0"
+edition = "2026"
+hash = "pkg_8484487e18dcbf04"
+
+[build]
+entry = "src/main.ut"
+hash = "bld_c296953574b87ffb"
+manifest_hash = "man_4c3c9276f740f7ea"

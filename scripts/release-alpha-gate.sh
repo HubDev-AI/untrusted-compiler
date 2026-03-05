@@ -107,7 +107,12 @@ run "${ROOT_DIR}/scripts/check-naming-lock.sh"
 run "${ROOT_DIR}/scripts/check-milestone-closure.sh" --fail-on-pending
 
 if [[ "${RUN_TESTS}" -eq 1 ]]; then
-  run cargo test -q --manifest-path "${ROOT_DIR}/Cargo.toml"
+  TEST_BUILD_JOBS="${SEC4_RELEASE_GATE_CARGO_BUILD_JOBS:-1}"
+  TEST_THREADS="${SEC4_RELEASE_GATE_TEST_THREADS:-1}"
+  run env \
+    CARGO_BUILD_JOBS="${TEST_BUILD_JOBS}" \
+    RUST_TEST_THREADS="${TEST_THREADS}" \
+    cargo test -q --manifest-path "${ROOT_DIR}/Cargo.toml"
 fi
 
 run cargo build -p sec4 --manifest-path "${ROOT_DIR}/Cargo.toml" >/dev/null

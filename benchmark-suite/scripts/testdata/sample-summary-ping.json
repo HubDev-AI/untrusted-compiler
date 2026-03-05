@@ -8,5 +8,9 @@
     "p95": "2.20ms",
     "p99": "3.10ms",
     "max": "9.10ms"
+  },
+  "memory": {
+    "rssKb": null,
+    "sampleSource": "unavailable"
   }
 }

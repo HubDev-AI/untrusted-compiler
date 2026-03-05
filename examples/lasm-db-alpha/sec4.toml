@@ -1,0 +1,6 @@
+[package]
+name = "lasm-db-alpha"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"

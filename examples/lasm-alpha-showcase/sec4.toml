@@ -1,0 +1,6 @@
+[package]
+name = "lasm-alpha-showcase"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"

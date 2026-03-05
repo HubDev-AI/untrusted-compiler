@@ -28,6 +28,8 @@ pub struct PackageSection {
 pub struct BuildSection {
     #[serde(default = "default_entry")]
     pub entry: String,
+    #[serde(default = "default_profile")]
+    pub profile: String,
 }
 
 fn default_edition() -> String {
@@ -36,6 +38,10 @@ fn default_edition() -> String {
 
 fn default_entry() -> String {
     "src/main.ut".to_string()
+}
+
+fn default_profile() -> String {
+    "server".to_string()
 }
 
 pub type Manifest = ManifestFile;
@@ -50,6 +56,13 @@ impl ManifestFile {
 
     pub fn entry_path(&self, root: &Path) -> PathBuf {
         root.join(self.entry_file())
+    }
+
+    pub fn build_profile(&self) -> &str {
+        self.build
+            .as_ref()
+            .map(|build| build.profile.as_str())
+            .unwrap_or("server")
     }
 }
 
@@ -87,6 +100,20 @@ pub fn parse_manifest_str(manifest_path: &Path, source: &str) -> Result<Manifest
                 Span::point(manifest_path.to_path_buf(), 1, 1),
             )
             .with_note("set [package].version to a semantic version string"),
+        );
+    }
+
+    let profile = parsed.build_profile();
+    if !matches!(profile, "server" | "browser") {
+        diagnostics.push(
+            Diagnostic::error(
+                "M0005",
+                "build.profile must be one of `server` or `browser`",
+                Span::point(manifest_path.to_path_buf(), 1, 1),
+            )
+            .with_note(format!("found [build].profile = `{profile}`"))
+            .with_note("set `[build].profile = \"server\"` for native backend builds")
+            .with_note("set `[build].profile = \"browser\"` for browser/WASM capability fencing"),
         );
     }
 
@@ -223,6 +250,7 @@ fn render_lockfile(manifest: &Manifest) -> String {
     let build_hash = build_hash(manifest);
     lockfile.push_str("[build]\n");
     push_toml_string_line(&mut lockfile, "entry", manifest.entry_file());
+    push_toml_string_line(&mut lockfile, "profile", manifest.build_profile());
     push_toml_string_line(&mut lockfile, "hash", &build_hash);
     push_toml_string_line(
         &mut lockfile,
@@ -254,11 +282,12 @@ fn push_toml_string_line(out: &mut String, key: &str, value: &str) {
 
 fn manifest_fingerprint(manifest: &Manifest) -> String {
     let mut normalized = format!(
-        "name={}\nversion={}\nedition={}\nentry={}\n",
+        "name={}\nversion={}\nedition={}\nentry={}\nprofile={}\n",
         manifest.package.name,
         manifest.package.version,
         manifest.package.edition,
         manifest.entry_file(),
+        manifest.build_profile(),
     );
     for (name, version) in &manifest.dependencies {
         normalized.push_str(&format!("dependency={name}@{version}\n"));
@@ -275,7 +304,11 @@ fn package_hash(manifest: &Manifest) -> String {
 }
 
 fn build_hash(manifest: &Manifest) -> String {
-    let normalized = format!("entry={}\n", manifest.entry_file());
+    let normalized = format!(
+        "entry={}\nprofile={}\n",
+        manifest.entry_file(),
+        manifest.build_profile()
+    );
     format!("bld_{:016x}", fnv1a64(normalized.as_bytes()))
 }
 

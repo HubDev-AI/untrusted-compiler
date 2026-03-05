@@ -80,4 +80,48 @@ if ! grep -q '"email"' /tmp/sec4-smoke-users-get.json; then
   exit 1
 fi
 
+db_exec_status="$(curl -sS -o /tmp/sec4-smoke-db-exec.json -w '%{http_code}' \
+  "http://127.0.0.1:${port}/db/hot-write")"
+if [ "$db_exec_status" != "200" ]; then
+  echo "sec4 smoke /db/hot-write expected 200, got $db_exec_status" >&2
+  exit 1
+fi
+if ! jq -e '.ok == true and .op == "exec"' /tmp/sec4-smoke-db-exec.json >/dev/null; then
+  echo "sec4 smoke /db/hot-write expected {ok:true,op:\"exec\"}" >&2
+  exit 1
+fi
+
+db_exec_tx_status="$(curl -sS -o /tmp/sec4-smoke-db-exec-tx.json -w '%{http_code}' \
+  "http://127.0.0.1:${port}/db/hot-write-tx")"
+if [ "$db_exec_tx_status" != "200" ]; then
+  echo "sec4 smoke /db/hot-write-tx expected 200, got $db_exec_tx_status" >&2
+  exit 1
+fi
+if ! jq -e '.ok == true and .op == "execTx"' /tmp/sec4-smoke-db-exec-tx.json >/dev/null; then
+  echo "sec4 smoke /db/hot-write-tx expected {ok:true,op:\"execTx\"}" >&2
+  exit 1
+fi
+
+db_query_one_status="$(curl -sS -o /tmp/sec4-smoke-db-query-one.json -w '%{http_code}' \
+  "http://127.0.0.1:${port}/db/hot-query-one")"
+if [ "$db_query_one_status" != "200" ]; then
+  echo "sec4 smoke /db/hot-query-one expected 200, got $db_query_one_status" >&2
+  exit 1
+fi
+if ! jq -e '.ok == true and .record.op == "exec"' /tmp/sec4-smoke-db-query-one.json >/dev/null; then
+  echo "sec4 smoke /db/hot-query-one expected {ok:true,record.op:\"exec\"}" >&2
+  exit 1
+fi
+
+db_records_status="$(curl -sS -o /tmp/sec4-smoke-db-records.json -w '%{http_code}' \
+  "http://127.0.0.1:${port}/db/records")"
+if [ "$db_records_status" != "200" ]; then
+  echo "sec4 smoke /db/records expected 200, got $db_records_status" >&2
+  exit 1
+fi
+if ! jq -e '.ok == true and .count >= 2' /tmp/sec4-smoke-db-records.json >/dev/null; then
+  echo "sec4 smoke /db/records expected {ok:true,count>=2}" >&2
+  exit 1
+fi
+
 echo "sec4 service smoke test passed"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 5 ]; then
-  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 7 ]; then
+  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json] [saturation_summary.md] [mode_compare.json]" >&2
   exit 2
 fi
 
@@ -11,6 +11,8 @@ out_path="$2"
 sec_audit_path="${3:-}"
 analysis_path="${4:-}"
 step_matrix_path="${5:-}"
+saturation_summary_path="${6:-}"
+mode_compare_path="${7:-}"
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -36,6 +38,35 @@ if [ -n "$step_matrix_path" ] && [ ! -f "$step_matrix_path" ]; then
   echo "step matrix file not found: ${step_matrix_path}" >&2
   exit 2
 fi
+if [ -n "$saturation_summary_path" ] && [ ! -f "$saturation_summary_path" ]; then
+  echo "saturation summary file not found: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Recommended boost step:' "$saturation_summary_path"; then
+  echo "saturation summary missing recommended boost step line: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Selection mode:' "$saturation_summary_path"; then
+  echo "saturation summary missing selection mode line: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$mode_compare_path" ] && [ ! -f "$mode_compare_path" ]; then
+  echo "mode compare file not found: ${mode_compare_path}" >&2
+  exit 2
+fi
+if [ -n "$mode_compare_path" ] && [ "$(jq -r '.comparison.recommendedMode // empty' "$mode_compare_path")" = "" ]; then
+  echo "mode compare missing comparison.recommendedMode: ${mode_compare_path}" >&2
+  exit 2
+fi
+
+extract_summary_value() {
+  local prefix="$1"
+  local path="$2"
+  local line
+  line="$(grep -F -- "$prefix" "$path" | head -n 1 || true)"
+  line="${line#"$prefix"}"
+  printf '%s' "$line"
+}
 
 mkdir -p "$(dirname "$out_path")"
 now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -47,6 +78,8 @@ leader_count="$(jq '.endpoints | length' "$matrix_path")"
 constant_rate_true_count="$(jq '[.endpoints[].leader | (if has("constantRate") then .constantRate else true end) | select(. == true)] | length' "$matrix_path")"
 non_constant_count="$((leader_count - constant_rate_true_count))"
 invalid_p99_count="$(jq '[.endpoints[].leader | ((.p99 // "") | tostring | test("[0-9]+(\\.[0-9]+)?") | not)] | map(select(. == true)) | length' "$matrix_path")"
+memory_sampled_count="$(jq '[.endpoints[].leader | select((.rssKb // null) != null)] | length' "$matrix_path")"
+memory_missing_count="$((leader_count - memory_sampled_count))"
 generators="$(jq -r '[.endpoints[].leader | (if has("loadGenerator") then .loadGenerator else "wrk2" end)] | unique | join(", ")' "$matrix_path")"
 
 run_mode="mixed"
@@ -58,6 +91,9 @@ fi
 
 quality_status="PASS"
 if [ "$non_constant_count" -gt 0 ] || [ "$invalid_p99_count" -gt 0 ]; then
+  quality_status="WARN"
+fi
+if [ "$memory_missing_count" -gt 0 ]; then
   quality_status="WARN"
 fi
 
@@ -79,22 +115,32 @@ fi
   if [ -n "$step_matrix_path" ]; then
     echo "- Step matrix source: ${step_matrix_path}"
   fi
+  if [ -n "$saturation_summary_path" ]; then
+    echo "- Saturation summary source: ${saturation_summary_path}"
+  fi
+  if [ -n "$mode_compare_path" ]; then
+    echo "- Mode compare source: ${mode_compare_path}"
+  fi
   echo
 
   echo "## Evidence Quality"
   echo
   echo "- Run mode: ${run_mode}"
   echo "- Generators: ${generators}"
+  echo "- Memory samples: ${memory_sampled_count}/${leader_count}"
   echo "- Quality status: ${quality_status}"
   if [ "$non_constant_count" -gt 0 ]; then
-    echo "- Warning: ${non_constant_count}/${leader_count} endpoint leaders are non-constant-rate (`constantRate=false`)."
+    echo "- Warning: ${non_constant_count}/${leader_count} endpoint leaders are non-constant-rate (constantRate=false)."
   fi
   if [ "$invalid_p99_count" -gt 0 ]; then
-    echo "- Warning: ${invalid_p99_count}/${leader_count} endpoint leaders have missing or non-numeric `p99`."
+    echo "- Warning: ${invalid_p99_count}/${leader_count} endpoint leaders have missing or non-numeric p99."
+  fi
+  if [ "$memory_missing_count" -gt 0 ]; then
+    echo "- Warning: ${memory_missing_count}/${leader_count} endpoint leaders are missing rssKb memory samples."
   fi
   echo
-  echo "| Endpoint | Constant Rate | Generator | p99 | Status |"
-  echo "|---|---|---|---:|---|"
+  echo "| Endpoint | Constant Rate | Generator | p99 | RSS (KB) | Status |"
+  echo "|---|---|---|---:|---:|---|"
   jq -r '
     .endpoints[]
     | .endpoint as $ep
@@ -104,27 +150,29 @@ fi
         (if ($l | has("constantRate")) then $l.constantRate else true end | tostring),
         (if ($l | has("loadGenerator")) then $l.loadGenerator else "wrk2" end),
         (($l.p99 // "") | tostring),
+        (if (($l.rssKb // null) == null) then "n/a" else (($l.rssKb | tostring)) end),
         (
           ((if ($l | has("constantRate")) then $l.constantRate else true end) == true)
           and ((($l.p99 // "") | tostring | test("[0-9]+(\\.[0-9]+)?")))
+          and (($l.rssKb // null) != null)
           | if . then "PASS" else "WARN" end
         )
       ]
     | @tsv
   ' "$matrix_path" \
-    | while IFS=$'\t' read -r endpoint constant_rate generator p99 status; do
+    | while IFS=$'\t' read -r endpoint constant_rate generator p99 rss_kb status; do
         [ -z "$p99" ] && p99="n/a"
-        printf "| %s | %s | %s | %s | %s |\n" "$endpoint" "$constant_rate" "$generator" "$p99" "$status"
+        printf "| %s | %s | %s | %s | %s | %s |\n" "$endpoint" "$constant_rate" "$generator" "$p99" "$rss_kb" "$status"
       done
   echo
 
   echo "## Endpoint Leaders"
   echo
-  echo "| Endpoint | Leader | Requests/sec | p99 |"
-  echo "|---|---|---:|---:|"
-  jq -r '.endpoints[] | [.endpoint, (.leader.impl // "n/a"), ((.leader.requestsPerSec // 0)|tostring), (.leader.p99 // "")] | @tsv' "$matrix_path" \
-    | while IFS=$'\t' read -r endpoint leader reqps p99; do
-        printf "| %s | %s | %s | %s |\n" "$endpoint" "$leader" "$reqps" "$p99"
+  echo "| Endpoint | Leader | Requests/sec | p99 | RSS (KB) |"
+  echo "|---|---|---:|---:|---:|"
+  jq -r '.endpoints[] | [.endpoint, (.leader.impl // "n/a"), ((.leader.requestsPerSec // 0)|tostring), (.leader.p99 // ""), (if (.leader.rssKb // null) == null then "n/a" else (.leader.rssKb | tostring) end)] | @tsv' "$matrix_path" \
+    | while IFS=$'\t' read -r endpoint leader reqps p99 rss_kb; do
+        printf "| %s | %s | %s | %s | %s |\n" "$endpoint" "$leader" "$reqps" "$p99" "$rss_kb"
       done
   echo
 
@@ -224,6 +272,72 @@ fi
     fi
   else
     echo "- No sec4 audit artifact provided."
+  fi
+  echo
+
+  echo "## LASM Saturation Boost Tuning"
+  echo
+  if [ -n "$saturation_summary_path" ]; then
+    sat_recommended="$(extract_summary_value '- Recommended boost step: ' "$saturation_summary_path")"
+    sat_selection_mode="$(extract_summary_value '- Selection mode: ' "$saturation_summary_path")"
+    sat_pass_runs="$(extract_summary_value '- Pass runs: ' "$saturation_summary_path")"
+    sat_verify_reqps="$(extract_summary_value '- Requests/sec: ' "$saturation_summary_path")"
+
+    echo "- Summary source: ${saturation_summary_path}"
+    echo "- Recommended boost step: ${sat_recommended}"
+    echo "- Selection mode: ${sat_selection_mode}"
+    echo "- Pass runs: ${sat_pass_runs}"
+    if [ -n "$sat_verify_reqps" ]; then
+      echo "- Verification requests/sec: ${sat_verify_reqps}"
+    fi
+  else
+    echo "- No saturation-summary artifact provided."
+  fi
+  echo
+
+  echo "## LASM Mode Comparison"
+  echo
+  if [ -n "$mode_compare_path" ]; then
+    mode_compare_recommended_mode="$(jq -r '.comparison.recommendedMode // "n/a"' "$mode_compare_path")"
+    mode_compare_proxy_pass="$(jq -r '.proxy.pass // false | tostring' "$mode_compare_path")"
+    mode_compare_fixed_pass="$(jq -r '.fixed.pass // false | tostring' "$mode_compare_path")"
+    mode_compare_proxy_reqps="$(jq -r '.proxy.observed.requestsPerSec // "n/a"' "$mode_compare_path")"
+    mode_compare_fixed_reqps="$(jq -r '.fixed.observed.requestsPerSec // "n/a"' "$mode_compare_path")"
+    mode_compare_reqps_delta="$(jq -r '.comparison.requestsPerSecDelta // "n/a"' "$mode_compare_path")"
+    mode_compare_reqps_gain_pct="$(jq -r 'if (.comparison.requestsPerSecGainPctVsProxy // null) == null then "n/a" else (((((.comparison.requestsPerSecGainPctVsProxy) * 100) | round) / 100) | tostring) end' "$mode_compare_path")"
+    mode_compare_p99_proxy_ms="$(jq -r '.comparison.p99ProxyMs // "n/a"' "$mode_compare_path")"
+    mode_compare_p99_fixed_ms="$(jq -r '.comparison.p99FixedMs // "n/a"' "$mode_compare_path")"
+    mode_compare_peak_rss_delta_kb="$(jq -r '.comparison.peakRssDeltaKb // "n/a"' "$mode_compare_path")"
+    mode_compare_short_circuit_total_proxy="$(jq -r '.comparison.relayDispatchShortCircuitTotalProxy // "n/a"' "$mode_compare_path")"
+    mode_compare_short_circuit_total_fixed="$(jq -r '.comparison.relayDispatchShortCircuitTotalFixed // "n/a"' "$mode_compare_path")"
+    mode_compare_short_circuit_total_delta="$(jq -r '.comparison.relayDispatchShortCircuitTotalDelta // "n/a"' "$mode_compare_path")"
+    mode_compare_live_sender_proxy="$(jq -r '.comparison.relayLiveSenderCountProxy // "n/a"' "$mode_compare_path")"
+    mode_compare_live_sender_fixed="$(jq -r '.comparison.relayLiveSenderCountFixed // "n/a"' "$mode_compare_path")"
+    mode_compare_live_sender_delta="$(jq -r '.comparison.relayLiveSenderCountDelta // "n/a"' "$mode_compare_path")"
+
+    echo "- Mode compare source: ${mode_compare_path}"
+    echo "- Recommended mode: ${mode_compare_recommended_mode}"
+    echo "- Proxy pass: ${mode_compare_proxy_pass}"
+    echo "- Fixed reuse-port pass: ${mode_compare_fixed_pass}"
+    echo "- Proxy requests/sec: ${mode_compare_proxy_reqps}"
+    echo "- Fixed requests/sec: ${mode_compare_fixed_reqps}"
+    echo "- Requests/sec delta (fixed-proxy): ${mode_compare_reqps_delta}"
+    if [ "$mode_compare_reqps_gain_pct" != "n/a" ]; then
+      echo "- Requests/sec gain vs proxy: ${mode_compare_reqps_gain_pct}%"
+    else
+      echo "- Requests/sec gain vs proxy: n/a"
+    fi
+    echo "- p99 proxy ms: ${mode_compare_p99_proxy_ms}"
+    echo "- p99 fixed ms: ${mode_compare_p99_fixed_ms}"
+    echo "- Peak RSS delta KB (fixed-proxy): ${mode_compare_peak_rss_delta_kb}"
+    echo "- Relay live sender count proxy: ${mode_compare_live_sender_proxy}"
+    echo "- Relay live sender count fixed: ${mode_compare_live_sender_fixed}"
+    echo "- Relay live sender count delta (fixed-proxy): ${mode_compare_live_sender_delta}"
+    echo "- Relay short-circuit total proxy: ${mode_compare_short_circuit_total_proxy}"
+    echo "- Relay short-circuit total fixed: ${mode_compare_short_circuit_total_fixed}"
+    echo "- Relay short-circuit total delta (fixed-proxy): ${mode_compare_short_circuit_total_delta}"
+  else
+    echo "- No mode-compare artifact provided."
   fi
 } > "$out_path"
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 5 ]; then
-  echo "usage: $0 <raw_wrk2.txt> <impl> <endpoint> <target_rps> <out_summary.json>" >&2
+if [ "$#" -lt 5 ] || [ "$#" -gt 7 ]; then
+  echo "usage: $0 <raw_wrk2.txt> <impl> <endpoint> <target_rps> <out_summary.json> [rss_kb] [rss_source]" >&2
   exit 2
 fi
 
@@ -11,10 +11,25 @@ impl="$2"
 endpoint="$3"
 target_rps="$4"
 out="$5"
+rss_kb="${6:-}"
+rss_source="${7:-unavailable}"
 
 if [ ! -f "$raw" ]; then
   echo "raw wrk2 output not found: $raw" >&2
   exit 2
+fi
+
+rss_kb_json="null"
+if [ -n "$rss_kb" ]; then
+  if ! [[ "$rss_kb" =~ ^[0-9]+$ ]]; then
+    echo "rss_kb must be an integer value when provided: ${rss_kb}" >&2
+    exit 2
+  fi
+  rss_kb_json="$rss_kb"
+fi
+
+if [ -z "$rss_source" ]; then
+  rss_source="unavailable"
 fi
 
 mkdir -p "$(dirname "$out")"
@@ -40,6 +55,10 @@ cat > "$out" <<JSON
   "requestsPerSec": ${requests_sec:-0},
   "loadGenerator": "${load_generator}",
   "constantRate": ${constant_rate},
+  "memory": {
+    "rssKb": ${rss_kb_json},
+    "sampleSource": "${rss_source}"
+  },
   "latency": {
     "p50": "${p50}",
     "p95": "${p95}",

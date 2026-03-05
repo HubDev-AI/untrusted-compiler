@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 <compare_matrix.json> [--endpoint ping] [--max-p99-ms 25] [--min-target-coverage 90] [--baseline path]
+usage: $0 <compare_matrix.json> [--endpoint ping] [--max-p99-ms 25] [--min-target-coverage 90] [--max-rss-kb 0] [--baseline path]
 
 Checks benchmark leader metrics for an endpoint and fails if thresholds are exceeded.
 USAGE
@@ -20,6 +20,7 @@ shift
 endpoint="ping"
 max_p99_ms="25"
 min_target_coverage="90"
+max_rss_kb=""
 baseline_path=""
 
 while [ "$#" -gt 0 ]; do
@@ -58,6 +59,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --min-target-coverage=*)
       min_target_coverage="${1#--min-target-coverage=}"
+      shift
+      ;;
+    --max-rss-kb)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      max_rss_kb="$2"
+      shift 2
+      ;;
+    --max-rss-kb=*)
+      max_rss_kb="${1#--max-rss-kb=}"
       shift
       ;;
     --baseline)
@@ -114,6 +127,14 @@ coverage_pct="$(jq -r '
   | (.requestsPerSec // 0) as $actual
   | if $target > 0 then (($actual / $target) * 100) else 0 end
 ' <<<"$leader_json")"
+leader_rss_kb="$(jq -r '
+  (.rssKb // null)
+  | if . == null then "" else tostring end
+' <<<"$leader_json")"
+if [ -n "$leader_rss_kb" ] && ! [[ "$leader_rss_kb" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "leader rssKb is non-numeric for endpoint=${endpoint}" >&2
+  exit 2
+fi
 
 if ! awk -v actual="$p99_ms" -v max="$max_p99_ms" 'BEGIN { exit !(actual+0 <= max+0) }'; then
   echo "threshold failure: endpoint=${endpoint} leader p99=${p99_ms}ms exceeds max=${max_p99_ms}ms" >&2
@@ -123,6 +144,21 @@ fi
 if ! awk -v actual="$coverage_pct" -v min="$min_target_coverage" 'BEGIN { exit !(actual+0 >= min+0) }'; then
   echo "threshold failure: endpoint=${endpoint} leader coverage=${coverage_pct}% below min=${min_target_coverage}%" >&2
   exit 1
+fi
+
+if [ -n "$max_rss_kb" ]; then
+  if ! [[ "$max_rss_kb" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "max-rss-kb must be numeric when provided: ${max_rss_kb}" >&2
+    exit 2
+  fi
+  if [ -z "$leader_rss_kb" ]; then
+    echo "leader rssKb is missing/non-numeric for endpoint=${endpoint}" >&2
+    exit 2
+  fi
+  if ! awk -v actual="$leader_rss_kb" -v max="$max_rss_kb" 'BEGIN { exit !(actual+0 <= max+0) }'; then
+    echo "threshold failure: endpoint=${endpoint} leader rssKb=${leader_rss_kb} exceeds max=${max_rss_kb}" >&2
+    exit 1
+  fi
 fi
 
 baseline_note=""
@@ -139,8 +175,10 @@ if [ -n "$baseline_path" ]; then
 
   baseline_p99_ms="$(jq -r '.baselineP99Ms // empty' "$baseline_path")"
   baseline_coverage_pct="$(jq -r '.baselineCoveragePct // empty' "$baseline_path")"
+  baseline_rss_kb="$(jq -r '.baselineRssKb // empty' "$baseline_path")"
   max_p99_regression_pct="$(jq -r '.maxP99RegressionPct // 20' "$baseline_path")"
   max_coverage_drop_pct="$(jq -r '.maxCoverageDropPct // 5' "$baseline_path")"
+  max_rss_regression_pct="$(jq -r '.maxRssRegressionPct // 20' "$baseline_path")"
 
   if [ -z "$baseline_p99_ms" ] || [ -z "$baseline_coverage_pct" ]; then
     echo "baseline file missing required baseline metrics: ${baseline_path}" >&2
@@ -160,11 +198,27 @@ if [ -n "$baseline_path" ]; then
     exit 1
   fi
 
+  if [ -n "$baseline_rss_kb" ]; then
+    if [ -z "$leader_rss_kb" ]; then
+      echo "baseline regression failure: endpoint=${endpoint} leader rssKb is missing while baselineRssKb is set" >&2
+      exit 2
+    fi
+    baseline_rss_limit="$(awk -v base="$baseline_rss_kb" -v pct="$max_rss_regression_pct" 'BEGIN { printf "%.6f", base * (1 + pct / 100.0) }')"
+    if ! awk -v actual="$leader_rss_kb" -v limit="$baseline_rss_limit" 'BEGIN { exit !(actual+0 <= limit+0) }'; then
+      echo "baseline regression failure: endpoint=${endpoint} leader rssKb=${leader_rss_kb} exceeds baseline limit=${baseline_rss_limit}" >&2
+      exit 1
+    fi
+  fi
+
   baseline_note=" baseline=${baseline_path}"
 fi
 
 leader_impl="$(jq -r '.impl // "unknown"' <<<"$leader_json")"
 leader_rps="$(jq -r '.requestsPerSec // 0' <<<"$leader_json")"
 leader_target="$(jq -r '.targetRps // 0' <<<"$leader_json")"
+rss_note=""
+if [ -n "$leader_rss_kb" ]; then
+  rss_note=" rssKb=${leader_rss_kb}"
+fi
 
-echo "thresholds passed: endpoint=${endpoint} leader=${leader_impl} p99=${p99_ms}ms coverage=${coverage_pct}% (${leader_rps}/${leader_target})${baseline_note}"
+echo "thresholds passed: endpoint=${endpoint} leader=${leader_impl} p99=${p99_ms}ms coverage=${coverage_pct}% (${leader_rps}/${leader_target})${rss_note}${baseline_note}"

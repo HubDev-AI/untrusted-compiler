@@ -88,6 +88,39 @@ validate_json_required_keys() {
   return "${failed}"
 }
 
+validate_summary_memory_shape() {
+  local sample_path="$1"
+  local label="$2"
+  if ! jq -e '
+    (.memory | type == "object")
+    and (.memory | has("rssKb"))
+    and (.memory | has("sampleSource"))
+    and ((.memory.rssKb == null) or (.memory.rssKb | type == "number"))
+    and (.memory.sampleSource | type == "string")
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} memory contract mismatch (rssKb/sampleSource): ${sample_path}" >&2
+    return 1
+  fi
+}
+
+validate_report_summary_memory_shape() {
+  local sample_path="$1"
+  local label="$2"
+  if ! jq -e '
+    (.summaries | type == "array")
+    and all(.summaries[];
+      (.memory | type == "object")
+      and (.memory | has("rssKb"))
+      and (.memory | has("sampleSource"))
+      and ((.memory.rssKb == null) or (.memory.rssKb | type == "number"))
+      and (.memory.sampleSource | type == "string")
+    )
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} summary memory contract mismatch: ${sample_path}" >&2
+    return 1
+  fi
+}
+
 validate_compare_matrix_rows() {
   local sample_path="$1"
   local label="$2"
@@ -101,7 +134,9 @@ validate_compare_matrix_rows() {
       and (.requestsPerSec | type == "number")
       and (.p99 | type == "string")
       and (.loadGenerator | type == "string")
-      and (.constantRate | type == "boolean");
+      and (.constantRate | type == "boolean")
+      and has("rssKb")
+      and ((.rssKb == null) or (.rssKb | type == "number"));
     def row_eq(a; b):
       a.impl == b.impl
       and a.endpoint == b.endpoint
@@ -109,7 +144,8 @@ validate_compare_matrix_rows() {
       and a.requestsPerSec == b.requestsPerSec
       and a.p99 == b.p99
       and a.loadGenerator == b.loadGenerator
-      and a.constantRate == b.constantRate;
+      and a.constantRate == b.constantRate
+      and a.rssKb == b.rssKb;
 
     (.endpoints | type == "array" and length > 0)
     and all(.endpoints[];
@@ -140,7 +176,9 @@ validate_compare_report_rows() {
       and (.requestsPerSec | type == "number")
       and (.p99 | type == "string")
       and (.loadGenerator | type == "string")
-      and (.constantRate | type == "boolean");
+      and (.constantRate | type == "boolean")
+      and has("rssKb")
+      and ((.rssKb == null) or (.rssKb | type == "number"));
     def row_eq(a; b):
       a.impl == b.impl
       and a.endpoint == b.endpoint
@@ -148,7 +186,8 @@ validate_compare_report_rows() {
       and a.requestsPerSec == b.requestsPerSec
       and a.p99 == b.p99
       and a.loadGenerator == b.loadGenerator
-      and a.constantRate == b.constantRate;
+      and a.constantRate == b.constantRate
+      and a.rssKb == b.rssKb;
 
     . as $report
     | ($report.endpoint | type == "string")
@@ -179,6 +218,9 @@ for impl in sec4 go node rust; do
   if ! validate_json_required_keys "${report_sample}" "${report_schema}" "report sample"; then
     failed=1
   fi
+  if ! validate_report_summary_memory_shape "${report_sample}" "report sample"; then
+    failed=1
+  fi
   if ! jq -e --arg impl "${impl}" '.impl == $impl' "${report_sample}" >/dev/null; then
     echo "error: report sample impl mismatch for ${impl}: ${report_sample}" >&2
     failed=1
@@ -188,6 +230,9 @@ done
 for endpoint in ping decode; do
   summary_sample="${samples_dir}/sample-summary-${endpoint}.json"
   if ! validate_json_required_keys "${summary_sample}" "${summary_schema}" "summary sample"; then
+    failed=1
+  fi
+  if ! validate_summary_memory_shape "${summary_sample}" "summary sample"; then
     failed=1
   fi
 done
