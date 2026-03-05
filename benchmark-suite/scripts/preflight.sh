@@ -3,10 +3,13 @@ set -euo pipefail
 
 usage() {
   echo "usage: $0 [--impls sec4,sec4-lasm,node,go,rust,c] [--dry-run-only]" >&2
+  echo "env: BENCH_REQUIRE_WRK2=1 enforces wrk2; BENCH_WRK2_BIN=/abs/path/to/wrk2 overrides wrk2 lookup" >&2
 }
 
 impls_csv="sec4,sec4-lasm,node,go,rust,c"
 dry_run_only="false"
+require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
+wrk2_bin_override="${BENCH_WRK2_BIN:-}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -56,10 +59,42 @@ check_cmd() {
   return 1
 }
 
-check_load_generator() {
+is_truthy() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+resolve_wrk2_bin() {
+  if [ -n "$wrk2_bin_override" ] && [ -x "$wrk2_bin_override" ]; then
+    printf '%s\n' "$wrk2_bin_override"
+    return 0
+  fi
   if command -v wrk2 >/dev/null 2>&1; then
+    command -v wrk2
+    return 0
+  fi
+  return 1
+}
+
+check_load_generator() {
+  local wrk2_bin=""
+  if wrk2_bin="$(resolve_wrk2_bin)"; then
     echo "OK       load generator (wrk2)"
     return 0
+  fi
+  if is_truthy "$require_wrk2"; then
+    if [ -n "$wrk2_bin_override" ] && [ ! -x "$wrk2_bin_override" ]; then
+      echo "MISSING  load generator (wrk2 required; BENCH_WRK2_BIN not executable: ${wrk2_bin_override})"
+      return 1
+    fi
+    echo "MISSING  load generator (wrk2 required)"
+    return 1
   fi
   if command -v wrk >/dev/null 2>&1; then
     echo "OK       load generator (wrk fallback) (wrk)"

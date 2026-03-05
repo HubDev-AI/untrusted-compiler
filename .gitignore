@@ -10,3 +10,6 @@ infra/local-postgres/data/
 **/.lasm-db/
 
 **/build/security_map.json
+benchmark-suite/bin/
+benchmark-suite/results/workbench-benchmark-report.md
+benchmark-suite/results/workbench-benchmark-report.html

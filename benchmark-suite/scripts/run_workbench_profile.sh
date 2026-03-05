@@ -4,6 +4,11 @@ set -euo pipefail
 usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] <impl> <endpoint:wb-tasks-post|wb-tasks-with-comment|wb-task-comment-post|wb-task-get|wb-tasks-list> [base_url]
+
+env:
+  BENCH_REQUIRE_WRK2=1        Enforce wrk2-only load generation
+  BENCH_WRK2_BIN=/abs/path    Explicit wrk2 binary path
+  BENCH_WRK_FALLBACK_TIMEOUT  wrk fallback timeout (default: 10s)
 USAGE
 }
 
@@ -40,15 +45,50 @@ duration="${BENCH_DURATION:-$duration}"
 
 load_bin=""
 load_supports_rate="false"
+require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
+wrk2_bin_override="${BENCH_WRK2_BIN:-}"
+wrk_fallback_timeout_default="10s"
+wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
+
+is_truthy() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+resolve_wrk2_bin() {
+  if [ -n "$wrk2_bin_override" ] && [ -x "$wrk2_bin_override" ]; then
+    printf '%s\n' "$wrk2_bin_override"
+    return 0
+  fi
+  if command -v wrk2 >/dev/null 2>&1; then
+    command -v wrk2
+    return 0
+  fi
+  return 1
+}
 
 select_load_generator() {
-  if command -v wrk2 >/dev/null 2>&1; then
-    load_bin="wrk2"
+  local wrk2_bin=""
+  if wrk2_bin="$(resolve_wrk2_bin)"; then
+    load_bin="$wrk2_bin"
     load_supports_rate="true"
     return
   fi
+  if is_truthy "$require_wrk2"; then
+    if [ -n "$wrk2_bin_override" ] && [ ! -x "$wrk2_bin_override" ]; then
+      echo "wrk2 override path is not executable: ${wrk2_bin_override}" >&2
+    fi
+    echo "wrk2 is required for this run (set BENCH_REQUIRE_WRK2=0 to allow wrk fallback)" >&2
+    exit 127
+  fi
   if command -v wrk >/dev/null 2>&1; then
-    load_bin="wrk"
+    load_bin="$(command -v wrk)"
     load_supports_rate="false"
     return
   fi
@@ -60,7 +100,7 @@ select_load_generator
 
 warn_wrk_fallback() {
   if [ "${load_supports_rate}" != "true" ]; then
-    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement" >&2
+    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement (timeout=${wrk_fallback_timeout})" >&2
   fi
 }
 
@@ -95,6 +135,8 @@ build_wrk_cmd() {
   local_cmd=("${load_bin}" --latency -t"${threads}" -c"${conns}" -d"${duration}")
   if [ "${load_supports_rate}" = "true" ]; then
     local_cmd+=(-R"${target}")
+  else
+    local_cmd+=(--timeout "${wrk_fallback_timeout}")
   fi
   if [ -n "${script_path}" ]; then
     local_cmd+=(-s "${script_path}")
@@ -180,10 +222,16 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
+{
+  echo "# sec4-bench-load-bin=${load_bin}"
+  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+  echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
+} >"$raw"
+
 if [ "${#endpoint_env[@]}" -gt 0 ]; then
-  env "${endpoint_env[@]}" "${cmd[@]}" | tee "$raw"
+  env "${endpoint_env[@]}" "${cmd[@]}" | tee -a "$raw"
 else
-  "${cmd[@]}" | tee "$raw"
+  "${cmd[@]}" | tee -a "$raw"
 fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"

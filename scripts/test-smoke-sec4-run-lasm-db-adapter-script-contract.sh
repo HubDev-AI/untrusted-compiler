@@ -57,9 +57,9 @@ required_tokens=(
   'dbAdapterLabel=${adapter_label}'
   'run_flags="--port,--oneshot,--serve-timeout-ms,--db-base,--db-adapter"'
   "--db-adapter \"\${db_adapter}\""
-  "\"/db/exec?template=SELECT%201&params=alpha\""
-  "\"/db/exec-tx?template=SELECT%201&params=alpha\""
-  "\"/db/query-one?template=SELECT%201&params=alpha&row_schema=7\""
+  "\"/db/exec?template=SELECT%201&params=0\""
+  "\"/db/exec-tx?template=SELECT%201&params=0\""
+  "\"/db/query-one?template=SELECT%201&params=0&row_schema=7\""
   "\"/db/records?includeRecords=true\""
   "default_smoke_auth_header=\"Authorization: Bearer smoke-token\""
   "SEC4_ALPHA_FULL_AUTH_HEADER"

@@ -116,13 +116,17 @@ for branch in default max-body; do
   fi
 
   users_header_trace_id="$(sed -nE 's/^X-Trace-Id:[[:space:]]*//Ip' "${users_headers_path}" | tr -d '\r' | head -n 1)"
-  users_body_trace_id="$(jq -r '.traceId // empty' "${users_body_path}")"
-  if [ -z "${users_header_trace_id}" ] || [ -z "${users_body_trace_id}" ]; then
-    echo "runtime-smoke ${branch} traceId fields are missing" >&2
+  users_body_user_id="$(jq -r '.userId // empty' "${users_body_path}")"
+  if [ -z "${users_header_trace_id}" ]; then
+    echo "runtime-smoke ${branch} users trace header is missing" >&2
     exit 1
   fi
-  if [ "${users_header_trace_id}" != "${users_body_trace_id}" ]; then
-    echo "runtime-smoke ${branch} users traceId mismatch between header and body" >&2
+  if [[ ! "${users_header_trace_id}" =~ ^rt-[0-9]+$ ]]; then
+    echo "runtime-smoke ${branch} users trace header is malformed" >&2
+    exit 1
+  fi
+  if [[ ! "${users_body_user_id}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+    echo "runtime-smoke ${branch} users.body userId is missing or malformed" >&2
     exit 1
   fi
 
@@ -156,7 +160,8 @@ for branch in default max-body; do
       --arg serveTimeoutMs "${serve_timeout_ms}" \
       --arg maxBodyBytes "${max_body_bytes}" \
       --arg runFlags "${run_flags}" \
-      --arg traceId "${users_body_trace_id}" \
+      --arg traceId "${users_header_trace_id}" \
+      --arg userId "${users_body_user_id}" \
       '{
         branch: $branch,
         dir: $dir,
@@ -167,7 +172,8 @@ for branch in default max-body; do
         serveTimeoutMs: $serveTimeoutMs,
         maxBodyBytes: $maxBodyBytes,
         runFlags: $runFlags,
-        traceId: $traceId
+        traceId: $traceId,
+        userId: $userId
       }'
   )"
 

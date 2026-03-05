@@ -56,7 +56,7 @@ Content-Type: application/json; charset=utf-8
 X-Trace-Id: ${trace_id}
 TXT
   cat > "${branch_dir}/db-exec.body" <<'TXT'
-{"recordId":1,"op":"exec","db":1,"template":"SELECT 1","params":"alpha"}
+{"recordId":1,"op":"exec","db":1,"template":"SELECT 1","params":"0"}
 TXT
 
   cat > "${branch_dir}/db-exec-tx.headers" <<TXT
@@ -65,7 +65,7 @@ Content-Type: application/json; charset=utf-8
 X-Trace-Id: ${trace_id}
 TXT
   cat > "${branch_dir}/db-exec-tx.body" <<'TXT'
-{"recordId":2,"op":"execTx","db":1,"tx":1,"template":"SELECT 1","params":"alpha"}
+{"recordId":2,"op":"execTx","db":1,"tx":1,"template":"SELECT 1","params":"0"}
 TXT
 
   cat > "${branch_dir}/db-query-one.headers" <<TXT
@@ -73,9 +73,15 @@ HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
 X-Trace-Id: ${trace_id}
 TXT
-  cat > "${branch_dir}/db-query-one.body" <<'TXT'
-{"recordId":2,"rowSchema":7,"summary":"op=execTx"}
+  if [ "${db_adapter}" = "sqlite" ]; then
+    cat > "${branch_dir}/db-query-one.body" <<'TXT'
+{"ok":true,"record":{"op":"queryOne"},"recordId":3,"row":"{\"1\":1}","rowObject":{"1":1},"rowSchema":7}
 TXT
+  else
+    cat > "${branch_dir}/db-query-one.body" <<'TXT'
+{"ok":true,"record":{"op":"queryOne"},"recordId":3,"row":"{\"op\":\"execTx\"}","rowObject":{"op":"execTx"},"rowSchema":7}
+TXT
+  fi
 
   cat > "${branch_dir}/db-records.headers" <<TXT
 HTTP/1.1 200 OK

@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry workbench-smoke workbench-bench workbench-bench-dry workbench-bench-local workbench-bench-local-dry workbench-step-bench workbench-step-bench-dry workbench-step-bench-local workbench-step-bench-local-dry workbench-full-bench workbench-full-bench-dry workbench-full-bench-repeats workbench-full-bench-repeats-dry workbench-full-bench-repeats-report workbench-full-bench-local workbench-full-bench-local-dry workbench-full-bench-local-repeats workbench-full-bench-local-repeats-dry workbench-full-bench-local-bundle workbench-full-bench-local-bundle-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry wrk2-install workbench-smoke workbench-bench workbench-bench-dry workbench-bench-report-html workbench-bench-local workbench-bench-local-dry workbench-step-bench workbench-step-bench-dry workbench-step-bench-local workbench-step-bench-local-dry workbench-full-bench workbench-full-bench-dry workbench-full-bench-repeats workbench-full-bench-repeats-dry workbench-full-bench-repeats-report workbench-full-bench-local workbench-full-bench-local-dry workbench-full-bench-local-repeats workbench-full-bench-local-repeats-dry workbench-full-bench-local-bundle workbench-full-bench-local-bundle-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-matrix-lasm-postgres bench-matrix-lasm-postgres-dry bench-full bench-full-dry bench-full-lasm-postgres bench-full-lasm-postgres-dry bench-alpha-postgres-suite bench-alpha-postgres-suite-dry bench-alpha-postgres-suite-repeats bench-alpha-postgres-suite-repeats-dry bench-alpha-postgres-suite-repeats-report bench-alpha-postgres-suite-local bench-alpha-postgres-suite-local-dry bench-alpha-postgres-suite-local-repeats bench-alpha-postgres-suite-local-repeats-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -6,6 +6,11 @@ ENDPOINTS ?= ping,decode,users-post,users-get
 WORKBENCH_IMPLS ?= sec4,sec4-lasm,node,go,rust
 WORKBENCH_ENDPOINTS ?= wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list
 WORKBENCH_REPEAT_RUNS ?= 3
+WORKBENCH_BENCHMARK_RUNS ?= results/summaries/workbench-benchmark-runs.json
+WORKBENCH_BENCHMARK_COMPARE ?= results/summaries/workbench-benchmark-compare-matrix.json
+WORKBENCH_BENCHMARK_ANALYSIS ?= results/summaries/workbench-benchmark-analysis.json
+WORKBENCH_BENCHMARK_REPORT_HTML ?= results/workbench-benchmark-report.html
+WORKBENCH_FULL_REPORT_HTML ?= results/workbench-full-benchmark-report.html
 WORKBENCH_FULL_REPEATS_SUMMARY ?= results/summaries/workbench-full-benchmark-repeats.json
 WORKBENCH_FULL_REPEATS_REPORT ?= results/workbench-full-benchmark-repeats.md
 BASE_URL ?= http://127.0.0.1:8080
@@ -100,9 +105,11 @@ help:
 	@echo "  env          Capture environment metadata"
 	@echo "  preflight    Validate required benchmark tooling for IMPLS=$(IMPLS)"
 	@echo "  preflight-dry Validate dry-run tooling only (skips wrk2 requirement)"
+	@echo "  wrk2-install Install repo-local wrk2 command (source build with docker-wrapper fallback)"
 	@echo "  workbench-smoke Run workbench matrix smoke orchestration"
 	@echo "  workbench-bench Run workbench matrix load benchmarks + compare/analysis/report outputs"
 	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
+	@echo "  workbench-bench-report-html Render compact HTML report from latest workbench benchmark JSON artifacts"
 	@echo "  workbench-bench-dry Print workbench benchmark command plan without executing load"
 	@echo "  workbench-bench-local Run workbench matrix load benchmarks with repo local postgres infra orchestration"
 	@echo "  workbench-bench-local-dry Print local-infra workbench benchmark command plan without docker start/stop"
@@ -115,6 +122,7 @@ help:
 	@echo "  workbench-full-bench Run workbench fixed-target + step-load suites and publish one combined report"
 	@echo "    - defaults: WORKBENCH_IMPLS=$(WORKBENCH_IMPLS), WORKBENCH_ENDPOINTS=$(WORKBENCH_ENDPOINTS)"
 	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
+	@echo "    - outputs include markdown and html reports (WORKBENCH_FULL_REPORT_HTML=$(WORKBENCH_FULL_REPORT_HTML))"
 	@echo "  workbench-full-bench-dry Print workbench full-suite command plan without executing load"
 	@echo "  workbench-full-bench-repeats Run workbench full suite repeatedly and emit run-manifest summary"
 	@echo "    - default repeat count: WORKBENCH_REPEAT_RUNS=$(WORKBENCH_REPEAT_RUNS)"
@@ -200,11 +208,17 @@ preflight:
 preflight-dry:
 	scripts/preflight.sh --impls "$(IMPLS)" --dry-run-only
 
+wrk2-install:
+	scripts/install_wrk2.sh
+
 workbench-smoke:
 	scripts/run_workbench_smoke_matrix.sh
 
 workbench-bench:
 	scripts/run_workbench_benchmark_matrix.sh $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+
+workbench-bench-report-html:
+	scripts/render_workbench_benchmark_report_html.sh "$(WORKBENCH_BENCHMARK_RUNS)" "$(WORKBENCH_BENCHMARK_COMPARE)" "$(WORKBENCH_BENCHMARK_ANALYSIS)" "$(WORKBENCH_BENCHMARK_REPORT_HTML)"
 
 workbench-bench-dry:
 	scripts/run_workbench_benchmark_matrix.sh --dry-run $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
@@ -228,31 +242,31 @@ workbench-step-bench-local-dry:
 	scripts/run_workbench_step_matrix_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench:
-	scripts/run_workbench_full_benchmark_suite.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-dry:
-	scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats:
-	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats-dry:
-	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats-report:
 	scripts/render_workbench_full_benchmark_suite_repeats_summary.sh "$(WORKBENCH_FULL_REPEATS_SUMMARY)" "$(WORKBENCH_FULL_REPEATS_REPORT)"
 
 workbench-full-bench-local:
-	scripts/run_workbench_full_benchmark_suite_local.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-dry:
-	scripts/run_workbench_full_benchmark_suite_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-repeats:
-	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-repeats-dry:
-	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --dry-run --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --dry-run --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-bundle:
 	scripts/run_workbench_full_benchmark_suite_local_bundle.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --out-summary "$(WORKBENCH_FULL_REPEATS_SUMMARY)" --out-report "$(WORKBENCH_FULL_REPEATS_REPORT)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)

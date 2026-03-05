@@ -33,6 +33,8 @@ raw="${raw_dir}/${impl}-${endpoint}.txt"
 summary="${sum_dir}/${impl}-${endpoint}.json"
 payload_path="${root_dir}/spec/payloads/user_4kb.json"
 seed_user_id=""
+wrk_fallback_timeout_default="10s"
+wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
 
 threads="${BENCH_THREADS:-$threads}"
 conns="${BENCH_CONNECTIONS:-$conns}"
@@ -60,7 +62,7 @@ select_load_generator
 
 warn_wrk_fallback() {
   if [ "${load_supports_rate}" != "true" ]; then
-    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement" >&2
+    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement (timeout=${wrk_fallback_timeout})" >&2
   fi
 }
 
@@ -95,6 +97,8 @@ build_wrk_cmd() {
   local_cmd=("${load_bin}" --latency -t"${threads}" -c"${conns}" -d"${duration}")
   if [ "${load_supports_rate}" = "true" ]; then
     local_cmd+=(-R"${target}")
+  else
+    local_cmd+=(--timeout "${wrk_fallback_timeout}")
   fi
   if [ -n "${script_path}" ]; then
     local_cmd+=(-s "${script_path}")
@@ -180,6 +184,12 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
+{
+  echo "# sec4-bench-load-bin=${load_bin}"
+  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+  echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
+} >"$raw"
+
 if [ "$endpoint" = "users-get" ]; then
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required for users-get seed setup" >&2
@@ -206,11 +216,11 @@ if [ "$endpoint" = "users-get" ]; then
       exit 1
       ;;
   esac
-  BENCH_USER_ID="$seed_user_id" "${cmd[@]}" | tee "$raw"
+  BENCH_USER_ID="$seed_user_id" "${cmd[@]}" | tee -a "$raw"
 elif [ "$endpoint" = "decode" ] || [ "$endpoint" = "users-post" ]; then
-  BENCH_PAYLOAD_FILE="$payload_path" "${cmd[@]}" | tee "$raw"
+  BENCH_PAYLOAD_FILE="$payload_path" "${cmd[@]}" | tee -a "$raw"
 else
-  "${cmd[@]}" | tee "$raw"
+  "${cmd[@]}" | tee -a "$raw"
 fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"

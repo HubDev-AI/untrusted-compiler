@@ -256,3 +256,53 @@ export SEC4_ALPHA_FULL_DB_ADAPTER=postgres
 export SEC4_ALPHA_FULL_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
 ./scripts/run-smoke.sh
 ```
+
+## 9) Cross-backend benchmark matrix (sec4/sec4-lasm/node/go/rust)
+
+This example is the operator baseline before running workbench benchmark matrix.
+
+Run from the example directory:
+
+```bash
+make bench-workbench
+```
+
+Fast local pass:
+
+```bash
+make bench-workbench-fast
+```
+
+Full suite (fixed-target + step-load + combined report):
+
+```bash
+make bench-workbench-full
+```
+
+Fast full-suite pass:
+
+```bash
+make bench-workbench-full-fast
+```
+
+Outputs:
+
+- `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+- `benchmark-suite/results/workbench-benchmark-report.md`
+- `benchmark-suite/results/workbench-benchmark-report.html`
+- `benchmark-suite/results/summaries/workbench-full-runs.json` (full suite)
+- `benchmark-suite/results/workbench-full-benchmark-report.md` (full suite)
+- `benchmark-suite/results/workbench-full-benchmark-report.html` (full suite)
+
+Notes:
+
+- The local wrapper starts/stops repo-local postgres infra (`infra/local-postgres`).
+- `make bench-workbench` and `make bench-workbench-full` run all five backends by default via `WORKBENCH_IMPLS=sec4,sec4-lasm,node,go,rust`.
+- Override backend/endpoints for local iterations, for example:
+  - `make bench-workbench WORKBENCH_IMPLS=sec4,sec4-lasm`
+  - `make bench-workbench-full WORKBENCH_ENDPOINTS=wb-task-get,wb-tasks-list`
+- Matrix/full-suite wrappers enforce `wrk2` by default for constant-rate compare quality; set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when intentionally allowing local `wrk` fallback.
+- If fallback mode is enabled, you can cap slow/hanging requests with `BENCH_WRK_FALLBACK_TIMEOUT` (default `10s`).
+- If `wrk2` is missing, run `make -C ../../benchmark-suite wrk2-install` (source build with docker-wrapper fallback) and export `BENCH_WRK2_BIN="$PWD/../../benchmark-suite/bin/wrk2"` before benchmark commands.

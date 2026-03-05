@@ -206,6 +206,9 @@ func (s *apiServer) requireAuth(r *http.Request) *httpError {
 
 func (s *apiServer) setupSchema() *httpError {
 	statements := []string{
+		"drop table if exists wb_labels;",
+		"drop table if exists wb_comments;",
+		"drop table if exists wb_tasks;",
 		"create table if not exists wb_tasks (id text primary key, title text not null, description text not null default '', status text not null, priority integer not null, created_at_ms bigint not null);",
 		"create table if not exists wb_comments (id text primary key, task_id text not null, body text not null, created_at_ms bigint not null);",
 		"create table if not exists wb_labels (task_id text not null, name text not null, primary key(task_id, name));",

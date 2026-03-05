@@ -8,7 +8,9 @@ usage: $0 [--repo-root <path>] [--project <path>] [--artifacts-root <path>] [--s
 Runs the M17 operator bootstrap profile:
   1) default runtime smoke
   2) max-body runtime smoke
-  3) runtime-smoke bundle validation/index generation
+  3) LASM DB runtime smoke (records-log)
+  4) LASM DB runtime smoke (sqlite)
+  5) runtime-smoke bundle validation/index generation
 USAGE
 }
 
@@ -100,6 +102,7 @@ if [ -z "${artifacts_root}" ]; then
 fi
 
 runtime_smoke_script="${repo_root}/scripts/smoke-sec4-run-hello-api.sh"
+db_runtime_smoke_script="${repo_root}/scripts/smoke-sec4-run-lasm-db-adapter.sh"
 bundle_checker_script="${repo_root}/scripts/check-runtime-smoke-bundle.sh"
 
 require_executable() {
@@ -131,12 +134,15 @@ if ! [[ "${max_body_bytes}" =~ ^[0-9]+$ ]] || [ "${max_body_bytes}" -le 0 ]; the
 fi
 
 require_executable "${runtime_smoke_script}" "runtime smoke script"
+require_executable "${db_runtime_smoke_script}" "db runtime smoke script"
 require_executable "${bundle_checker_script}" "runtime smoke bundle checker"
 
 mkdir -p "${artifacts_root}"
 
 default_artifacts_dir="${artifacts_root}/default"
 max_body_artifacts_dir="${artifacts_root}/max-body"
+db_records_log_artifacts_dir="${artifacts_root}/lasm-db-records-log"
+db_sqlite_artifacts_dir="${artifacts_root}/lasm-db-sqlite"
 branch_index_path="${artifacts_root}/runtime-smoke-branch-index.json"
 
 "${runtime_smoke_script}" \
@@ -149,6 +155,16 @@ branch_index_path="${artifacts_root}/runtime-smoke-branch-index.json"
   --serve-timeout-ms "${serve_timeout_ms}" \
   --max-body-bytes "${max_body_bytes}" \
   --artifacts-dir "${max_body_artifacts_dir}"
+
+"${db_runtime_smoke_script}" \
+  --db-adapter records-log \
+  --serve-timeout-ms "${serve_timeout_ms}" \
+  --artifacts-dir "${db_records_log_artifacts_dir}"
+
+"${db_runtime_smoke_script}" \
+  --db-adapter sqlite \
+  --serve-timeout-ms "${serve_timeout_ms}" \
+  --artifacts-dir "${db_sqlite_artifacts_dir}"
 
 "${bundle_checker_script}" \
   --artifacts-root "${artifacts_root}" \

@@ -24,6 +24,8 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 3. Validate parity against contract.
 4. Run smoke parity matrix:
    - `make -C benchmark-suite workbench-smoke`
+   - strict load-generator default for benchmark lanes: `BENCH_WORKBENCH_REQUIRE_WRK2=1` (default); set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only for local fallback runs.
+   - if `wrk2` is missing locally: `make -C benchmark-suite wrk2-install` (source build with docker-wrapper fallback) and export `BENCH_WRK2_BIN="$PWD/benchmark-suite/bin/wrk2"`.
 5. Run load benchmark matrix:
    - `make -C benchmark-suite workbench-bench-dry`
    - `make -C benchmark-suite workbench-bench`
@@ -39,6 +41,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
      - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
      - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
      - `benchmark-suite/results/workbench-benchmark-report.md`
+     - `benchmark-suite/results/workbench-benchmark-report.html`
 6. Run step-load benchmark matrix (knee detection):
    - `make -C benchmark-suite workbench-step-bench-dry`
    - `make -C benchmark-suite workbench-step-bench`
@@ -70,6 +73,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
    - outputs:
      - `benchmark-suite/results/summaries/workbench-full-runs.json`
      - `benchmark-suite/results/workbench-full-benchmark-report.md`
+     - `benchmark-suite/results/workbench-full-benchmark-report.html`
 8. Run repeated full workbench benchmark suites (same settings, run-scoped artifacts):
    - `make -C benchmark-suite workbench-full-bench-repeats-dry`
    - `make -C benchmark-suite workbench-full-bench-repeats`

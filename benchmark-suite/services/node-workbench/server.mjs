@@ -277,6 +277,9 @@ function runPsqlTx(statements) {
 }
 
 function setupSchema() {
+  runPsql('drop table if exists wb_labels;');
+  runPsql('drop table if exists wb_comments;');
+  runPsql('drop table if exists wb_tasks;');
   runPsql(
     'create table if not exists wb_tasks (id text primary key, title text not null, description text not null default \'\', status text not null, priority integer not null, created_at_ms bigint not null);',
   );

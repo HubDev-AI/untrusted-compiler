@@ -296,6 +296,7 @@ Post-alpha track acceptance anchors:
 - [x] CLI `lasm-smoke` now supports machine-readable `--format json` summaries alongside text output (`docs/book/904-m39-lasm-smoke-json-summary-output.md`).
 - [x] LASM HTTP runtime now supports parameterized route matching (`/users/:id`) with exact-route-first resolution, captured path-parameter propagation into exchanges, query/fragment-insensitive request matching, and deterministic `HEAD -> GET` fallback when HEAD is not explicitly registered (`docs/book/905-m39-lasm-http-runtime-parameterized-route-matching.md`, `docs/book/907-m39-lasm-http-runtime-request-path-normalization.md`, `docs/book/908-m39-lasm-http-runtime-head-fallback.md`).
 - [x] LASM HTTP runtime pattern route overrides now follow deterministic latest-registration-wins semantics (aligned with exact-route overwrite behavior), and `run --backend lasm` route-plan consolidation now preserves the same latest-registration-wins parity for duplicate method/path registrations (`docs/book/910-m39-lasm-http-runtime-pattern-override-order.md`, `docs/book/981-m39-lasm-run-duplicate-route-latest-wins-parity.md`).
+- [x] LASM HTTP runtime pattern-route lookup now uses indexed candidate sets by method and segment count (plus segment-count index for allow-method discovery), reducing per-request pattern scan overhead while preserving exact-route-first, latest-registration-wins, and `HEAD -> GET` fallback semantics (`docs/book/1548-m39-lasm-pattern-route-indexed-lookup.md`).
 - [x] LASM HTTP runtime now supports deterministic max in-flight concurrency gating with FIFO pending-request queue drain semantics (`set_max_in_flight` / `clear_max_in_flight`) (`docs/book/912-m39-lasm-http-runtime-max-in-flight-queue.md`).
 - [x] LASM HTTP runtime now supports deterministic max pending queue backpressure (`set_max_pending` / `clear_max_pending`) with immediate queue-full `503` overflow responses (`docs/book/914-m39-lasm-http-runtime-max-pending-backpressure.md`).
 - [x] LASM HTTP runtime now supports deterministic per-request timeout enforcement (`set_max_request_duration_ms`) with timeout `504` response mapping, live-task cancellation for timed-out handlers, and timeout-age evaluation from original request submit time (including pending queue wait) (`docs/book/916-m39-lasm-http-runtime-request-timeout-enforcement.md`, `docs/book/918-m39-lasm-http-runtime-timeout-from-submit-time.md`).
@@ -2486,6 +2487,12 @@ Post-alpha track acceptance anchors:
    - [x] Added Postgres runtime session timeout defaults in shared connect bootstrap (`SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS`, default `5000`; `SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS`, default `2000`) so LASM Postgres adapter sessions are bounded for long-running/blocked operations (`docs/book/1122-m39-lasm-postgres-runtime-timeout-defaults.md`).
    - [x] Improved DB runtime timeout/lock error envelopes with deterministic timeout/conflict mapping codes (`DB.*_TIMEOUT`, `DB.*_LOCK_TIMEOUT`) for Postgres statement/lock timeouts and sqlite lock contention (`docs/book/1123-m39-lasm-db-timeout-lock-error-classification.md`).
    - [x] Routed `records.log` `db.queryOne` runtime lookup/materialization through `lasm_db_client` operation dispatch (`run_lasm_db_query_one_operation`) so all adapters (`records.log`/`sqlite`/`postgres`) now execute through one intrinsic client entrypoint rather than dispatch-owned records special-casing (`docs/book/1546-m39-lasm-db-records-queryone-client-path-unification.md`).
+   - [x] Added compact visual HTML report generation for workbench benchmark matrix artifacts:
+      - new renderer: `benchmark-suite/scripts/render_workbench_benchmark_report_html.sh`,
+      - `run_workbench_benchmark_matrix.sh` now emits both markdown and HTML outputs (`workbench-benchmark-report.md` + `workbench-benchmark-report.html`) from the same compare/analysis artifacts,
+      - `run_workbench_full_benchmark_suite.sh` now forwards dedicated full-suite HTML output (`workbench-full-benchmark-report.html`) and records `reportHtml` in full-suite run manifests,
+      - added make target `workbench-bench-report-html` for no-rerun HTML regeneration from existing JSON outputs.
+      - documented in `docs/book/1547-m39-workbench-benchmark-html-report.md`.
 6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
    - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
    - [x] Added dedicated real-Postgres E2E operator lane with shared local Docker infra (`infra/local-postgres`) plus canonical smoke-ready sample (`examples/postgres-e2e`), including deterministic `sec4 check` command coverage for the example path (`docs/book/1407-m39-postgres-e2e-local-infra-example-and-smoke.md`).
@@ -12166,6 +12173,16 @@ M13-S1 go/no-go note:
   - Added the zed readiness command to `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`.
   - Updated readiness checkers to enforce the handoff-lane zed command presence and executability.
 - [x] Next planned slice reserved: alpha-hardening focus remains locked to release-closure verification and Postgres runtime-env hardening.
+- [x] Postgres runtime-env hardening completed for alias-migration safety:
+  - DSN env aliases now resolve when values are identical, while conflicting values remain deterministic errors.
+  - DSN file alias sources now resolve when they point to the same normalized file path, while conflicting file sources remain deterministic errors.
+  - Runtime env files now accept duplicate DSN alias keys only when values match, preserving conflict failures on mismatched values.
+  - documented in `docs/book/1549-m39-postgres-dsn-alias-same-value-hardening.md`.
+- [x] Workbench benchmark fallback hardening completed:
+  - `run_profile.sh` and `run_workbench_profile.sh` now apply explicit timeout caps when falling back from `wrk2` to `wrk` (`--timeout`, default `10s`, configurable via `BENCH_WRK_FALLBACK_TIMEOUT`).
+  - fallback warning text and raw benchmark headers now include effective fallback timeout for artifact-level traceability.
+  - operator docs updated in benchmark-suite and alpha-full example readmes.
+  - documented in `docs/book/1550-m39-workbench-wrk-fallback-timeout-bounding.md`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

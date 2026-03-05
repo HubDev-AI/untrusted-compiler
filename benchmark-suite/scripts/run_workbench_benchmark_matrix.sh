@@ -6,12 +6,13 @@ usage() {
 usage: $0 [--dry-run] [--matrix path] [--impls sec4,sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
-          [--port <n>] [--out-runs path] [--out-compare path] [--out-analysis path] [--out-report path]
+          [--port <n>] [--out-runs path] [--out-compare path] [--out-analysis path]
+          [--out-report path] [--out-report-html path]
 
 Runs workbench benchmark profiles across implemented matrix lanes and emits:
 1) per-impl endpoint summaries
 2) per-impl report bundles
-3) cross-impl compare matrix + analysis + markdown report
+3) cross-impl compare matrix + analysis + markdown/html reports
 USAGE
 }
 
@@ -23,10 +24,12 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+require_wrk2="${BENCH_WORKBENCH_REQUIRE_WRK2:-1}"
 out_runs=""
 out_compare=""
 out_analysis=""
 out_report=""
+out_report_html=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -166,6 +169,18 @@ while [ "$#" -gt 0 ]; do
       out_report="${1#--out-report=}"
       shift
       ;;
+    --out-report-html)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      out_report_html="$2"
+      shift 2
+      ;;
+    --out-report-html=*)
+      out_report_html="${1#--out-report-html=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -196,13 +211,16 @@ fi
 if [ -z "$out_report" ]; then
   out_report="${suite_dir}/results/workbench-benchmark-report.md"
 fi
+if [ -z "$out_report_html" ]; then
+  out_report_html="${suite_dir}/results/workbench-benchmark-report.html"
+fi
 
 if [ ! -f "$matrix_path" ]; then
   echo "workbench matrix missing: $matrix_path" >&2
   exit 2
 fi
 
-mkdir -p "${suite_dir}/results/raw" "${suite_dir}/results/summaries" "$(dirname "$out_report")"
+mkdir -p "${suite_dir}/results/raw" "${suite_dir}/results/summaries" "$(dirname "$out_report")" "$(dirname "$out_report_html")"
 
 if [ -n "$impls_csv" ]; then
   selected_impls_json="$(
@@ -292,9 +310,9 @@ runnable_impls_csv="$(
 )"
 
 if [ "$dry_run" = "true" ]; then
-  "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv" --dry-run-only
+  BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv" --dry-run-only
 else
-  "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
+  BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
 base_url="http://127.0.0.1:${bench_port}"
@@ -377,7 +395,6 @@ start_impl_service() {
       else
         (
           cd "$repo_root"
-          SEC4_DB_ALPHA_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \
@@ -417,18 +434,21 @@ start_impl_service() {
 
 wait_ready() {
   local pid="$1"
-  local tries=180
-  while [ "$tries" -gt 0 ]; do
+  local ready_timeout_seconds="${BENCH_WORKBENCH_READY_TIMEOUT_SECONDS:-90}"
+  local ready_probe_interval_seconds="${BENCH_WORKBENCH_READY_PROBE_INTERVAL_SECONDS:-0.1}"
+  local deadline=$((SECONDS + ready_timeout_seconds))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       return 2
     fi
     if curl -fsS "${base_url}/health" >/tmp/workbench-bench-health.txt 2>/dev/null; then
-      if [ "$(cat /tmp/workbench-bench-health.txt 2>/dev/null || true)" = "ok" ]; then
+      health_body="$(tr -d '\r\n[:space:]' </tmp/workbench-bench-health.txt 2>/dev/null || true)"
+      if [ "$health_body" = "ok" ] || [ "$health_body" = "\"ok\"" ]; then
         return 0
       fi
     fi
-    tries=$((tries - 1))
-    sleep 0.1
+    sleep "$ready_probe_interval_seconds"
   done
   return 1
 }
@@ -552,20 +572,18 @@ while IFS= read -r impl_row; do
   fi
 
   if [ "$result" = "passed" ]; then
-    seed_task_id="$(seed_impl_state "$impl" || true)"
-    if [ -z "$seed_task_id" ]; then
-      result="failed"
-      reason="failed to setup/seed workbench state"
-      exit_code=1
-    fi
-  fi
-
-  if [ "$result" = "passed" ]; then
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
       [ -z "$endpoint" ] && continue
+      seed_task_id="$(seed_impl_state "$impl" || true)"
+      if [ -z "$seed_task_id" ]; then
+        result="failed"
+        reason="failed to setup/seed workbench state endpoint=${endpoint}"
+        exit_code=1
+        break
+      fi
       run_tag="${impl}-${endpoint}-$(date +%s%N)"
-      if ! BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
+      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
         "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$base_url"; then
         result="failed"
         reason="profile failed endpoint=${endpoint}"
@@ -625,6 +643,7 @@ if [ "$dry_run" = "true" ]; then
   echo "run: ${suite_dir}/scripts/compare_matrix.sh ${suite_dir}/results/summaries ${out_compare} ${runnable_impls_csv}"
   echo "run: ${suite_dir}/scripts/analyze_matrix.sh ${out_compare} ${out_analysis}"
   echo "run: ${suite_dir}/scripts/publish_report.sh ${out_compare} ${out_report} \"\" ${out_analysis}"
+  echo "run: ${suite_dir}/scripts/render_workbench_benchmark_report_html.sh ${out_runs} ${out_compare} ${out_analysis} ${out_report_html}"
   exit 0
 fi
 
@@ -643,6 +662,7 @@ jq -n \
   --arg comparePath "$out_compare" \
   --arg analysisPath "$out_analysis" \
   --arg reportPath "$out_report" \
+  --arg reportHtmlPath "$out_report_html" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{
@@ -654,6 +674,7 @@ jq -n \
     comparePath: $comparePath,
     analysisPath: $analysisPath,
     reportPath: $reportPath,
+    reportHtmlPath: $reportHtmlPath,
     totals: $totals,
     runs: $runs
   }' >"$out_runs"
@@ -662,6 +683,7 @@ if [ -n "$passed_impls_csv" ]; then
   "${suite_dir}/scripts/compare_matrix.sh" "${suite_dir}/results/summaries" "$out_compare" "$passed_impls_csv"
   "${suite_dir}/scripts/analyze_matrix.sh" "$out_compare" "$out_analysis"
   "${suite_dir}/scripts/publish_report.sh" "$out_compare" "$out_report" "" "$out_analysis"
+  "${suite_dir}/scripts/render_workbench_benchmark_report_html.sh" "$out_runs" "$out_compare" "$out_analysis" "$out_report_html"
 fi
 
 echo "wrote workbench benchmark run summary: $out_runs"
@@ -669,6 +691,7 @@ if [ -n "$passed_impls_csv" ]; then
   echo "wrote workbench compare matrix: $out_compare"
   echo "wrote workbench analysis: $out_analysis"
   echo "wrote workbench report: $out_report"
+  echo "wrote workbench html report: $out_report_html"
 fi
 echo "totals: passed=${total_passed} failed=${total_failed} skipped=${total_skipped}"
 

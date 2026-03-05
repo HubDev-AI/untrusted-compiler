@@ -131,6 +131,7 @@ Measure end-to-end service behavior across identical implementations:
      - `results/summaries/workbench-benchmark-compare-matrix.json`
      - `results/summaries/workbench-benchmark-analysis.json`
      - `results/workbench-benchmark-report.md`
+     - `results/workbench-benchmark-report.html`
 24. Run workbench step-load benchmark matrix (feature-app knee detection + step matrix):
    - dry-run plan:
      - `make -C benchmark-suite workbench-step-bench-dry`
@@ -167,6 +168,7 @@ Measure end-to-end service behavior across identical implementations:
    - outputs:
      - `results/summaries/workbench-full-runs.json`
      - `results/workbench-full-benchmark-report.md`
+     - `results/workbench-full-benchmark-report.html`
 26. Run repeated workbench full suites under identical settings:
    - dry-run plan:
      - `make -C benchmark-suite workbench-full-bench-repeats-dry`
@@ -203,12 +205,20 @@ Measure end-to-end service behavior across identical implementations:
      - `results/summaries/workbench-full-benchmark-runs/`
 29. Stop DB:
    - `make -C benchmark-suite db-down`
+30. Re-render compact HTML report from existing JSON artifacts (no rerun required):
+   - `make -C benchmark-suite workbench-bench-report-html`
 
 ## Notes
 
 - All services must implement identical endpoint behavior defined in `spec/endpoints.md`.
 - Use constant-rate load for primary comparisons.
-- Prefer `wrk2` for non-dry-run profile execution; `wrk` fallback is supported with explicit warning and non-constant-rate posture.
+- Workbench matrix/step/full suite runners enforce `wrk2` by default (`BENCH_WORKBENCH_REQUIRE_WRK2=1`) so compare artifacts stay constant-rate.
+- Set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when you intentionally allow local `wrk` fallback (non-constant-rate posture).
+- When fallback is enabled, bound request hang behavior with `BENCH_WRK_FALLBACK_TIMEOUT` (default `10s`).
+- Install repo-local `wrk2` when system `wrk2` is missing:
+  - `make -C benchmark-suite wrk2-install`
+  - installer mode defaults to `auto` (source build, then docker-wrapper fallback if build fails)
+  - then export `BENCH_WRK2_BIN="$PWD/benchmark-suite/bin/wrk2"` for benchmark runs.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
 - `services/sec4`, `services/sec4-lasm`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
 - Orchestrator embeds `sec4 audit` data into `sec4-report.json` when baseline artifact is available.
@@ -243,6 +253,7 @@ Measure end-to-end service behavior across identical implementations:
 - `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
 - `run_workbench_smoke_matrix.sh` executes `benchmark-suite/workbench/matrix.backends.json` implementations with status `implemented-alpha|implemented`, runs each service smoke script, and writes `results/summaries/workbench-smoke-matrix.json`.
 - `run_workbench_benchmark_matrix.sh` executes the same workbench matrix with load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`), writes per-impl summary/report artifacts, then emits compare/analysis/markdown report artifacts under `results/`.
+  - also emits compact visual report: `results/workbench-benchmark-report.html`
   - `sec4-lasm` DB mode is configurable via:
     - `--lasm-db-adapter sqlite|postgres`
     - `--lasm-db-base <path>` (sqlite)
@@ -258,6 +269,7 @@ Measure end-to-end service behavior across identical implementations:
 - `run_workbench_full_benchmark_suite.sh` runs workbench fixed-target matrix + workbench step matrix and republishes one combined markdown report with step-load signals:
   - `results/summaries/workbench-full-runs.json`
   - `results/workbench-full-benchmark-report.md`
+  - `results/workbench-full-benchmark-report.html`
 - `run_workbench_full_benchmark_suite_repeats.sh` wraps the full workbench suite repeatedly with run-scoped outputs and aggregate run manifest:
   - `results/summaries/workbench-full-benchmark-repeats.json`
   - `results/summaries/workbench-full-benchmark-runs/`
