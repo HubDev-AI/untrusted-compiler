@@ -41,6 +41,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
      - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
      - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
      - `benchmark-suite/results/workbench-benchmark-report.md`
+     - `benchmark-suite/results/workbench-benchmark-report.html`
 6. Run step-load benchmark matrix (knee detection):
    - `make -C benchmark-suite workbench-step-bench-dry`
    - `make -C benchmark-suite workbench-step-bench`

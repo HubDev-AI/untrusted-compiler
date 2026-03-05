@@ -131,6 +131,7 @@ Measure end-to-end service behavior across identical implementations:
      - `results/summaries/workbench-benchmark-compare-matrix.json`
      - `results/summaries/workbench-benchmark-analysis.json`
      - `results/workbench-benchmark-report.md`
+     - `results/workbench-benchmark-report.html`
 24. Run workbench step-load benchmark matrix (feature-app knee detection + step matrix):
    - dry-run plan:
      - `make -C benchmark-suite workbench-step-bench-dry`
@@ -203,6 +204,8 @@ Measure end-to-end service behavior across identical implementations:
      - `results/summaries/workbench-full-benchmark-runs/`
 29. Stop DB:
    - `make -C benchmark-suite db-down`
+30. Re-render compact HTML report from existing JSON artifacts (no rerun required):
+   - `make -C benchmark-suite workbench-bench-report-html`
 
 ## Notes
 
@@ -248,6 +251,7 @@ Measure end-to-end service behavior across identical implementations:
 - `render_alpha_postgres_comparison_suite_repeats_summary.sh` converts repeated-suite JSON summary to markdown table report (`results/alpha-postgres-comparison-suite-repeats.md` by default).
 - `run_workbench_smoke_matrix.sh` executes `benchmark-suite/workbench/matrix.backends.json` implementations with status `implemented-alpha|implemented`, runs each service smoke script, and writes `results/summaries/workbench-smoke-matrix.json`.
 - `run_workbench_benchmark_matrix.sh` executes the same workbench matrix with load profiles (`wb-tasks-post`, `wb-tasks-with-comment`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`), writes per-impl summary/report artifacts, then emits compare/analysis/markdown report artifacts under `results/`.
+  - also emits compact visual report: `results/workbench-benchmark-report.html`
   - `sec4-lasm` DB mode is configurable via:
     - `--lasm-db-adapter sqlite|postgres`
     - `--lasm-db-base <path>` (sqlite)
