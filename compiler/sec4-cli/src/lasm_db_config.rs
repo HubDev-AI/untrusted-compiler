@@ -76,6 +76,10 @@ fn resolve_unique_env_value(
     }
 
     if found.len() > 1 {
+        let first_value = found[0].1.as_str();
+        if found.iter().all(|(_name, value)| value == first_value) {
+            return Ok(Some(first_value.to_string()));
+        }
         let names = found
             .iter()
             .map(|(name, _)| format!("{name}"))
@@ -108,8 +112,41 @@ fn resolve_unique_env_file_path_with_candidates(
         configured.push((name, trimmed.to_string()));
     }
 
-    if configured.len() > 1 {
-        let names = configured
+    let mut resolved = Vec::<(&'static str, PathBuf)>::new();
+    for (name, raw_path) in configured {
+        let mut file_path = expand_tilde_in_path(raw_path.as_str());
+        if file_path.is_relative() && !file_path.exists() {
+            if let Some(project_path) = project_path {
+                let candidate = project_path.join(file_path.as_path());
+                if candidate.exists() {
+                    file_path = candidate;
+                }
+            }
+        }
+        if !file_path.exists() {
+            return Err(format!(
+                "{source_name} configured via `{name}` points to missing file `{}`",
+                raw_path
+            ));
+        }
+        let normalized_path = fs::canonicalize(&file_path).unwrap_or(file_path);
+        resolved.push((name, normalized_path));
+    }
+
+    if resolved.is_empty() {
+        return Ok(None);
+    }
+
+    if resolved.len() > 1 {
+        let first_path = &resolved[0].1;
+        if resolved
+            .iter()
+            .all(|(_name, path)| path.as_path() == first_path.as_path())
+        {
+            return Ok(Some((resolved[0].0, resolved[0].1.clone())));
+        }
+
+        let names = resolved
             .iter()
             .map(|(name, _)| format!("{name}"))
             .collect::<Vec<_>>()
@@ -119,26 +156,10 @@ fn resolve_unique_env_file_path_with_candidates(
         ));
     }
 
-    let Some((name, raw_path)) = configured.into_iter().next() else {
-        return Ok(None);
-    };
-
-    let mut file_path = expand_tilde_in_path(raw_path.as_str());
-    if file_path.is_relative() && !file_path.exists() {
-        if let Some(project_path) = project_path {
-            let candidate = project_path.join(file_path.as_path());
-            if candidate.exists() {
-                file_path = candidate;
-            }
-        }
-    }
-    if !file_path.exists() {
-        return Err(format!(
-            "{source_name} configured via `{name}` points to missing file `{}`",
-            raw_path
-        ));
-    }
-
+    let (name, file_path) = resolved
+        .into_iter()
+        .next()
+        .expect("resolved env file path list is non-empty");
     Ok(Some((name, file_path)))
 }
 
@@ -147,7 +168,7 @@ fn parse_env_file_value(
     keys: &[&str],
     source: &str,
 ) -> Result<Option<String>, String> {
-    let mut found: Option<String> = None;
+    let mut found: Option<(String, String)> = None;
     for line in raw_contents.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -166,15 +187,18 @@ fn parse_env_file_value(
             if value.is_empty() {
                 return Err(format!("{source} value for `{}` must be non-empty", name));
             }
-            if let Some(previous) = found {
-                return Err(format!(
-                    "{source} contains multiple values for DSN key (`{previous}` and `{name}`)"
-                ));
+            if let Some((previous_name, previous_value)) = &found {
+                if previous_value != &value {
+                    return Err(format!(
+                        "{source} contains multiple values for DSN key (`{previous_name}` and `{name}`)"
+                    ));
+                }
+                continue;
             }
-            found = Some(value.to_string());
+            found = Some((name.to_string(), value));
         }
     }
-    Ok(found)
+    Ok(found.map(|(_name, value)| value))
 }
 
 fn strip_unquoted_comment(raw_value: &str) -> &str {
@@ -568,6 +592,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn postgres_dsn_env_aliases_with_same_value_resolve() {
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", Some("postgres://shared")),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", Some("postgres://shared")),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let resolved = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, None)
+                    .expect("same DSN aliases should resolve");
+                assert_eq!(resolved, Some("postgres://shared".to_string()));
+            },
+        );
+    }
+
     fn write_dsn_file(path: &PathBuf, raw: &str) {
         let mut file = File::create(path).expect("test DSN file must be writable");
         file.write_all(raw.as_bytes())
@@ -610,6 +650,37 @@ mod tests {
 
         let _ = fs::remove_file(&first);
         let _ = fs::remove_file(&second);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn postgres_dsn_file_sources_with_same_path_resolve() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-dsn-same-path");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let dsn_file = dir.join("shared.env");
+        write_dsn_file(&dsn_file, "postgres://shared-file\n");
+
+        let dsn_path = dsn_file.to_string_lossy().to_string();
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", Some(dsn_path.as_str())),
+                (
+                    "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH",
+                    Some(dsn_path.as_str()),
+                ),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let resolved =
+                    super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                        .expect("matching DSN file aliases should resolve");
+                assert_eq!(resolved, Some("postgres://shared-file".to_string()));
+            },
+        );
+
+        let _ = fs::remove_file(&dsn_file);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -777,6 +848,43 @@ mod tests {
                 let err = super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
                     .expect_err("multiple runtime env DSN aliases should fail");
                 assert!(err.contains("runtime env file `"), "wrong error: {err}");
+            },
+        );
+
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn postgres_dsn_runtime_env_file_accepts_duplicate_aliases_when_values_match() {
+        let dir = std::env::temp_dir().join("sec4-lasm-postgres-runtime-env-same");
+        fs::create_dir_all(&dir).expect("temp test directory should be created");
+        let path = dir.join("runtime.env");
+        let mut file = File::create(&path).expect("runtime env file must be writable");
+        file.write_all(
+            b"SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://shared\nSEC4_RT_LASM_DB_POSTGRES_DSN=postgres://shared\n",
+        )
+        .expect("runtime env file write should succeed");
+
+        with_env_vars(
+            &[
+                ("SEC4_DB_ALPHA_DB_POSTGRES_DSN", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", None),
+                ("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH", None),
+                ("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH", None),
+                (
+                    "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+                    Some(path.to_string_lossy().as_ref()),
+                ),
+            ],
+            || {
+                let adapter = super::LasmDbRecordsAdapter::Postgres;
+                let resolved =
+                    super::resolve_lasm_dynamic_db_postgres_dsn(adapter, None, Some(&dir))
+                        .expect("same-value runtime env aliases should resolve");
+                assert_eq!(resolved, Some("postgres://shared".to_string()));
             },
         );
 
