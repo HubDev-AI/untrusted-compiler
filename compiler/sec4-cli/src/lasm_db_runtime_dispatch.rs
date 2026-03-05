@@ -1893,14 +1893,23 @@ fn handle_lasm_internal_db_exec_tx_operation(
         ) {
             Ok(value) => value,
             Err(error) => {
-                if error.tx_started {
+                let should_rollback_postgres_active_tx =
+                    db_records_adapter == LasmDbRecordsAdapter::Postgres && tx_active;
+                if error.tx_started || should_rollback_postgres_active_tx {
                     let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
+                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                        tx_state.active = false;
+                    }
                     if !keep_allocated_tx_handle {
                         state.db_tx_handles.remove(&tx);
                     }
                 }
                 if let Some(tx_handle) = allocated_tx_handle {
-                    if !keep_allocated_tx_handle {
+                    if keep_allocated_tx_handle {
+                        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
+                            tx_state.active = false;
+                        }
+                    } else {
                         state.db_tx_handles.remove(&tx_handle);
                     }
                 }
@@ -1919,7 +1928,9 @@ fn handle_lasm_internal_db_exec_tx_operation(
                 affected_rows,
                 tx_started,
             } => {
-                if tx_started && !keep_allocated_tx_handle {
+                let should_finalize_postgres_tx =
+                    !keep_allocated_tx_handle && (tx_started || tx_active);
+                if should_finalize_postgres_tx {
                     if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
                     {
                         state.db_tx_handles.remove(&tx);
@@ -1932,10 +1943,18 @@ fn handle_lasm_internal_db_exec_tx_operation(
                         return true;
                     }
                     state.db_tx_handles.remove(&tx);
+                } else if tx_started {
+                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                        tx_state.active = true;
+                    }
                 }
                 if let Some(tx_handle) = allocated_tx_handle {
                     if !keep_allocated_tx_handle {
                         state.db_tx_handles.remove(&tx_handle);
+                    } else if tx_started {
+                        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
+                            tx_state.active = true;
+                        }
                     }
                 }
                 let record = allocate_lasm_db_runtime_record(

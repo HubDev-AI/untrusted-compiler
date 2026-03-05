@@ -63,6 +63,13 @@ If it cannot, it is mostly convention.
   - CORS/security-headers/CSRF/auth middleware behavior.
 - CI closure audit currently enforces milestone gates through `M16`.
 
+## Tutorial Portal
+
+If you want one guided place for setup, IDE workflow, real Postgres runs, full examples, and benchmarks, start here:
+
+- `docs/tutorial-portal/README.md`
+- beginner guided chapter: `docs/book/1552-beginner-zed-plugin-postgres-lasm-tutorial.md`
+
 ## Run End-to-End Now
 
 Fast deterministic smoke check:
@@ -186,6 +193,7 @@ curl -i -X POST \\
 
 Roadmap: `docs/05-sec4-master-roadmap.md`
 Book docs: `docs/book/README.md`
+Tutorial portal: `docs/tutorial-portal/README.md`
 v0 scope (one-page): `docs/book/43-sec4-v0-scope.md`
 security baseline: `docs/book/53-v0-security-baseline.md`
 

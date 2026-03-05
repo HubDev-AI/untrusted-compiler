@@ -1472,7 +1472,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             state,
             tx_handle,
             "postgres transaction begin failed",
-            "SAVEPOINT {tx}",
+            "BEGIN; SAVEPOINT {tx}",
         ) {
             return Err((message, false));
         }
@@ -1810,7 +1810,7 @@ pub(crate) fn run_lasm_postgres_exec_tx_commit(
         state,
         tx_handle,
         "postgres transaction commit failed",
-        "RELEASE SAVEPOINT {tx}",
+        "RELEASE SAVEPOINT {tx}; COMMIT",
     )
 }
 
@@ -1822,7 +1822,7 @@ pub(crate) fn run_lasm_postgres_exec_tx_rollback(
     let rollback_to = format!("ROLLBACK TO SAVEPOINT {savepoint}");
     let release = format!("RELEASE SAVEPOINT {savepoint}");
     let client = lasm_dynamic_postgres_client_mut(state)?;
-    match client.batch_execute(&format!("{rollback_to}; {release}")) {
+    match client.batch_execute(&format!("{rollback_to}; {release}; ROLLBACK")) {
         Ok(()) => Ok(()),
         Err(err) => {
             let message =
