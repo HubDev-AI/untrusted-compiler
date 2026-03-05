@@ -2489,6 +2489,7 @@ Post-alpha track acceptance anchors:
    - [x] Added compact visual HTML report generation for workbench benchmark matrix artifacts:
       - new renderer: `benchmark-suite/scripts/render_workbench_benchmark_report_html.sh`,
       - `run_workbench_benchmark_matrix.sh` now emits both markdown and HTML outputs (`workbench-benchmark-report.md` + `workbench-benchmark-report.html`) from the same compare/analysis artifacts,
+      - `run_workbench_full_benchmark_suite.sh` now forwards dedicated full-suite HTML output (`workbench-full-benchmark-report.html`) and records `reportHtml` in full-suite run manifests,
       - added make target `workbench-bench-report-html` for no-rerun HTML regeneration from existing JSON outputs.
       - documented in `docs/book/1547-m39-workbench-benchmark-html-report.md`.
 6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.

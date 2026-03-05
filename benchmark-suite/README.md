@@ -168,6 +168,7 @@ Measure end-to-end service behavior across identical implementations:
    - outputs:
      - `results/summaries/workbench-full-runs.json`
      - `results/workbench-full-benchmark-report.md`
+     - `results/workbench-full-benchmark-report.html`
 26. Run repeated workbench full suites under identical settings:
    - dry-run plan:
      - `make -C benchmark-suite workbench-full-bench-repeats-dry`
@@ -267,6 +268,7 @@ Measure end-to-end service behavior across identical implementations:
 - `run_workbench_full_benchmark_suite.sh` runs workbench fixed-target matrix + workbench step matrix and republishes one combined markdown report with step-load signals:
   - `results/summaries/workbench-full-runs.json`
   - `results/workbench-full-benchmark-report.md`
+  - `results/workbench-full-benchmark-report.html`
 - `run_workbench_full_benchmark_suite_repeats.sh` wraps the full workbench suite repeatedly with run-scoped outputs and aggregate run manifest:
   - `results/summaries/workbench-full-benchmark-repeats.json`
   - `results/summaries/workbench-full-benchmark-runs/`

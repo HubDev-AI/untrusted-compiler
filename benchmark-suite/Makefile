@@ -10,6 +10,7 @@ WORKBENCH_BENCHMARK_RUNS ?= results/summaries/workbench-benchmark-runs.json
 WORKBENCH_BENCHMARK_COMPARE ?= results/summaries/workbench-benchmark-compare-matrix.json
 WORKBENCH_BENCHMARK_ANALYSIS ?= results/summaries/workbench-benchmark-analysis.json
 WORKBENCH_BENCHMARK_REPORT_HTML ?= results/workbench-benchmark-report.html
+WORKBENCH_FULL_REPORT_HTML ?= results/workbench-full-benchmark-report.html
 WORKBENCH_FULL_REPEATS_SUMMARY ?= results/summaries/workbench-full-benchmark-repeats.json
 WORKBENCH_FULL_REPEATS_REPORT ?= results/workbench-full-benchmark-repeats.md
 BASE_URL ?= http://127.0.0.1:8080
@@ -121,6 +122,7 @@ help:
 	@echo "  workbench-full-bench Run workbench fixed-target + step-load suites and publish one combined report"
 	@echo "    - defaults: WORKBENCH_IMPLS=$(WORKBENCH_IMPLS), WORKBENCH_ENDPOINTS=$(WORKBENCH_ENDPOINTS)"
 	@echo "    - optional LASM DB knobs: WORKBENCH_LASM_DB_ADAPTER=sqlite|postgres, WORKBENCH_LASM_DB_BASE=<dir>, WORKBENCH_LASM_DB_POSTGRES_DSN_FILE=<path>"
+	@echo "    - outputs include markdown and html reports (WORKBENCH_FULL_REPORT_HTML=$(WORKBENCH_FULL_REPORT_HTML))"
 	@echo "  workbench-full-bench-dry Print workbench full-suite command plan without executing load"
 	@echo "  workbench-full-bench-repeats Run workbench full suite repeatedly and emit run-manifest summary"
 	@echo "    - default repeat count: WORKBENCH_REPEAT_RUNS=$(WORKBENCH_REPEAT_RUNS)"
@@ -240,31 +242,31 @@ workbench-step-bench-local-dry:
 	scripts/run_workbench_step_matrix_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench:
-	scripts/run_workbench_full_benchmark_suite.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-dry:
-	scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats:
-	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats-dry:
-	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
+	scripts/run_workbench_full_benchmark_suite_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(WORKBENCH_LASM_DB_ADAPTER_FLAG) $(WORKBENCH_LASM_DB_BASE_FLAG) $(WORKBENCH_LASM_DB_POSTGRES_DSN_FILE_FLAG)
 
 workbench-full-bench-repeats-report:
 	scripts/render_workbench_full_benchmark_suite_repeats_summary.sh "$(WORKBENCH_FULL_REPEATS_SUMMARY)" "$(WORKBENCH_FULL_REPEATS_REPORT)"
 
 workbench-full-bench-local:
-	scripts/run_workbench_full_benchmark_suite_local.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local.sh --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-dry:
-	scripts/run_workbench_full_benchmark_suite_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local.sh --dry-run --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-repeats:
-	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-repeats-dry:
-	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --dry-run --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
+	scripts/run_workbench_full_benchmark_suite_local_repeats.sh --dry-run --runs "$(WORKBENCH_REPEAT_RUNS)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" --out-report-html "$(WORKBENCH_FULL_REPORT_HTML)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)
 
 workbench-full-bench-local-bundle:
 	scripts/run_workbench_full_benchmark_suite_local_bundle.sh --runs "$(WORKBENCH_REPEAT_RUNS)" --out-summary "$(WORKBENCH_FULL_REPEATS_SUMMARY)" --out-report "$(WORKBENCH_FULL_REPEATS_REPORT)" --impls "$(WORKBENCH_IMPLS)" --endpoints "$(WORKBENCH_ENDPOINTS)" $(BENCH_LOCAL_POSTGRES_KEEP_UP_FLAG) $(BENCH_LOCAL_POSTGRES_RESET_FLAG)

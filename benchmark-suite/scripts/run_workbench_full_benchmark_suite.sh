@@ -7,7 +7,8 @@ usage: $0 [--dry-run] [--matrix path] [--impls sec4,sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--port <n>] [--out-runs path] [--out-fixed-runs path] [--out-step-runs path]
-          [--out-compare path] [--out-analysis path] [--out-step-matrix path] [--out-report path]
+          [--out-compare path] [--out-analysis path] [--out-step-matrix path]
+          [--out-report path] [--out-report-html path]
 
 Runs workbench fixed-target matrix + workbench step-load matrix and republishes one
 combined markdown report containing step-load signals.
@@ -29,6 +30,7 @@ out_compare=""
 out_analysis=""
 out_step_matrix=""
 out_report=""
+out_report_html=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -204,6 +206,18 @@ while [ "$#" -gt 0 ]; do
       out_report="${1#--out-report=}"
       shift
       ;;
+    --out-report-html)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      out_report_html="$2"
+      shift 2
+      ;;
+    --out-report-html=*)
+      out_report_html="${1#--out-report-html=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -242,8 +256,11 @@ fi
 if [ -z "$out_report" ]; then
   out_report="${suite_dir}/results/workbench-full-benchmark-report.md"
 fi
+if [ -z "$out_report_html" ]; then
+  out_report_html="${suite_dir}/results/workbench-full-benchmark-report.html"
+fi
 
-mkdir -p "$(dirname "$out_runs")" "$(dirname "$out_report")"
+mkdir -p "$(dirname "$out_runs")" "$(dirname "$out_report")" "$(dirname "$out_report_html")"
 
 bench_cmd=(
   "${suite_dir}/scripts/run_workbench_benchmark_matrix.sh"
@@ -255,6 +272,7 @@ bench_cmd=(
   --out-compare "$out_compare"
   --out-analysis "$out_analysis"
   --out-report "$out_report"
+  --out-report-html "$out_report_html"
 )
 
 step_cmd=(
@@ -312,6 +330,7 @@ jq -n \
   --arg analysisPath "$out_analysis" \
   --arg stepMatrixPath "$out_step_matrix" \
   --arg reportPath "$out_report" \
+  --arg reportHtmlPath "$out_report_html" \
   '{
     version: $version,
     startedAt: $startedAt,
@@ -326,9 +345,11 @@ jq -n \
       compareMatrix: $comparePath,
       analysis: $analysisPath,
       stepMatrix: $stepMatrixPath,
-      report: $reportPath
+      report: $reportPath,
+      reportHtml: $reportHtmlPath
     }
   }' >"$out_runs"
 
 echo "wrote workbench full run summary: $out_runs"
 echo "wrote workbench full report: $out_report"
+echo "wrote workbench full html report: $out_report_html"

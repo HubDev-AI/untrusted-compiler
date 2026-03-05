@@ -2,13 +2,16 @@
 
 ## What it is
 
-This slice adds a visual benchmark report output for workbench matrix runs:
+This slice adds visual benchmark report outputs for workbench matrix/full runs:
 
 - new renderer script:
   - `benchmark-suite/scripts/render_workbench_benchmark_report_html.sh`
 - workbench matrix runner now emits HTML alongside existing markdown:
   - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh`
   - output: `benchmark-suite/results/workbench-benchmark-report.html`
+- workbench full-suite runner now carries dedicated HTML output path:
+  - `benchmark-suite/scripts/run_workbench_full_benchmark_suite.sh`
+  - output: `benchmark-suite/results/workbench-full-benchmark-report.html`
 
 ## Why it exists
 
@@ -26,7 +29,8 @@ Operators needed a directly viewable report with all backend results in one plac
    - per-endpoint ranked rows for all implementations,
    - endpoint findings from analysis.
 3. The matrix runner now invokes the renderer automatically after compare/analysis/markdown generation.
-4. A new make target can re-render HTML from existing JSON artifacts:
+4. The full-suite runner now forwards `--out-report-html` into the matrix lane and records `reportHtml` in full-suite run manifests.
+5. A new make target can re-render HTML from existing JSON artifacts:
    - `make -C benchmark-suite workbench-bench-report-html`
 
 ## Inputs, outputs, and constraints
@@ -37,6 +41,7 @@ Operators needed a directly viewable report with all backend results in one plac
   - `results/summaries/workbench-benchmark-analysis.json`
 - Outputs:
   - `results/workbench-benchmark-report.html`
+  - `results/workbench-full-benchmark-report.html`
 - Constraint:
   - no additional benchmark execution is required to regenerate HTML when JSON artifacts already exist.
 
