@@ -377,7 +377,6 @@ start_impl_service() {
       else
         (
           cd "$repo_root"
-          SEC4_DB_ALPHA_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \
@@ -417,18 +416,21 @@ start_impl_service() {
 
 wait_ready() {
   local pid="$1"
-  local tries=180
-  while [ "$tries" -gt 0 ]; do
+  local ready_timeout_seconds="${BENCH_WORKBENCH_READY_TIMEOUT_SECONDS:-90}"
+  local ready_probe_interval_seconds="${BENCH_WORKBENCH_READY_PROBE_INTERVAL_SECONDS:-0.1}"
+  local deadline=$((SECONDS + ready_timeout_seconds))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       return 2
     fi
     if curl -fsS "${base_url}/health" >/tmp/workbench-bench-health.txt 2>/dev/null; then
-      if [ "$(cat /tmp/workbench-bench-health.txt 2>/dev/null || true)" = "ok" ]; then
+      health_body="$(tr -d '\r\n[:space:]' </tmp/workbench-bench-health.txt 2>/dev/null || true)"
+      if [ "$health_body" = "ok" ] || [ "$health_body" = "\"ok\"" ]; then
         return 0
       fi
     fi
-    tries=$((tries - 1))
-    sleep 0.1
+    sleep "$ready_probe_interval_seconds"
   done
   return 1
 }
@@ -552,18 +554,16 @@ while IFS= read -r impl_row; do
   fi
 
   if [ "$result" = "passed" ]; then
-    seed_task_id="$(seed_impl_state "$impl" || true)"
-    if [ -z "$seed_task_id" ]; then
-      result="failed"
-      reason="failed to setup/seed workbench state"
-      exit_code=1
-    fi
-  fi
-
-  if [ "$result" = "passed" ]; then
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
       [ -z "$endpoint" ] && continue
+      seed_task_id="$(seed_impl_state "$impl" || true)"
+      if [ -z "$seed_task_id" ]; then
+        result="failed"
+        reason="failed to setup/seed workbench state endpoint=${endpoint}"
+        exit_code=1
+        break
+      fi
       run_tag="${impl}-${endpoint}-$(date +%s%N)"
       if ! BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
         "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$base_url"; then

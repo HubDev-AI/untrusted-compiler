@@ -19,6 +19,11 @@ fn wbSetup() effects { net, db.write } -> Int {
   auth.require(ctx.current());
   let db = DbCap();
 
+  // Reset benchmark tables so each setup starts from clean state.
+  db.exec(db, sql.q("drop table if exists wb_labels", "[]"));
+  db.exec(db, sql.q("drop table if exists wb_comments", "[]"));
+  db.exec(db, sql.q("drop table if exists wb_tasks", "[]"));
+
   // Tasks table.
   db.exec(
     db,
