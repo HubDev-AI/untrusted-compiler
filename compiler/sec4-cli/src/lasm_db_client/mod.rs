@@ -1,18 +1,17 @@
 use crate::lasm_db_config::LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE;
 use crate::lasm_db_runtime_postgres::{
-    parse_lasm_postgres_query_template_and_params, parse_lasm_postgres_query_template_and_params_value,
-    run_lasm_postgres_exec_thread_local, run_lasm_postgres_exec_tx,
-    run_lasm_postgres_exec_tx_commit, run_lasm_postgres_exec_tx_rollback,
-    run_lasm_postgres_query_one_thread_local, LasmPostgresParam, LasmPostgresThreadLocalConfig,
+    parse_lasm_postgres_query_template_and_params,
+    parse_lasm_postgres_query_template_and_params_value, run_lasm_postgres_exec_thread_local,
+    run_lasm_postgres_exec_tx, run_lasm_postgres_exec_tx_commit,
+    run_lasm_postgres_exec_tx_rollback, run_lasm_postgres_query_one_thread_local,
+    LasmPostgresParam, LasmPostgresThreadLocalConfig,
 };
-use crate::lasm_db_runtime_sqlite::{run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx,
-    run_lasm_sqlite_exec_tx_commit, run_lasm_sqlite_exec_tx_rollback, run_lasm_sqlite_query_one,
-    parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value,
-    LasmSqliteQueryParams,
+use crate::lasm_db_runtime_sqlite::{
+    parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
+    run_lasm_sqlite_exec_tx, run_lasm_sqlite_exec_tx_commit, run_lasm_sqlite_exec_tx_rollback,
+    run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
-use crate::{
-    LasmDbRecordsAdapter, LasmDynamicResponseState,
-};
+use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
@@ -139,19 +138,13 @@ pub(crate) fn run_lasm_db_exec_operation(
 ) -> Result<LasmDbExecOperationResult, String> {
     match db_records_adapter {
         LasmDbRecordsAdapter::Postgres => {
-            let LasmPreparedDbOperationParams::Postgres {
-                template,
-                params,
-            } = prepared_params
+            let LasmPreparedDbOperationParams::Postgres { template, params } = prepared_params
             else {
                 return Err("internal db operation preparation mismatch".to_string());
             };
             let config = build_lasm_postgres_thread_local_config(state)?;
-            let affected_rows = run_lasm_postgres_exec_thread_local(
-                &config,
-                template,
-                params.as_slice(),
-            )?;
+            let affected_rows =
+                run_lasm_postgres_exec_thread_local(&config, template, params.as_slice())?;
             Ok(LasmDbExecOperationResult::Postgres {
                 config,
                 affected_rows,
@@ -164,9 +157,9 @@ pub(crate) fn run_lasm_db_exec_operation(
             let affected_rows = run_lasm_sqlite_exec(state, template, params)?;
             Ok(LasmDbExecOperationResult::Sqlite { affected_rows })
         }
-        LasmDbRecordsAdapter::RecordsLog => Ok(LasmDbExecOperationResult::RecordsLog {
-            affected_rows: 0,
-        }),
+        LasmDbRecordsAdapter::RecordsLog => {
+            Ok(LasmDbExecOperationResult::RecordsLog { affected_rows: 0 })
+        }
     }
 }
 
@@ -178,10 +171,12 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
     template: &str,
     prepared_params: &LasmPreparedDbOperationParams,
 ) -> Result<LasmDbExecTxOperationResult, LasmDbExecTxError> {
-    let to_error = |message: String, tx_started: bool| Err(LasmDbExecTxError {
-        message,
-        tx_started,
-    });
+    let to_error = |message: String, tx_started: bool| {
+        Err(LasmDbExecTxError {
+            message,
+            tx_started,
+        })
+    };
     match db_records_adapter {
         LasmDbRecordsAdapter::Postgres => {
             let LasmPreparedDbOperationParams::Postgres {
@@ -189,7 +184,10 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
                 params,
             } = prepared_params
             else {
-                return to_error("internal db operation preparation mismatch".to_string(), false);
+                return to_error(
+                    "internal db operation preparation mismatch".to_string(),
+                    false,
+                );
             };
             let config = match build_lasm_postgres_thread_local_config(state) {
                 Ok(config) => config,
@@ -219,7 +217,10 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
         }
         LasmDbRecordsAdapter::Sqlite => {
             let LasmPreparedDbOperationParams::Sqlite { params } = prepared_params else {
-                return to_error("internal db operation preparation mismatch".to_string(), false);
+                return to_error(
+                    "internal db operation preparation mismatch".to_string(),
+                    false,
+                );
             };
             match run_lasm_sqlite_exec_tx(state, tx, template, params, tx_active) {
                 Ok((affected_rows, tx_started)) => Ok(LasmDbExecTxOperationResult::Sqlite {
@@ -232,9 +233,9 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
                 }),
             }
         }
-        LasmDbRecordsAdapter::RecordsLog => Ok(LasmDbExecTxOperationResult::RecordsLog {
-            affected_rows: 0,
-        }),
+        LasmDbRecordsAdapter::RecordsLog => {
+            Ok(LasmDbExecTxOperationResult::RecordsLog { affected_rows: 0 })
+        }
     }
 }
 
@@ -253,9 +254,14 @@ pub(crate) fn run_lasm_db_query_one_operation(
             else {
                 return Err(LasmDbQueryOneOperationError::PreparationMismatch);
             };
-            let config = build_lasm_postgres_thread_local_config(state).map_err(LasmDbQueryOneOperationError::Runtime)?;
-            let row = run_lasm_postgres_query_one_thread_local(&config, parsed_template, params.as_slice())
+            let config = build_lasm_postgres_thread_local_config(state)
                 .map_err(LasmDbQueryOneOperationError::Runtime)?;
+            let row = run_lasm_postgres_query_one_thread_local(
+                &config,
+                parsed_template,
+                params.as_slice(),
+            )
+            .map_err(LasmDbQueryOneOperationError::Runtime)?;
             match row {
                 Some(value) => Ok(LasmDbQueryOneOperationResult::Postgres { config, row: value }),
                 None => Err(LasmDbQueryOneOperationError::NotFound),
@@ -265,9 +271,8 @@ pub(crate) fn run_lasm_db_query_one_operation(
             let LasmPreparedDbOperationParams::Sqlite { params } = prepared_params else {
                 return Err(LasmDbQueryOneOperationError::PreparationMismatch);
             };
-            let row = run_lasm_sqlite_query_one(state, template, params).map_err(
-                LasmDbQueryOneOperationError::Runtime,
-            )?;
+            let row = run_lasm_sqlite_query_one(state, template, params)
+                .map_err(LasmDbQueryOneOperationError::Runtime)?;
             match row {
                 Some(value) => Ok(LasmDbQueryOneOperationResult::Sqlite { row: value }),
                 None => Err(LasmDbQueryOneOperationError::NotFound),
