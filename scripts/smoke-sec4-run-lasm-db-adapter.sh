@@ -599,25 +599,33 @@ request_once() {
   echo "${body_file}"
 }
 
-exec_body="$(request_once "db-exec" "POST" "/db/exec?template=SELECT%201&params=alpha" "200")"
-if ! jq -e '.recordId == 1 and .op == "exec" and .db == 1 and .template == "SELECT 1" and .params == "alpha"' "${exec_body}" >/dev/null; then
+exec_body="$(request_once "db-exec" "POST" "/db/exec?template=SELECT%201&params=0" "200")"
+if ! jq -e '.recordId == 1 and .op == "exec" and .db == 1 and .template == "SELECT 1" and .params == "0"' "${exec_body}" >/dev/null; then
   echo "unexpected /db/exec response payload" >&2
   cat "${exec_body}" >&2
   exit 1
 fi
 
-exec_tx_body="$(request_once "db-exec-tx" "POST" "/db/exec-tx?template=SELECT%201&params=alpha" "200")"
+exec_tx_body="$(request_once "db-exec-tx" "POST" "/db/exec-tx?template=SELECT%201&params=0" "200")"
 if ! jq -e '.recordId == 2 and .op == "execTx" and (.tx > 0)' "${exec_tx_body}" >/dev/null; then
   echo "unexpected /db/exec-tx response payload" >&2
   cat "${exec_tx_body}" >&2
   exit 1
 fi
 
-query_one_body="$(request_once "db-query-one" "GET" "/db/query-one?template=SELECT%201&params=alpha&row_schema=7" "200")"
-if ! jq -e '.record.op == "queryOne" and .rowSchema == 7 and ((.rowObject | type == "object" and .op == "execTx") or (.row | type == "string" and (.row|test("\"op\":\"execTx\""))))' "${query_one_body}" >/dev/null; then
-  echo "unexpected /db/query-one response payload" >&2
-  cat "${query_one_body}" >&2
-  exit 1
+query_one_body="$(request_once "db-query-one" "GET" "/db/query-one?template=SELECT%201&params=0&row_schema=7" "200")"
+if [ "${db_adapter}" = "sqlite" ]; then
+  if ! jq -e '.record.op == "queryOne" and .rowSchema == 7 and (.rowObject | type == "object")' "${query_one_body}" >/dev/null; then
+    echo "unexpected /db/query-one response payload" >&2
+    cat "${query_one_body}" >&2
+    exit 1
+  fi
+else
+  if ! jq -e '.record.op == "queryOne" and .rowSchema == 7 and (((.rowObject | type) == "object" and .rowObject.op == "execTx") or ((.row | type) == "string" and (.row | test("\"op\":\"execTx\""))))' "${query_one_body}" >/dev/null; then
+    echo "unexpected /db/query-one response payload" >&2
+    cat "${query_one_body}" >&2
+    exit 1
+  fi
 fi
 
 records_body="$(request_once "db-records" "GET" "/db/records?includeRecords=true" "200")"
