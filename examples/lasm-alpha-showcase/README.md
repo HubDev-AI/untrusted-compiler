@@ -16,7 +16,8 @@ This project is intended for manual alpha verification of the real runtime logic
   - wires routes to feature modules
   - exports health/meta/db/fs/net endpoints
 - `src/showcase_db.ut`:
-  - write / tx / queryOne / write+query composition / list routes
+  - write / tx / queryOne / write+query composition
+  - list route with runtime adapter visibility (`DbListRecordsResponse`)
 - `src/showcase_fs.ut`:
   - deterministic `path.base` + `path.under` flow
   - write/read roundtrip and containment-inspection helper
@@ -69,7 +70,7 @@ curl -i -X POST \
 curl -i \
   'http://127.0.0.1:8090/db/query-one?template=SELECT%201&params=%5B1%5D&row_schema=7'
 
-curl -i http://127.0.0.1:8090/db/list
+curl -i "http://127.0.0.1:8090/db/list?limit=10&offset=0"
 
 ls -l examples/lasm-alpha-showcase/.lasm-db
 cat examples/lasm-alpha-showcase/.lasm-db/records.log

@@ -71,8 +71,7 @@ fn queryOneRecord() effects { net, db.read } -> Int {
 
 fn listRecords() effects { net } -> Int {
   // List currently persisted records from the selected adapter.
-  res.setHeader(headers.name("X-Sec4-Showcase-Db"), headers.value("records"));
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
-
