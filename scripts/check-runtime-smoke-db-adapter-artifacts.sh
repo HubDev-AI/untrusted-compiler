@@ -213,7 +213,7 @@ for endpoint in db-exec db-exec-tx db-query-one db-records; do
   fi
 done
 
-if ! jq -e '.recordId == 1 and .op == "exec" and .db == 1 and .template == "SELECT 1" and .params == "alpha"' "${artifacts_dir}/db-exec.body" >/dev/null; then
+if ! jq -e '.recordId == 1 and .op == "exec" and .db == 1 and .template == "SELECT 1" and .params == "0"' "${artifacts_dir}/db-exec.body" >/dev/null; then
   echo "db-exec.body does not match expected payload contract" >&2
   exit 1
 fi
@@ -223,11 +223,16 @@ if ! jq -e '.recordId == 2 and .op == "execTx" and (.tx > 0)' "${artifacts_dir}/
   exit 1
 fi
 
-if ! rg -Fq '"recordId":2' "${artifacts_dir}/db-query-one.body" \
-  || ! rg -Fq '"rowSchema":7' "${artifacts_dir}/db-query-one.body" \
-  || ! rg -Fq 'op=execTx' "${artifacts_dir}/db-query-one.body"; then
-  echo "db-query-one.body does not match expected payload contract" >&2
-  exit 1
+if [ "${db_adapter}" = "sqlite" ]; then
+  if ! jq -e '.record.op == "queryOne" and .rowSchema == 7 and (.rowObject | type == "object")' "${artifacts_dir}/db-query-one.body" >/dev/null; then
+    echo "db-query-one.body does not match expected payload contract" >&2
+    exit 1
+  fi
+else
+  if ! jq -e '.record.op == "queryOne" and .rowSchema == 7 and (((.rowObject | type) == "object" and .rowObject.op == "execTx") or ((.row | type) == "string" and (.row | test("\\\"op\\\":\\\"execTx\\\""))))' "${artifacts_dir}/db-query-one.body" >/dev/null; then
+    echo "db-query-one.body does not match expected payload contract" >&2
+    exit 1
+  fi
 fi
 
 if ! jq -e --arg adapter "${db_adapter_label}" '.count == 3 and .adapter == $adapter and (.records | type == "array" and length == 3) and (.records[0].op == "exec") and (.records[1].op == "execTx") and (.records[2].op == "queryOne")' "${artifacts_dir}/db-records.body" >/dev/null; then

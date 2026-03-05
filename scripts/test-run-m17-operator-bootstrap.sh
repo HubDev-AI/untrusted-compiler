@@ -49,6 +49,45 @@ printf 'ok\n' > "${artifacts_dir}/run-metadata.txt"
 SH
 chmod +x "${repo_dir}/scripts/smoke-sec4-run-hello-api.sh"
 
+cat > "${repo_dir}/scripts/smoke-sec4-run-lasm-db-adapter.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -z "${SEC4_DB_SMOKE_LOG:-}" ]; then
+  echo "missing SEC4_DB_SMOKE_LOG" >&2
+  exit 1
+fi
+
+args="$*"
+printf '%s\n' "${args}" >> "${SEC4_DB_SMOKE_LOG}"
+
+artifacts_dir=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --artifacts-dir)
+      artifacts_dir="$2"
+      shift 2
+      ;;
+    --artifacts-dir=*)
+      artifacts_dir="${1#--artifacts-dir=}"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ -z "${artifacts_dir}" ]; then
+  echo "missing --artifacts-dir in db smoke stub" >&2
+  exit 1
+fi
+
+mkdir -p "${artifacts_dir}"
+printf 'ok\n' > "${artifacts_dir}/run-metadata.txt"
+SH
+chmod +x "${repo_dir}/scripts/smoke-sec4-run-lasm-db-adapter.sh"
+
 cat > "${repo_dir}/scripts/check-runtime-smoke-bundle.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -92,7 +131,7 @@ if [ -z "${artifacts_root}" ] || [ -z "${index_path}" ]; then
   exit 1
 fi
 
-if [ ! -d "${artifacts_root}/default" ] || [ ! -d "${artifacts_root}/max-body" ]; then
+if [ ! -d "${artifacts_root}/default" ] || [ ! -d "${artifacts_root}/max-body" ] || [ ! -d "${artifacts_root}/lasm-db-records-log" ] || [ ! -d "${artifacts_root}/lasm-db-sqlite" ]; then
   echo "missing branch dirs in bundle stub" >&2
   exit 1
 fi
@@ -105,10 +144,12 @@ SH
 chmod +x "${repo_dir}/scripts/check-runtime-smoke-bundle.sh"
 
 smoke_log="${tmp_dir}/smoke.log"
+db_smoke_log="${tmp_dir}/db-smoke.log"
 bundle_log="${tmp_dir}/bundle.log"
 artifacts_root="${tmp_dir}/runtime-smoke"
 
 SEC4_SMOKE_LOG="${smoke_log}" \
+SEC4_DB_SMOKE_LOG="${db_smoke_log}" \
 SEC4_BUNDLE_LOG="${bundle_log}" \
 "${bootstrap_script}" \
   --repo-root "${repo_dir}" \
@@ -123,8 +164,15 @@ if [ "$(wc -l < "${smoke_log}" | tr -d ' ')" -ne 2 ]; then
   exit 1
 fi
 
+if [ "$(wc -l < "${db_smoke_log}" | tr -d ' ')" -ne 2 ]; then
+  echo "expected bootstrap helper to invoke db smoke script twice" >&2
+  exit 1
+fi
+
 smoke_default_line="$(sed -n '1p' "${smoke_log}")"
 smoke_max_body_line="$(sed -n '2p' "${smoke_log}")"
+db_smoke_records_line="$(sed -n '1p' "${db_smoke_log}")"
+db_smoke_sqlite_line="$(sed -n '2p' "${db_smoke_log}")"
 
 if ! printf '%s\n' "${smoke_default_line}" | rg -Fq -- "--artifacts-dir ${artifacts_root}/default"; then
   echo "expected first smoke invocation to target default artifacts dir" >&2
@@ -150,6 +198,22 @@ if ! printf '%s\n' "${smoke_max_body_line}" | rg -Fq -- "--max-body-bytes 4096";
   echo "expected max-body smoke invocation to include max-body override" >&2
   exit 1
 fi
+if ! printf '%s\n' "${db_smoke_records_line}" | rg -Fq -- "--db-adapter records-log"; then
+  echo "expected first db smoke invocation to target records-log adapter" >&2
+  exit 1
+fi
+if ! printf '%s\n' "${db_smoke_sqlite_line}" | rg -Fq -- "--db-adapter sqlite"; then
+  echo "expected second db smoke invocation to target sqlite adapter" >&2
+  exit 1
+fi
+if ! printf '%s\n' "${db_smoke_records_line}" | rg -Fq -- "--artifacts-dir ${artifacts_root}/lasm-db-records-log"; then
+  echo "expected records-log db smoke invocation to target deterministic artifacts dir" >&2
+  exit 1
+fi
+if ! printf '%s\n' "${db_smoke_sqlite_line}" | rg -Fq -- "--artifacts-dir ${artifacts_root}/lasm-db-sqlite"; then
+  echo "expected sqlite db smoke invocation to target deterministic artifacts dir" >&2
+  exit 1
+fi
 
 if ! rg -Fq -- "--artifacts-root ${artifacts_root}" "${bundle_log}"; then
   echo "expected bundle checker invocation to include artifacts root" >&2
@@ -166,7 +230,7 @@ if ! jq -e '.branchOrder == ["default","max-body"]' "${artifacts_root}/runtime-s
 fi
 
 rm -f "${repo_dir}/scripts/check-runtime-smoke-bundle.sh"
-if SEC4_SMOKE_LOG="${smoke_log}" SEC4_BUNDLE_LOG="${bundle_log}" "${bootstrap_script}" --repo-root "${repo_dir}" --project "${repo_dir}/examples/hello-api" --artifacts-root "${artifacts_root}" >"${tmp_dir}/missing-bundle.log" 2>&1; then
+if SEC4_SMOKE_LOG="${smoke_log}" SEC4_DB_SMOKE_LOG="${db_smoke_log}" SEC4_BUNDLE_LOG="${bundle_log}" "${bootstrap_script}" --repo-root "${repo_dir}" --project "${repo_dir}/examples/hello-api" --artifacts-root "${artifacts_root}" >"${tmp_dir}/missing-bundle.log" 2>&1; then
   echo "expected bootstrap helper to fail when bundle checker script is missing" >&2
   exit 1
 fi

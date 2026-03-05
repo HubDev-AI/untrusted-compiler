@@ -96,8 +96,8 @@ if ! rg -Fq -- '--oneshot' "${artifacts_dir}/health.run.log"; then
   exit 1
 fi
 
-if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and test("^rt-[0-9]+$")) and (.timeMs | type == "number") and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
-  echo "users.body does not match expected std-success envelope contract" >&2
+if ! jq -e '.ok == true and (.userId | type == "string" and test("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"))' "${artifacts_dir}/users.body" >/dev/null; then
+  echo "users.body does not match expected create-user success contract" >&2
   exit 1
 fi
 
@@ -107,10 +107,8 @@ if ! rg -iq '^X-Trace-Id:[[:space:]]*.+$' "${artifacts_dir}/users.headers"; then
 fi
 
 users_header_trace_id="$(sed -nE 's/^X-Trace-Id:[[:space:]]*//Ip' "${artifacts_dir}/users.headers" | tr -d '\r' | head -n 1)"
-users_body_trace_id="$(jq -r '.traceId' "${artifacts_dir}/users.body")"
-
-if [ "${users_header_trace_id}" != "${users_body_trace_id}" ]; then
-  echo "users traceId mismatch between headers and body" >&2
+if [[ ! "${users_header_trace_id}" =~ ^rt-[0-9]+$ ]]; then
+  echo "users.headers contains malformed X-Trace-Id value" >&2
   exit 1
 fi
 

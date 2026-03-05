@@ -35,7 +35,7 @@ X-Trace-Id: ${trace_id}
 TXT
 
   cat > "${branch_dir}/users.body" <<TXT
-{"ok":true,"status":201,"traceId":"${trace_id}","timeMs":1,"data":1}
+{"ok":true,"userId":"123e4567-e89b-42d3-a456-426614174000"}
 TXT
 }
 

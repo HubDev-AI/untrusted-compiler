@@ -264,11 +264,11 @@ users_body="$(request_once \
   --header "X-CSRF-Token: token123" \
   --header "Cookie: csrf=token123" \
   --header "Connection: close" \
-  --data "{}"
+  --data '{"id":"123e4567-e89b-42d3-a456-426614174000","email":"smoke@example.com","age":30,"tags":["smoke"],"address":{"zip":"12345"},"meta":{"flags":{"a":true,"b":false,"c":true}}}'
 )"
 
-if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and length > 0) and has("data")' "${users_body}" >/dev/null; then
-  echo "unexpected /users JSON envelope" >&2
+if ! jq -e '.ok == true and .userId == "123e4567-e89b-42d3-a456-426614174000"' "${users_body}" >/dev/null; then
+  echo "unexpected /users create-user response" >&2
   cat "${users_body}" >&2
   exit 1
 fi
