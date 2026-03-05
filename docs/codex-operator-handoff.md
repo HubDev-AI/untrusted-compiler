@@ -1,8 +1,8 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-03-04  
+Updated: 2026-03-05  
 Primary branch: `dev`  
-Current baseline commit: `a5792a05`
+Current baseline commit: `2bd2ae98`
 
 ## 1) Purpose
 
@@ -48,6 +48,15 @@ Status notes:
 
 1. Defer proxy/runtime feature-level performance tuning (including 1M req/s optimization campaign) until P2 is completed.
 2. Before P2 completion, only accept performance work that is required to preserve correctness/stability contracts.
+
+## Release Snapshot (2026-03-05)
+
+1. Strict alpha gate bundle is currently green on this branch (`scripts/release-alpha-gate.sh` passed end-to-end).
+2. LASM DB runtime dispatch keeps orchestration-only boundaries; adapter-specific operation/persistence stays in `lasm_db_client`.
+3. Focused DB/promote tests are green:
+   - `cargo test -p sec4 lasm_db_runtime_dispatch::tests::list_records_marker_materializes_records_payload -- --exact`
+   - `cargo test -p sec4 --test commands promote_apply_rewrites_composition_root_and_generates_scaffold -- --exact`
+   - `cargo test -p sec4 --test commands promote_dry_run_reports_blocking_preconditions_for_invalid_project -- --exact`
 
 ## 4) DB Status (Explicit)
 
@@ -163,7 +172,7 @@ For each merged implementation chunk:
 Use this exact prompt in another editor:
 
 ---
-You are working in `/Users/vladimirtrifonov/src/ai/AILang`.
+You are working in `/Users/vladimirtrifonov/src/ai/untrusted-compiler`.
 
 Read first:
 1. `docs/codex-operator-handoff.md`
@@ -194,7 +203,7 @@ For each merged chunk:
 ## 11) Quick Start Commands
 
 ```bash
-cd /Users/vladimirtrifonov/src/ai/AILang
+cd /Users/vladimirtrifonov/src/ai/untrusted-compiler
 git fetch origin
 git checkout dev
 git pull --ff-only origin dev

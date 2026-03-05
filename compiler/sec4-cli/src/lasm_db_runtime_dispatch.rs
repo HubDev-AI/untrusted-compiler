@@ -2063,7 +2063,7 @@ fn handle_lasm_internal_db_query_one_operation(
         Some(value) => value,
         None => return true,
     };
-    let query_result = {
+    let (query_result, persistence_payload) = {
         let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
         {
             Some(state) => state,
@@ -2083,44 +2083,37 @@ fn handle_lasm_internal_db_query_one_operation(
         ) {
             Ok(LasmDbQueryOneOperationResult::Postgres { config, row }) => {
                 let row_object = row;
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "queryOne".to_string(),
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "queryOne",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
-                    tx: 0,
-                    affected_rows: 1,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    1,
+                );
                 let (record, compaction_snapshot) =
                     append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
-                persist_lasm_db_record_after_unlock(
-                    db_records_adapter,
-                    &config,
-                    &record,
-                    compaction_snapshot,
-                );
-                Some((record, row_object))
+                (
+                    Some((record.clone(), row_object)),
+                    Some((config, record, compaction_snapshot)),
+                )
             }
             Ok(LasmDbQueryOneOperationResult::Sqlite { row })
             | Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => {
-                let record = LasmDbRecord {
-                    id: state.next_db_record_id,
-                    op: "queryOne".to_string(),
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "queryOne",
                     db,
-                    template: template.clone(),
-                    params: params.clone(),
-                    tx: 0,
-                    affected_rows: 1,
-                    created_at_ms: lasm_now_ms(),
-                };
-                state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    1,
+                );
                 persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                Some((record, row))
+                (Some((record, row)), None)
             }
-            Err(LasmDbQueryOneOperationError::NotFound) => None,
+            Err(LasmDbQueryOneOperationError::NotFound) => (None, None),
             Err(LasmDbQueryOneOperationError::Runtime(message)) => {
                 set_lasm_db_runtime_error_response(
                     response,
@@ -2136,6 +2129,14 @@ fn handle_lasm_internal_db_query_one_operation(
             }
         }
     };
+    if let Some((postgres_config, record, compaction_snapshot)) = persistence_payload {
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
+    }
     let Some((record, row_object)) = query_result else {
         set_lasm_json_response(
             response,

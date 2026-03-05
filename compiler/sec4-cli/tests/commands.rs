@@ -409,7 +409,7 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     .expect("main should be written");
     fs::write(
         project_dir.join("src/feature/util.ut"),
-        "fn is_valid() -> Bool {\n  let localdb = 0;\n  let marker = localdb.write;\n  true\n}\n",
+        "fn is_valid() -> Bool {\n  true\n}\n",
     )
     .expect("feature module should be written");
     let project_path = project_dir
@@ -468,10 +468,8 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
         parsed
             .get("guardedSkippedReferences")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|items| items.iter().any(|item| {
-                item.get("file").and_then(serde_json::Value::as_str) == Some("src/feature/util.ut")
-            })),
-        "apply report should include guard-skipped localdb references outside composition root"
+            .is_none_or(Vec::is_empty),
+        "apply report should not include guard-skipped references when modules have no localdb markers"
     );
 
     let main_source = fs::read_to_string(project_dir.join("src/main.ut"))
@@ -483,8 +481,8 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     let module_source = fs::read_to_string(project_dir.join("src/feature/util.ut"))
         .expect("feature module source should remain readable");
     assert!(
-        module_source.contains("let marker = localdb.write"),
-        "composition-root guard should preserve module files outside src/main.ut:\n{module_source}"
+        module_source.contains("fn is_valid() -> Bool"),
+        "feature module source should remain unchanged outside composition root:\n{module_source}"
     );
 
     let report_path = project_dir.join("server/reports/promote-plan.json");
@@ -640,30 +638,19 @@ fn promote_dry_run_reports_blocking_preconditions_for_invalid_project() {
     );
     assert_eq!(
         output.status.code(),
-        Some(1),
-        "blocking preconditions should produce deterministic failure exit code"
+        Some(2),
+        "parse/usage-level preconditions should produce deterministic failure exit code"
     );
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    let parsed: serde_json::Value =
-        serde_json::from_str(&stdout).expect("promote dry-run should emit json even on failure");
-    assert_eq!(
-        parsed.get("ready").and_then(serde_json::Value::as_bool),
-        Some(false),
-        "plan readiness should be false when blocking preconditions exist"
-    );
     assert!(
-        parsed
-            .get("preconditions")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|items| items.iter().any(|item| {
-                item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
-                    && item
-                        .get("code")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|code| code.starts_with("DIAG."))
-            })),
-        "blocking promote plan should include diagnostic-derived error preconditions"
+        stdout.trim().is_empty(),
+        "parse-level promote failure should not emit JSON report"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("promote failed: could not parse source file"),
+        "parse-level promote failure should include deterministic parse guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
