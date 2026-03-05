@@ -1,6 +1,6 @@
 use crate::ast::{Expr, ExprKind, Item, ItemKind, MatchArm, Stmt, StmtKind};
 use crate::{manifest::Manifest, project::ResolvedProjectSources};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -204,10 +204,17 @@ fn collect_contract_violations_from_domain_dependency_calls(
 
     for item in program.items {
         if let ItemKind::Function(function) = item.kind {
+            let mut forbidden_aliases = HashMap::new();
+            collect_domain_forbidden_aliases_from_block(
+                &function.body,
+                forbidden_roots,
+                &mut forbidden_aliases,
+            );
             collect_domain_forbidden_roots_from_block(
                 &function.body,
                 module,
                 forbidden_roots,
+                &forbidden_aliases,
                 &mut issues,
                 &mut seen,
             );
@@ -387,6 +394,7 @@ fn collect_domain_forbidden_roots_from_block(
     block: &crate::ast::Block,
     module: &crate::project::ResolvedModuleSource,
     forbidden_roots: &HashSet<String>,
+    forbidden_aliases: &HashMap<String, String>,
     issues: &mut Vec<PromoteContractViolation>,
     seen: &mut HashSet<(PathBuf, usize, usize)>,
 ) {
@@ -395,13 +403,21 @@ fn collect_domain_forbidden_roots_from_block(
             statement,
             module,
             forbidden_roots,
+            forbidden_aliases,
             issues,
             seen,
         );
     }
 
     if let Some(tail) = block.tail.as_deref() {
-        collect_domain_forbidden_roots_from_expr(tail, module, forbidden_roots, issues, seen);
+        collect_domain_forbidden_roots_from_expr(
+            tail,
+            module,
+            forbidden_roots,
+            forbidden_aliases,
+            issues,
+            seen,
+        );
     }
 }
 
@@ -409,12 +425,20 @@ fn collect_domain_forbidden_roots_from_statement(
     statement: &Stmt,
     module: &crate::project::ResolvedModuleSource,
     forbidden_roots: &HashSet<String>,
+    forbidden_aliases: &HashMap<String, String>,
     issues: &mut Vec<PromoteContractViolation>,
     seen: &mut HashSet<(PathBuf, usize, usize)>,
 ) {
     match &statement.kind {
         StmtKind::Let { value, .. } => {
-            collect_domain_forbidden_roots_from_expr(value, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(
+                value,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
         }
         StmtKind::Return { value } => {
             if let Some(value) = value {
@@ -422,13 +446,21 @@ fn collect_domain_forbidden_roots_from_statement(
                     value,
                     module,
                     forbidden_roots,
+                    forbidden_aliases,
                     issues,
                     seen,
                 );
             }
         }
         StmtKind::Expr { expr } => {
-            collect_domain_forbidden_roots_from_expr(expr, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(
+                expr,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
         }
     }
 }
@@ -437,44 +469,86 @@ fn collect_domain_forbidden_roots_from_expr(
     expr: &Expr,
     module: &crate::project::ResolvedModuleSource,
     forbidden_roots: &HashSet<String>,
+    forbidden_aliases: &HashMap<String, String>,
     issues: &mut Vec<PromoteContractViolation>,
     seen: &mut HashSet<(PathBuf, usize, usize)>,
 ) {
     if let Some(root) = root_member_expression_root(expr) {
-        if forbidden_roots.contains(root.as_str())
-            && seen.insert((
+        let dependency_root = if forbidden_roots.contains(root.as_str()) {
+            Some(root.as_str())
+        } else {
+            forbidden_aliases.get(root.as_str()).map(String::as_str)
+        };
+        if let Some(dependency_root) = dependency_root {
+            if seen.insert((
                 module.file_path.clone(),
                 expr.span.start_line,
                 expr.span.start_col,
-            ))
-        {
-            issues.push(PromoteContractViolation {
-                code: "PROMOTE.P9404".to_string(),
-                severity: "error".to_string(),
-                message: format!(
-                    "domain module cannot call `{root}.*` directly; use the repository interface and compose via `repo.*` adapter contract"
-                ),
-                file: module.file_path.clone(),
-                line: expr.span.start_line,
-            });
+            )) {
+                let message = if root == dependency_root {
+                    format!(
+                        "domain module cannot call `{dependency_root}.*` directly; use the repository interface and compose via `repo.*` adapter contract"
+                    )
+                } else {
+                    format!(
+                        "domain module cannot call `{dependency_root}.*` directly (via alias `{root}`); use the repository interface and compose via `repo.*` adapter contract"
+                    )
+                };
+                issues.push(PromoteContractViolation {
+                    code: "PROMOTE.P9404".to_string(),
+                    severity: "error".to_string(),
+                    message,
+                    file: module.file_path.clone(),
+                    line: expr.span.start_line,
+                });
+            }
         }
     }
 
     match &expr.kind {
         ExprKind::Unary { expr, .. } => {
-            collect_domain_forbidden_roots_from_expr(expr, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(
+                expr,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
         }
         ExprKind::Binary { left, right, .. } => {
-            collect_domain_forbidden_roots_from_expr(left, module, forbidden_roots, issues, seen);
-            collect_domain_forbidden_roots_from_expr(right, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(
+                left,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
+            collect_domain_forbidden_roots_from_expr(
+                right,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
         }
         ExprKind::Call { callee, args } => {
-            collect_domain_forbidden_roots_from_expr(callee, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_expr(
+                callee,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
             for arg in args {
                 collect_domain_forbidden_roots_from_expr(
                     arg,
                     module,
                     forbidden_roots,
+                    forbidden_aliases,
                     issues,
                     seen,
                 );
@@ -489,6 +563,7 @@ fn collect_domain_forbidden_roots_from_expr(
                 condition,
                 module,
                 forbidden_roots,
+                forbidden_aliases,
                 issues,
                 seen,
             );
@@ -496,6 +571,7 @@ fn collect_domain_forbidden_roots_from_expr(
                 then_branch,
                 module,
                 forbidden_roots,
+                forbidden_aliases,
                 issues,
                 seen,
             );
@@ -504,6 +580,7 @@ fn collect_domain_forbidden_roots_from_expr(
                     else_expr,
                     module,
                     forbidden_roots,
+                    forbidden_aliases,
                     issues,
                     seen,
                 );
@@ -514,6 +591,7 @@ fn collect_domain_forbidden_roots_from_expr(
                 scrutinee,
                 module,
                 forbidden_roots,
+                forbidden_aliases,
                 issues,
                 seen,
             );
@@ -522,13 +600,21 @@ fn collect_domain_forbidden_roots_from_expr(
                     arm,
                     module,
                     forbidden_roots,
+                    forbidden_aliases,
                     issues,
                     seen,
                 );
             }
         }
         ExprKind::Block(block) => {
-            collect_domain_forbidden_roots_from_block(block, module, forbidden_roots, issues, seen);
+            collect_domain_forbidden_roots_from_block(
+                block,
+                module,
+                forbidden_roots,
+                forbidden_aliases,
+                issues,
+                seen,
+            );
         }
         ExprKind::Member { .. }
         | ExprKind::Identifier(_)
@@ -542,10 +628,105 @@ fn collect_domain_forbidden_roots_from_match_arm(
     arm: &MatchArm,
     module: &crate::project::ResolvedModuleSource,
     forbidden_roots: &HashSet<String>,
+    forbidden_aliases: &HashMap<String, String>,
     issues: &mut Vec<PromoteContractViolation>,
     seen: &mut HashSet<(PathBuf, usize, usize)>,
 ) {
-    collect_domain_forbidden_roots_from_expr(&arm.value, module, forbidden_roots, issues, seen);
+    collect_domain_forbidden_roots_from_expr(
+        &arm.value,
+        module,
+        forbidden_roots,
+        forbidden_aliases,
+        issues,
+        seen,
+    );
+}
+
+fn collect_domain_forbidden_aliases_from_block(
+    block: &crate::ast::Block,
+    forbidden_roots: &HashSet<String>,
+    aliases: &mut HashMap<String, String>,
+) {
+    for statement in &block.statements {
+        collect_domain_forbidden_aliases_from_statement(statement, forbidden_roots, aliases);
+    }
+    if let Some(tail) = block.tail.as_deref() {
+        collect_domain_forbidden_aliases_from_expr(tail, forbidden_roots, aliases);
+    }
+}
+
+fn collect_domain_forbidden_aliases_from_statement(
+    statement: &Stmt,
+    forbidden_roots: &HashSet<String>,
+    aliases: &mut HashMap<String, String>,
+) {
+    match &statement.kind {
+        StmtKind::Let { name, value, .. } => {
+            collect_domain_forbidden_aliases_from_expr(value, forbidden_roots, aliases);
+            if let Some(root) = root_member_expression_root(value) {
+                if forbidden_roots.contains(root.as_str()) {
+                    aliases.insert(name.clone(), root);
+                } else if let Some(mapped) = aliases.get(root.as_str()) {
+                    aliases.insert(name.clone(), mapped.clone());
+                }
+            }
+        }
+        StmtKind::Return { value } => {
+            if let Some(value) = value {
+                collect_domain_forbidden_aliases_from_expr(value, forbidden_roots, aliases);
+            }
+        }
+        StmtKind::Expr { expr } => {
+            collect_domain_forbidden_aliases_from_expr(expr, forbidden_roots, aliases);
+        }
+    }
+}
+
+fn collect_domain_forbidden_aliases_from_expr(
+    expr: &Expr,
+    forbidden_roots: &HashSet<String>,
+    aliases: &mut HashMap<String, String>,
+) {
+    match &expr.kind {
+        ExprKind::Unary { expr, .. } => {
+            collect_domain_forbidden_aliases_from_expr(expr, forbidden_roots, aliases);
+        }
+        ExprKind::Binary { left, right, .. } => {
+            collect_domain_forbidden_aliases_from_expr(left, forbidden_roots, aliases);
+            collect_domain_forbidden_aliases_from_expr(right, forbidden_roots, aliases);
+        }
+        ExprKind::Call { callee, args } => {
+            collect_domain_forbidden_aliases_from_expr(callee, forbidden_roots, aliases);
+            for arg in args {
+                collect_domain_forbidden_aliases_from_expr(arg, forbidden_roots, aliases);
+            }
+        }
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_domain_forbidden_aliases_from_expr(condition, forbidden_roots, aliases);
+            collect_domain_forbidden_aliases_from_block(then_branch, forbidden_roots, aliases);
+            if let Some(else_expr) = else_branch {
+                collect_domain_forbidden_aliases_from_expr(else_expr, forbidden_roots, aliases);
+            }
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            collect_domain_forbidden_aliases_from_expr(scrutinee, forbidden_roots, aliases);
+            for arm in arms {
+                collect_domain_forbidden_aliases_from_expr(&arm.value, forbidden_roots, aliases);
+            }
+        }
+        ExprKind::Block(block) => {
+            collect_domain_forbidden_aliases_from_block(block, forbidden_roots, aliases);
+        }
+        ExprKind::Member { .. }
+        | ExprKind::Identifier(_)
+        | ExprKind::Number(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_) => {}
+    }
 }
 
 fn root_member_expression_root(expr: &Expr) -> Option<String> {

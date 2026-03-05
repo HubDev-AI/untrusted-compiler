@@ -1114,6 +1114,87 @@ fn promote_dry_run_blocks_domain_module_dependency_calls() {
 }
 
 #[test]
+fn promote_dry_run_blocks_domain_module_dependency_calls_via_alias() {
+    let root = temp_dir("sec4-promote-domain-module-alias-dependency-call");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::create_dir_all(project_dir.join("src/domain")).expect("domain dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-domain-alias-dependency-call\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use domain.boundary;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/domain/boundary.ut"),
+        "fn apply() -> Int {\n  let store = localdb;\n  let _id = store.get(\"user:42\");\n  42\n}\n",
+    )
+    .expect("domain module should be written");
+    fs::write(
+        project_dir.join("src/repo/db_repo.ut"),
+        "fn browser_get_user() -> Int {\n  0\n}\nfn server_get_user() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when domain module calls dependency root via alias"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when forbidden dependency aliases exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9404")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| {
+                            message.contains("via alias `store`")
+                                && message.contains("`localdb.*`")
+                        })
+            })),
+        "contract preconditions should include alias-aware domain dependency guidance"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_succeeds_for_multi_file_module_project() {
     let root = temp_dir("sec4-check-multi-file-pass");
     let project_dir = root.join("project");
