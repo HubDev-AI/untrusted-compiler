@@ -284,3 +284,4 @@ Notes:
 
 - The local wrapper starts/stops repo-local postgres infra (`infra/local-postgres`).
 - `make bench-workbench` enforces `wrk2` by default for constant-rate compare quality; set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when intentionally allowing local `wrk` fallback.
+- If `wrk2` is missing, install repo-local binary with `make -C ../../benchmark-suite wrk2-install` and export `BENCH_WRK2_BIN="$PWD/../../benchmark-suite/bin/wrk2"` before running benchmark commands.

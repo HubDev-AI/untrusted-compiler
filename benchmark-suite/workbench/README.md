@@ -25,6 +25,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 4. Run smoke parity matrix:
    - `make -C benchmark-suite workbench-smoke`
    - strict load-generator default for benchmark lanes: `BENCH_WORKBENCH_REQUIRE_WRK2=1` (default); set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only for local fallback runs.
+   - if `wrk2` is missing locally: `make -C benchmark-suite wrk2-install` and export `BENCH_WRK2_BIN="$PWD/benchmark-suite/bin/wrk2"`.
 5. Run load benchmark matrix:
    - `make -C benchmark-suite workbench-bench-dry`
    - `make -C benchmark-suite workbench-bench`
