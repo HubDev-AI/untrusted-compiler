@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added helper `emit_lasm_cluster_relay_pump_warning_if_allowed(...)`,
   - both relay pump error branches now call this helper instead of duplicating throttle checks,
   - helper centralizes warning window comparison and throttle window advancement.

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime + DB hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_db_runtime_common.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_db_runtime_common.rs`:
   - `allocate_lasm_db_tx_handle` now allocates by probing for a vacant positive handle slot,
   - allocator wraps from `i64::MAX` back to `1` and advances `next_db_tx_handle` accordingly,
   - allocator no longer relies on monotonic saturating increment that can eventually pin on the same terminal handle value.

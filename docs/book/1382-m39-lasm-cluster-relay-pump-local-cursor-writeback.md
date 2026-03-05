@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay pump scheduler now runs per-step cursor progression/normalization on a local cursor variable,
   - mode resolver now returns an initial cursor and pump budget (`LasmClusterRelayPumpModeResolution`),
   - shared cursor state (`relay_pump_cursor`) is written once after loop completion (or reset to zero for full-scan mode).

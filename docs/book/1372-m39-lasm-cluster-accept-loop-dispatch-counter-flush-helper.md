@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added helper `flush_lasm_cluster_accept_dispatch_counters(...)`,
   - both accept-error branches now call this helper instead of repeating inline flush blocks,
   - accept-loop final tail now calls the same helper for dispatch counter flushes.

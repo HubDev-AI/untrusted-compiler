@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`:
   - `attempt_lasm_cluster_relay_send` disconnected path now updates sender-liveness state only on live-to-dead transition,
   - relay live-sender count now decrements with direct bounded subtraction only when that transition occurs,
   - removed unconditional `saturating_sub` decrement on every disconnected send attempt.

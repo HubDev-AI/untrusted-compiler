@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`.
 - Moved the relay worker thread loop from `cmd_run_lasm_cluster(...)` into:
   - `spawn_lasm_cluster_relay_worker_loop(...)`
 - `main.rs` now spawns each relay worker by calling the extracted module function instead of embedding the full closure body inline.

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_workers.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_workers.rs`:
   - added deterministic first-error capture for accept-loop failures across worker/main accept paths,
   - removed inline error printing from worker orchestration,
   - now returns non-`Ok` result when any accept-loop failure occurs (instead of returning success after logging).

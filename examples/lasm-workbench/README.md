@@ -18,7 +18,7 @@ validate module resolution + runtime behavior together.
 ## Start
 
 ```bash
-cd /Users/vladimirtrifonov/src/ai/AILang/examples/lasm-workbench
+cd $REPO_ROOT/examples/lasm-workbench
 sec4 check
 sec4 build --emit c-bin
 ```

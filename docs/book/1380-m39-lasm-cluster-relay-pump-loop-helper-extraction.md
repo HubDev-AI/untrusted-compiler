@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - extracted relay pump scheduler block into `pump_lasm_cluster_relay_connections(...)`,
   - worker loop now calls this helper and receives a single `progressed` signal,
   - existing per-step helper calls (`pump_lasm_cluster_relay_connection_once`, release/warning/cursor helpers) are reused unchanged inside the extracted loop helper.

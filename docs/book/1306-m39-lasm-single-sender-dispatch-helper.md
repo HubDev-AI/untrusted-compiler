@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`.
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`.
 - Added `attempt_lasm_cluster_relay_send_single(...)` for single-sender relay dispatch.
 - Single-sender accept loop now delegates dispatch result mapping through this helper before `handle_lasm_cluster_accept_dispatch_error(...)`.
 

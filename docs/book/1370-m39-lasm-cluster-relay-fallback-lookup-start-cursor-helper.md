@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added helper `resolve_lasm_cluster_fallback_lookup_start_cursor(...)`,
   - fallback lookup traversal now uses this helper instead of inline failed-index wrap + binary-search bootstrap logic.
 

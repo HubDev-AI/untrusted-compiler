@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_status_writer.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_status_writer.rs`:
   - added throttled/deduplicated warning behavior for status JSON write failures,
   - warning logs now emit when:
     - throttle window allows, or

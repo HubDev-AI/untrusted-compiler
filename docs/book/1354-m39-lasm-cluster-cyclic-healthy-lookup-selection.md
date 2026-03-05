@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
   - degraded lookup rebuild now gathers healthy backend indices and fills selection lookup slots with cyclic healthy-index mapping,
   - removed previous next-healthy-from-index mapping that produced selection skew based on unhealthy index gaps.
 

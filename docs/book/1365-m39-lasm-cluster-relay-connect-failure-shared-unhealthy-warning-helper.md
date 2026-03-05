@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added shared helper `mark_lasm_cluster_relay_backend_connect_failure(...)`,
   - both primary connect-failure and fallback connect-failure branches now call this helper for:
     - unhealthy cooldown marking,

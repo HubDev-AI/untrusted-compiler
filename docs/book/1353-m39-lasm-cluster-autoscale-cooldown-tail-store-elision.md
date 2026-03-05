@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
   - added `cooldown_anchor_changed` tracking for per-tick scale actions,
   - end-of-tick cooldown remaining atomic stores now run only when `last_scale_up_at` or `last_scale_down_at` changed in that tick.
 

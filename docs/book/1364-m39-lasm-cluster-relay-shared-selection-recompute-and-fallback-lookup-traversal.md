@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added shared helper `recompute_lasm_cluster_relay_selection_state(...)` for selection-state derivation (`has_healthy`, identity mode, cycle span, single-healthy index),
   - steady-path selection rebuild now calls this helper,
   - connect-failure fallback now refreshes selection state once and traverses fallback candidates from healthy lookup state instead of scanning all worker slots.

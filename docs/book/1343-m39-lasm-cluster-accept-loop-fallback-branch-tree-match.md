@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - failed-primary-dispatch fallback selection now checks `relay_all_senders_live` first,
   - degraded path selection now uses `match relay_live_sender_count` (`2`, `1`, default) instead of repeated boolean conjunction checks (`!relay_all_senders_live && count == ...`).
 

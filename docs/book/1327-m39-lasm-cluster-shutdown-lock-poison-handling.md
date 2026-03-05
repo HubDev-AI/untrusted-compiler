@@ -5,10 +5,10 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`:
   - `LasmClusterShutdownSummary` now includes `state_lock_poisoned`,
   - shutdown summary now exposes unified failure check (`has_failures`) and deterministic failure message.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`:
   - cluster run now treats shutdown lock-poison as deterministic runtime failure,
   - shutdown failure reporting now uses unified shutdown failure summary.
 

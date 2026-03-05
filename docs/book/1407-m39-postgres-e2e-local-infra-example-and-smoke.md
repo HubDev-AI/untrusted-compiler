@@ -32,9 +32,9 @@ The alpha DB path needed one deterministic operator flow that starts a real Post
 
 ## Validation
 
-- `cargo run -p sec4 -- check --path /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e`
-- `bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh`
-- `bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/down.sh`
-- `bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/reset.sh`
-- `bash -n /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/scripts/smoke.sh`
+- `cargo run -p sec4 -- check --path $REPO_ROOT/examples/postgres-e2e`
+- `bash -n $REPO_ROOT/infra/local-postgres/scripts/up.sh`
+- `bash -n $REPO_ROOT/infra/local-postgres/scripts/down.sh`
+- `bash -n $REPO_ROOT/infra/local-postgres/scripts/reset.sh`
+- `bash -n $REPO_ROOT/examples/postgres-e2e/scripts/smoke.sh`
 - `cargo test -p sec4 --test commands check_command_succeeds_for_postgres_e2e_example`

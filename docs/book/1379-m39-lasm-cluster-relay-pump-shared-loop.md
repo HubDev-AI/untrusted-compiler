@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - collapsed full-scan and budgeted relay pump scheduler branches into one shared loop,
   - added mode flag `full_scan_pump_mode` to choose between full-scan and budgeted pump budget sizing,
   - preserved full-scan cursor reset behavior before/after the shared loop.

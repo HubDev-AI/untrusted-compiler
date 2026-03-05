@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added `pump_lasm_cluster_relay_connection_once(...)` and `LasmClusterRelayPumpDispatchOutcome`,
   - full-scan and budgeted pump schedulers now call the same helper for `pump_once` outcomes,
   - helper centralizes release handling and warning-throttle/decrement side effects for `Complete` and error paths.

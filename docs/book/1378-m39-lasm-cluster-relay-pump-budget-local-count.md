@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - budgeted relay pump scheduler now tracks mutable local `relay_count`,
   - pre-step cursor progression now uses local `relay_len_before_step = relay_count`,
   - removed-path cursor normalization now reuses local `relay_count` after decrement instead of re-reading vector length.

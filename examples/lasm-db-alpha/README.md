@@ -125,7 +125,7 @@ If you are using `infra/local-postgres`, you can let the smoke script pick up
 `infra/local-postgres/.runtime.env` automatically:
 
 ```bash
-cd /path/to/AILang
+cd /path/to/untrusted-compiler
 infra/local-postgres/scripts/up.sh
 SEC4_DB_ALPHA_DB_ADAPTER=postgres ./examples/lasm-db-alpha/scripts/run-smoke.sh
 ```

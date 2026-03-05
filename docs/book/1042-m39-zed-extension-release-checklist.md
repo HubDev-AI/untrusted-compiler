@@ -4,13 +4,13 @@ This slice adds a deterministic release checklist command for the Zed extension 
 
 ## What changed
 
-1. Added `/Users/vladimirtrifonov/src/ai/AILang/scripts/check-zed-extension-release.sh`.
+1. Added `$REPO_ROOT/scripts/check-zed-extension-release.sh`.
 2. Checklist now validates:
    - required extension files exist,
    - required `zed-extension/extension.toml` wiring tokens are present,
    - grammar pin check passes,
    - plugin smoke runner passes in fast mode (unless `--skip-smoke` is used).
-3. Updated `/Users/vladimirtrifonov/src/ai/AILang/zed-extension/README.md` so release validation points to the new checklist.
+3. Updated `$REPO_ROOT/zed-extension/README.md` so release validation points to the new checklist.
 
 ## Why
 

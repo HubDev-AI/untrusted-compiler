@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - `resolve_lasm_cluster_next_live_sender_index` now exits early on empty sender slices,
   - start-index live-state check now uses direct index access (`relay_sender_live[start_index_wrapped]`) guarded by explicit debug assertion,
   - removed option-chain access (`get(...).copied().unwrap_or(...)`) from this helper.

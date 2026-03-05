@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_pump.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_pump.rs`.
 - Moved relay pump types from `main.rs`:
   - `LasmClusterRelayPumpStep`
   - `LasmClusterRelayPump` and its impl (`new`, `new_with_buffers`, `pump_once`, `into_buffers`)

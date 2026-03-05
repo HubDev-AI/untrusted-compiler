@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
   - autoscale loop now tracks whether workers changed after the initial maintenance refresh,
   - second worker-port snapshot refresh now runs only when scale-up/scale-down actually changed worker membership.
 

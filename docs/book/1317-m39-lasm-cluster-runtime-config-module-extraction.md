@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`.
 - Moved LASM cluster runtime-config helper surface from `main.rs`, including:
   - proxy sizing helpers (`lasm_cluster_proxy_worker_count`, `lasm_cluster_proxy_queue_capacity`)
   - accept/relay batch helpers (`lasm_cluster_accept_worker_count`, `lasm_cluster_relay_accept_batch_max`, `lasm_cluster_relay_pump_batch_max`)

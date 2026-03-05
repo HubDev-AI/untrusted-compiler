@@ -5,10 +5,10 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - `resolve_lasm_cluster_next_live_sender_index_with_lookup_state(...)` now assumes non-empty sender slices under existing fallback-call invariants (`sender_count > 0`) via debug assertions,
   - removed runtime empty-slice branch from this hot resolver path.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
   - saturated dispatch-error branch now flushes saturation counters inline when local pending count reaches flush threshold,
   - replaced helper-call flush with direct atomic updates + local reset.
 

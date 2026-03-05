@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`.
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`.
 - In multi-sender accept-loop primary dispatch:
   - replaced direct `try_send` match with `attempt_lasm_cluster_relay_send(...)`,
   - kept existing saturated short-circuit branch (`listener_all_senders_saturated_in_batch`) and fallback dispatch flow.

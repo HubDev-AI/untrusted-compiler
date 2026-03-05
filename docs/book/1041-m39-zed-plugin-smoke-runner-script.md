@@ -4,7 +4,7 @@ This slice adds a single-command smoke runner for the Zed plugin workflow.
 
 ## What changed
 
-1. Added `/Users/vladimirtrifonov/src/ai/AILang/scripts/run-zed-plugin-smoke.sh`:
+1. Added `$REPO_ROOT/scripts/run-zed-plugin-smoke.sh`:
    - validates Zed grammar pin guard,
    - runs `sec4 check` for `examples/zed-plugin-smoke`,
    - runs `sec4 fmt` in a temp project copy,

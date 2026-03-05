@@ -5,10 +5,10 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - added `resolve_lasm_cluster_next_live_sender_index_with_lookup_state(...)`,
   - this helper accepts precomputed lookup availability and avoids recomputing `lookup.is_empty()` in hot callers.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - degraded fallback path now computes `relay_has_next_live_sender_lookup` once,
   - all next-live resolver calls in that path use the lookup-state-aware helper.
 

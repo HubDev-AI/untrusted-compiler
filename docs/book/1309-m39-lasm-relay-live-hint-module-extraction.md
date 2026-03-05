@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`.
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`.
 - Moved live-hint refresh helpers from `main.rs` into the topology module:
   - `refresh_lasm_cluster_next_live_sender_lookup(...)`
   - `refresh_lasm_cluster_single_live_sender_index(...)`

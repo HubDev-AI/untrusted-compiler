@@ -5,10 +5,10 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - removed `dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(...)`,
   - `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now accepts precomputed `relay_has_next_live_sender_lookup` as a direct parameter.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - fallback call sites now call core fallback-multi function directly with the precomputed lookup-state flag.
 
 ## Why

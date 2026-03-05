@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - in degraded-liveness next-dispatch cursor resolution (`relay_live_sender_count > 2` path),
   - after next-live lookup miss (including refresh-on-miss helper path),
   - changed fallback cursor from `next_dispatch_wrapped` to `stream_dispatch_start`.

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - `dispatch_lasm_cluster_relay_stream_fallback_single_live` and `dispatch_lasm_cluster_relay_stream_fallback_dual_live` now use direct indexed reads for live-sender membership checks,
   - removed `get(...).copied().unwrap_or(...)` option-chain checks from these fast paths,
   - added explicit debug assertions for relay-live vector shape parity (`relay_sender_live.len() == relay_senders.len()`).

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - `lookup_lasm_cluster_next_live_sender_index` now takes the established lookup/snapshot invariants as direct fast-path assumptions (guarded with debug assertions),
   - removed runtime empty-slice and cached-index bounds branches from the hot lookup path,
   - preserved fallback behavior to linear live-sender scan when cached entry is no longer live.

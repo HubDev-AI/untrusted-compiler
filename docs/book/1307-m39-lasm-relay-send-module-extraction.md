@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`.
 - Moved relay send helpers out of `main.rs`:
   - `attempt_lasm_cluster_relay_send(...)`
   - `attempt_lasm_cluster_relay_send_single(...)`

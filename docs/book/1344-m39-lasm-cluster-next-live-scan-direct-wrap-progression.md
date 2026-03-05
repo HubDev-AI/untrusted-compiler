@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - `lasm_cluster_next_live_sender_index` now advances its scan cursor with direct increment + wrap reset in-loop,
   - removed per-iteration `lasm_cluster_next_index_wrapped(...)` call from this shared scan helper.
 

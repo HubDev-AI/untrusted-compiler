@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added `handle_lasm_cluster_accept_dispatch_error_with_counters(...)`,
   - updated accept-loop single-sender and multi-sender dispatch-error call sites to use this wrapper,
   - `handle_lasm_cluster_accept_unavailable_stream(...)` now reuses the same wrapper path for `Unavailable(...)` dispatch errors.

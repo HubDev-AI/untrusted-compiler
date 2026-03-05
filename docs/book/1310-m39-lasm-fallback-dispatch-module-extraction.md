@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`.
 - Moved fallback-dispatch internals out of `main.rs`:
   - `dispatch_lasm_cluster_relay_stream_fallback_dual_live(...)`
   - `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)`

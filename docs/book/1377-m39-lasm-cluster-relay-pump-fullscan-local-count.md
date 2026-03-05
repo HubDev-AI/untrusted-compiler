@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - full-scan relay pump scheduler now initializes local mutable `relay_count`,
   - loop condition now uses `index < relay_count` instead of reading `relay_connections.len()` each iteration,
   - removal path decrements `relay_count` while non-removal path advances index.
