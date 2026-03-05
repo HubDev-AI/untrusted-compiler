@@ -172,7 +172,7 @@ For each merged implementation chunk:
 Use this exact prompt in another editor:
 
 ---
-You are working in `/Users/vladimirtrifonov/src/ai/untrusted-compiler`.
+You are working in `$REPO_ROOT`.
 
 Read first:
 1. `docs/codex-operator-handoff.md`
@@ -203,7 +203,7 @@ For each merged chunk:
 ## 11) Quick Start Commands
 
 ```bash
-cd /Users/vladimirtrifonov/src/ai/untrusted-compiler
+cd $REPO_ROOT
 git fetch origin
 git checkout dev
 git pull --ff-only origin dev
