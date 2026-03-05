@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` in `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`.
+- Updated `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` in `$REPO_ROOT/compiler/sec4-cli/src/main.rs`.
 - In the `scan_live_target == 2` branch:
   - added direct wrapped-next liveness check for the second attempt (`second_start_index`) before resolver fallback,
   - routed second-attempt dispatch through `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)`.

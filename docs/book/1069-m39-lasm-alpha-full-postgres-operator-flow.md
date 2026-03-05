@@ -7,7 +7,7 @@ This slice updates the canonical `examples/lasm-alpha-full` operator flow to inc
 1. Updated `examples/lasm-alpha-full/src/main.ut` top-level/operator comments to describe all supported DB adapter modes (`records-log`, `sqlite`, `postgres`).
 2. Expanded `examples/lasm-alpha-full/README.md` with Postgres runtime startup instructions:
    - `--db-adapter postgres`
-   - required `SEC4_RT_LASM_DB_POSTGRES_DSN`
+   - required `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`
 3. Added operator-ready Postgres DB query demonstrations:
    - typed parameterized `db.queryOne` (`$N` + JSON-array params)
    - literal-preserving placeholder behavior (`'$1-literal'` remains literal)

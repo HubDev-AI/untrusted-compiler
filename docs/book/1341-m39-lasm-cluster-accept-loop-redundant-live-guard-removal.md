@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - removed redundant `relay_live_sender_count > 0` guard from dispatch-cursor realignment condition,
   - retained `relay_live_sender_count > 1` guard, which already subsumes the removed check.
 

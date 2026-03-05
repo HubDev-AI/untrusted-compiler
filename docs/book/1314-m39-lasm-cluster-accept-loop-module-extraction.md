@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`.
 - Moved `run_lasm_cluster_accept_loop(...)` out of `main.rs` into the new module.
 - `main.rs` now imports `run_lasm_cluster_accept_loop` from module boundaries.
 - Accept-loop module explicitly consumes:

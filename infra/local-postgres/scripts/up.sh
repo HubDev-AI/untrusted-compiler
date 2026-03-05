@@ -108,6 +108,7 @@ PG_PORT=$PG_PORT
 POSTGRES_DB=$POSTGRES_DB
 POSTGRES_USER=$POSTGRES_USER
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+SEC4_DB_ALPHA_DB_POSTGRES_DSN=$dsn
 SEC4_RT_LASM_DB_POSTGRES_DSN=$dsn
 EOF
 }
@@ -194,7 +195,8 @@ if [ "$status" -ne 0 ]; then
     if [ -n "$replacement_port" ] && [ "$replacement_port" != "${PG_PORT:-5432}" ]; then
       echo "local postgres host route conflict detected on port ${PG_PORT:-5432}; retrying with free port $replacement_port"
       PG_PORT="$replacement_port"
-      SEC4_RT_LASM_DB_POSTGRES_DSN="$(build_local_dsn_for_port "$replacement_port")"
+      SEC4_DB_ALPHA_DB_POSTGRES_DSN="$(build_local_dsn_for_port "$replacement_port")"
+      SEC4_RT_LASM_DB_POSTGRES_DSN="$SEC4_DB_ALPHA_DB_POSTGRES_DSN"
       compose_down_quiet
       compose_up
       container_id="$(resolve_container_id)"
@@ -235,12 +237,13 @@ if [ "$status" -ne 0 ]; then
   fi
 fi
 
-raw_dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN:-$(build_local_dsn_for_port "${PG_PORT:-5432}")}"
+raw_dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-$(build_local_dsn_for_port "${PG_PORT:-5432}")}}"
 write_runtime_env_file "$raw_dsn"
 redacted_dsn="$(redact_postgres_dsn_password "$raw_dsn")"
 echo "postgres is ready"
 echo "dsn: $redacted_dsn"
 echo "next: export SEC4_RT_LASM_DB_ADAPTER=postgres"
+echo "next: export SEC4_DB_ALPHA_DB_POSTGRES_DSN=..."
 echo "next: export SEC4_RT_LASM_DB_POSTGRES_DSN=..."
 popd >/dev/null
 exit 0

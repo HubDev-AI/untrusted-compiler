@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay worker connect-failure fallback now scans all remaining healthy backend candidates in cyclic order (starting from failed-backend-next index),
   - each candidate receives one bounded connect attempt before final unavailable response,
   - failed fallback candidates are marked unhealthy with deterministic cooldown/warning handling before continuing scan.

@@ -1,8 +1,8 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-02-25  
+Updated: 2026-03-05  
 Primary branch: `dev`  
-Current baseline commit: `4de2d06`
+Current baseline commit: `2bd2ae98`
 
 ## 1) Purpose
 
@@ -13,10 +13,11 @@ Use it to keep speed high without losing architecture direction.
 
 1. Multi-file modules are done (`M39-S2A` complete).
 2. LASM async runtime is heavily implemented (`M39-S2B` advanced and benchmarked).
-3. LASM DB parity for active intrinsics is done on file-backed adapter v1 (`records.log`).
+3. LASM DB parity for active intrinsics is real for `records.log`, `sqlite`, and `postgres` adapters.
 4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
 5. Fixed-cluster fast path is available through shared-port workers (reuse-port mode when `instances == autoscale-max-instances`).
-6. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
+6. Composition Contract Analyzer (`M39-S2`) is completed, and the docs+perf-sequencing lock is now lifted.
+7. `M39-S2K` is in-progress: Zed operator readiness (`scripts/check-zed-extension-operator-readiness.sh`) is part of release-operator handoff lane checks.
 
 ## 3) Backlog Priority (Immediate)
 
@@ -26,12 +27,17 @@ Use it to keep speed high without losing architecture direction.
 2. Remove remaining compatibility-only branches on alpha-critical paths where real deterministic behavior is required.
 3. Keep implementation-first cadence: targeted checks for touched functionality, broad runs only near merge confidence.
 
-### P1: Full LASM DB client after P0
+### P1: Full LASM DB client package cleanup after P0
 
 1. Replace LASM DB compatibility-bridge handling with full intrinsic runtime client dispatch (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`, `sql.q`).
-2. Keep file adapter (`records.log`) and SQLite under one intrinsic surface with deterministic parity contracts.
+2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
 3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
-4. Extract adapter layers into packages/modules only after full client path is complete and stable.
+4. Extract adapter layers into packages/modules now that runtime execution is stable.
+
+Status notes:
+- `LasmDbExecTx` tx lifecycle (commit/rollback + cleanup trigger points) is now routed through `lasm_db_client` to keep dispatch free of adapter internals.
+- `Lasm DB` runtime now routes PostgreSQL listRecords bootstrap and post-unlock record persistence through `lasm_db_client` helpers (`ensure_lasm_db_records_client_ready`, `persist_lasm_db_record_after_unlock`) so dispatch stays orchestration-focused.
+- `Lasm DB` `queryOne` now routes records-adapter lookup/materialization through `lasm_db_client` (`run_lasm_db_query_one_operation`) instead of dispatch-local records-log special handling, aligning all adapters under the same intrinsic client path.
 
 ### P2: Composition Contract Analyzer (`M39-S2`) after P1
 
@@ -43,15 +49,27 @@ Use it to keep speed high without losing architecture direction.
 1. Defer proxy/runtime feature-level performance tuning (including 1M req/s optimization campaign) until P2 is completed.
 2. Before P2 completion, only accept performance work that is required to preserve correctness/stability contracts.
 
+## Release Snapshot (2026-03-05)
+
+1. Strict alpha gate bundle is currently green on this branch (`scripts/release-alpha-gate.sh` passed end-to-end).
+2. LASM DB runtime dispatch keeps orchestration-only boundaries; adapter-specific operation/persistence stays in `lasm_db_client`.
+3. Focused DB/promote tests are green:
+   - `cargo test -p sec4 lasm_db_runtime_dispatch::tests::list_records_marker_materializes_records_payload -- --exact`
+   - `cargo test -p sec4 --test commands promote_apply_rewrites_composition_root_and_generates_scaffold -- --exact`
+   - `cargo test -p sec4 --test commands promote_dry_run_reports_blocking_preconditions_for_invalid_project -- --exact`
+
 ## 4) DB Status (Explicit)
 
-Current LASM DB is **not** a full DB client yet.
+LASM DB runtime execution paths are now implemented across adapters (`records.log`, `sqlite`, `postgres`).
 
 Current runtime status:
 
 - Dynamic state + persistence:
   - `compiler/sec4-cli/src/main.rs`
-- Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE`.
+- Stores records in `records.log` under `--db-base` / `SEC4_RT_LASM_DB_BASE` for records adapter,
+  `records.sqlite3` under the same base for sqlite, and metadata table in Postgres for postgres adapter.
+- Operator docs/runs now include explicit example-runner compatibility:
+  - `examples/lasm-alpha-full/README.md` and `examples/lasm-alpha-full/scripts/run-smoke.sh` document and support `SEC4_ALPHA_FULL_POSTGRES_DSN`, `SEC4_ALPHA_FULL_POSTGRES_DSN_FILE`, `SEC4_ALPHA_FULL_POSTGRES_RUNTIME_ENV_FILE` aliases plus `SEC4_ALPHA_FULL_AUTH_HEADER` for smoke runs.
 - Active DB intrinsic runtime dispatch is real for:
   - `sql.q`
   - `db.exec`
@@ -154,7 +172,7 @@ For each merged implementation chunk:
 Use this exact prompt in another editor:
 
 ---
-You are working in `/Users/vladimirtrifonov/src/ai/AILang`.
+You are working in `$REPO_ROOT`.
 
 Read first:
 1. `docs/codex-operator-handoff.md`
@@ -185,7 +203,7 @@ For each merged chunk:
 ## 11) Quick Start Commands
 
 ```bash
-cd /Users/vladimirtrifonov/src/ai/AILang
+cd $REPO_ROOT
 git fetch origin
 git checkout dev
 git pull --ff-only origin dev

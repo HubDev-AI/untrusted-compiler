@@ -7,5 +7,6 @@
 infra/local-postgres/.env
 infra/local-postgres/.runtime.env
 infra/local-postgres/data/
+**/.lasm-db/
 
 **/build/security_map.json

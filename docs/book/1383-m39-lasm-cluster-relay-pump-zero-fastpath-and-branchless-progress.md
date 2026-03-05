@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay pump mode resolution now has an explicit zero-relay fast path (`cursor=0`, `pump_budget=0`),
   - removed redundant debug-only branch in mode resolution,
   - relay pump loop now tracks progress with branchless boolean OR (`progressed |= pump_outcome.progressed`).

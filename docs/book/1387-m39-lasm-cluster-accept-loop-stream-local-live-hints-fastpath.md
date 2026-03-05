@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - introduced per-stream local hint slots (`stream_single_live_index`, `stream_dual_live_indices`) in the multi-sender accept path,
   - set those hints once during degraded-liveness cursor-prep (`live_count == 1` / `live_count == 2`),
   - reused the pre-resolved hints in `next_dispatch_index` resolution instead of re-checking shared option state in the two-live branch.

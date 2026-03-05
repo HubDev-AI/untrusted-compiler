@@ -5,9 +5,9 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
   - lookup rebuild now returns degraded healthy cycle span with `(has_healthy, is_identity, cycle_span)` metadata.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay selection reservation now tracks reservation span independently from total worker count,
   - degraded selection path now advances reservation cursor modulo healthy cycle span, while identity mode continues to use total worker count span.
 

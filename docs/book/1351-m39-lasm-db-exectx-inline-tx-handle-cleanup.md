@@ -5,9 +5,9 @@ Milestone: M39-S2B (LASM runtime + DB hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_db_runtime_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_db_runtime_dispatch.rs`:
   - `execTx` now removes auto-allocated inline tx handles (`db.execTx(db.tx(dbCap), query)` materialization path) from runtime tx-handle registry after successful DB execution.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/tests/commands.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/tests/commands.rs`:
   - adjusted sqlite tx-capacity command integration expectations to assert successful second inline `execTx` request and bounded tx-handle telemetry (`txHandleCount=0`, `txHandleCapacity=1`).
 
 ## Why

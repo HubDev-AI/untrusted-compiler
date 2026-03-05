@@ -1,0 +1,41 @@
+// showcase_net
+//
+// Outbound network lanes for the LASM alpha showcase.
+//
+// publicGet:
+//   allowed by default with policy/range checks in runtime.
+//
+// internalGet:
+//   blocked by default unless SEC4_RT_ALLOW_INTERNAL_NET=1.
+
+fn publicGet() effects { net } -> Int {
+  // Query args:
+  //   url=<absolute URL>
+  let raw = req.query("url");
+  let target = url.public(raw);
+  let net = NetCap();
+  let body = httpClient.get(net, target);
+  if body == 0 {
+    res.text(500, "public get returned empty body handle");
+    return 0;
+  };
+
+  res.text(200, "public get succeeded");
+  0
+}
+
+fn internalGet() effects { net } -> Int {
+  // Query args:
+  //   url=<absolute internal URL>
+  let raw = req.query("url");
+  let target = url.internal(raw);
+  let net = InternalNetCap();
+  let body = httpClient.getInternal(net, target);
+  if body == 0 {
+    res.text(500, "internal get returned empty body handle");
+    return 0;
+  };
+
+  res.text(200, "internal get succeeded");
+  0
+}

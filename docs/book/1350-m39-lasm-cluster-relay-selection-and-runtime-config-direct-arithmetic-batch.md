@@ -5,11 +5,11 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - hoisted relay selection reservation chunk (`max(relay_accept_batch_max, relay_selection_reservation_min_chunk)`) out of the per-request selection branch.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`:
   - replaced reverse scan + branch loop for post-first-healthy wrap fill with direct tail-slice fill.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`:
   - changed desired autoscale instance calculation to direct ceil-division math on active connections with explicit `target_connections_per_instance >= 1` guard.
 
 ## Why

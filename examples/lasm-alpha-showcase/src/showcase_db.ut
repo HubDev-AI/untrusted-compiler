@@ -1,0 +1,77 @@
+// showcase_db
+//
+// DB routes for the LASM alpha showcase.
+//
+// All DB input is intentionally taken from query args so this can be exercised
+// with curl in a terminal without helper tooling.
+
+fn execRecord() effects { net, db.write } -> Int {
+  // Query args:
+  //   template=<sql template>
+  //   params=<json encoded parameters>
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+
+  db.exec(db, query);
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn execTxRecord() effects { net, db.write, db.tx } -> Int {
+  // Query args:
+  //   template=<sql template>
+  //   params=<json encoded parameters>
+  let db = DbCap();
+  let tx = db.tx(db);
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn writeAndQueryRecord() effects { net, db.write, db.read } -> Int {
+  // Query args:
+  //   write_template=<sql template>
+  //   write_params=<json encoded parameters>
+  //   query_template=<sql template>
+  //   query_params=<json encoded parameters>
+  //   row_schema=<row schema id>
+  let db = DbCap();
+  let writeTemplate = validate.nonEmpty(req.query("write_template"));
+  let writeParams = validate.nonEmpty(req.query("write_params"));
+  let queryTemplate = validate.nonEmpty(req.query("query_template"));
+  let queryParams = validate.nonEmpty(req.query("query_params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.exec(db, sql.q(writeTemplate, writeParams));
+  db.queryOne(db, sql.q(queryTemplate, queryParams), rowSchema);
+  res.json(200, "DbWriteAndQueryResponse", 0);
+  0
+}
+
+fn queryOneRecord() effects { net, db.read } -> Int {
+  // Query args:
+  //   template=<sql template>
+  //   params=<json encoded parameters>
+  //   row_schema=<row schema id>
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.queryOne(db, sql.q(template, params), rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn listRecords() effects { net } -> Int {
+  // List currently persisted records from the selected adapter.
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}

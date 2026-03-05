@@ -5,11 +5,11 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`:
   - cluster fixed reuse-port mode gate now treats explicit `--reuse-port` as an override in cluster mode,
   - `fixed_cluster_reuse_port_mode` now resolves as:
     - `cluster_mode && (max_instances == instances || reuse_port)`.
-- Added command test in `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/tests/commands.rs`:
+- Added command test in `$REPO_ROOT/compiler/sec4-cli/tests/commands.rs`:
   - `run_command_rejects_cluster_status_json_when_reuse_port_forces_fixed_cluster_mode`.
 
 ## Why

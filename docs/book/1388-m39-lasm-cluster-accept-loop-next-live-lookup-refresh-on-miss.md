@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added `lookup_lasm_cluster_next_live_sender_index_with_refresh_on_miss(...)`,
   - degraded-mode dispatch-cursor realignment now uses this helper,
   - degraded-mode next-dispatch index resolution now uses the same helper.

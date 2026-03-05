@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added `LasmClusterAcceptDispatchCounters` to group saturation/fallback/short-circuit local counters,
   - updated unavailable-stream and dispatch-counter flush helpers to consume this counter struct,
   - rewired accept-loop dispatch/error call sites to use shared counter state instead of passing four separate local counter references each time.

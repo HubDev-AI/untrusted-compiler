@@ -36,7 +36,7 @@ sec4 check --path examples/zed-plugin-smoke
 
 ## Zed smoke checklist
 
-Open `/Users/vladimirtrifonov/src/ai/AILang/examples/zed-plugin-smoke` in Zed.
+Open `$REPO_ROOT/examples/zed-plugin-smoke` in Zed.
 
 1. **Diagnostics stream**
 - Open `playground/lsp-errors.ut`.

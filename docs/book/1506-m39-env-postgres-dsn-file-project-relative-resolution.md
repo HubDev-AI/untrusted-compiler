@@ -2,7 +2,7 @@
 
 ## What changed
 
-1. Extended `resolve_lasm_dynamic_db_postgres_dsn(...)` to accept optional project root context and resolve `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE=<relative>` against that root when cwd-relative lookup does not exist.
+1. Extended `resolve_lasm_dynamic_db_postgres_dsn(...)` to accept optional project root context and resolve `SEC4_DB_ALPHA_POSTGRES_DSN_FILE(_PATH)` or `SEC4_RT_LASM_DB_POSTGRES_DSN_FILE(_PATH)` values against that root when cwd-relative lookup does not exist.
 2. Updated LASM dynamic-state bootstrap to pass selected project root into DB DSN resolver:
    - `sec4 run` path,
    - `sec4 lasm-smoke` path.

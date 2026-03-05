@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_status_json.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_status_json.rs`.
 - Moved status snapshot and writer helpers out of `main.rs`:
   - `LasmClusterStatusSnapshot`
   - `write_lasm_cluster_status_json(...)`

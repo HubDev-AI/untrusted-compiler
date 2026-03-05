@@ -4,7 +4,7 @@ This slice hardens `zed-extension` language-server launch behavior for local dev
 
 ## What changed
 
-1. Added deterministic launch resolution in `/Users/vladimirtrifonov/src/ai/AILang/zed-extension/src/lib.rs`:
+1. Added deterministic launch resolution in `$REPO_ROOT/zed-extension/src/lib.rs`:
    - reads optional `lsp.sec4audit-lsp.binary.path` override from Zed settings,
    - otherwise resolves `sec4audit-language-server` from `PATH`,
    - otherwise checks local workspace fallback paths under `target/{debug,release}` and `compiler/sec4-lsp/target/{debug,release}`.

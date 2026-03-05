@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added `flush_lasm_cluster_accept_post_batch_counters(...)`,
   - moved end-of-batch active/fallback/short-circuit counter flush logic into this helper,
   - accept-loop main body now calls the helper once after accepted-batch handling.

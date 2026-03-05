@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
   - `handle_lasm_cluster_accept_dispatch_error` now writes relay-saturated and relay-unavailable static HTTP response buffers directly,
   - removed helper-dispatch indirection for these two overload paths in the accept-dispatch handler,
   - kept `write_lasm_cluster_unavailable_response(...)` for no-healthy-worker and worker-unavailable response paths used by relay workers.

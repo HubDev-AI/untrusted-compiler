@@ -8,7 +8,7 @@ This slice adds a real PostgreSQL-backed LASM DB adapter path for runtime DB int
    - CLI: `sec4 run --db-adapter postgres`
    - Env adapter override: `SEC4_RT_LASM_DB_ADAPTER=postgres`
 2. Added strict Postgres DSN contract:
-   - required env: `SEC4_RT_LASM_DB_POSTGRES_DSN`
+   - required env: `SEC4_DB_ALPHA_DB_POSTGRES_DSN` or `SEC4_RT_LASM_DB_POSTGRES_DSN`
    - deterministic startup failure when missing.
 3. Extended LASM dynamic DB state to support Postgres metadata storage:
    - adapter label now includes `postgres`,

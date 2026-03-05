@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - on primary selected backend connect failure, relay worker now marks primary backend unhealthy and performs one immediate connect attempt to another currently-healthy backend (if available),
   - if fallback connect succeeds, request proceeds via relay pump path without emitting worker-unavailable response,
   - if fallback connect also fails (or no alternate healthy backend exists), behavior falls back to existing worker-unavailable response path.

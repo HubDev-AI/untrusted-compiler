@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - extracted relay connect-success setup into `initialize_lasm_cluster_relay_connection(...)`,
   - both primary and fallback connect-success paths now call this helper for:
     - `TCP_NODELAY` setup,

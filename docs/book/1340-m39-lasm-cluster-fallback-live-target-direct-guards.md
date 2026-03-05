@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - fallback scan slot limit now uses direct `sender_count - 1` under existing `sender_count > 1` invariant,
   - fallback live-target derivation now uses direct guarded decrement (`live_count - 1`) instead of `saturating_sub` for:
     - initial `scan_live_target`,

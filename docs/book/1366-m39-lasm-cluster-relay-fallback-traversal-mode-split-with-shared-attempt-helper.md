@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added shared helper `try_lasm_cluster_relay_fallback_connect(...)` for one fallback connect attempt,
   - fallback traversal now uses explicit mode loops:
     - single-healthy candidate mode,

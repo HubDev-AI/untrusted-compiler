@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`.
 - Moved relay-topology helper functions out of `main.rs`:
   - `lasm_cluster_next_index_wrapped(...)`
   - `lasm_cluster_next_live_sender_index(...)`

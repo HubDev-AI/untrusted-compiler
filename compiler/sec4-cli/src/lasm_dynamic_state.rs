@@ -1,9 +1,8 @@
 use crate::lasm_db_adapter_state::{
-    connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
-    ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
-    load_lasm_dynamic_db_records_from_sqlite, normalize_lasm_db_sqlite_journal_mode,
-    normalize_lasm_db_sqlite_synchronous, parse_lasm_db_postgres_tls_mode,
-    resolve_lasm_db_sqlite_journal_mode, resolve_lasm_db_sqlite_synchronous, LasmDbPostgresTlsMode,
+    connect_lasm_dynamic_db_records_sqlite, load_lasm_dynamic_db_records_from_sqlite,
+    normalize_lasm_db_sqlite_journal_mode, normalize_lasm_db_sqlite_synchronous,
+    parse_lasm_db_postgres_tls_mode, resolve_lasm_db_sqlite_journal_mode,
+    resolve_lasm_db_sqlite_synchronous, LasmDbPostgresTlsMode,
     LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT,
     LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_TLS_MODE_ENV,
     LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
@@ -16,7 +15,7 @@ use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
@@ -39,6 +38,12 @@ pub(crate) struct LasmDbRecord {
     pub(crate) created_at_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LasmDbTxState {
+    pub(crate) db: i64,
+    pub(crate) active: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct LasmDynamicResponseState {
     pub(crate) users_by_id: HashMap<String, serde_json::Value>,
@@ -54,6 +59,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_sqlite_connection: Option<rusqlite::Connection>,
     pub(crate) db_records_postgres_dsn: Option<String>,
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
+    pub(crate) db_records_postgres_bootstrapped: bool,
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
     pub(crate) db_records_postgres_statement_cache_order: VecDeque<String>,
     pub(crate) db_postgres_placeholder_max_cache: HashMap<String, usize>,
@@ -63,7 +69,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_postgres_placeholder_cache_max: usize,
     pub(crate) db_postgres_statement_cache_evictions_total: u64,
     pub(crate) db_postgres_placeholder_cache_evictions_total: u64,
-    pub(crate) db_tx_handles: HashMap<i64, i64>,
+    pub(crate) db_tx_handles: HashMap<i64, LasmDbTxState>,
     pub(crate) db_tx_max_handles: usize,
     pub(crate) db_postgres_statement_timeout_ms: u64,
     pub(crate) db_postgres_lock_timeout_ms: u64,
@@ -326,7 +332,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 LASM_DB_RECORDS_MAX_DEFAULT,
             )
         });
-    let base = resolve_lasm_dynamic_store_base(explicit_db_base);
+    let base = resolve_lasm_dynamic_store_base(project_path, explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
@@ -336,8 +342,29 @@ pub(crate) fn build_lasm_dynamic_response_state(
         explicit_db_postgres_dsn,
         project_path,
     )?;
+    if let Some(path) = users_store_path.as_ref() {
+        if let Err(message) =
+            ensure_lasm_dynamic_db_storage_path(path.as_path(), false, db_records_adapter)
+        {
+            eprintln!("warning: {message}");
+        }
+    }
+    if let Some(path) = db_records_store_path.as_ref() {
+        if let Err(message) =
+            ensure_lasm_dynamic_db_storage_path(path.as_path(), true, db_records_adapter)
+        {
+            eprintln!("warning: {message}");
+        }
+    }
+    if let Some(path) = db_records_sqlite_store_path.as_ref() {
+        if let Err(message) =
+            ensure_lasm_dynamic_db_storage_path(path.as_path(), false, db_records_adapter)
+        {
+            eprintln!("warning: {message}");
+        }
+    }
     let mut db_records_sqlite_connection = None;
-    let mut db_records_postgres_client = None;
+    let db_records_postgres_client = None;
     let users_by_id = users_store_path
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
@@ -370,26 +397,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
                 records
             })
             .unwrap_or_default(),
-        LasmDbRecordsAdapter::Postgres => {
-            let dsn = db_records_postgres_dsn
-                .as_ref()
-                .ok_or_else(|| {
-                    "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
-                        .to_string()
-                })?
-                .as_str();
-            let mut client = connect_lasm_dynamic_db_records_postgres(
-                dsn,
-                db_postgres_tls_mode,
-                db_postgres_statement_timeout_ms,
-                db_postgres_lock_timeout_ms,
-                db_postgres_connect_timeout_ms,
-            )?;
-            ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
-            let records = load_lasm_dynamic_db_records_from_postgres(&mut client)?;
-            db_records_postgres_client = Some(client);
-            records
-        }
+        LasmDbRecordsAdapter::Postgres => Vec::new(),
     };
     let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
     let db_record_signatures = build_lasm_db_record_signature_counts(&db_records);
@@ -421,6 +429,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_sqlite_connection,
         db_records_postgres_dsn,
         db_records_postgres_client,
+        db_records_postgres_bootstrapped: false,
         db_records_postgres_statement_cache,
         db_records_postgres_statement_cache_order,
         db_postgres_placeholder_max_cache,
@@ -531,6 +540,38 @@ fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json:
         .iter()
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
+}
+
+fn ensure_lasm_dynamic_db_storage_path(
+    path: &Path,
+    create_if_missing: bool,
+    adapter: LasmDbRecordsAdapter,
+) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic storage directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    if !create_if_missing {
+        return Ok(());
+    }
+    if adapter != LasmDbRecordsAdapter::RecordsLog {
+        return Ok(());
+    }
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|err| {
+            format!(
+                "could not create LASM dynamic records log file `{}`: {err}",
+                path.display()
+            )
+        })?;
+    Ok(())
 }
 
 pub(crate) fn persist_lasm_dynamic_users_to_disk(

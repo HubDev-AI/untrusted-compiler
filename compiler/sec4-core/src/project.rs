@@ -101,7 +101,9 @@ fn determine_source_root(project_root: &Path, entry_path: &Path) -> PathBuf {
     }
 }
 
-fn build_module_candidates(source_root: &Path) -> Result<BTreeMap<String, Vec<PathBuf>>, Vec<Diagnostic>> {
+fn build_module_candidates(
+    source_root: &Path,
+) -> Result<BTreeMap<String, Vec<PathBuf>>, Vec<Diagnostic>> {
     let mut files = Vec::new();
     collect_ut_files_recursive(source_root, &mut files)?;
     files.sort();
@@ -115,7 +117,10 @@ fn build_module_candidates(source_root: &Path) -> Result<BTreeMap<String, Vec<Pa
     Ok(candidates)
 }
 
-fn collect_ut_files_recursive(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), Vec<Diagnostic>> {
+fn collect_ut_files_recursive(
+    path: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), Vec<Diagnostic>> {
     if !path.exists() {
         return Ok(());
     }
@@ -128,27 +133,23 @@ fn collect_ut_files_recursive(path: &Path, files: &mut Vec<PathBuf>) -> Result<(
     }
 
     let entries = fs::read_dir(path).map_err(|err| {
-        vec![
-            Diagnostic::error(
-                "M0301",
-                "could not read module directory",
-                Span::point(path.to_path_buf(), 1, 1),
-            )
-            .with_note(err.to_string()),
-        ]
+        vec![Diagnostic::error(
+            "M0301",
+            "could not read module directory",
+            Span::point(path.to_path_buf(), 1, 1),
+        )
+        .with_note(err.to_string())]
     })?;
 
     let mut children = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|err| {
-            vec![
-                Diagnostic::error(
-                    "M0301",
-                    "could not read module directory entry",
-                    Span::point(path.to_path_buf(), 1, 1),
-                )
-                .with_note(err.to_string()),
-            ]
+            vec![Diagnostic::error(
+                "M0301",
+                "could not read module directory entry",
+                Span::point(path.to_path_buf(), 1, 1),
+            )
+            .with_note(err.to_string())]
         })?;
         children.push(entry.path());
     }
@@ -167,17 +168,12 @@ fn collect_ut_files_recursive(path: &Path, files: &mut Vec<PathBuf>) -> Result<(
 
 fn derive_module_name(source_root: &Path, file_path: &Path) -> Result<String, Vec<Diagnostic>> {
     let rel = file_path.strip_prefix(source_root).map_err(|_| {
-        vec![
-            Diagnostic::error(
-                "M0302",
-                "module file must be under source root",
-                Span::point(file_path.to_path_buf(), 1, 1),
-            )
-            .with_note(format!(
-                "source root: {}",
-                source_root.display()
-            )),
-        ]
+        vec![Diagnostic::error(
+            "M0302",
+            "module file must be under source root",
+            Span::point(file_path.to_path_buf(), 1, 1),
+        )
+        .with_note(format!("source root: {}", source_root.display()))]
     })?;
 
     let mut parts = rel
@@ -200,14 +196,14 @@ fn derive_module_name(source_root: &Path, file_path: &Path) -> Result<String, Ve
 
     if stem == "mod" {
         if parts.is_empty() {
-            return Err(vec![
-                Diagnostic::error(
-                    "M0302",
-                    "root `mod.ut` is not supported",
-                    Span::point(file_path.to_path_buf(), 1, 1),
-                )
-                .with_note("rename the file (for example `main.ut`) or move it under a module directory"),
-            ]);
+            return Err(vec![Diagnostic::error(
+                "M0302",
+                "root `mod.ut` is not supported",
+                Span::point(file_path.to_path_buf(), 1, 1),
+            )
+            .with_note(
+                "rename the file (for example `main.ut`) or move it under a module directory",
+            )]);
         }
     } else {
         parts.push(stem.to_string());
@@ -296,9 +292,10 @@ fn resolve_import_target(
     loaded: &HashMap<String, ResolvedModuleSource>,
 ) -> Result<Option<PathBuf>, Diagnostic> {
     let Some(paths) = candidates.get(&import.module_path) else {
-        let mut diagnostic = Diagnostic::error("M0303", "module import not found", import.span.clone())
-            .with_note(format!("importer module: {importer}"))
-            .with_note(format!("missing module: {}", import.module_path));
+        let mut diagnostic =
+            Diagnostic::error("M0303", "module import not found", import.span.clone())
+                .with_note(format!("importer module: {importer}"))
+                .with_note(format!("missing module: {}", import.module_path));
         for suggestion in suggest_module_paths(import.module_path.as_str(), candidates) {
             diagnostic = diagnostic.with_note(format!("did you mean: {suggestion}"));
         }
@@ -306,10 +303,13 @@ fn resolve_import_target(
     };
 
     if paths.len() > 1 {
-        let mut diagnostic =
-            Diagnostic::error("M0304", "ambiguous module import target", import.span.clone())
-                .with_note(format!("importer module: {importer}"))
-                .with_note(format!("module: {}", import.module_path));
+        let mut diagnostic = Diagnostic::error(
+            "M0304",
+            "ambiguous module import target",
+            import.span.clone(),
+        )
+        .with_note(format!("importer module: {importer}"))
+        .with_note(format!("module: {}", import.module_path));
         for candidate in paths {
             diagnostic = diagnostic.with_note(format!("candidate: {}", candidate.display()));
         }
@@ -319,12 +319,14 @@ fn resolve_import_target(
     let target = paths[0].clone();
     if let Some(existing) = loaded.get(&import.module_path) {
         if existing.file_path != target {
-            return Err(
-                Diagnostic::error("M0304", "ambiguous module import target", import.span.clone())
-                    .with_note(format!("importer module: {importer}"))
-                    .with_note(format!("existing target: {}", existing.file_path.display()))
-                    .with_note(format!("candidate target: {}", target.display())),
-            );
+            return Err(Diagnostic::error(
+                "M0304",
+                "ambiguous module import target",
+                import.span.clone(),
+            )
+            .with_note(format!("importer module: {importer}"))
+            .with_note(format!("existing target: {}", existing.file_path.display()))
+            .with_note(format!("candidate target: {}", target.display())));
         }
     }
 
@@ -397,16 +399,17 @@ fn cycle_diagnostic(import: &ModuleImport, stack: &[String]) -> Diagnostic {
         .with_note(format!("cycle: {}", chain.join(" -> ")))
 }
 
-fn load_module_source(module_path: &str, file_path: &Path) -> Result<ResolvedModuleSource, Vec<Diagnostic>> {
+fn load_module_source(
+    module_path: &str,
+    file_path: &Path,
+) -> Result<ResolvedModuleSource, Vec<Diagnostic>> {
     let raw_source = fs::read_to_string(file_path).map_err(|err| {
-        vec![
-            Diagnostic::error(
-                "M0301",
-                "could not read module source file",
-                Span::point(file_path.to_path_buf(), 1, 1),
-            )
-            .with_note(err.to_string()),
-        ]
+        vec![Diagnostic::error(
+            "M0301",
+            "could not read module source file",
+            Span::point(file_path.to_path_buf(), 1, 1),
+        )
+        .with_note(err.to_string())]
     })?;
 
     let (imports, source_without_uses) = parse_use_directives(file_path, &raw_source)?;
@@ -503,42 +506,34 @@ fn parse_use_module_path(
     let module_with_semicolon = rest.trim_start();
     if !module_with_semicolon.ends_with(';') {
         let col = line.find('u').unwrap_or(0) + 1;
-        return Err(
-            Diagnostic::error(
-                "M0306",
-                "invalid `use` directive",
-                Span::point(file_path.to_path_buf(), line_no, col),
-            )
-            .with_note("expected syntax: use module.path;"),
-        );
+        return Err(Diagnostic::error(
+            "M0306",
+            "invalid `use` directive",
+            Span::point(file_path.to_path_buf(), line_no, col),
+        )
+        .with_note("expected syntax: use module.path;"));
     }
 
-    let module_path = module_with_semicolon
-        .trim_end_matches(';')
-        .trim();
+    let module_path = module_with_semicolon.trim_end_matches(';').trim();
     if module_path.is_empty() {
         let col = line.find('u').unwrap_or(0) + 1;
-        return Err(
-            Diagnostic::error(
-                "M0306",
-                "invalid `use` directive",
-                Span::point(file_path.to_path_buf(), line_no, col),
-            )
-            .with_note("expected syntax: use module.path;"),
-        );
+        return Err(Diagnostic::error(
+            "M0306",
+            "invalid `use` directive",
+            Span::point(file_path.to_path_buf(), line_no, col),
+        )
+        .with_note("expected syntax: use module.path;"));
     }
 
     if !is_valid_module_path(module_path) {
         let col = line.find('u').unwrap_or(0) + 1;
-        return Err(
-            Diagnostic::error(
-                "M0306",
-                "invalid module path in `use` directive",
-                Span::point(file_path.to_path_buf(), line_no, col),
-            )
-            .with_note(format!("found: `{module_path}`"))
-            .with_note("module path segments must match [A-Za-z_][A-Za-z0-9_]*"),
-        );
+        return Err(Diagnostic::error(
+            "M0306",
+            "invalid module path in `use` directive",
+            Span::point(file_path.to_path_buf(), line_no, col),
+        )
+        .with_note(format!("found: `{module_path}`"))
+        .with_note("module path segments must match [A-Za-z_][A-Za-z0-9_]*"));
     }
 
     let col = line.find('u').unwrap_or(0) + 1;
@@ -601,18 +596,25 @@ mod tests {
         let root = temp_dir("sec4-modules-pass");
         fs::create_dir_all(root.join("src")).expect("src should exist");
         write_manifest(&root);
-        fs::write(root.join("src/main.ut"), "use util;\n\nfn main() -> Int {\n  helper();\n  0\n}\n")
-            .expect("main should be written");
+        fs::write(
+            root.join("src/main.ut"),
+            "use util;\n\nfn main() -> Int {\n  helper();\n  0\n}\n",
+        )
+        .expect("main should be written");
         fs::write(root.join("src/util.ut"), "fn helper() -> Int {\n  0\n}\n")
             .expect("util should be written");
 
         let manifest = load_manifest(&root);
-        let resolved = resolve_project_modules(&root, &manifest).expect("module graph should resolve");
+        let resolved =
+            resolve_project_modules(&root, &manifest).expect("module graph should resolve");
 
         assert_eq!(resolved.modules.len(), 2);
         assert_eq!(resolved.modules[0].module_path, "util");
         assert_eq!(resolved.modules[1].module_path, "main");
-        assert!(resolved.modules[1].imports.iter().any(|import| import.module_path == "util"));
+        assert!(resolved.modules[1]
+            .imports
+            .iter()
+            .any(|import| import.module_path == "util"));
 
         fs::remove_dir_all(root).expect("temp cleanup should succeed");
     }
@@ -622,8 +624,11 @@ mod tests {
         let root = temp_dir("sec4-modules-missing");
         fs::create_dir_all(root.join("src")).expect("src should exist");
         write_manifest(&root);
-        fs::write(root.join("src/main.ut"), "use missing.module;\n\nfn main() -> Int {\n  0\n}\n")
-            .expect("main should be written");
+        fs::write(
+            root.join("src/main.ut"),
+            "use missing.module;\n\nfn main() -> Int {\n  0\n}\n",
+        )
+        .expect("main should be written");
 
         let manifest = load_manifest(&root);
         let diagnostics = resolve_project_modules(&root, &manifest)
@@ -639,8 +644,11 @@ mod tests {
         let root = temp_dir("sec4-modules-missing-suggestion");
         fs::create_dir_all(root.join("src")).expect("src should exist");
         write_manifest(&root);
-        fs::write(root.join("src/main.ut"), "use utl;\n\nfn main() -> Int {\n  helper();\n  0\n}\n")
-            .expect("main should be written");
+        fs::write(
+            root.join("src/main.ut"),
+            "use utl;\n\nfn main() -> Int {\n  helper();\n  0\n}\n",
+        )
+        .expect("main should be written");
         fs::write(root.join("src/util.ut"), "fn helper() -> Int {\n  0\n}\n")
             .expect("util should be written");
 
@@ -653,7 +661,10 @@ mod tests {
             .find(|diag| diag.code == "M0303")
             .expect("missing import diagnostic should exist");
         assert!(
-            missing_import.notes.iter().any(|note| note == "did you mean: util"),
+            missing_import
+                .notes
+                .iter()
+                .any(|note| note == "did you mean: util"),
             "missing import diagnostics should include deterministic close-match suggestion: {:?}",
             missing_import.notes
         );
@@ -666,12 +677,18 @@ mod tests {
         let root = temp_dir("sec4-modules-ambiguous");
         fs::create_dir_all(root.join("src/foo")).expect("src/foo should exist");
         write_manifest(&root);
-        fs::write(root.join("src/main.ut"), "use foo;\n\nfn main() -> Int {\n  0\n}\n")
-            .expect("main should be written");
+        fs::write(
+            root.join("src/main.ut"),
+            "use foo;\n\nfn main() -> Int {\n  0\n}\n",
+        )
+        .expect("main should be written");
         fs::write(root.join("src/foo.ut"), "fn from_file() -> Int {\n  0\n}\n")
             .expect("foo file should be written");
-        fs::write(root.join("src/foo/mod.ut"), "fn from_mod() -> Int {\n  0\n}\n")
-            .expect("foo mod file should be written");
+        fs::write(
+            root.join("src/foo/mod.ut"),
+            "fn from_mod() -> Int {\n  0\n}\n",
+        )
+        .expect("foo mod file should be written");
 
         let manifest = load_manifest(&root);
         let diagnostics = resolve_project_modules(&root, &manifest)
@@ -687,16 +704,25 @@ mod tests {
         let root = temp_dir("sec4-modules-cycle");
         fs::create_dir_all(root.join("src")).expect("src should exist");
         write_manifest(&root);
-        fs::write(root.join("src/main.ut"), "use a;\n\nfn main() -> Int {\n  0\n}\n")
-            .expect("main should be written");
-        fs::write(root.join("src/a.ut"), "use b;\n\nfn fa() -> Int {\n  0\n}\n")
-            .expect("a should be written");
-        fs::write(root.join("src/b.ut"), "use a;\n\nfn fb() -> Int {\n  0\n}\n")
-            .expect("b should be written");
+        fs::write(
+            root.join("src/main.ut"),
+            "use a;\n\nfn main() -> Int {\n  0\n}\n",
+        )
+        .expect("main should be written");
+        fs::write(
+            root.join("src/a.ut"),
+            "use b;\n\nfn fa() -> Int {\n  0\n}\n",
+        )
+        .expect("a should be written");
+        fs::write(
+            root.join("src/b.ut"),
+            "use a;\n\nfn fb() -> Int {\n  0\n}\n",
+        )
+        .expect("b should be written");
 
         let manifest = load_manifest(&root);
-        let diagnostics = resolve_project_modules(&root, &manifest)
-            .expect_err("cycle should fail resolution");
+        let diagnostics =
+            resolve_project_modules(&root, &manifest).expect_err("cycle should fail resolution");
 
         assert!(diagnostics.iter().any(|diag| diag.code == "M0305"));
 

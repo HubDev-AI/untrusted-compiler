@@ -5,13 +5,13 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_workers.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_workers.rs`:
   - added panic-aware accept worker join helper,
   - accept worker orchestration now returns deterministic `Err(...)` when worker joins report panics.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`:
   - `finalize_lasm_cluster_runtime(...)` now returns `LasmClusterShutdownSummary` instead of `()`,
   - summary includes panic flags/count for relay workers, autoscale thread, and status-writer thread.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`:
   - cluster runtime now reports shutdown panic summary deterministically,
   - successful run path now fails with non-zero exit when shutdown detects background thread panic(s).
 

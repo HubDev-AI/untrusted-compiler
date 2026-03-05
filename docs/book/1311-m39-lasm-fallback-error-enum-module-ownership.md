@@ -6,9 +6,9 @@ Milestone: M39-S2B (LASM runtime load hardening)
 ## What Changed
 
 - Updated:
-  - `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`
-  - `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`
-  - `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`
+  - `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`
+  - `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_send.rs`
+  - `$REPO_ROOT/compiler/sec4-cli/src/main.rs`
 - Moved `LasmClusterRelayDispatchError` definition from `main.rs` into `lasm_cluster_fallback_dispatch.rs`.
 - Updated main/send modules to import enum ownership from fallback module.
 

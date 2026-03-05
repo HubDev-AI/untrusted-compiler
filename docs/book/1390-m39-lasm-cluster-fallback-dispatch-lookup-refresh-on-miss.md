@@ -6,8 +6,8 @@ Milestone: M39-S2B (LASM runtime load hardening)
 ## What Changed
 
 - Updated fallback dispatch in:
-  - `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`
-  - `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`
+  - `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`
+  - `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`
 - Changes:
   - `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now receives mutable next-live lookup state,
   - fallback scan/index helpers now refresh next-live lookup table once on lookup miss and retry,

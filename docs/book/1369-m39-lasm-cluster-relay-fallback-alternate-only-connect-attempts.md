@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - fallback connect traversal now excludes the primary-selected backend that just failed connect,
   - identity traversal now scans exactly `worker_count - 1` alternates,
   - healthy-lookup traversal now defensively skips the selected backend index if present.

@@ -13,13 +13,13 @@ Durable local example that proves LASM runtime against a real Postgres connectio
 
 ## Layout
 
-- Shared infra: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres`
-- Example app: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e`
+- Shared infra: `$REPO_ROOT/infra/local-postgres`
+- Example app: `$REPO_ROOT/examples/postgres-e2e`
 
 ## 1) Start local Postgres
 
 ```bash
-/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh
+$REPO_ROOT/infra/local-postgres/scripts/up.sh
 ```
 
 If `.env` is missing, it is created from `.env.example`.
@@ -27,13 +27,13 @@ If `.env` is missing, it is created from `.env.example`.
 ## 2) Validate example compiles
 
 ```bash
-cargo run -p sec4 -- check --path /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e
+cargo run -p sec4 -- check --path $REPO_ROOT/examples/postgres-e2e
 ```
 
 ## 3) Run automated smoke flow
 
 ```bash
-/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/scripts/smoke.sh
+$REPO_ROOT/examples/postgres-e2e/scripts/smoke.sh
 ```
 
 Expected output ends with:
@@ -48,11 +48,11 @@ Run server manually:
 
 ```bash
 set -a
-source /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/.env
+source $REPO_ROOT/infra/local-postgres/.env
 set +a
 export SEC4_RT_LASM_DB_ADAPTER=postgres
 cargo run -p sec4 -- run \
-  --path /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e \
+  --path $REPO_ROOT/examples/postgres-e2e \
   --backend lasm \
   --port 18080
 ```
@@ -68,8 +68,8 @@ curl -i 'http://127.0.0.1:18080/db/records'
 
 ## Troubleshooting
 
-- `db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set`
+- `db adapter postgres requires SEC4_DB_ALPHA_DB_POSTGRES_DSN (legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN) to be set`
   - Ensure `.env` exists and is sourced, or export DSN explicitly.
 - Postgres connect/auth failures
-  - Verify container health: `docker compose -f /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/docker-compose.yml ps`
+  - Verify container health: `docker compose -f $REPO_ROOT/infra/local-postgres/docker-compose.yml ps`
   - Verify DSN user/password/db in `.env`.

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_autoscale_loop.rs`:
   - saturation batch rounding now uses direct quotient+remainder arithmetic under the non-zero flush-batch invariant,
   - scale-up target bounding now uses direct remaining-capacity math instead of `saturating_add` chains,
   - scale-down floor calculation now uses direct bounded subtraction instead of `saturating_sub`.

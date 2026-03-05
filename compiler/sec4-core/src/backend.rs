@@ -88,8 +88,8 @@ pub fn emit_program_with_backend(backend: BackendKind, program: &MirProgram) -> 
 #[cfg(test)]
 mod tests {
     use super::{
-        emit_program_with_backend, BackendEmitter, BackendKind, CBackendEmitter, LasmBackendEmitter,
-        LasmJsonBackendEmitter, RuntimeAssets,
+        emit_program_with_backend, BackendEmitter, BackendKind, CBackendEmitter,
+        LasmBackendEmitter, LasmJsonBackendEmitter, RuntimeAssets,
     };
     use crate::c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
     use crate::lasm_backend::{emit_lasm_program, emit_lasm_program_json};

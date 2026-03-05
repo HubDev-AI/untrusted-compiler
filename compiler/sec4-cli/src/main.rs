@@ -4,7 +4,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, TrySendError};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
-    build_security_map_with_allows, emit_program_with_backend, parse_source,
+    build_security_map_with_allows, collect_promote_binding_references,
+    collect_promote_contract_violations, emit_program_with_backend, parse_source,
     render_security_audit_text, run_security_audit_with_baseline, should_fail,
     strip_allow_annotations, summarize_history_window, validate_lockfile_stub,
     write_build_metadata, write_lockfile_stub, write_sbom, write_security_map,
@@ -38,6 +39,7 @@ mod lasm_cluster_status_json;
 mod lasm_cluster_status_writer;
 mod lasm_db_adapter_state;
 mod lasm_db_cli;
+mod lasm_db_client;
 mod lasm_db_config;
 mod lasm_db_headers;
 mod lasm_db_plan;
@@ -49,6 +51,7 @@ mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_postgres_persist;
 mod lasm_db_runtime_records_log;
 mod lasm_db_runtime_sqlite;
+mod lasm_db_smoke_summary;
 mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
@@ -93,6 +96,7 @@ pub(crate) use lasm_db_headers::{
     LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
+use lasm_db_smoke_summary::build_lasm_smoke_db_summary;
 pub(crate) use lasm_dynamic_state::{
     append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
     persist_lasm_dynamic_users_to_disk, LasmDbRecord, LasmDbRecordsAdapter,
@@ -500,6 +504,8 @@ fn apply_lasm_postgres_runtime_env_overrides(
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
 ) {
     if let Some(value) = db_postgres_shared_client_max_idle_per_key {
         std::env::set_var(
@@ -528,6 +534,18 @@ fn apply_lasm_postgres_runtime_env_overrides(
     if let Some(value) = db_postgres_persist_batch_max {
         std::env::set_var(
             "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_statement_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_placeholder_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
             value.to_string(),
         );
     }
@@ -1186,6 +1204,10 @@ fn cmd_lasm_smoke(
         resolved_lasm_db_usize.db_postgres_statement_cache_max;
     let explicit_db_postgres_placeholder_cache_max =
         resolved_lasm_db_usize.db_postgres_placeholder_cache_max;
+    let explicit_db_postgres_statement_cache_max_u64 =
+        explicit_db_postgres_statement_cache_max.map(|value| value as u64);
+    let explicit_db_postgres_placeholder_cache_max_u64 =
+        explicit_db_postgres_placeholder_cache_max.map(|value| value as u64);
     let explicit_db_postgres_retryable_conflict_retry_max =
         resolved_lasm_db_usize.db_postgres_retryable_conflict_retry_max;
     let explicit_db_sqlite_lock_retry_max = resolved_lasm_db_usize.db_sqlite_lock_retry_max;
@@ -1196,6 +1218,8 @@ fn cmd_lasm_smoke(
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
         db_postgres_persist_queue_full_mode,
+        explicit_db_postgres_statement_cache_max_u64,
+        explicit_db_postgres_placeholder_cache_max_u64,
     );
 
     let runtime_actions = if let Some(script) = runtime_script {
@@ -1373,61 +1397,7 @@ fn cmd_lasm_smoke(
         }
     };
     let smoke_db_records_adapter = smoke_dynamic_state.db_records_adapter;
-    let smoke_db_adapter_label =
-        lasm_db_config::lasm_db_records_adapter_label(smoke_db_records_adapter);
-    let smoke_db_records_max = smoke_dynamic_state.db_records_max;
-    let smoke_db_tx_max_handles = smoke_dynamic_state.db_tx_max_handles;
-    let smoke_db_store_path = smoke_dynamic_state
-        .db_records_store_path
-        .as_ref()
-        .map(|path| path.display().to_string());
-    let smoke_db_sqlite_store_path = smoke_dynamic_state
-        .db_records_sqlite_store_path
-        .as_ref()
-        .map(|path| path.display().to_string());
-    let smoke_db_postgres_dsn_configured = smoke_dynamic_state.db_records_postgres_dsn.is_some();
-    let smoke_db_postgres_tls_mode = lasm_db_adapter_state::lasm_db_postgres_tls_mode_label(
-        smoke_dynamic_state.db_postgres_tls_mode,
-    );
-    let smoke_db_postgres_statement_timeout_ms =
-        smoke_dynamic_state.db_postgres_statement_timeout_ms;
-    let smoke_db_postgres_lock_timeout_ms = smoke_dynamic_state.db_postgres_lock_timeout_ms;
-    let smoke_db_postgres_connect_timeout_ms = smoke_dynamic_state.db_postgres_connect_timeout_ms;
-    let smoke_db_postgres_retryable_conflict_retry_max =
-        smoke_dynamic_state.db_postgres_retryable_conflict_retry_max;
-    let smoke_db_postgres_statement_cache_max = smoke_dynamic_state.db_postgres_statement_cache_max;
-    let smoke_db_postgres_placeholder_cache_max =
-        smoke_dynamic_state.db_postgres_placeholder_cache_max;
-    let smoke_db_sqlite_busy_timeout_ms = smoke_dynamic_state.db_sqlite_busy_timeout_ms;
-    let smoke_db_sqlite_lock_retry_max = smoke_dynamic_state.db_sqlite_lock_retry_max;
-    let smoke_db_sqlite_lock_retry_delay_ms = smoke_dynamic_state.db_sqlite_lock_retry_delay_ms;
-    let smoke_db_op_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
-    let smoke_db_sqlite_journal_mode = smoke_dynamic_state.db_sqlite_journal_mode.clone();
-    let smoke_db_sqlite_synchronous = smoke_dynamic_state.db_sqlite_synchronous.clone();
-    let smoke_db_postgres_shared_client_pool_keys =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_key_count();
-    let smoke_db_postgres_shared_client_pool_idle_total =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_idle_total();
-    let smoke_db_postgres_shared_client_max_idle_per_key =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_max_idle_per_key();
-    let smoke_db_postgres_shared_client_max_total_idle =
-        lasm_db_runtime_postgres::lasm_postgres_shared_client_max_total_idle();
-    let smoke_db_postgres_persist_workers =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_workers_configured();
-    let smoke_db_postgres_persist_queue_capacity =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_capacity_configured();
-    let smoke_db_postgres_persist_batch_max =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_batch_max_configured();
-    let smoke_db_postgres_persist_queue_full_mode =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_full_mode();
-    let smoke_db_postgres_persist_workers_available =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_workers_available();
-    let smoke_db_postgres_persist_queue_depth =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_depth();
-    let smoke_db_postgres_persist_queue_backpressure_total =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_queue_backpressure_total();
-    let smoke_db_postgres_persist_sync_fallback_total =
-        lasm_db_runtime_postgres_persist::lasm_postgres_persist_sync_fallback_total();
+    let smoke_db_summary = build_lasm_smoke_db_summary(&smoke_dynamic_state);
     let smoke_dynamic_state = Mutex::new(smoke_dynamic_state);
     while let Some(mut exchange) = runtime.pop_response() {
         if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
@@ -1529,8 +1499,7 @@ fn cmd_lasm_smoke(
     let first_body = first_body.unwrap_or_default();
     let first_error_code_text = first_error_code.as_deref().unwrap_or("-");
     let first_error_kind_text = first_error_kind.as_deref().unwrap_or("-");
-    let smoke_db_store_path_text = smoke_db_store_path.as_deref().unwrap_or("-");
-    let smoke_db_sqlite_store_path_text = smoke_db_sqlite_store_path.as_deref().unwrap_or("-");
+    let smoke_db_payload = smoke_db_summary.clone().into_json_payload();
     match format {
         LasmSmokeOutputFormat::Text => {
             let max_in_flight_text = effective_max_in_flight
@@ -1574,82 +1543,41 @@ fn cmd_lasm_smoke(
                 first_duration_ms.unwrap_or(0),
                 first_path_params_text,
                 first_headers.len(),
-                smoke_db_adapter_label,
-                smoke_db_records_max,
-                smoke_db_tx_max_handles,
-                smoke_db_op_sequence_max,
-                smoke_db_store_path_text,
-                smoke_db_sqlite_store_path_text,
-                smoke_db_postgres_dsn_configured,
-                smoke_db_postgres_tls_mode,
-                smoke_db_postgres_statement_timeout_ms,
-                smoke_db_postgres_lock_timeout_ms,
-                smoke_db_postgres_connect_timeout_ms,
-                smoke_db_postgres_retryable_conflict_retry_max,
-                smoke_db_postgres_statement_cache_max,
-                smoke_db_postgres_placeholder_cache_max,
-                smoke_db_postgres_shared_client_pool_keys,
-                smoke_db_postgres_shared_client_pool_idle_total,
-                smoke_db_postgres_shared_client_max_idle_per_key,
-                smoke_db_postgres_shared_client_max_total_idle,
-                smoke_db_postgres_persist_workers,
-                smoke_db_postgres_persist_queue_capacity,
-                smoke_db_postgres_persist_batch_max,
-                smoke_db_postgres_persist_queue_full_mode,
-                smoke_db_postgres_persist_workers_available,
-                smoke_db_postgres_persist_queue_depth,
-                smoke_db_postgres_persist_queue_backpressure_total,
-                smoke_db_postgres_persist_sync_fallback_total,
-                smoke_db_sqlite_busy_timeout_ms,
-                smoke_db_sqlite_lock_retry_max,
-                smoke_db_sqlite_lock_retry_delay_ms,
-                smoke_db_sqlite_journal_mode,
-                smoke_db_sqlite_synchronous,
+                smoke_db_summary.adapter_label.as_str(),
+                smoke_db_summary.records_max,
+                smoke_db_summary.tx_max_handles,
+                smoke_db_summary.op_sequence_max,
+                smoke_db_summary.as_text_store_path(),
+                smoke_db_summary.as_text_sqlite_store_path(),
+                smoke_db_summary.postgres_dsn_configured,
+                smoke_db_summary.postgres_tls_mode.as_str(),
+                smoke_db_summary.postgres_statement_timeout_ms,
+                smoke_db_summary.postgres_lock_timeout_ms,
+                smoke_db_summary.postgres_connect_timeout_ms,
+                smoke_db_summary.postgres_retryable_conflict_retry_max,
+                smoke_db_summary.postgres_statement_cache_max,
+                smoke_db_summary.postgres_placeholder_cache_max,
+                smoke_db_summary.postgres_shared_client_pool_keys,
+                smoke_db_summary.postgres_shared_client_pool_idle_total,
+                smoke_db_summary.postgres_shared_client_max_idle_per_key,
+                smoke_db_summary.postgres_shared_client_max_total_idle,
+                smoke_db_summary.postgres_persist_workers,
+                smoke_db_summary.postgres_persist_queue_capacity,
+                smoke_db_summary.postgres_persist_batch_max,
+                smoke_db_summary.postgres_persist_queue_full_mode.as_str(),
+                smoke_db_summary.postgres_persist_workers_available,
+                smoke_db_summary.postgres_persist_queue_depth,
+                smoke_db_summary.postgres_persist_queue_backpressure_total,
+                smoke_db_summary.postgres_persist_sync_fallback_total,
+                smoke_db_summary.sqlite_busy_timeout_ms,
+                smoke_db_summary.sqlite_lock_retry_max,
+                smoke_db_summary.sqlite_lock_retry_delay_ms,
+                smoke_db_summary.sqlite_journal_mode.as_str(),
+                smoke_db_summary.sqlite_synchronous.as_str(),
                 first_body
             );
         }
         LasmSmokeOutputFormat::Json => {
-            let db_payload = serde_json::json!({
-                "adapter": smoke_db_adapter_label,
-                "recordsMax": smoke_db_records_max,
-                "txMaxHandles": smoke_db_tx_max_handles,
-                "opSequenceMax": smoke_db_op_sequence_max,
-                "storePath": smoke_db_store_path,
-                "sqliteStorePath": smoke_db_sqlite_store_path,
-                "postgres": {
-                    "dsnConfigured": smoke_db_postgres_dsn_configured,
-                    "tlsMode": smoke_db_postgres_tls_mode,
-                    "statementTimeoutMs": smoke_db_postgres_statement_timeout_ms,
-                    "lockTimeoutMs": smoke_db_postgres_lock_timeout_ms,
-                    "connectTimeoutMs": smoke_db_postgres_connect_timeout_ms,
-                    "retryableConflictRetryMax": smoke_db_postgres_retryable_conflict_retry_max,
-                    "statementCacheMax": smoke_db_postgres_statement_cache_max,
-                    "placeholderCacheMax": smoke_db_postgres_placeholder_cache_max,
-                    "sharedClient": {
-                        "poolKeys": smoke_db_postgres_shared_client_pool_keys,
-                        "poolIdleTotal": smoke_db_postgres_shared_client_pool_idle_total,
-                        "maxIdlePerKey": smoke_db_postgres_shared_client_max_idle_per_key,
-                        "maxTotalIdle": smoke_db_postgres_shared_client_max_total_idle
-                    },
-                    "persist": {
-                        "workers": smoke_db_postgres_persist_workers,
-                        "queueCapacity": smoke_db_postgres_persist_queue_capacity,
-                        "batchMax": smoke_db_postgres_persist_batch_max,
-                        "queueFullMode": smoke_db_postgres_persist_queue_full_mode,
-                        "workersAvailable": smoke_db_postgres_persist_workers_available,
-                        "queueDepth": smoke_db_postgres_persist_queue_depth,
-                        "queueBackpressureTotal": smoke_db_postgres_persist_queue_backpressure_total,
-                        "syncFallbackTotal": smoke_db_postgres_persist_sync_fallback_total
-                    }
-                },
-                "sqlite": {
-                    "busyTimeoutMs": smoke_db_sqlite_busy_timeout_ms,
-                    "lockRetryMax": smoke_db_sqlite_lock_retry_max,
-                    "lockRetryDelayMs": smoke_db_sqlite_lock_retry_delay_ms,
-                    "journalMode": smoke_db_sqlite_journal_mode,
-                    "synchronous": smoke_db_sqlite_synchronous
-                }
-            });
             let payload = serde_json::json!({
                 "ok": true,
                 "requestId": first_request_id.unwrap_or(0),
@@ -1685,7 +1613,7 @@ fn cmd_lasm_smoke(
                 "firstDurationMs": first_duration_ms.unwrap_or(0),
                 "pathParams": first_path_params,
                 "headers": first_headers,
-                "db": db_payload,
+                "db": smoke_db_payload,
                 "body": first_body,
             });
             println!(
@@ -1969,14 +1897,6 @@ fn collect_lasm_route_plans(
             lasm_db_plan::apply_lasm_db_operation_plan_sequence_headers(
                 &mut headers,
                 db_operations.as_slice(),
-            );
-        } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str())
-            .as_deref()
-            == Some("DbListRecordsResponse")
-        {
-            headers.insert(
-                LASM_INTERNAL_DB_OP_HEADER.to_string(),
-                "listRecords".to_string(),
             );
         }
         if let Some(content_type) = response_plan.default_content_type {
@@ -2350,7 +2270,9 @@ fn parse_lasm_internal_db_indexed_header_index(
     suffix.parse::<usize>().ok()
 }
 
-fn find_lasm_non_indexed_db_operation_marker(headers: &BTreeMap<String, String>) -> Option<&'static str> {
+fn find_lasm_non_indexed_db_operation_marker(
+    headers: &BTreeMap<String, String>,
+) -> Option<&'static str> {
     for header_name in LASM_DB_MARKER_BASE_HEADERS {
         if lasm_route_db_header_value(headers, header_name, None).is_some() {
             return Some(header_name);
@@ -2378,7 +2300,9 @@ fn find_lasm_out_of_range_indexed_db_operation_marker(
     None
 }
 
-fn find_unknown_lasm_internal_db_marker_header(headers: &BTreeMap<String, String>) -> Option<String> {
+fn find_unknown_lasm_internal_db_marker_header(
+    headers: &BTreeMap<String, String>,
+) -> Option<String> {
     for header_name in headers.keys() {
         if !header_name.starts_with(LASM_INTERNAL_DB_HEADER_PREFIX) {
             continue;
@@ -2393,7 +2317,8 @@ fn find_unknown_lasm_internal_db_marker_header(headers: &BTreeMap<String, String
             continue;
         }
         if LASM_DB_MARKER_BASE_HEADERS.iter().any(|known_header| {
-            parse_lasm_internal_db_indexed_header_index(header_name.as_str(), known_header).is_some()
+            parse_lasm_internal_db_indexed_header_index(header_name.as_str(), known_header)
+                .is_some()
         }) {
             continue;
         }
@@ -2549,7 +2474,11 @@ fn validate_lasm_route_db_operation_header_contract(
                 || (tx.is_none() && tx_db.is_none())
                 || (tx.is_some() && tx_db.is_some())
                 || (tx.is_some()
-                    && !lasm_route_db_numeric_header_valid(headers, LASM_INTERNAL_DB_TX_HEADER, index))
+                    && !lasm_route_db_numeric_header_valid(
+                        headers,
+                        LASM_INTERNAL_DB_TX_HEADER,
+                        index,
+                    ))
                 || (tx_db.is_some()
                     && !lasm_route_db_numeric_header_valid(
                         headers,
@@ -2565,7 +2494,10 @@ fn validate_lasm_route_db_operation_header_contract(
             if lasm_route_db_has_any_headers(
                 headers,
                 index,
-                &[LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER],
+                &[
+                    LASM_INTERNAL_DB_HANDLE_HEADER,
+                    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+                ],
             ) {
                 return Err(format!(
                     "route {} {} has invalid DB execTx marker contract at {} (must not include db/rowSchema headers)",
@@ -2635,13 +2567,6 @@ fn resolve_lasm_smoke_route_plan(
         lasm_db_plan::apply_lasm_db_operation_plan_sequence_headers(
             &mut headers,
             db_operations.as_slice(),
-        );
-    } else if extract_lasm_schema_hint_from_response_body(response_plan.body.as_str()).as_deref()
-        == Some("DbListRecordsResponse")
-    {
-        headers.insert(
-            LASM_INTERNAL_DB_OP_HEADER.to_string(),
-            "listRecords".to_string(),
         );
     }
     if let Some(content_type) = response_plan.default_content_type {
@@ -9455,6 +9380,12 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    let explicit_db_postgres_statement_cache_max = resolved_lasm_db_usize
+        .db_postgres_statement_cache_max
+        .map(|value| value as u64);
+    let explicit_db_postgres_placeholder_cache_max = resolved_lasm_db_usize
+        .db_postgres_placeholder_cache_max
+        .map(|value| value as u64);
     apply_lasm_postgres_runtime_env_overrides(
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
@@ -9462,6 +9393,8 @@ fn cmd_run_lasm_backend(
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
         db_postgres_persist_queue_full_mode,
+        explicit_db_postgres_statement_cache_max,
+        explicit_db_postgres_placeholder_cache_max,
     );
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
@@ -9705,8 +9638,12 @@ fn cmd_run_lasm_backend(
             2
         })?,
     ));
+    let db_records_op_sequence_max = lasm_db_runtime_dispatch::lasm_db_op_sequence_max_limit();
     let db_records_adapter = match dynamic_state.lock() {
-        Ok(state) => state.db_records_adapter,
+        Ok(state) => {
+            print_lasm_db_startup_summary(&state, db_records_op_sequence_max);
+            state.db_records_adapter
+        }
         Err(_) => {
             eprintln!("run failed: dynamic response state unavailable");
             return Err(2);
@@ -9927,6 +9864,59 @@ fn cmd_run_lasm_backend(
     }
 
     Ok(())
+}
+
+fn print_lasm_db_startup_summary(
+    state: &LasmDynamicResponseState,
+    db_records_op_sequence_max: usize,
+) {
+    let db_summary = build_lasm_smoke_db_summary(state);
+    let adapter = db_summary.adapter_label.as_str();
+    let active_db_store = match state.db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => format!(
+            "records.log at {}",
+            state
+                .db_records_store_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        ),
+        LasmDbRecordsAdapter::Sqlite => format!(
+            "records.sqlite3 at {}",
+            state
+                .db_records_sqlite_store_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        ),
+        LasmDbRecordsAdapter::Postgres => "postgres connection pool".to_string(),
+    };
+    let records_log_path = db_summary.as_text_store_path();
+    let sqlite_store_path = db_summary.as_text_sqlite_store_path();
+    let postgres_dsn = if db_summary.postgres_dsn_configured {
+        "configured"
+    } else {
+        "not configured"
+    };
+
+    println!(
+        "LASM DB: adapter={} recordsMax={} txHandlesMax={} opSequenceMax={}",
+        adapter, db_summary.records_max, db_summary.tx_max_handles, db_records_op_sequence_max,
+    );
+    println!("LASM DB active store: {active_db_store}");
+    println!("LASM DB paths: records.log={records_log_path} records.sqlite3={sqlite_store_path}",);
+    println!(
+        "LASM DB postgres: dsn={postgres_dsn} statementCacheMax={} placeholderCacheMax={}",
+        db_summary.postgres_statement_cache_max, db_summary.postgres_placeholder_cache_max,
+    );
+    println!(
+        "LASM DB sqlite: busyTimeoutMs={} lockRetryMax={} lockRetryDelayMs={} journalMode={} synchronous={}",
+        db_summary.sqlite_busy_timeout_ms,
+        db_summary.sqlite_lock_retry_max,
+        db_summary.sqlite_lock_retry_delay_ms,
+        db_summary.sqlite_journal_mode,
+        db_summary.sqlite_synchronous,
+    );
 }
 
 fn build_lasm_http_runtime(
@@ -11703,14 +11693,6 @@ fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Opti
         .map(ToOwned::to_owned)
 }
 
-fn extract_lasm_schema_hint_from_response_body(body: &str) -> Option<String> {
-    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
-    parsed
-        .get("schema")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
 fn parse_lasm_json_payload(bytes: &[u8]) -> Option<serde_json::Value> {
     if bytes.is_empty() {
         return None;
@@ -13390,7 +13372,19 @@ fn cmd_promote(
         .map(|file| project_relative_path(path, file))
         .collect::<Vec<_>>();
 
-    let localdb_references = collect_promote_binding_references(path, &source_files, "localdb.")?;
+    let localdb_references = match collect_promote_binding_references(&source_files, "localdb.") {
+        Ok(references) => references,
+        Err(message) => {
+            eprintln!("promote failed: {message}");
+            return Err(2);
+        }
+    }
+    .into_iter()
+    .map(|reference| PromoteBindingReference {
+        file: project_relative_path(path, &reference.file),
+        line: reference.line,
+    })
+    .collect::<Vec<_>>();
     let mut preconditions = Vec::new();
 
     if source_files.is_empty() {
@@ -13427,6 +13421,25 @@ fn cmd_promote(
         if let Err(diagnostics) = analyze_entry(path, manifest) {
             for diagnostic in diagnostics {
                 preconditions.push(precondition_from_diagnostic(path, &diagnostic, false));
+            }
+        }
+
+        match collect_promote_contract_violations(path, manifest) {
+            Ok(violations) => {
+                for violation in violations {
+                    preconditions.push(PromotePrecondition {
+                        code: violation.code,
+                        severity: violation.severity,
+                        message: violation.message,
+                        file: Some(project_relative_path(path, &violation.file)),
+                        line: Some(violation.line),
+                    });
+                }
+            }
+            Err(diagnostics) => {
+                for diagnostic in diagnostics {
+                    preconditions.push(precondition_from_diagnostic(path, &diagnostic, true));
+                }
             }
         }
     }
@@ -13747,36 +13760,6 @@ fn promote_diagnostic_blocks_plan(diagnostic: &Diagnostic) -> bool {
 fn project_relative_path(project_root: &Path, file: &Path) -> String {
     let relative = file.strip_prefix(project_root).unwrap_or(file);
     relative.to_string_lossy().replace('\\', "/")
-}
-
-fn collect_promote_binding_references(
-    project_root: &Path,
-    source_files: &[PathBuf],
-    needle: &str,
-) -> Result<Vec<PromoteBindingReference>, i32> {
-    let mut references = Vec::new();
-    for source_file in source_files {
-        let source = match fs::read_to_string(source_file) {
-            Ok(source) => source,
-            Err(err) => {
-                eprintln!(
-                    "promote failed: could not read source file `{}`: {err}",
-                    source_file.display()
-                );
-                return Err(2);
-            }
-        };
-
-        for (index, line) in source.lines().enumerate() {
-            if line.contains(needle) {
-                references.push(PromoteBindingReference {
-                    file: project_relative_path(project_root, source_file),
-                    line: index + 1,
-                });
-            }
-        }
-    }
-    Ok(references)
 }
 
 fn collect_ut_files(path: &Path) -> Result<Vec<PathBuf>, i32> {

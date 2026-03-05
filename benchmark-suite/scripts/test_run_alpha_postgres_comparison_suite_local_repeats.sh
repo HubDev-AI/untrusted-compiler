@@ -5,6 +5,7 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 tmp_env="$(mktemp)"
 trap 'rm -f "$tmp_env"' EXIT
 cat >"$tmp_env" <<EOF
+SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgresql://bench:bench@127.0.0.1:5432/bench
 SEC4_RT_LASM_DB_POSTGRES_DSN=postgresql://bench:bench@127.0.0.1:5432/bench
 EOF
 

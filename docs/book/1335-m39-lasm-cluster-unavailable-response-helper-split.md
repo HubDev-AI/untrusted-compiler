@@ -5,12 +5,12 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`:
   - replaced reason-enum + shared dispatch helper with dedicated response writers:
     - `write_lasm_cluster_no_healthy_workers_response(...)`
     - `write_lasm_cluster_worker_unavailable_response(...)`
   - kept static response buffers and error text unchanged.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay worker now calls dedicated unavailable-response helpers directly.
 
 ## Why

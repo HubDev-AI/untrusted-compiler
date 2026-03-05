@@ -3,11 +3,12 @@ pub mod audit;
 pub mod backend;
 pub mod build_metadata;
 pub mod c_backend;
+pub mod composition;
 pub mod diagnostics;
-pub mod lexer;
 pub mod lasm_backend;
 pub mod lasm_http_runtime;
 pub mod lasm_runtime;
+pub mod lexer;
 pub mod manifest;
 pub mod mir;
 pub mod parser;
@@ -40,12 +41,16 @@ pub use build_metadata::{
     compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
 };
 pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
+pub use composition::{
+    collect_promote_binding_references, collect_promote_contract_violations,
+    PromoteBindingReference, PromoteContractViolation,
+};
 pub use diagnostics::{Diagnostic, Severity, Span};
-pub use manifest::{Manifest, ManifestFile, PackageSection};
-pub use mir::{lower_program_to_mir, MirProgram};
 pub use lasm_backend::{emit_lasm_program, emit_lasm_program_json, lower_mir_to_lasm, LasmProgram};
 pub use lasm_http_runtime::{HttpExchange, HttpRequest, HttpResponse, LasmHttpRuntime};
 pub use lasm_runtime::{LasmAsyncRuntime, RunReport, RuntimeAction, TaskExit, TaskId};
+pub use manifest::{Manifest, ManifestFile, PackageSection};
+pub use mir::{lower_program_to_mir, MirProgram};
 pub use parser::{parse_source, parse_source_with_interrupt};
 pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
 pub use project::{
@@ -143,11 +148,7 @@ pub fn analyze_entry_with_allows(
 ) -> Result<(ast::Program, Vec<SecurityAllow>), Vec<Diagnostic>> {
     let program = parse_entry_ast(project_root, manifest)?;
     let policy = policy::load_policy(project_root)?;
-    semantic::analyze_program_with_policy_and_profile(
-        &program,
-        &policy,
-        manifest.build_profile(),
-    )?;
+    semantic::analyze_program_with_policy_and_profile(&program, &policy, manifest.build_profile())?;
     let allows = collect_allow_annotations(project_root, manifest)?;
     Ok((program, allows))
 }

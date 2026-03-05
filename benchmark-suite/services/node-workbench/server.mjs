@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 const PORT = Number(process.env.PORT || 18089);
 const PG_DSN =
   process.env.BENCH_WORKBENCH_PG_DSN ||
+  process.env.SEC4_DB_ALPHA_DB_POSTGRES_DSN ||
   process.env.SEC4_RT_LASM_DB_POSTGRES_DSN ||
   'postgresql://127.0.0.1:5432/postgres?sslmode=disable';
 const AUTH_TOKEN = process.env.BENCH_WORKBENCH_AUTH_TOKEN || 'token123';

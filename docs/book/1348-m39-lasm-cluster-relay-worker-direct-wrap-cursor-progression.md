@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - relay selection reservation now advances `relay_selection_reservation_next_index` with direct increment+wrap arithmetic,
   - relay pump loop (`relay_connections.len() > relay_pump_batch_max`) now advances `relay_pump_cursor` with direct increment+wrap on `Progressed` and `Idle` steps,
   - removed wrapped-index helper dependency from this relay-worker hot path.

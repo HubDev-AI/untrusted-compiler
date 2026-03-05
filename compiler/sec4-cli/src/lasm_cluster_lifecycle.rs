@@ -4,11 +4,108 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::lasm_db_config::{LASM_DB_POSTGRES_DSN_FILE_KEYS, LASM_DB_POSTGRES_RUNTIME_ENV_KEYS};
 use crate::{
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, LasmClusterConfig, LasmClusterState,
     LasmClusterWorker,
 };
+
+fn forward_env_if_set(cmd: &mut Command, env_key: &str) {
+    if let Ok(value) = std::env::var(env_key) {
+        let value = value.trim();
+        if !value.is_empty() {
+            cmd.env(env_key, value);
+        }
+    }
+}
+
+fn forward_db_alias_env_vars_to_worker(cmd: &mut Command) {
+    LASM_DB_POSTGRES_DSN_FILE_KEYS
+        .iter()
+        .for_each(|env_key| forward_env_if_set(cmd, env_key));
+    LASM_DB_POSTGRES_RUNTIME_ENV_KEYS
+        .iter()
+        .for_each(|env_key| forward_env_if_set(cmd, env_key));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forward_db_alias_env_vars_to_worker;
+    use crate::lasm_db_config::{
+        LASM_DB_POSTGRES_DSN_FILE_KEYS, LASM_DB_POSTGRES_RUNTIME_ENV_KEYS,
+    };
+    use std::env;
+    use std::process::Command;
+
+    #[test]
+    fn forward_db_alias_env_vars_keeps_resolved_dsn_authoritative() {
+        let mut snapshots = vec![
+            (
+                "SEC4_DB_ALPHA_DB_POSTGRES_DSN".to_string(),
+                env::var_os("SEC4_DB_ALPHA_DB_POSTGRES_DSN"),
+            ),
+            (
+                "SEC4_RT_LASM_DB_POSTGRES_DSN".to_string(),
+                env::var_os("SEC4_RT_LASM_DB_POSTGRES_DSN"),
+            ),
+        ];
+
+        for env_key in LASM_DB_POSTGRES_DSN_FILE_KEYS {
+            snapshots.push((env_key.to_string(), env::var_os(env_key)));
+            env::set_var(env_key, format!("/tmp/{env_key}.dsn"));
+        }
+
+        for env_key in LASM_DB_POSTGRES_RUNTIME_ENV_KEYS {
+            snapshots.push((env_key.to_string(), env::var_os(env_key)));
+            env::set_var(env_key, format!("/{env_key}_runtime.env"));
+        }
+
+        let mut command = Command::new("echo");
+        env::set_var("SEC4_DB_ALPHA_DB_POSTGRES_DSN", "SHOULD_NOT_FORWARD");
+
+        forward_db_alias_env_vars_to_worker(&mut command);
+
+        let envs: Vec<String> = command
+            .get_envs()
+            .map(|(key, _)| key.to_string_lossy().into_owned())
+            .collect();
+
+        for env_key in LASM_DB_POSTGRES_DSN_FILE_KEYS {
+            assert!(
+                envs.iter().any(|key| key == env_key),
+                "DSN file alias `{env_key}` should be forwarded when set"
+            );
+        }
+        for env_key in LASM_DB_POSTGRES_RUNTIME_ENV_KEYS {
+            assert!(
+                envs.iter().any(|key| key == env_key),
+                "runtime env alias `{env_key}` should be forwarded when set"
+            );
+        }
+        assert!(
+            !envs
+                .iter()
+                .any(|key| key == "SEC4_DB_ALPHA_DB_POSTGRES_DSN"),
+            "resolved DSN key should not be forwarded by alias forwarder"
+        );
+        assert!(
+            !envs.iter().any(|key| key == "SEC4_RT_LASM_DB_POSTGRES_DSN"),
+            "resolved LASM DSN key should not be forwarded by alias forwarder"
+        );
+
+        for (key, snapshot) in snapshots {
+            match snapshot {
+                Some(value) => {
+                    env::set_var(&key, value);
+                }
+                None => {
+                    env::remove_var(key);
+                }
+            }
+        }
+    }
+}
 
 pub(crate) fn compute_lasm_cluster_base_port(
     listen_port: u16,
@@ -196,9 +293,30 @@ fn spawn_lasm_cluster_worker(
         "--db-sqlite-lock-retry-delay-ms",
         config.db_sqlite_lock_retry_delay_ms,
     );
-    if let Some(dsn) = config.db_postgres_dsn.as_deref() {
-        cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
+    if let Some(dsn) = config
+        .db_postgres_dsn
+        .as_deref()
+        .map(|dsn| dsn.trim())
+        .filter(|dsn| !dsn.is_empty())
+        .map(|dsn| dsn.to_string())
+        .or_else(|| {
+            std::env::var("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+                .ok()
+                .map(|dsn| dsn.trim().to_string())
+                .filter(|dsn| !dsn.is_empty())
+        })
+        .or_else(|| {
+            std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN")
+                .ok()
+                .map(|dsn| dsn.trim().to_string())
+                .filter(|dsn| !dsn.is_empty())
+        })
+    {
+        cmd.env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", &dsn);
+        cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", &dsn);
     }
+
+    forward_db_alias_env_vars_to_worker(&mut cmd);
 
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());

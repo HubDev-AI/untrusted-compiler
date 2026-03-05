@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - `dispatch_lasm_cluster_relay_stream_fallback_multi` now computes `relay_has_next_live_sender_lookup` once per dispatch call,
   - scan-advance helper calls now receive that precomputed flag,
   - `advance_lasm_cluster_fallback_scan_index` no longer checks `relay_next_live_sender_lookup.is_empty()` on every invocation.

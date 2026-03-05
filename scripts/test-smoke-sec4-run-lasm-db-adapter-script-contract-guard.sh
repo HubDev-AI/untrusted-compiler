@@ -14,8 +14,8 @@ chmod +x "${fixture}"
 
 "${contract_script}" --script "${fixture}" >/dev/null
 
-missing_auth_token="Authorization: Bearer smoke-token"
-perl -0pi -e 's/Authorization: Bearer smoke-token/Authorization: removed-token/' "${fixture}"
+missing_auth_token='default_smoke_auth_header="Authorization: Bearer smoke-token"'
+perl -0pi -e 's/default_smoke_auth_header="[^"]*"/default_smoke_auth_header="Authorization: removed-token"/' "${fixture}"
 
 if "${contract_script}" --script "${fixture}" >"${tmp_dir}/auth-guard.log" 2>&1; then
   echo "expected smoke script contract to fail when authorization token is removed" >&2

@@ -128,14 +128,14 @@ if ! grep -q 'dbPostgresDsnFile=/tmp/sec4-test-postgres.dsn' <<<"$out_db_postgre
   echo "mode compare db postgres query-one dry-run missing dsn passthrough marker" >&2
   exit 1
 fi
-if env -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
+if env -u SEC4_DB_ALPHA_DB_POSTGRES_DSN -u SEC4_RT_LASM_DB_POSTGRES_DSN "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" \
   --dry-run \
   --profile db-hot-postgres-query-one \
   --port 19097 >/tmp/lasm-mode-compare-missing-postgres-dsn.log 2>&1; then
   echo "mode compare accepted db-hot-postgres-query-one profile without DSN" >&2
   exit 1
 fi
-if ! grep -q "postgres adapter requires --db-postgres-dsn-file or SEC4_RT_LASM_DB_POSTGRES_DSN" /tmp/lasm-mode-compare-missing-postgres-dsn.log; then
+if ! grep -q "postgres adapter requires --db-postgres-dsn-file or SEC4_DB_ALPHA_DB_POSTGRES_DSN (legacy alias SEC4_RT_LASM_DB_POSTGRES_DSN)" /tmp/lasm-mode-compare-missing-postgres-dsn.log; then
   echo "mode compare missing postgres profile DSN diagnostic" >&2
   exit 1
 fi

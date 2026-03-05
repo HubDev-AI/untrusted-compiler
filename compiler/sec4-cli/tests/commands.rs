@@ -404,12 +404,12 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "use feature.util;\n\nfn main() -> Int {\n  // localdb.main\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
+        "use feature.util;\n\nfn main() -> Int {\n  let localdb = 0;\n  let marker = localdb.read;\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
     )
     .expect("main should be written");
     fs::write(
         project_dir.join("src/feature/util.ut"),
-        "// localdb.module\nfn is_valid() -> Bool {\n  true\n}\n",
+        "fn is_valid() -> Bool {\n  true\n}\n",
     )
     .expect("feature module should be written");
     let project_path = project_dir
@@ -468,23 +468,21 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
         parsed
             .get("guardedSkippedReferences")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|items| items.iter().any(|item| {
-                item.get("file").and_then(serde_json::Value::as_str) == Some("src/feature/util.ut")
-            })),
-        "apply report should include guard-skipped localdb references outside composition root"
+            .is_none_or(Vec::is_empty),
+        "apply report should not include guard-skipped references when modules have no localdb markers"
     );
 
     let main_source = fs::read_to_string(project_dir.join("src/main.ut"))
         .expect("rewritten main source should exist");
     assert!(
-        main_source.contains("// db.main"),
+        main_source.contains("let marker = db.read"),
         "apply rewrite should replace localdb token in composition root:\n{main_source}"
     );
     let module_source = fs::read_to_string(project_dir.join("src/feature/util.ut"))
         .expect("feature module source should remain readable");
     assert!(
-        module_source.contains("// localdb.module"),
-        "composition-root guard should preserve module files outside src/main.ut:\n{module_source}"
+        module_source.contains("fn is_valid() -> Bool"),
+        "feature module source should remain unchanged outside composition root:\n{module_source}"
     );
 
     let report_path = project_dir.join("server/reports/promote-plan.json");
@@ -640,30 +638,19 @@ fn promote_dry_run_reports_blocking_preconditions_for_invalid_project() {
     );
     assert_eq!(
         output.status.code(),
-        Some(1),
-        "blocking preconditions should produce deterministic failure exit code"
+        Some(2),
+        "parse/usage-level preconditions should produce deterministic failure exit code"
     );
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    let parsed: serde_json::Value =
-        serde_json::from_str(&stdout).expect("promote dry-run should emit json even on failure");
-    assert_eq!(
-        parsed.get("ready").and_then(serde_json::Value::as_bool),
-        Some(false),
-        "plan readiness should be false when blocking preconditions exist"
-    );
     assert!(
-        parsed
-            .get("preconditions")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|items| items.iter().any(|item| {
-                item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
-                    && item
-                        .get("code")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|code| code.starts_with("DIAG."))
-            })),
-        "blocking promote plan should include diagnostic-derived error preconditions"
+        stdout.trim().is_empty(),
+        "parse-level promote failure should not emit JSON report"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("promote failed: could not parse source file"),
+        "parse-level promote failure should include deterministic parse guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -726,6 +713,482 @@ fn promote_dry_run_treats_semantic_diagnostics_as_non_blocking_warnings() {
                         == Some("unknown function or constructor")
             })),
         "semantic diagnostics should be reported as warning preconditions"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_domain_import_of_repo_from_non_root_module() {
+    let root = temp_dir("sec4-promote-direct-repo-import");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::create_dir_all(project_dir.join("src/feature")).expect("feature dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-direct-repo-import\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use feature.boundary;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/feature/boundary.ut"),
+        "use repo.adapter;\n\nfn boundary() -> Int {\n  0\n}\n",
+    )
+    .expect("boundary module should be written");
+    fs::write(
+        project_dir.join("src/repo/adapter.ut"),
+        "fn get_item() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when module outside composition root imports repo adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when contract violations exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9401")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                    && item
+                        .get("file")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|file| file == "src/feature/boundary.ut")
+            })),
+        "contract preconditions should include blocked repo import from non-root module"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_repo_adapter_parity_mismatch() {
+    let root = temp_dir("sec4-promote-repo-parity-mismatch");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo/browser"))
+        .expect("browser repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-repo-parity-mismatch\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use repo.browser;\nuse repo.server;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/repo/browser.ut"),
+        "fn browser_fetch_user() -> Int {\n  0\n}\n",
+    )
+    .expect("browser repo module should be written");
+    fs::write(
+        project_dir.join("src/repo/server.ut"),
+        "fn server_fetch_user() -> Int {\n  0\n}\nfn server_store_user() -> Int {\n  0\n}\n",
+    )
+    .expect("server repo module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when repo adapter parity mismatch exists"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when parity issues exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9403")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| message.contains("server_ method"))
+            })),
+        "contract preconditions should include parity mismatch code for missing browser_ counterpart"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_repo_adapter_parity_when_browser_side_is_empty() {
+    let root = temp_dir("sec4-promote-repo-parity-empty-browser");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-repo-parity-empty-browser\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use repo.browser;\nuse repo.server;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/repo/browser.ut"),
+        "fn helper() -> Int {\n  0\n}\n",
+    )
+    .expect("browser repo module should be written");
+    fs::write(
+        project_dir.join("src/repo/server.ut"),
+        "fn server_fetch_user() -> Int {\n  0\n}\n",
+    )
+    .expect("server repo module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when browser repo adapter side is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when one repo adapter side is empty"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9403")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| {
+                            message.contains("server_ method `fetch_user`")
+                        })
+            })),
+        "contract preconditions should include parity mismatch when browser_ side has no adapter methods"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_repo_adapter_methods_without_target_prefix() {
+    let root = temp_dir("sec4-promote-repo-unscoped-method");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-repo-unscoped-method\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use repo.adapter;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/repo/adapter.ut"),
+        "fn fetch_user() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when repo adapter methods are missing browser_/server_ prefixes"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when repo method prefixes are invalid"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9405")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| {
+                            message.contains("must be prefixed with `browser_` or `server_`")
+                        })
+            })),
+        "contract preconditions should include unscoped repo adapter method guidance"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_domain_module_dependency_calls() {
+    let root = temp_dir("sec4-promote-domain-module-direct-dependency-call");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::create_dir_all(project_dir.join("src/domain")).expect("domain dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-domain-dependency-call\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use domain.boundary;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/domain/boundary.ut"),
+        "fn apply() -> Int {\n  let _id = localdb.get(\"user:42\");\n  let _total = db.query_one(\"SELECT 1\");\n  42\n}\n",
+    )
+    .expect("domain module should be written");
+    fs::write(
+        project_dir.join("src/repo/db_repo.ut"),
+        "fn browser_get_user() -> Int {\n  0\n}\nfn server_get_user() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when domain module calls direct adapters"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when forbidden dependency calls exist"
+    );
+    let preconditions = parsed
+        .get("preconditions")
+        .and_then(serde_json::Value::as_array)
+        .expect("preconditions should be an array");
+    assert!(
+        preconditions.iter().any(|item| {
+            item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9404")
+                && item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                && item
+                    .get("file")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|file| file == "src/domain/boundary.ut")
+                && item
+                    .get("message")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|message| {
+                        message.contains("domain module cannot call `localdb.*`")
+                    })
+        }),
+        "contract preconditions should include direct dependency usage errors for domain modules"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_blocks_domain_module_dependency_calls_via_alias() {
+    let root = temp_dir("sec4-promote-domain-module-alias-dependency-call");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::create_dir_all(project_dir.join("src/domain")).expect("domain dir should be created");
+    fs::create_dir_all(project_dir.join("src/repo")).expect("repo dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-domain-alias-dependency-call\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use domain.boundary;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/domain/boundary.ut"),
+        "fn apply() -> Int {\n  let store = localdb;\n  let _id = store.get(\"user:42\");\n  42\n}\n",
+    )
+    .expect("domain module should be written");
+    fs::write(
+        project_dir.join("src/repo/db_repo.ut"),
+        "fn browser_get_user() -> Int {\n  0\n}\nfn server_get_user() -> Int {\n  0\n}\n",
+    )
+    .expect("repo adapter module should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when domain module calls dependency root via alias"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "promotion precondition failures should fail with deterministic non-zero exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "promotion plan should be blocking when forbidden dependency aliases exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9404")
+                    && item
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|message| {
+                            message.contains("via alias `store`")
+                                && message.contains("`localdb.*`")
+                        })
+            })),
+        "contract preconditions should include alias-aware domain dependency guidance"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -1212,7 +1675,7 @@ fn lasm_smoke_command_materializes_db_list_records_response() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn dbListRecords() effects { net } -> Int {\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
+        "fn dbListRecords() effects { net } -> Int {\n  res.setHeader(headers.name(\"X-Sec4-Internal-Db-Op\"), headers.value(\"listRecords\"));\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -1319,7 +1782,7 @@ fn lasm_smoke_command_supports_sqlite_db_adapter_flags() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn dbListRecords() effects { net } -> Int {\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
+        "fn dbListRecords() effects { net } -> Int {\n  res.setHeader(headers.name(\"X-Sec4-Internal-Db-Op\"), headers.value(\"listRecords\"));\n  res.json(200, \"DbListRecordsResponse\", 0);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/db/records\", dbListRecords);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -2726,8 +3189,9 @@ fn lasm_smoke_command_rejects_db_tx_marker_with_template_header() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("lasm-smoke failed: route GET /bad-tx-extra has invalid DB tx marker contract")
-            && stderr.contains("must not include template/params/tx/txDb/rowSchema headers"),
+        stderr.contains(
+            "lasm-smoke failed: route GET /bad-tx-extra has invalid DB tx marker contract"
+        ) && stderr.contains("must not include template/params/tx/txDb/rowSchema headers"),
         "lasm-smoke should emit deterministic tx-marker extra-header diagnostics:\n{stderr}"
     );
 
@@ -16407,6 +16871,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -17492,6 +17957,645 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_exec_tx_accepts_tx_from_helper_function() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-exec-tx-helper");
+    let db_base = project_dir.join("lasm-db");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbexectxhelpercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn buildTx(db: DbCap) effects { db.tx } -> TxCap {
+  db.tx(db)
+}
+
+fn dbWithHelperTx() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let tx = buildTx(db);
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/helper", dbWithHelperTx);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--oneshot",
+            "--port",
+            &port_value,
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let request =
+        "POST /db/helper?template=INSERT%20INTO%20items%20%28name%29%20VALUES%20%28%3F%29&params=%5B%22alpha%22%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper execTx flow could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper execTx process did not exit in expected window");
+        }
+    };
+    assert!(
+        status.success(),
+        "run command LASM db helper execTx process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK")
+            && response.contains("\"op\":\"execTx\"")
+            && response.contains("\"recordId\":1")
+            && response.contains("\"tx\":"),
+        "helper execTx response should materialize deterministic execTx payload:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_exec_and_query_one_accept_helpers_for_db_query_and_row_schema() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-helpers-in-args");
+    let db_base = project_dir.join("lasm-db");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbhelperscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn build_db() -> DbCap {
+  DbCap()
+}
+
+fn build_query(template: String, params: String) -> SqlQuery {
+  sql.q(template, params)
+}
+
+fn build_row_schema(raw: Untrusted<String>) -> Schema<Int> {
+  schema.row(validate.int64(raw))
+}
+
+fn exec_with_helper_inputs() effects { net, db.write } -> Int {
+  let db = build_db();
+  let query = build_query(
+    validate.nonEmpty(req.query("template")),
+    validate.nonEmpty(req.query("params"))
+  );
+  db.exec(db, query);
+  res.json(200, "DbExecWithHelpers", 0);
+  0
+}
+
+fn query_one_with_helper_inputs() effects { net, db.read } -> Int {
+  let db = build_db();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let row_schema = build_row_schema(req.query("row_schema"));
+  let query = build_query(template, params);
+  db.queryOne(db, query, row_schema);
+  res.json(200, "DbQueryOneWithHelpers", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", exec_with_helper_inputs);
+  http.get(router, "/db/query-one", query_one_with_helper_inputs);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let exec_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+    let exec_response = {
+        let port = exec_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command LASM db helper exec flow exited early with status: {status}");
+            }
+            match TcpStream::connect(("127.0.0.1", exec_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = response.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper exec flow could not connect to server");
+        });
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = status.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper exec flow did not exit in expected window");
+        });
+        assert!(
+            status.success(),
+            "run command LASM db helper exec flow should exit successfully"
+        );
+        response
+    };
+
+    let query_one_response = {
+        let port = query_one_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!(
+                    "run command LASM db helper queryOne flow exited early with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", query_one_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = response.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper queryOne flow could not connect to server");
+        });
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = status.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM db helper queryOne flow did not exit in expected window");
+        });
+        assert!(
+            status.success(),
+            "run command LASM db helper queryOne flow should exit successfully"
+        );
+        response
+    };
+
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK")
+            && exec_response.contains("\"op\":\"exec\""),
+        "helper-driven db.exec flow should route db args through helper extraction:\n{exec_response}"
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK")
+            && query_one_response.contains("\"op\":\"queryOne\""),
+        "helper-driven db.queryOne flow should route db/query/rowSchema through helper extraction:\n{query_one_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_accepts_db_helpers_with_local_let_bindings() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-helpers-local-lets");
+    let db_base = project_dir.join("lasm-db");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdblethelperscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn build_query(raw_template: Untrusted<String>, raw_params: Untrusted<String>) -> SqlQuery {
+  let validated_template = validate.nonEmpty(raw_template);
+  let validated_params = validate.nonEmpty(raw_params);
+  let query = sql.q(validated_template, validated_params);
+  query
+}
+
+fn build_row_schema(raw_schema: Untrusted<String>) -> Schema<Int> {
+  schema.row(validate.int64(raw_schema))
+}
+
+fn exec_with_local_let_helpers() effects { net, db.write } -> Int {
+  let db = DbCap();
+  let template = req.query("template");
+  let params = req.query("params");
+  let query = build_query(template, params);
+  db.exec(db, query);
+  res.json(200, "DbExecWithLocalLetHelpers", 0);
+  0
+}
+
+fn query_one_with_local_let_helpers() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let template = req.query("template");
+  let params = req.query("params");
+  let row_schema = build_row_schema(req.query("row_schema"));
+  let query = build_query(template, params);
+  db.queryOne(db, query, row_schema);
+  res.json(200, "DbQueryOneWithLocalLetHelpers", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", exec_with_local_let_helpers);
+  http.get(router, "/db/query-one", query_one_with_local_let_helpers);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let exec_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+
+    let exec_response = {
+        let port = exec_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "POST /db/exec?template=SELECT%201&params=%5B%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!(
+                    "run command LASM db let helper exec flow exited early with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", exec_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper exec flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper exec flow did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db let helper exec flow should exit successfully"
+        );
+        response
+    };
+
+    let query_one_response = {
+        let port = query_one_port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                &project_path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                &db_base_value,
+                "--oneshot",
+                "--port",
+                &port,
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let request =
+            "GET /db/query-one?template=SELECT%201&params=%5B%5D&row_schema=1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!(
+                    "run command LASM db let helper queryOne flow exited early with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", query_one_port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db let helper queryOne flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "run command LASM db let helper queryOne flow did not exit in expected window"
+                );
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db let helper queryOne flow should exit successfully"
+        );
+        response
+    };
+
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK") && exec_response.contains("\"op\":\"exec\""),
+        "db helper with local lets should route exec query through helper extraction:\n{exec_response}"
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK")
+            && query_one_response.contains("\"op\":\"queryOne\""),
+        "db helper with local lets should route queryOne query/schema through helper extraction:\n{query_one_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_rejects_db_operation_sequence_over_limit() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-op-sequence-limit");
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
@@ -17683,6 +18787,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18155,6 +19260,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18322,6 +19428,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18499,6 +19606,7 @@ fn staleExecTx() effects { net } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -18678,6 +19786,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -20358,6 +21467,7 @@ entry = "src/main.ut"
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -20552,6 +21662,7 @@ fn invalidParamsExec() effects { net } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -20762,6 +21873,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -30610,6 +31722,302 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_cluster_mode_forwards_db_postgres_dsn_file_env_alias_to_workers() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!("skipping cluster postgres DSN-file alias test: SEC4_TEST_POSTGRES_DSN not set");
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!("skipping cluster postgres DSN-file alias test: SEC4_TEST_POSTGRES_DSN is empty");
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!(
+            "skipping cluster postgres DSN-file alias test: could not connect to postgres DSN"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-postgres-dsn-file-alias");
+    let dsn_file_name = "cluster-postgres-dsn.txt";
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterpostgresdsnfilealiascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    fs::write(project_dir.join(dsn_file_name), dsn.as_str())
+        .expect("postgres dsn file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "2",
+            "--db-adapter",
+            "postgres",
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE", dsn_file_name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run cluster command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer token123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM cluster test could not connect to proxy listener");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected success status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_cluster_mode_forwards_db_postgres_runtime_env_alias_to_workers() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: SEC4_TEST_POSTGRES_DSN not set"
+        );
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: SEC4_TEST_POSTGRES_DSN is empty"
+        );
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!(
+            "skipping cluster postgres runtime-env alias test: could not connect to postgres DSN"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-postgres-runtime-env-alias");
+    let runtime_env_file_name = "cluster-postgres-runtime-env.txt";
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterpostgresruntimeenvaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    fs::write(
+        project_dir.join(runtime_env_file_name),
+        format!("SEC4_RT_LASM_DB_POSTGRES_DSN={dsn}\n"),
+    )
+    .expect("postgres runtime env file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "2",
+            "--db-adapter",
+            "postgres",
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
+            runtime_env_file_name,
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run cluster command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer token123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM cluster test could not connect to proxy listener");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected success status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_cluster_status_json_skips_unchanged_snapshots() {
     let project_dir = temp_dir("sec4-run-command-lasm-cluster-status-json");
     let status_json_path = project_dir.join("status/cluster-status.json");
@@ -31065,6 +32473,160 @@ fn main() effects { net } -> Int {
     assert_eq!(
         second_updated_at_ms, first_updated_at_ms,
         "status writer should keep updatedAtMs stable when snapshot fields are unchanged"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_cluster_status_json_includes_postgres_cache_overrides() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!(
+            "skipping cluster postgres status-json cache override test: SEC4_TEST_POSTGRES_DSN not set"
+        );
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!(
+            "skipping cluster postgres status-json cache override test: SEC4_TEST_POSTGRES_DSN is empty"
+        );
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!(
+            "skipping cluster postgres status-json cache override test: could not connect to postgres DSN"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-postgres-cache-status-json");
+    let status_json_path = project_dir.join("status/cluster-status.json");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::create_dir_all(project_dir.join("status")).expect("status directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterpostgrescachestatusjson"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let status_json_value = status_json_path
+        .to_str()
+        .expect("status json path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "3",
+            "--autoscale-check-ms",
+            "100",
+            "--cluster-status-json",
+            &status_json_value,
+            "--serve-timeout-ms",
+            "20000",
+            "--db-adapter",
+            "postgres",
+            "--db-postgres-dsn",
+            &dsn,
+            "--db-postgres-statement-cache-max",
+            "777",
+            "--db-postgres-placeholder-cache-max",
+            "888",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster status-json command should start");
+
+    let mut status_json_seen = false;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while waiting for status json")
+        {
+            panic!("run cluster command exited before status json check with status: {status}");
+        }
+        if status_json_path.exists() {
+            status_json_seen = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        status_json_seen,
+        "cluster status json file should be created at {}",
+        status_json_path.display()
+    );
+
+    thread::sleep(Duration::from_millis(250));
+    let status_json = fs::read_to_string(&status_json_path)
+        .expect("cluster status json snapshot should be readable");
+    let status: serde_json::Value =
+        serde_json::from_str(&status_json).expect("cluster status json should parse");
+    assert_eq!(
+        status.get("dbAdapter").and_then(serde_json::Value::as_str),
+        Some("postgres"),
+        "cluster status json should show postgres dbAdapter when postgres is selected"
+    );
+    assert_eq!(
+        status
+            .get("dbPostgresDsnConfigured")
+            .and_then(serde_json::Value::as_bool),
+        Some(true),
+        "cluster status json should mark postgres DSN configured"
+    );
+    assert_eq!(
+        status
+            .get("dbPostgresStatementCacheMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(777),
+        "cluster status json should include explicit dbPostgresStatementCacheMax override"
+    );
+    assert_eq!(
+        status
+            .get("dbPostgresPlaceholderCacheMax")
+            .and_then(serde_json::Value::as_u64),
+        Some(888),
+        "cluster status json should include explicit dbPostgresPlaceholderCacheMax override"
     );
 
     let _ = child.kill();
@@ -31609,6 +33171,14 @@ fn main() effects { net } -> Int {
         ])
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
         .output()
         .expect("sec4 run command should execute");
 
@@ -31624,9 +33194,302 @@ fn main() effects { net } -> Int {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
+            "run failed: db adapter postgres requires --db-postgres-dsn or a DSN source via SEC4_DB_ALPHA_DB_POSTGRES_DSN"
         ),
         "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_dsn_env_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-dsn-env-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousdsnaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env("SEC4_DB_ALPHA_DB_POSTGRES_DSN", "postgres://alpha")
+        .env("SEC4_RT_LASM_DB_POSTGRES_DSN", "postgres://lasm")
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres DSN env aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres DSN environment variables is ambiguous"),
+        "stderr should contain deterministic ambiguous DSN env alias guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_dsn_file_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-dsn-file-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousdsnfilealiascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let alpha_dsn_file = project_dir.join("alpha.postgres.dsn");
+    let lasm_dsn_file = project_dir.join("lasm.postgres.dsn");
+    fs::write(&alpha_dsn_file, "postgres://alpha").expect("alpha postgres file should be written");
+    fs::write(&lasm_dsn_file, "postgres://lasm").expect("lasm postgres file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_DB_ALPHA_POSTGRES_DSN_FILE",
+            alpha_dsn_file
+                .to_str()
+                .expect("alpha dsn file path should be valid utf-8"),
+        )
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+            lasm_dsn_file
+                .to_str()
+                .expect("lasm dsn file path should be valid utf-8"),
+        )
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres dsn file aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres DSN file sources is ambiguous"),
+        "stderr should contain deterministic ambiguous DSN file source guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_ambiguous_db_postgres_runtime_env_aliases_with_adapter_postgres() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-ambiguous-runtime-env-aliases");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresambiguousruntimeenvaliascommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let alpha_runtime_env_file = project_dir.join("alpha-runtime.postgres.env");
+    let lasm_runtime_env_file = project_dir.join("lasm-runtime.postgres.env");
+    fs::write(
+        &alpha_runtime_env_file,
+        "SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://alpha\n",
+    )
+    .expect("alpha runtime env file should be written");
+    fs::write(
+        &lasm_runtime_env_file,
+        "SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://lasm\n",
+    )
+    .expect("lasm runtime env file should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_RUNTIME_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE")
+        .env_remove("SEC4_DB_ALPHA_POSTGRES_RUNTIME_DSN_FILE")
+        .env(
+            "SEC4_DB_ALPHA_POSTGRES_RUNTIME_ENV_FILE",
+            alpha_runtime_env_file
+                .to_str()
+                .expect("alpha runtime env file path should be valid utf-8"),
+        )
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_RUNTIME_ENV_FILE",
+            lasm_runtime_env_file
+                .to_str()
+                .expect("lasm runtime env file path should be valid utf-8"),
+        )
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres runtime-env aliases are configured"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: db adapter postgres runtime env file sources is ambiguous"),
+        "stderr should contain deterministic ambiguous runtime env file source guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

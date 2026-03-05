@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_lifecycle.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_lifecycle.rs`.
 - Moved LASM cluster worker lifecycle helpers from `main.rs`:
   - `compute_lasm_cluster_base_port(...)`
   - worker spawn/wait helpers (`spawn_lasm_cluster_worker`, `wait_for_lasm_cluster_worker_ready`, `wait_for_lasm_cluster_worker_alive`, `spawn_and_wait_lasm_cluster_worker`)

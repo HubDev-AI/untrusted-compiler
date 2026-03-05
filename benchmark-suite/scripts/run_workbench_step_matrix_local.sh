@@ -112,6 +112,23 @@ resolve_infra_env_file() {
   printf '%s\n' "$infra_root/.env.example"
 }
 
+resolve_postgres_dsn_file() {
+  local dsn_file="$1"
+  local dsn
+  if [ -z "$dsn_file" ]; then
+    return 1
+  fi
+  if [ ! -f "$dsn_file" ]; then
+    return 1
+  fi
+  dsn="$(tr -d '\r\n' < "$dsn_file")"
+  dsn="$(printf '%s' "$dsn" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$dsn" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dsn"
+}
+
 load_dsn_from_env_file() {
   local env_file="$1"
   if [ ! -f "$env_file" ]; then
@@ -122,7 +139,22 @@ load_dsn_from_env_file() {
   # shellcheck source=/dev/null
   source "$env_file"
   set +a
-  local dsn="${SEC4_RT_LASM_DB_POSTGRES_DSN:-}"
+  local dsn="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-}}"
+  local candidate_file=""
+
+  if [ -z "$dsn" ]; then
+    for candidate_file in \
+      "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE:-}" \
+      "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE:-}" \
+      "${SEC4_DB_ALPHA_POSTGRES_DSN_FILE_PATH:-}" \
+      "${SEC4_RT_LASM_DB_POSTGRES_DSN_FILE_PATH:-}"
+    do
+      dsn="$(resolve_postgres_dsn_file "$candidate_file" || true)"
+      if [ -n "$dsn" ]; then
+        break
+      fi
+    done
+  fi
   if [ -z "$dsn" ]; then
     local user="${POSTGRES_USER:-sec4}"
     local pass="${POSTGRES_PASSWORD:-sec4dev}"

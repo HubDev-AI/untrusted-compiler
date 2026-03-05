@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - in `dispatch_lasm_cluster_relay_stream_fallback_multi`, the all-live sender scan branch now advances the scan cursor using direct increment + wrap reset,
   - replaced per-iteration `lasm_cluster_next_index_wrapped(...)` helper calls in that branch.
 

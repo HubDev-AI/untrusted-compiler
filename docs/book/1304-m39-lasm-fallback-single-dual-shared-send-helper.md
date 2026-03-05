@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`.
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/main.rs`.
 - Refactored:
   - `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)`
   - `dispatch_lasm_cluster_relay_stream_fallback_dual_live(...)`

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_dispatch.rs`.
 - Moved accept-dispatch helpers out of `main.rs`:
   - unavailable response enum/constants/writer:
     - `LasmClusterUnavailableReason`

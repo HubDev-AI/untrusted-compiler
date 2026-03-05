@@ -1,24 +1,16 @@
-use crate::lasm_db_adapter_state::{
-    persist_lasm_dynamic_db_record_append, persist_lasm_dynamic_db_records_full_sync,
+use crate::lasm_db_client::{
+    cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
+    ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
+    persist_lasm_db_record_after_unlock, persist_lasm_db_record_append,
+    persist_lasm_db_records_full_sync, run_lasm_db_exec_operation, run_lasm_db_exec_tx_operation,
+    run_lasm_db_query_one_operation, run_lasm_db_tx_commit, run_lasm_db_tx_rollback,
+    LasmDbExecOperationResult, LasmDbExecTxOperationResult, LasmDbQueryOneOperationError,
+    LasmDbQueryOneOperationResult, LasmPreparedDbOperationParams,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
     normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
-};
-use crate::lasm_db_runtime_postgres::{
-    parse_lasm_postgres_query_template_and_params,
-    parse_lasm_postgres_query_template_and_params_value, run_lasm_postgres_exec_thread_local,
-    run_lasm_postgres_exec_tx_thread_local, run_lasm_postgres_query_one_thread_local,
-    LasmPostgresParam, LasmPostgresThreadLocalConfig,
-};
-use crate::lasm_db_runtime_postgres_persist::persist_lasm_postgres_record_after_unlock;
-use crate::lasm_db_runtime_records_log::{
-    build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
-};
-use crate::lasm_db_runtime_sqlite::{
-    parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
-    run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
@@ -29,7 +21,7 @@ use crate::{
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
     LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -485,7 +477,7 @@ fn persist_lasm_db_record_with_capacity_guard(
 ) {
     let dropped_before = state.db_records_dropped_total;
     let history_overflowed = append_lasm_dynamic_db_record(state, record.clone());
-    if let Err(message) = persist_lasm_dynamic_db_record_append(state, record) {
+    if let Err(message) = persist_lasm_db_record_append(state, record) {
         eprintln!("warning: LASM dynamic records store persistence failed: {message}");
     }
     // Avoid O(n) full-store sync on every request once history is over capacity.
@@ -496,7 +488,7 @@ fn persist_lasm_db_record_with_capacity_guard(
             .db_records_dropped_total
             .is_multiple_of(LASM_DB_RECORDS_COMPACTION_SYNC_DROPS_INTERVAL)
     {
-        if let Err(message) = persist_lasm_dynamic_db_records_full_sync(state) {
+        if let Err(message) = persist_lasm_db_records_full_sync(state) {
             eprintln!(
                 "warning: LASM dynamic records store compaction sync failed after \
                  in-memory overflow: {message}"
@@ -505,20 +497,27 @@ fn persist_lasm_db_record_with_capacity_guard(
     }
 }
 
-fn build_lasm_postgres_thread_local_config(
-    state: &LasmDynamicResponseState,
-) -> Result<LasmPostgresThreadLocalConfig, String> {
-    let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
-    })?;
-    Ok(LasmPostgresThreadLocalConfig {
-        dsn: dsn.to_string(),
-        tls_mode: state.db_postgres_tls_mode,
-        statement_timeout_ms: state.db_postgres_statement_timeout_ms.max(1),
-        lock_timeout_ms: state.db_postgres_lock_timeout_ms.max(1),
-        connect_timeout_ms: state.db_postgres_connect_timeout_ms.max(1),
-        retryable_conflict_retry_max: state.db_postgres_retryable_conflict_retry_max,
-    })
+fn allocate_lasm_db_runtime_record(
+    state: &mut LasmDynamicResponseState,
+    op: &str,
+    db: i64,
+    template: &str,
+    params: &str,
+    tx: i64,
+    affected_rows: u64,
+) -> LasmDbRecord {
+    let record = LasmDbRecord {
+        id: state.next_db_record_id,
+        op: op.to_string(),
+        db,
+        template: template.to_string(),
+        params: params.to_string(),
+        tx,
+        affected_rows,
+        created_at_ms: lasm_now_ms(),
+    };
+    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+    record
 }
 
 fn append_lasm_db_record_in_memory_with_compaction_snapshot(
@@ -540,14 +539,37 @@ fn append_lasm_db_record_in_memory_with_compaction_snapshot(
     (record, compaction_snapshot)
 }
 
-struct PreparedLasmDbOperationParams {
-    postgres: Option<(String, Vec<LasmPostgresParam>)>,
-    sqlite: Option<LasmSqliteQueryParams>,
-}
-
 enum LasmExecTxSource {
     AllocateFromDb(i64),
     ExistingTx(i64),
+}
+
+fn parse_lasm_db_operation_params(
+    db_records_adapter: LasmDbRecordsAdapter,
+    validation_code: &'static str,
+    template: &str,
+    params: &str,
+    parsed_params: Option<&serde_json::Value>,
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) -> Option<LasmPreparedDbOperationParams> {
+    match parse_lasm_db_template_and_params(db_records_adapter, template, params, parsed_params) {
+        Ok(params) => Some(params),
+        Err(message) => {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    validation_code,
+                    "validation",
+                    message.as_str(),
+                    400,
+                    trace_id,
+                ),
+            );
+            None
+        }
+    }
 }
 
 fn prepare_lasm_db_operation_params(
@@ -558,55 +580,16 @@ fn prepare_lasm_db_operation_params(
     parsed_params: Option<&serde_json::Value>,
     response: &mut sec4_core::HttpResponse,
     trace_id: &str,
-) -> Option<PreparedLasmDbOperationParams> {
-    let postgres_preparsed = if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        Some(match parsed_params {
-            Some(parsed) => parse_lasm_postgres_query_template_and_params_value(template, parsed),
-            None => parse_lasm_postgres_query_template_and_params(template, params),
-        })
-    } else {
-        None
-    };
-    let sqlite_params = if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-        Some(match parsed_params {
-            Some(parsed) => parse_lasm_sqlite_query_params_value(parsed),
-            None => parse_lasm_sqlite_query_params(params),
-        })
-    } else {
-        None
-    };
-    if let Some(Err(message)) = sqlite_params {
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                validation_code,
-                "validation",
-                message.as_str(),
-                400,
-                trace_id,
-            ),
-        );
-        return None;
-    }
-    if let Some(Err(message)) = postgres_preparsed {
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                validation_code,
-                "validation",
-                message.as_str(),
-                400,
-                trace_id,
-            ),
-        );
-        return None;
-    }
-    Some(PreparedLasmDbOperationParams {
-        postgres: postgres_preparsed.and_then(Result::ok),
-        sqlite: sqlite_params.and_then(Result::ok),
-    })
+) -> Option<LasmPreparedDbOperationParams> {
+    parse_lasm_db_operation_params(
+        db_records_adapter,
+        validation_code,
+        template,
+        params,
+        parsed_params,
+        response,
+        trace_id,
+    )
 }
 
 fn resolve_lasm_db_operation_template_and_params(
@@ -615,7 +598,8 @@ fn resolve_lasm_db_operation_template_and_params(
     path_params: &BTreeMap<String, String>,
     operation: &str,
     validation_code: &'static str,
-    missing_handles_message: &'static str,
+    missing_template_message: &'static str,
+    missing_params_message: &'static str,
     trace_id: &str,
 ) -> Option<(String, String, Option<serde_json::Value>)> {
     let Some(raw_template_header) =
@@ -627,7 +611,7 @@ fn resolve_lasm_db_operation_template_and_params(
             &lasm_error_envelope(
                 validation_code,
                 "validation",
-                missing_handles_message,
+                missing_template_message,
                 400,
                 trace_id,
             ),
@@ -640,11 +624,17 @@ fn resolve_lasm_db_operation_template_and_params(
         return None;
     }
     if template.trim().is_empty() {
+        let code = match operation {
+            "exec" => "DB.EXEC_INVALID",
+            "execTx" => "DB.EXEC_TX_INVALID",
+            "queryOne" => "DB.QUERY_ONE_INVALID",
+            _ => "DB.SQL_TEMPLATE_INVALID",
+        };
         set_lasm_json_response(
             response,
             400,
             &lasm_error_envelope(
-                "DB.SQL_TEMPLATE_INVALID",
+                code,
                 "validation",
                 "sql.q query template is required",
                 400,
@@ -662,7 +652,7 @@ fn resolve_lasm_db_operation_template_and_params(
             &lasm_error_envelope(
                 validation_code,
                 "validation",
-                missing_handles_message,
+                missing_params_message,
                 400,
                 trace_id,
             ),
@@ -1046,17 +1036,17 @@ fn resolve_lasm_exec_tx_state_bindings(
     tx_source: &LasmExecTxSource,
     response: &mut sec4_core::HttpResponse,
     trace_id: &str,
-) -> Option<(i64, i64, Option<i64>)> {
+) -> Option<(i64, i64, bool, Option<i64>)> {
     match tx_source {
         LasmExecTxSource::AllocateFromDb(db_value) => {
             let Some(tx_value) = allocate_lasm_db_tx_handle(state, *db_value) else {
                 set_lasm_db_tx_capacity_response(response, state.db_tx_max_handles, trace_id);
                 return None;
             };
-            Some((*db_value, tx_value, Some(tx_value)))
+            Some((*db_value, tx_value, false, Some(tx_value)))
         }
         LasmExecTxSource::ExistingTx(tx_value) => {
-            let Some(db_value) = state.db_tx_handles.get(tx_value).copied() else {
+            let Some(tx_state) = state.db_tx_handles.get(tx_value).copied() else {
                 set_lasm_json_response(
                     response,
                     400,
@@ -1070,18 +1060,7 @@ fn resolve_lasm_exec_tx_state_bindings(
                 );
                 return None;
             };
-            Some((db_value, *tx_value, None))
-        }
-    }
-}
-
-fn cleanup_lasm_exec_tx_allocated_handle(
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    tx_handle: Option<i64>,
-) {
-    if let Some(tx_handle) = tx_handle {
-        if let Ok(mut state) = dynamic_state.lock() {
-            state.db_tx_handles.remove(&tx_handle);
+            Some((tx_state.db, *tx_value, tx_state.active, None))
         }
     }
 }
@@ -1176,10 +1155,21 @@ fn stage_lasm_internal_db_sequence_operation_headers(
 fn cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
     dynamic_state: &Mutex<LasmDynamicResponseState>,
     sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
+    sequence_tx_handles: &BTreeSet<i64>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    operation_succeeded: bool,
 ) {
     cleanup_lasm_internal_db_sequence_tx_handles(
         dynamic_state,
+        db_records_adapter,
         sequence_tx_handles_by_source.values().copied(),
+        operation_succeeded,
+    );
+    cleanup_lasm_internal_db_sequence_tx_handles(
+        dynamic_state,
+        db_records_adapter,
+        sequence_tx_handles.iter().copied(),
+        operation_succeeded,
     );
 }
 
@@ -1187,6 +1177,8 @@ fn fail_lasm_internal_db_sequence_with_envelope(
     response: &mut sec4_core::HttpResponse,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
     sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
+    sequence_tx_handles: &BTreeSet<i64>,
+    db_records_adapter: LasmDbRecordsAdapter,
     code: &str,
     kind: &str,
     message: &str,
@@ -1201,6 +1193,9 @@ fn fail_lasm_internal_db_sequence_with_envelope(
     cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
         dynamic_state,
         sequence_tx_handles_by_source,
+        sequence_tx_handles,
+        db_records_adapter,
+        false,
     );
     true
 }
@@ -1283,6 +1278,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     }
     if operation_count > 1 {
         let mut sequence_tx_handles_by_source = BTreeMap::<i64, i64>::new();
+        let mut sequence_tx_handles = BTreeSet::<i64>::new();
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(
                 response,
@@ -1330,6 +1326,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.EXEC_TX_INVALID",
                         "validation",
                         "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
@@ -1349,6 +1347,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             response,
                             dynamic_state,
                             &sequence_tx_handles_by_source,
+                            &sequence_tx_handles,
+                            db_records_adapter,
                             "DB.EXEC_TX_INVALID",
                             "validation",
                             "db.execTx requires transaction and query handles",
@@ -1361,6 +1361,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             response,
                             dynamic_state,
                             &sequence_tx_handles_by_source,
+                            &sequence_tx_handles,
+                            db_records_adapter,
                             "DB.EXEC_TX_INVALID",
                             "validation",
                             "db.execTx requires db.tx(dbCap) with valid db capability handle",
@@ -1386,9 +1388,31 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         sequence_allocated_tx_source = Some(tx_db_source);
                     }
                 } else if let Some(raw_tx_handle) = raw_tx_handle {
-                    response
-                        .headers
-                        .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), raw_tx_handle);
+                    response.headers.insert(
+                        LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
+                        "1".to_string(),
+                    );
+                    response.headers.insert(
+                        LASM_INTERNAL_DB_TX_HEADER.to_string(),
+                        raw_tx_handle.clone(),
+                    );
+                    let tx_handle_raw =
+                        materialize_lasm_internal_header_value(raw_tx_handle, request, path_params);
+                    let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.trim()) else {
+                        return fail_lasm_internal_db_sequence_with_envelope(
+                            response,
+                            dynamic_state,
+                            &sequence_tx_handles_by_source,
+                            &sequence_tx_handles,
+                            db_records_adapter,
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires valid tx handle",
+                            400,
+                            trace_id,
+                        );
+                    };
+                    sequence_tx_handles.insert(tx_handle);
                 }
             } else {
                 if let Some(value) = take_lasm_internal_header_value_indexed(
@@ -1423,6 +1447,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     response,
                     dynamic_state,
                     &sequence_tx_handles_by_source,
+                    &sequence_tx_handles,
+                    db_records_adapter,
                     "DB.OPERATION_INVALID",
                     "validation",
                     "missing internal db operation marker",
@@ -1434,6 +1460,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
                     dynamic_state,
                     &sequence_tx_handles_by_source,
+                    &sequence_tx_handles,
+                    db_records_adapter,
+                    false,
                 );
                 return true;
             }
@@ -1443,6 +1472,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.tx runtime did not preserve db handle marker",
@@ -1457,6 +1488,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.tx runtime failure",
@@ -1471,6 +1504,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.tx runtime did not publish transaction handle marker",
@@ -1483,6 +1518,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.tx runtime failure",
@@ -1500,6 +1537,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.execTx runtime did not publish transaction handle marker",
@@ -1512,6 +1551,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         response,
                         dynamic_state,
                         &sequence_tx_handles_by_source,
+                        &sequence_tx_handles,
+                        db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
                         "db.tx runtime failure",
@@ -1525,6 +1566,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
             dynamic_state,
             &sequence_tx_handles_by_source,
+            &sequence_tx_handles,
+            db_records_adapter,
+            true,
         );
         return true;
     }
@@ -1555,6 +1599,19 @@ fn apply_lasm_internal_db_operation_materialization_single(
     let operation = operation.trim();
     match operation {
         "listRecords" => {
+            {
+                let mut state =
+                    match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
+                        Some(state) => state,
+                        None => return true,
+                    };
+                if let Err(message) =
+                    ensure_lasm_db_records_client_ready(&mut state, db_records_adapter)
+                {
+                    set_lasm_db_runtime_error_response(response, "listRecords", &message, trace_id);
+                    return true;
+                }
+            }
             apply_lasm_db_list_records_response_materialization(
                 response,
                 request,
@@ -1667,7 +1724,8 @@ fn handle_lasm_internal_db_exec_operation(
         path_params,
         "exec",
         "DB.EXEC_INVALID",
-        "db.exec requires db capability and query handle",
+        "db.exec requires db capability, query template, and query params",
+        "db.exec requires db capability, query template, and query params",
         trace_id,
     ) else {
         return true;
@@ -1677,7 +1735,7 @@ fn handle_lasm_internal_db_exec_operation(
         request,
         path_params,
         "DB.EXEC_INVALID",
-        "db.exec requires db capability and query handle",
+        "db.exec requires db capability handle",
         trace_id,
     ) else {
         return true;
@@ -1694,68 +1752,7 @@ fn handle_lasm_internal_db_exec_operation(
         Some(value) => value,
         None => return true,
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
-            set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
-            return true;
-        };
-        let postgres_config = {
-            let state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
-            {
-                Some(state) => state,
-                None => return true,
-            };
-            if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
-                return true;
-            }
-            match build_lasm_postgres_thread_local_config(&state) {
-                Ok(config) => config,
-                Err(message) => {
-                    set_lasm_db_runtime_error_response(
-                        response,
-                        "exec",
-                        message.as_str(),
-                        trace_id,
-                    );
-                    return true;
-                }
-            }
-        };
-        let affected_rows = match run_lasm_postgres_exec_thread_local(
-            &postgres_config,
-            postgres_template.as_str(),
-            postgres_params.as_slice(),
-        ) {
-            Ok(value) => value,
-            Err(message) => {
-                set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id);
-                return true;
-            }
-        };
-        let (record, compaction_snapshot) = {
-            let mut state =
-                match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
-                    Some(state) => state,
-                    None => return true,
-                };
-            let record = LasmDbRecord {
-                id: state.next_db_record_id,
-                op: "exec".to_string(),
-                db,
-                template: template.clone(),
-                params: params.clone(),
-                tx: 0,
-                affected_rows,
-                created_at_ms: lasm_now_ms(),
-            };
-            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-            append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
-        };
-        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
-        set_lasm_db_exec_like_success_response(response, &record, affected_rows);
-        return true;
-    }
-    let (record, affected_rows) = {
+    let (record, persistence_payload) = {
         let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
         {
             Some(state) => state,
@@ -1764,42 +1761,62 @@ fn handle_lasm_internal_db_exec_operation(
         if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
             return true;
         }
-        let mut affected_rows = 0u64;
-        if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
-                set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
-                return true;
-            };
-            let sqlite_affected_rows =
-                match run_lasm_sqlite_exec(&mut state, template.as_str(), sqlite_params) {
-                    Ok(value) => value,
-                    Err(message) => {
-                        set_lasm_db_runtime_error_response(
-                            response,
-                            "exec",
-                            message.as_str(),
-                            trace_id,
-                        );
-                        return true;
-                    }
-                };
-            affected_rows = sqlite_affected_rows;
-        }
-        let record = LasmDbRecord {
-            id: state.next_db_record_id,
-            op: "exec".to_string(),
-            db,
-            template: template.clone(),
-            params: params.clone(),
-            tx: 0,
-            affected_rows,
-            created_at_ms: lasm_now_ms(),
+        let operation_result = run_lasm_db_exec_operation(
+            &mut state,
+            db_records_adapter,
+            template.as_str(),
+            &prepared_params,
+        )
+        .map_err(|message| {
+            set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id)
+        });
+        let operation_result = match operation_result {
+            Ok(value) => value,
+            Err(()) => return true,
         };
-        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-        (record, affected_rows)
+        match operation_result {
+            LasmDbExecOperationResult::Postgres {
+                config,
+                affected_rows,
+            } => {
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "exec",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    affected_rows,
+                );
+                let (record, compaction_snapshot) =
+                    append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
+                (record, Some((config, compaction_snapshot)))
+            }
+            LasmDbExecOperationResult::Sqlite { affected_rows }
+            | LasmDbExecOperationResult::RecordsLog { affected_rows } => {
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "exec",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    affected_rows,
+                );
+                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                (record, None)
+            }
+        }
     };
-    set_lasm_db_exec_like_success_response(response, &record, affected_rows);
+    if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
+    }
+    set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     true
 }
 
@@ -1817,7 +1834,8 @@ fn handle_lasm_internal_db_exec_tx_operation(
         path_params,
         "execTx",
         "DB.EXEC_TX_INVALID",
-        "db.execTx requires transaction and query handles",
+        "db.execTx requires transaction, query template, and query params",
+        "db.execTx requires transaction, query template, and query params",
         trace_id,
     ) else {
         return true;
@@ -1851,11 +1869,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
         Some(value) => value,
         None => return true,
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
-            set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
-            return true;
-        };
+    let (record, persistence_payload) = {
         let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
         {
             Some(state) => state,
@@ -1864,94 +1878,51 @@ fn handle_lasm_internal_db_exec_tx_operation(
         if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
             return true;
         }
-        let (db, tx, allocated_tx_handle) =
+        let (db, tx, tx_active, allocated_tx_handle) =
             match resolve_lasm_exec_tx_state_bindings(&mut state, &tx_source, response, trace_id) {
                 Some(value) => value,
                 None => return true,
             };
-        let postgres_config = match build_lasm_postgres_thread_local_config(&state) {
-            Ok(config) => config,
-            Err(message) => {
-                if let Some(tx_handle) = allocated_tx_handle {
-                    state.db_tx_handles.remove(&tx_handle);
-                }
-                set_lasm_db_runtime_error_response(response, "execTx", message.as_str(), trace_id);
-                return true;
-            }
-        };
-        drop(state);
-        let affected_rows = match run_lasm_postgres_exec_tx_thread_local(
-            &postgres_config,
-            postgres_template.as_str(),
-            postgres_params.as_slice(),
+        let operation_result = match run_lasm_db_exec_tx_operation(
+            &mut state,
+            db_records_adapter,
+            tx,
+            tx_active,
+            template.as_str(),
+            &prepared_params,
         ) {
             Ok(value) => value,
-            Err(message) => {
-                cleanup_lasm_exec_tx_allocated_handle(dynamic_state, allocated_tx_handle);
-                set_lasm_db_runtime_error_response(response, "execTx", message.as_str(), trace_id);
-                return true;
-            }
-        };
-        let (record, compaction_snapshot) = {
-            let mut state =
-                match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
-                    Some(state) => state,
-                    None => return true,
-                };
-            if let Some(tx_handle) = allocated_tx_handle {
-                if !keep_allocated_tx_handle {
-                    state.db_tx_handles.remove(&tx_handle);
+            Err(error) => {
+                if error.tx_started {
+                    let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
+                    if !keep_allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx);
+                    }
                 }
-            }
-            let record = LasmDbRecord {
-                id: state.next_db_record_id,
-                op: "execTx".to_string(),
-                db,
-                template: template.clone(),
-                params: params.clone(),
-                tx,
-                affected_rows,
-                created_at_ms: lasm_now_ms(),
-            };
-            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-            append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
-        };
-        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
-        set_lasm_db_exec_like_success_response(response, &record, affected_rows);
-        response.headers.insert(
-            LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
-            record.tx.to_string(),
-        );
-        return true;
-    }
-
-    let (record, affected_rows) = {
-        let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
-        {
-            Some(state) => state,
-            None => return true,
-        };
-        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
-            return true;
-        }
-        let (db, tx, allocated_tx_handle) =
-            match resolve_lasm_exec_tx_state_bindings(&mut state, &tx_source, response, trace_id) {
-                Some(value) => value,
-                None => return true,
-            };
-        let mut affected_rows = 0u64;
-        if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
-                set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
+                if let Some(tx_handle) = allocated_tx_handle {
+                    if !keep_allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx_handle);
+                    }
+                }
+                set_lasm_db_runtime_error_response(
+                    response,
+                    "execTx",
+                    error.message.as_str(),
+                    trace_id,
+                );
                 return true;
-            };
-            let sqlite_affected_rows =
-                match run_lasm_sqlite_exec_tx(&mut state, template.as_str(), sqlite_params) {
-                    Ok(value) => value,
-                    Err(message) => {
-                        if let Some(tx_handle) = allocated_tx_handle {
-                            state.db_tx_handles.remove(&tx_handle);
-                        }
+            }
+        };
+        match operation_result {
+            LasmDbExecTxOperationResult::Postgres {
+                config,
+                affected_rows,
+                tx_started,
+            } => {
+                if tx_started && !keep_allocated_tx_handle {
+                    if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
+                    {
+                        state.db_tx_handles.remove(&tx);
                         set_lasm_db_runtime_error_response(
                             response,
                             "execTx",
@@ -1960,29 +1931,79 @@ fn handle_lasm_internal_db_exec_tx_operation(
                         );
                         return true;
                     }
+                    state.db_tx_handles.remove(&tx);
+                }
+                if let Some(tx_handle) = allocated_tx_handle {
+                    if !keep_allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx_handle);
+                    }
+                }
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "execTx",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    tx,
+                    affected_rows,
+                );
+                let (record, compaction_snapshot) =
+                    append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
+                (record, Some((config, compaction_snapshot)))
+            }
+            other_result => {
+                let (affected_rows, tx_started, should_commit_tx) = match other_result {
+                    LasmDbExecTxOperationResult::Sqlite {
+                        affected_rows,
+                        tx_started,
+                    } => (affected_rows, tx_started, true),
+                    LasmDbExecTxOperationResult::RecordsLog { affected_rows } => {
+                        (affected_rows, false, false)
+                    }
+                    LasmDbExecTxOperationResult::Postgres { .. } => unreachable!(),
                 };
-            affected_rows = sqlite_affected_rows;
-        }
-        if let Some(tx_handle) = allocated_tx_handle {
-            if !keep_allocated_tx_handle {
-                state.db_tx_handles.remove(&tx_handle);
+                if should_commit_tx && tx_started && !keep_allocated_tx_handle {
+                    if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
+                    {
+                        state.db_tx_handles.remove(&tx);
+                        set_lasm_db_runtime_error_response(
+                            response,
+                            "execTx",
+                            message.as_str(),
+                            trace_id,
+                        );
+                        return true;
+                    }
+                    state.db_tx_handles.remove(&tx);
+                }
+                if let Some(tx_handle) = allocated_tx_handle {
+                    if !keep_allocated_tx_handle {
+                        state.db_tx_handles.remove(&tx_handle);
+                    }
+                }
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "execTx",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    tx,
+                    affected_rows,
+                );
+                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                (record, None)
             }
         }
-        let record = LasmDbRecord {
-            id: state.next_db_record_id,
-            op: "execTx".to_string(),
-            db,
-            template: template.clone(),
-            params: params.clone(),
-            tx,
-            affected_rows,
-            created_at_ms: lasm_now_ms(),
-        };
-        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-        (record, affected_rows)
     };
-    set_lasm_db_exec_like_success_response(response, &record, affected_rows);
+    if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
+    }
+    set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     response.headers.insert(
         LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
         record.tx.to_string(),
@@ -2004,7 +2025,8 @@ fn handle_lasm_internal_db_query_one_operation(
         path_params,
         "queryOne",
         "DB.QUERY_ONE_INVALID",
-        "db.queryOne requires db capability, query, and row schema handles",
+        "db.queryOne requires db capability, query template, query params, and row schema",
+        "db.queryOne requires db capability, query template, query params, and row schema",
         trace_id,
     ) else {
         return true;
@@ -2014,7 +2036,7 @@ fn handle_lasm_internal_db_query_one_operation(
         request,
         path_params,
         "DB.QUERY_ONE_INVALID",
-        "db.queryOne requires db capability, query, and row schema handles",
+        "db.queryOne requires db capability, query template, query params, and row schema handles",
         trace_id,
     ) else {
         return true;
@@ -2024,7 +2046,7 @@ fn handle_lasm_internal_db_query_one_operation(
         request,
         path_params,
         "DB.QUERY_ONE_INVALID",
-        "db.queryOne requires db capability, query, and row schema handles",
+        "db.queryOne requires db capability, query template, query params, and row schema",
         trace_id,
     ) else {
         return true;
@@ -2041,98 +2063,7 @@ fn handle_lasm_internal_db_query_one_operation(
         Some(value) => value,
         None => return true,
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let Some((postgres_template, postgres_params)) = prepared_params.postgres.as_ref() else {
-            set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-            return true;
-        };
-        let state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
-            Some(state) => state,
-            None => return true,
-        };
-        if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
-            return true;
-        }
-        let postgres_config = match build_lasm_postgres_thread_local_config(&state) {
-            Ok(config) => config,
-            Err(message) => {
-                set_lasm_db_runtime_error_response(
-                    response,
-                    "queryOne",
-                    message.as_str(),
-                    trace_id,
-                );
-                return true;
-            }
-        };
-        drop(state);
-        let row_object = match run_lasm_postgres_query_one_thread_local(
-            &postgres_config,
-            postgres_template.as_str(),
-            postgres_params.as_slice(),
-        ) {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                set_lasm_json_response(
-                    response,
-                    404,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_NOT_FOUND",
-                        "missing_dependency",
-                        "db.queryOne row not found",
-                        404,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            Err(message) => {
-                set_lasm_db_runtime_error_response(
-                    response,
-                    "queryOne",
-                    message.as_str(),
-                    trace_id,
-                );
-                return true;
-            }
-        };
-        let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-        if !enforce_lasm_db_query_one_row_max_columns(response, &row_object, trace_id) {
-            return true;
-        }
-        if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
-            return true;
-        }
-        let (record, compaction_snapshot) = {
-            let mut state =
-                match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
-                    Some(state) => state,
-                    None => return true,
-                };
-            let record = LasmDbRecord {
-                id: state.next_db_record_id,
-                op: "queryOne".to_string(),
-                db,
-                template: template.clone(),
-                params: params.clone(),
-                tx: 0,
-                affected_rows: 1,
-                created_at_ms: lasm_now_ms(),
-            };
-            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-            append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
-        };
-        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
-        set_lasm_db_query_one_success_response(
-            response,
-            &record,
-            row_schema,
-            row.as_str(),
-            &row_object,
-        );
-        return true;
-    }
-    let matched_record = {
+    let (query_result, persistence_payload) = {
         let mut state = match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id)
         {
             Some(state) => state,
@@ -2141,102 +2072,85 @@ fn handle_lasm_internal_db_query_one_operation(
         if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
             return true;
         }
-        if db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-            let Some(sqlite_params) = prepared_params.sqlite.as_ref() else {
+        match run_lasm_db_query_one_operation(
+            &mut state,
+            db_records_adapter,
+            db,
+            template.as_str(),
+            params.as_str(),
+            row_schema,
+            &prepared_params,
+        ) {
+            Ok(LasmDbQueryOneOperationResult::Postgres { config, row }) => {
+                let row_object = row;
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "queryOne",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    1,
+                );
+                let (record, compaction_snapshot) =
+                    append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
+                (
+                    Some((record.clone(), row_object)),
+                    Some((config, record, compaction_snapshot)),
+                )
+            }
+            Ok(LasmDbQueryOneOperationResult::Sqlite { row })
+            | Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => {
+                let record = allocate_lasm_db_runtime_record(
+                    &mut state,
+                    "queryOne",
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                    0,
+                    1,
+                );
+                persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                (Some((record, row)), None)
+            }
+            Err(LasmDbQueryOneOperationError::NotFound) => (None, None),
+            Err(LasmDbQueryOneOperationError::Runtime(message)) => {
+                set_lasm_db_runtime_error_response(
+                    response,
+                    "queryOne",
+                    message.as_str(),
+                    trace_id,
+                );
+                return true;
+            }
+            Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
                 set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
                 return true;
-            };
-            let row_object =
-                match run_lasm_sqlite_query_one(&mut state, template.as_str(), sqlite_params) {
-                    Ok(Some(value)) => value,
-                    Ok(None) => {
-                        set_lasm_json_response(
-                            response,
-                            404,
-                            &lasm_error_envelope(
-                                "DB.QUERY_ONE_NOT_FOUND",
-                                "missing_dependency",
-                                "db.queryOne row not found",
-                                404,
-                                trace_id,
-                            ),
-                        );
-                        return true;
-                    }
-                    Err(message) => {
-                        set_lasm_db_runtime_error_response(
-                            response,
-                            "queryOne",
-                            message.as_str(),
-                            trace_id,
-                        );
-                        return true;
-                    }
-                };
-            let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-            if !enforce_lasm_db_query_one_row_max_columns(response, &row_object, trace_id) {
-                return true;
             }
-            if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
-                return true;
-            }
-            let record = LasmDbRecord {
-                id: state.next_db_record_id,
-                op: "queryOne".to_string(),
-                db,
-                template: template.clone(),
-                params: params.clone(),
-                tx: 0,
-                affected_rows: 1,
-                created_at_ms: lasm_now_ms(),
-            };
-            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-            persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-            set_lasm_db_query_one_success_response(
-                response,
-                &record,
-                row_schema,
-                row.as_str(),
-                &row_object,
-            );
-            return true;
-        }
-        let matched_source_record =
-            find_lasm_records_log_latest_match(&state, db, template.as_str(), params.as_str());
-        if let Some(matched_source_record) = matched_source_record {
-            let record = LasmDbRecord {
-                id: state.next_db_record_id,
-                op: "queryOne".to_string(),
-                db,
-                template: template.clone(),
-                params: params.clone(),
-                tx: 0,
-                affected_rows: 1,
-                created_at_ms: lasm_now_ms(),
-            };
-            state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-            persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-            Some((record, matched_source_record))
-        } else {
-            None
         }
     };
-    let Some((record, matched_source_record)) = matched_record else {
+    if let Some((postgres_config, record, compaction_snapshot)) = persistence_payload {
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
+    }
+    let Some((record, row_object)) = query_result else {
         set_lasm_json_response(
             response,
             404,
             &lasm_error_envelope(
                 "DB.QUERY_ONE_NOT_FOUND",
                 "missing_dependency",
-                "db.queryOne record not found",
+                "db.queryOne row not found",
                 404,
                 trace_id,
             ),
         );
         return true;
     };
-    let row_object =
-        build_lasm_records_log_query_one_row_object(&matched_source_record, row_schema);
     let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
     if !enforce_lasm_db_query_one_row_max_columns(response, &row_object, trace_id) {
         return true;
@@ -2256,14 +2170,16 @@ fn handle_lasm_internal_db_query_one_operation(
 
 fn cleanup_lasm_internal_db_sequence_tx_handles(
     dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
     handles: impl IntoIterator<Item = i64>,
+    operation_succeeded: bool,
 ) {
-    let Ok(mut state) = dynamic_state.lock() else {
-        return;
-    };
-    for handle in handles {
-        state.db_tx_handles.remove(&handle);
-    }
+    cleanup_lasm_internal_db_sequence_tx_handles_from_adapter(
+        dynamic_state,
+        db_records_adapter,
+        handles,
+        operation_succeeded,
+    );
 }
 
 fn take_lasm_internal_header_value(
@@ -2626,6 +2542,82 @@ mod tests {
     }
 
     #[test]
+    fn exec_marker_rejects_empty_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "   ".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "empty template marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_INVALID\""));
+    }
+
+    #[test]
+    fn exec_marker_rejects_invalid_db_handle_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "0".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "invalid db handle should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_INVALID\""));
+    }
+
+    #[test]
     fn query_one_marker_rejects_missing_row_schema_header() {
         let request = empty_request();
         let path_params = BTreeMap::new();
@@ -2711,6 +2703,92 @@ mod tests {
     }
 
     #[test]
+    fn query_one_marker_rejects_invalid_row_schema_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "0".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "invalid queryOne row schema should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+    }
+
+    #[test]
+    fn query_one_marker_rejects_non_numeric_row_schema_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "invalid".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "non-numeric queryOne row schema should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+    }
+
+    #[test]
     fn query_one_marker_rejects_missing_template_header() {
         let request = empty_request();
         let path_params = BTreeMap::new();
@@ -2743,6 +2821,49 @@ mod tests {
         assert!(
             handled,
             "missing queryOne template marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
+    }
+
+    #[test]
+    fn query_one_marker_rejects_empty_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response.headers.insert(
+            LASM_INTERNAL_DB_OP_HEADER.to_string(),
+            "queryOne".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), "1".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+            "7".to_string(),
+        );
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "   ".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "empty queryOne template marker should be handled deterministically"
         );
         assert_eq!(response.status, 400);
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
@@ -2831,6 +2952,120 @@ mod tests {
         let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
         assert!(body.contains("\"code\":\"DB.QUERY_ONE_INVALID\""));
         assert!(body.contains("sql.q params payload is required"));
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_empty_template_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), "1".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(), "".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "empty template marker should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_invalid_tx_db_handle_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), "0".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "invalid tx db handle should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
+    }
+
+    #[test]
+    fn exec_tx_marker_rejects_invalid_tx_handle_header() {
+        let request = empty_request();
+        let path_params = BTreeMap::new();
+        let dynamic_state = Mutex::new(LasmDynamicResponseState::default());
+        let mut response = sec4_core::HttpResponse::text(200, "");
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), "0".to_string());
+        response.headers.insert(
+            LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+            "SELECT 1".to_string(),
+        );
+        response
+            .headers
+            .insert(LASM_INTERNAL_DB_PARAMS_HEADER.to_string(), "[]".to_string());
+
+        let handled = apply_lasm_internal_db_operation_materialization(
+            &mut response,
+            &request,
+            &path_params,
+            &dynamic_state,
+            LasmDbRecordsAdapter::RecordsLog,
+            "rt-unit",
+        );
+
+        assert!(
+            handled,
+            "invalid tx handle should be handled deterministically"
+        );
+        assert_eq!(response.status, 400);
+        let body = String::from_utf8(response.body).expect("response body should be utf-8 JSON");
+        assert!(body.contains("\"code\":\"DB.EXEC_TX_INVALID\""));
+        assert!(body.contains("db.execTx requires transaction and query handles"));
     }
 
     #[test]

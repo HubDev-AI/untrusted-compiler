@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added `advance_lasm_cluster_relay_pump_cursor(...)` for wrapped cursor progression,
   - added `normalize_lasm_cluster_relay_pump_cursor(...)` for post-release empty/bounds normalization,
   - budgeted relay pump scheduler now uses these helpers in `Progressed`, `Idle`, `Complete`, and pump-error branches.

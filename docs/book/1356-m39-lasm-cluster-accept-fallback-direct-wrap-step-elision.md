@@ -5,11 +5,11 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - replaced `lasm_cluster_next_index_wrapped(...)` usage for `next_dispatch_wrapped` with direct increment+wrap arithmetic.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - replaced dual-live second-attempt `lasm_cluster_next_index_wrapped(...)` usage with direct increment+wrap arithmetic.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`:
   - removed now-unused `lasm_cluster_next_index_wrapped` helper.
 
 ## Why

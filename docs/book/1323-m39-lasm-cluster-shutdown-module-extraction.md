@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_shutdown.rs`.
 - Moved repeated cluster finalization path from `cmd_run_lasm_cluster(...)` in `main.rs` into:
   - `finalize_lasm_cluster_runtime(...)`
 - Shared finalizer now handles:

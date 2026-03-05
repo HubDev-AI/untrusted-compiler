@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added helper `release_lasm_cluster_relay_connection(...)`,
   - relay pump `Complete` and pump-error branches now call this helper instead of repeating inline release code,
   - helper centralizes `swap_remove`, pooled-buffer return, and active-connection decrement bookkeeping.

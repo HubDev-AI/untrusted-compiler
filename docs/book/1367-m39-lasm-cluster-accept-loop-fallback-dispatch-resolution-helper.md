@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - added `dispatch_lasm_cluster_relay_stream_fallback_with_live_hints(...)`,
   - moved fallback dispatch strategy resolution (all-live / dual-live / single-live / multi) out of the main accept-loop body into this helper.
 

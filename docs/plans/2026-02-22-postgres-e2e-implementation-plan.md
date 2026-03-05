@@ -6,25 +6,25 @@
 
 **Architecture:** Use a hybrid layout: shared local infra under `infra/local-postgres/` plus a dedicated runnable example under `examples/postgres-e2e/`. Reuse existing LASM DB intrinsic response contracts (`DbExecResponse`, `DbExecTxResponse`, `DbQueryOneResponse`, `DbListRecordsResponse`) and wire runtime via `SEC4_RT_LASM_DB_ADAPTER=postgres` and DSN env.
 
-**Tech Stack:** Docker Compose (Postgres 16), shell scripts, AILang `.ut` example routes, `sec4` CLI (LASM backend), focused Rust integration test in `compiler/sec4-cli/tests/commands.rs`.
+**Tech Stack:** Docker Compose (Postgres 16), shell scripts, untrusted-compiler `.ut` example routes, `sec4` CLI (LASM backend), focused Rust integration test in `compiler/sec4-cli/tests/commands.rs`.
 
 ---
 
 ### Task 1: Shared local Postgres infra
 
 **Files:**
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/docker-compose.yml`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/.env.example`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/down.sh`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/reset.sh`
+- Create: `$REPO_ROOT/infra/local-postgres/docker-compose.yml`
+- Create: `$REPO_ROOT/infra/local-postgres/.env.example`
+- Create: `$REPO_ROOT/infra/local-postgres/scripts/up.sh`
+- Create: `$REPO_ROOT/infra/local-postgres/scripts/down.sh`
+- Create: `$REPO_ROOT/infra/local-postgres/scripts/reset.sh`
 
 **Step 1: Write failing script contract checks (minimal shell validation)**
 
 ```bash
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/down.sh
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/reset.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/up.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/down.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/reset.sh
 ```
 
 Expected now: FAIL (files missing).
@@ -43,7 +43,8 @@ Create `.env.example`:
 - `POSTGRES_DB=sec4_local`
 - `POSTGRES_USER=sec4`
 - `POSTGRES_PASSWORD=sec4dev`
-- `SEC4_RT_LASM_DB_POSTGRES_DSN=postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable`
+- `SEC4_DB_ALPHA_DB_POSTGRES_DSN=postgres://sec4:sec4dev@127.0.0.1:5432/sec4_local?sslmode=disable`
+  (or `SEC4_RT_LASM_DB_POSTGRES_DSN=...` as legacy-compatible alias)
 
 **Step 3: Add scripts with fail-fast UX**
 
@@ -64,33 +65,33 @@ Create `.env.example`:
 
 Run:
 ```bash
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/down.sh
-bash -n /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/reset.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/up.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/down.sh
+bash -n $REPO_ROOT/infra/local-postgres/scripts/reset.sh
 ```
 Expected: PASS.
 
 **Step 5: Commit**
 
 ```bash
-git add /Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres
+git add $REPO_ROOT/infra/local-postgres
 git commit -m "M39: add durable local postgres infra for lasm e2e"
 ```
 
 ### Task 2: Postgres E2E example app
 
 **Files:**
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/sec4.toml`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/sec4.policy`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/src/main.ut`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/README.md`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/scripts/smoke.sh`
+- Create: `$REPO_ROOT/examples/postgres-e2e/sec4.toml`
+- Create: `$REPO_ROOT/examples/postgres-e2e/sec4.policy`
+- Create: `$REPO_ROOT/examples/postgres-e2e/src/main.ut`
+- Create: `$REPO_ROOT/examples/postgres-e2e/README.md`
+- Create: `$REPO_ROOT/examples/postgres-e2e/scripts/smoke.sh`
 
 **Step 1: Write failing validation command**
 
 Run:
 ```bash
-cargo run -p sec4 -- check --path /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e
+cargo run -p sec4 -- check --path $REPO_ROOT/examples/postgres-e2e
 ```
 Expected now: FAIL (project missing).
 
@@ -122,22 +123,22 @@ Use deterministic sample SQL in docs (for Postgres):
 
 Run:
 ```bash
-cargo run -p sec4 -- check --path /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e
-bash -n /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/scripts/smoke.sh
+cargo run -p sec4 -- check --path $REPO_ROOT/examples/postgres-e2e
+bash -n $REPO_ROOT/examples/postgres-e2e/scripts/smoke.sh
 ```
 Expected: PASS.
 
 **Step 5: Commit**
 
 ```bash
-git add /Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e
+git add $REPO_ROOT/examples/postgres-e2e
 git commit -m "M39: add postgres e2e lasm example with smoke script"
 ```
 
 ### Task 3: Focused CLI integration verification
 
 **Files:**
-- Modify: `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/tests/commands.rs`
+- Modify: `$REPO_ROOT/compiler/sec4-cli/tests/commands.rs`
 
 **Step 1: Add failing integration test**
 
@@ -167,8 +168,8 @@ Expected: PASS.
 **Step 4: Run one manual real DB flow**
 
 ```bash
-/Users/vladimirtrifonov/src/ai/AILang/infra/local-postgres/scripts/up.sh
-/Users/vladimirtrifonov/src/ai/AILang/examples/postgres-e2e/scripts/smoke.sh
+$REPO_ROOT/infra/local-postgres/scripts/up.sh
+$REPO_ROOT/examples/postgres-e2e/scripts/smoke.sh
 ```
 
 Expected: PASS, real Postgres-backed responses.
@@ -176,16 +177,16 @@ Expected: PASS, real Postgres-backed responses.
 **Step 5: Commit**
 
 ```bash
-git add /Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/tests/commands.rs
+git add $REPO_ROOT/compiler/sec4-cli/tests/commands.rs
 git commit -m "M39: add focused command coverage for postgres e2e example"
 ```
 
 ### Task 4: Documentation + roadmap/book updates
 
 **Files:**
-- Modify: `/Users/vladimirtrifonov/src/ai/AILang/docs/05-sec4-master-roadmap.md`
-- Create: `/Users/vladimirtrifonov/src/ai/AILang/docs/book/1407-m39-durable-postgres-e2e-infra-and-example.md`
-- Modify: `/Users/vladimirtrifonov/src/ai/AILang/docs/book/README.md`
+- Modify: `$REPO_ROOT/docs/05-sec4-master-roadmap.md`
+- Create: `$REPO_ROOT/docs/book/1407-m39-durable-postgres-e2e-infra-and-example.md`
+- Modify: `$REPO_ROOT/docs/book/README.md`
 
 **Step 1: Add roadmap bullet for durable Postgres E2E setup**
 
@@ -217,9 +218,9 @@ cargo test -p sec4 --test commands run_command_postgres_e2e_example_check_passes
 **Step 5: Commit**
 
 ```bash
-git add /Users/vladimirtrifonov/src/ai/AILang/docs/05-sec4-master-roadmap.md \
-        /Users/vladimirtrifonov/src/ai/AILang/docs/book/1407-m39-durable-postgres-e2e-infra-and-example.md \
-        /Users/vladimirtrifonov/src/ai/AILang/docs/book/README.md
+git add $REPO_ROOT/docs/05-sec4-master-roadmap.md \
+        $REPO_ROOT/docs/book/1407-m39-durable-postgres-e2e-infra-and-example.md \
+        $REPO_ROOT/docs/book/README.md
 git commit -m "M39: document durable postgres e2e infra and example"
 ```
 

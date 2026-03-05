@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - `dispatch_lasm_cluster_relay_stream_fallback_multi` now tracks fallback scan progress with `remaining_slots`,
   - replaced repeated `scanned_slots.saturating_add(...)` checks/updates with direct bounded decrement logic (`remaining_slots -= advanced_slots`),
   - kept all existing fallback dispatch outcomes unchanged (`Saturated` vs `Unavailable`) and existing live-target bounds.

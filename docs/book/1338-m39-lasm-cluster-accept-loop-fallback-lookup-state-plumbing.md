@@ -5,10 +5,10 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`:
   - added `dispatch_lasm_cluster_relay_stream_fallback_multi_with_lookup_state(...)`,
   - this helper selects lookup slice once from a precomputed boolean and forwards to existing fallback-multi dispatcher.
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`:
   - fallback path now computes `relay_use_next_live_lookup_for_fallback` once per primary-dispatch failure,
   - single-live/dual-live/default fallback branches now reuse the same helper and lookup-state flag.
 

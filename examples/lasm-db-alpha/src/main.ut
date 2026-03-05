@@ -7,9 +7,33 @@
 // - db.execTx(...)    -> append tx record to records.log
 // - db.queryOne(...)  -> return latest matching record
 // - DbListRecordsResponse -> return all persisted records
+// - transactional batch writes -> exercise multi-statement tx handling
+// - write + query composition -> prove read-after-write in one request
 
 fn health() effects { net } -> Int {
   res.text(200, "ok");
+  0
+}
+
+fn dbExecBatch() effects { net, db.write, db.tx } -> Int {
+  // Request query parameters:
+  //   template_a=<sql template text>  (required)
+  //   params_a=<json payload>        (required)
+  //   template_b=<sql template text>  (required)
+  //   params_b=<json payload>        (required)
+  // Example:
+  //   /db/exec-batch?template_a=SELECT%201&params_a=%5B%22alpha%22%5D&template_b=SELECT%202&params_b=%5B%22beta%22%5D
+  // Both statements are executed inside one transaction handle.
+  let db = DbCap();
+  let tx = db.tx(db);
+  let templateA = validate.nonEmpty(req.query("template_a"));
+  let paramsA = validate.nonEmpty(req.query("params_a"));
+  let templateB = validate.nonEmpty(req.query("template_b"));
+  let paramsB = validate.nonEmpty(req.query("params_b"));
+
+  db.execTx(tx, sql.q(templateA, paramsA));
+  db.execTx(tx, sql.q(templateB, paramsB));
+  res.text(200, "db batch tx executed");
   0
 }
 
@@ -23,6 +47,27 @@ fn dbExec() effects { net, db.write } -> Int {
   let query = sql.q(template, params);
   db.exec(db, query);
   res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn dbWriteAndQuery() effects { net, db.write, db.read } -> Int {
+  // Request query parameters:
+  //   write_template=<sql template text> (required)
+  //   write_params=<json payload>       (required)
+  //   query_template=<sql template text> (required)
+  //   query_params=<json payload>       (required)
+  //   row_schema=<schema handle id>     (required, numeric)
+  // Writes one record and immediately reads the matching latest row.
+  let db = DbCap();
+  let writeTemplate = validate.nonEmpty(req.query("write_template"));
+  let writeParams = validate.nonEmpty(req.query("write_params"));
+  let queryTemplate = validate.nonEmpty(req.query("query_template"));
+  let queryParams = validate.nonEmpty(req.query("query_params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.exec(db, sql.q(writeTemplate, writeParams));
+  db.queryOne(db, sql.q(queryTemplate, queryParams), rowSchema);
+  res.json(200, "DbWriteAndQueryResponse", 0);
   0
 }
 
@@ -57,6 +102,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 
 fn dbListRecords() effects { net } -> Int {
   // Returns all currently persisted DB records from records.log.
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
   res.json(200, "DbListRecordsResponse", 0);
   0
 }
@@ -65,7 +111,9 @@ fn main() effects { net } -> Int {
   let router = http.router();
 
   http.get(router, "/health", health);
+  http.get(router, "/db/exec-batch", dbExecBatch);
   http.post(router, "/db/exec", dbExec);
+  http.post(router, "/db/write-and-query", dbWriteAndQuery);
   http.post(router, "/db/exec-tx", dbExecTx);
   http.get(router, "/db/query-one", dbQueryOne);
   http.get(router, "/db/records", dbListRecords);

@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added `attempt_lasm_cluster_relay_send(...)` in `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/main.rs`.
+- Added `attempt_lasm_cluster_relay_send(...)` in `$REPO_ROOT/compiler/sec4-cli/src/main.rs`.
 - Reused this helper in fallback-multi dispatch paths:
   - all-live scan loop,
   - `scan_live_target == 2` first attempt,

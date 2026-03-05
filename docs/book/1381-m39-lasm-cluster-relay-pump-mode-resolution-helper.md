@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Updated `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
+- Updated `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs`:
   - added `resolve_lasm_cluster_relay_pump_mode(...)` and `LasmClusterRelayPumpModeResolution`,
   - relay pump scheduler now delegates full-scan/budget mode setup to this helper (full-scan cursor reset, budgeted cursor normalization, pump-budget resolution),
   - shared pump loop helper consumes the mode resolution result.

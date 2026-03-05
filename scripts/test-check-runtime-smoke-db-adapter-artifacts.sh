@@ -16,12 +16,21 @@ write_db_adapter_fixture() {
   local serve_timeout_ms="$6"
 
   local db_adapter_label="records.log"
-  if [ "${db_adapter}" = "sqlite" ]; then
-    db_adapter_label="sqlite"
+  case "${db_adapter}" in
+    sqlite)
+      db_adapter_label="sqlite"
+      ;;
+    postgres)
+      db_adapter_label="postgres"
+      ;;
+  esac
+
+  local run_flags="--port,--oneshot,--serve-timeout-ms,--db-base,--db-adapter"
+  if [ "${db_adapter}" = "postgres" ]; then
+    run_flags="${run_flags},--db-postgres-dsn"
   fi
 
   local db_base="/tmp/lasm-db-${branch}"
-  local run_flags="--port,--oneshot,--serve-timeout-ms,--db-base,--db-adapter"
   local branch_dir="${root}/${branch}"
   mkdir -p "${branch_dir}"
 
@@ -74,10 +83,16 @@ Content-Type: application/json; charset=utf-8
 X-Trace-Id: ${trace_id}
 TXT
   cat > "${branch_dir}/db-records.body" <<TXT
-{"count":2,"adapter":"${db_adapter_label}","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"}]}
+{"count":3,"adapter":"${db_adapter_label}","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"},{"recordId":3,"op":"queryOne"}]}
 TXT
 
-  local run_cmd="Running \`target/debug/sec4 run --path /tmp/lasm-alpha-full --backend lasm --db-base ${db_base} --db-adapter ${db_adapter} --oneshot --port ${port} --serve-timeout-ms ${serve_timeout_ms}\`"
+  local run_cmd="Running \`target/debug/sec4 run --path /tmp/lasm-alpha-full --backend lasm --db-base ${db_base} --db-adapter ${db_adapter} --oneshot --port ${port} --serve-timeout-ms ${serve_timeout_ms}"
+  if [ "${db_adapter}" = "postgres" ]; then
+    run_cmd="${run_cmd} --db-postgres-dsn postgresql://smoke:smoke@127.0.0.1:5432/smoke\`"
+  else
+    run_cmd="${run_cmd}\`"
+  fi
+
   printf '%s\n' "${run_cmd}" > "${branch_dir}/db-exec.run.log"
   printf '%s\n' "${run_cmd}" > "${branch_dir}/db-exec-tx.run.log"
   printf '%s\n' "${run_cmd}" > "${branch_dir}/db-query-one.run.log"
@@ -85,10 +100,11 @@ TXT
 
   if [ "${db_adapter}" = "sqlite" ]; then
     printf '%s\n' "sqlite-persisted" > "${branch_dir}/records.sqlite3"
-  else
+  elif [ "${db_adapter}" = "records-log" ]; then
     cat > "${branch_dir}/records.log" <<'TXT'
 {"op":"exec","recordId":1}
 {"op":"execTx","recordId":2}
+{"op":"queryOne","recordId":3}
 TXT
   fi
 }
@@ -100,6 +116,26 @@ write_db_adapter_fixture "${tmp_dir}" "ok-records" "records-log" "8082" "rt-10" 
 sqlite_ok_dir="${tmp_dir}/ok-sqlite"
 write_db_adapter_fixture "${tmp_dir}" "ok-sqlite" "sqlite" "8083" "rt-11" "20000"
 "${checker}" --artifacts-dir "${sqlite_ok_dir}" >/dev/null
+
+postgres_ok_dir="${tmp_dir}/ok-postgres"
+write_db_adapter_fixture "${tmp_dir}" "ok-postgres" "postgres" "8084" "rt-12" "20000"
+"${checker}" --artifacts-dir "${postgres_ok_dir}" >/dev/null
+
+postgres_bad_records_dir="${tmp_dir}/bad-postgres-records-persist"
+cp -R "${postgres_ok_dir}" "${postgres_bad_records_dir}"
+cat > "${postgres_bad_records_dir}/records.sqlite3" <<'TXT'
+unexpected sqlite file
+TXT
+
+if "${checker}" --artifacts-dir "${postgres_bad_records_dir}" >"${tmp_dir}/postgres-bad-records.log" 2>&1; then
+  echo "expected runtime-smoke db-adapter checker to fail on postgres persistence artifacts" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'postgres db-adapter artifacts should not include records.sqlite3' "${tmp_dir}/postgres-bad-records.log"; then
+  echo "expected postgres persistence diagnostic for unexpected records.sqlite3" >&2
+  exit 1
+fi
 
 missing_sqlite_dir="${tmp_dir}/bad-missing-sqlite"
 cp -R "${sqlite_ok_dir}" "${missing_sqlite_dir}"
@@ -166,7 +202,7 @@ fi
 payload_bad_dir="${tmp_dir}/bad-records-payload"
 cp -R "${sqlite_ok_dir}" "${payload_bad_dir}"
 cat > "${payload_bad_dir}/db-records.body" <<'TXT'
-{"count":2,"adapter":"records.log","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"}]}
+{"count":3,"adapter":"records.log","records":[{"recordId":1,"op":"exec"},{"recordId":2,"op":"execTx"},{"recordId":3,"op":"queryOne"}]}
 TXT
 
 if "${checker}" --artifacts-dir "${payload_bad_dir}" >"${tmp_dir}/payload-bad.log" 2>&1; then

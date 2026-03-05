@@ -70,6 +70,9 @@ func main() {
 
 	pgDSN := os.Getenv("BENCH_WORKBENCH_PG_DSN")
 	if pgDSN == "" {
+		pgDSN = os.Getenv("SEC4_DB_ALPHA_DB_POSTGRES_DSN")
+	}
+	if pgDSN == "" {
 		pgDSN = os.Getenv("SEC4_RT_LASM_DB_POSTGRES_DSN")
 	}
 	if pgDSN == "" {

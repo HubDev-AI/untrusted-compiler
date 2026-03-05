@@ -11,9 +11,7 @@ This slice introduces intrinsic-driven LASM DB execution for route handlers that
 Instead of relying on schema-name response hints to trigger DB writes, LASM now extracts DB call plans from handler call graphs and executes those DB operations directly during request materialization.
 
 ## Why It Exists
-
-The previous LASM DB path depended on response-schema branching (`DbExecResponse` / `DbExecTxResponse`) as a compatibility bridge. That blocked parity with the intrinsic surface and made DB behavior tied to response schema names instead of handler logic.
-
+The previous LASM DB path depended on response-schema branching (`DbExecResponse` / `DbExecTxResponse`) as a compatibility bridge.
 This slice moves DB writes to the intrinsic path so behavior follows actual handler code.
 
 ## How It Works Internally
@@ -46,8 +44,8 @@ Outputs:
 - persisted `records.log` records for write operations.
 
 Constraints:
-- this slice applies to extracted `db.exec` / `db.execTx` paths,
-- legacy schema-hint DB query/list paths remain for compatibility where intrinsic extraction is not yet used.
+- this slice applies to extracted `db.exec` / `db.execTx` / `db.queryOne` intrinsic paths,
+- DB list responses use the `listRecords` intrinsic marker, not response-schema branching.
 
 ## Failure Modes and Diagnostics
 
@@ -89,10 +87,8 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
 ## Tradeoffs and Next Steps
 
 Tradeoffs:
-- intrinsic DB writes now follow handler logic, but the schema-hint query/list compatibility bridge still exists for remaining paths,
-- tx-handle lifecycle is deterministic but currently process-local (in-memory) rather than persisted.
+- tx-handle lifecycle is deterministic and process-local (in-memory) rather than persisted.
 
 Next steps:
-1. move `db.queryOne` and remaining DB compatibility branches fully onto intrinsic extraction paths,
-2. tighten parity against C runtime DB handle/query validation across all LASM DB operations,
-3. extend docs/examples so canonical LASM DB flows no longer depend on DB schema-name hints.
+1. tighten parity against C runtime DB handle/query validation across all LASM DB operations,
+2. continue package/module extraction for runtime layers without semantic changes.

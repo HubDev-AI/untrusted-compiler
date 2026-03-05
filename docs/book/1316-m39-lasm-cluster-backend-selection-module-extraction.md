@@ -5,7 +5,7 @@ Milestone: M39-S2B (LASM runtime load hardening)
 
 ## What Changed
 
-- Added module file `/Users/vladimirtrifonov/src/ai/AILang/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`.
+- Added module file `$REPO_ROOT/compiler/sec4-cli/src/lasm_cluster_backend_selection.rs`.
 - Moved backend-selection/remap helpers from `main.rs`:
   - `LASM_CLUSTER_SELECTION_LOOKUP_NONE`
   - `rebuild_lasm_cluster_backend_selection_lookup(...)`

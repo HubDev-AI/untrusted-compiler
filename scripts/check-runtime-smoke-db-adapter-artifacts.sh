@@ -109,12 +109,12 @@ if [ -z "${db_base}" ]; then
   exit 1
 fi
 
-if [ "${db_adapter}" != "records-log" ] && [ "${db_adapter}" != "sqlite" ]; then
+if [ "${db_adapter}" != "records-log" ] && [ "${db_adapter}" != "sqlite" ] && [ "${db_adapter}" != "postgres" ]; then
   echo "run-metadata.txt has invalid dbAdapter field" >&2
   exit 1
 fi
 
-if [ "${db_adapter_label}" != "records.log" ] && [ "${db_adapter_label}" != "sqlite" ]; then
+if [ "${db_adapter_label}" != "records.log" ] && [ "${db_adapter_label}" != "sqlite" ] && [ "${db_adapter_label}" != "postgres" ]; then
   echo "run-metadata.txt has invalid dbAdapterLabel field" >&2
   exit 1
 fi
@@ -125,6 +125,11 @@ if [ "${db_adapter}" = "records-log" ] && [ "${db_adapter_label}" != "records.lo
 fi
 
 if [ "${db_adapter}" = "sqlite" ] && [ "${db_adapter_label}" != "sqlite" ]; then
+  echo "run-metadata.txt dbAdapterLabel does not match dbAdapter" >&2
+  exit 1
+fi
+
+if [ "${db_adapter}" = "postgres" ] && [ "${db_adapter_label}" != "postgres" ]; then
   echo "run-metadata.txt dbAdapterLabel does not match dbAdapter" >&2
   exit 1
 fi
@@ -155,6 +160,9 @@ if [ "${serve_timeout_ms}" -le 0 ]; then
 fi
 
 expected_run_flags="--port,--oneshot,--serve-timeout-ms,--db-base,--db-adapter"
+if [ "${db_adapter}" = "postgres" ]; then
+  expected_run_flags="${expected_run_flags},--db-postgres-dsn"
+fi
 if [ "${run_flags_value}" != "${expected_run_flags}" ]; then
   echo "run-metadata.txt runFlags field does not match expected db-adapter runtime flag shape" >&2
   exit 1
@@ -181,6 +189,11 @@ for endpoint in db-exec db-exec-tx db-query-one db-records; do
 
   if ! rg -Fq -- "--db-adapter ${db_adapter}" "${run_log_path}"; then
     echo "${endpoint}.run.log missing --db-adapter ${db_adapter} invocation token" >&2
+    exit 1
+  fi
+
+  if [ "${db_adapter}" = "postgres" ] && ! rg -Fq -- "--db-postgres-dsn" "${run_log_path}"; then
+    echo "${endpoint}.run.log missing --db-postgres-dsn invocation token" >&2
     exit 1
   fi
 
@@ -217,7 +230,7 @@ if ! rg -Fq '"recordId":2' "${artifacts_dir}/db-query-one.body" \
   exit 1
 fi
 
-if ! jq -e --arg adapter "${db_adapter_label}" '.count == 2 and .adapter == $adapter and (.records | type == "array" and length == 2) and (.records[0].op == "exec") and (.records[1].op == "execTx")' "${artifacts_dir}/db-records.body" >/dev/null; then
+if ! jq -e --arg adapter "${db_adapter_label}" '.count == 3 and .adapter == $adapter and (.records | type == "array" and length == 3) and (.records[0].op == "exec") and (.records[1].op == "execTx") and (.records[2].op == "queryOne")' "${artifacts_dir}/db-records.body" >/dev/null; then
   echo "db-records.body does not match expected payload contract" >&2
   exit 1
 fi
@@ -234,7 +247,7 @@ if [ "${db_adapter}" = "sqlite" ]; then
     echo "sqlite db-adapter artifacts should not include records.log" >&2
     exit 1
   fi
-else
+elif [ "${db_adapter}" = "records-log" ]; then
   if [ ! -f "${records_log_path}" ] || [ ! -s "${records_log_path}" ]; then
     echo "records-log db-adapter artifacts missing records.log" >&2
     exit 1
@@ -245,6 +258,19 @@ else
   fi
   if ! rg -Fq '"op":"exec"' "${records_log_path}" || ! rg -Fq '"op":"execTx"' "${records_log_path}"; then
     echo "records.log does not contain expected deterministic entries" >&2
+    exit 1
+  fi
+  if ! rg -Fq '"op":"queryOne"' "${records_log_path}"; then
+    echo "records.log does not contain queryOne persistence entry" >&2
+    exit 1
+  fi
+else
+  if [ -f "${records_log_path}" ]; then
+    echo "postgres db-adapter artifacts should not include records.log" >&2
+    exit 1
+  fi
+  if [ -f "${sqlite_path}" ]; then
+    echo "postgres db-adapter artifacts should not include records.sqlite3" >&2
     exit 1
   fi
 fi
