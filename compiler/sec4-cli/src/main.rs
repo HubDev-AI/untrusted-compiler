@@ -46,6 +46,7 @@ mod lasm_db_records_log;
 mod lasm_db_records_response;
 mod lasm_db_runtime_common;
 mod lasm_db_runtime_dispatch;
+mod lasm_db_runtime_adapters;
 mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_postgres_persist;
 mod lasm_db_runtime_records_log;
