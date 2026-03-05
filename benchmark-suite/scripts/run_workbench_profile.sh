@@ -40,12 +40,28 @@ duration="${BENCH_DURATION:-$duration}"
 
 load_bin=""
 load_supports_rate="false"
+require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
+
+is_truthy() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 select_load_generator() {
   if command -v wrk2 >/dev/null 2>&1; then
     load_bin="wrk2"
     load_supports_rate="true"
     return
+  fi
+  if is_truthy "$require_wrk2"; then
+    echo "wrk2 is required for this run (set BENCH_REQUIRE_WRK2=0 to allow wrk fallback)" >&2
+    exit 127
   fi
   if command -v wrk >/dev/null 2>&1; then
     load_bin="wrk"

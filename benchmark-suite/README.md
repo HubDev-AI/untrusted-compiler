@@ -208,7 +208,8 @@ Measure end-to-end service behavior across identical implementations:
 
 - All services must implement identical endpoint behavior defined in `spec/endpoints.md`.
 - Use constant-rate load for primary comparisons.
-- Prefer `wrk2` for non-dry-run profile execution; `wrk` fallback is supported with explicit warning and non-constant-rate posture.
+- Workbench matrix/step/full suite runners enforce `wrk2` by default (`BENCH_WORKBENCH_REQUIRE_WRK2=1`) so compare artifacts stay constant-rate.
+- Set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when you intentionally allow local `wrk` fallback (non-constant-rate posture).
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
 - `services/sec4`, `services/sec4-lasm`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
 - Orchestrator embeds `sec4 audit` data into `sec4-report.json` when baseline artifact is available.

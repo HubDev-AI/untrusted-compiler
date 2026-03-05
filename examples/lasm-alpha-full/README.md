@@ -283,4 +283,4 @@ Outputs:
 Notes:
 
 - The local wrapper starts/stops repo-local postgres infra (`infra/local-postgres`).
-- `make bench-workbench` requires benchmark toolchain (`wrk2` or `wrk`, `jq`, `curl`, and language runtimes).
+- `make bench-workbench` enforces `wrk2` by default for constant-rate compare quality; set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only when intentionally allowing local `wrk` fallback.

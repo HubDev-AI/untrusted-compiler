@@ -7,6 +7,7 @@ usage() {
 
 impls_csv="sec4,sec4-lasm,node,go,rust,c"
 dry_run_only="false"
+require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -56,10 +57,25 @@ check_cmd() {
   return 1
 }
 
+is_truthy() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 check_load_generator() {
   if command -v wrk2 >/dev/null 2>&1; then
     echo "OK       load generator (wrk2)"
     return 0
+  fi
+  if is_truthy "$require_wrk2"; then
+    echo "MISSING  load generator (wrk2 required)"
+    return 1
   fi
   if command -v wrk >/dev/null 2>&1; then
     echo "OK       load generator (wrk fallback) (wrk)"
