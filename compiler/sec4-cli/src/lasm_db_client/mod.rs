@@ -329,3 +329,27 @@ pub(crate) fn cleanup_lasm_internal_db_sequence_tx_handles(
         state.db_tx_handles.remove(&handle);
     }
 }
+
+pub(crate) fn run_lasm_db_tx_commit(
+    state: &mut LasmDynamicResponseState,
+    adapter: LasmDbRecordsAdapter,
+    tx: i64,
+) -> Result<(), String> {
+    match adapter {
+        LasmDbRecordsAdapter::Postgres => run_lasm_postgres_exec_tx_commit(state, tx),
+        LasmDbRecordsAdapter::Sqlite => run_lasm_sqlite_exec_tx_commit(state, tx),
+        LasmDbRecordsAdapter::RecordsLog => Ok(()),
+    }
+}
+
+pub(crate) fn run_lasm_db_tx_rollback(
+    state: &mut LasmDynamicResponseState,
+    adapter: LasmDbRecordsAdapter,
+    tx: i64,
+) -> Result<(), String> {
+    match adapter {
+        LasmDbRecordsAdapter::Postgres => run_lasm_postgres_exec_tx_rollback(state, tx),
+        LasmDbRecordsAdapter::Sqlite => run_lasm_sqlite_exec_tx_rollback(state, tx),
+        LasmDbRecordsAdapter::RecordsLog => Ok(()),
+    }
+}

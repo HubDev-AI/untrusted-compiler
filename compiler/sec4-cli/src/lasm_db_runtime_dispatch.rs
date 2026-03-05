@@ -1,6 +1,13 @@
 use crate::lasm_db_adapter_state::{
     persist_lasm_dynamic_db_record_append, persist_lasm_dynamic_db_records_full_sync,
 };
+use crate::lasm_db_client::{
+    cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
+    parse_lasm_db_template_and_params, run_lasm_db_exec_operation, run_lasm_db_exec_tx_operation,
+    run_lasm_db_query_one_operation, run_lasm_db_tx_commit, run_lasm_db_tx_rollback,
+    LasmDbExecOperationResult, LasmDbExecTxOperationResult, LasmDbQueryOneOperationError,
+    LasmDbQueryOneOperationResult, LasmPreparedDbOperationParams,
+};
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
@@ -10,17 +17,6 @@ use crate::lasm_db_runtime_postgres_persist::persist_lasm_postgres_record_after_
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
 };
-use crate::lasm_db_client::{
-    cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
-    parse_lasm_db_template_and_params, run_lasm_db_exec_operation,
-    run_lasm_db_exec_tx_operation, run_lasm_db_query_one_operation,
-    LasmDbExecOperationResult, LasmDbExecTxOperationResult,
-    LasmPreparedDbOperationParams, LasmDbQueryOneOperationError, LasmDbQueryOneOperationResult,
-};
-use crate::lasm_db_runtime_postgres::run_lasm_postgres_exec_tx_commit;
-use crate::lasm_db_runtime_postgres::run_lasm_postgres_exec_tx_rollback;
-use crate::lasm_db_runtime_sqlite::run_lasm_sqlite_exec_tx_commit;
-use crate::lasm_db_runtime_sqlite::run_lasm_sqlite_exec_tx_rollback;
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
     lasm_internal_db_indexed_header, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
@@ -1745,11 +1741,15 @@ fn handle_lasm_internal_db_exec_operation(
         if !ensure_lasm_db_adapter_state_match(response, &state, db_records_adapter, trace_id) {
             return true;
         }
-        let operation_result =
-            run_lasm_db_exec_operation(&mut state, db_records_adapter, template.as_str(), &prepared_params)
-                .map_err(|message| {
-                    set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id)
-                });
+        let operation_result = run_lasm_db_exec_operation(
+            &mut state,
+            db_records_adapter,
+            template.as_str(),
+            &prepared_params,
+        )
+        .map_err(|message| {
+            set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id)
+        });
         let operation_result = match operation_result {
             Ok(value) => value,
             Err(()) => return true,
@@ -1807,11 +1807,7 @@ fn handle_lasm_internal_db_exec_operation(
         }
     };
     if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
-        persist_lasm_postgres_record_after_unlock(
-            &postgres_config,
-            &record,
-            compaction_snapshot,
-        );
+        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
     }
     set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     true
@@ -1891,15 +1887,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
             Ok(value) => value,
             Err(error) => {
                 if error.tx_started {
-                    match db_records_adapter {
-                        LasmDbRecordsAdapter::Postgres => {
-                            let _ = run_lasm_postgres_exec_tx_rollback(&mut state, tx);
-                        }
-                        LasmDbRecordsAdapter::Sqlite => {
-                            let _ = run_lasm_sqlite_exec_tx_rollback(&mut state, tx);
-                        }
-                        LasmDbRecordsAdapter::RecordsLog => {}
-                    }
+                    let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
                     if !keep_allocated_tx_handle {
                         state.db_tx_handles.remove(&tx);
                     }
@@ -1925,7 +1913,8 @@ fn handle_lasm_internal_db_exec_tx_operation(
                 tx_started,
             } => {
                 if tx_started && !keep_allocated_tx_handle {
-                    if let Err(message) = run_lasm_postgres_exec_tx_commit(&mut state, tx) {
+                    if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
+                    {
                         state.db_tx_handles.remove(&tx);
                         set_lasm_db_runtime_error_response(
                             response,
@@ -1957,7 +1946,8 @@ fn handle_lasm_internal_db_exec_tx_operation(
                 tx_started,
             } => {
                 if tx_started && !keep_allocated_tx_handle {
-                    if let Err(message) = run_lasm_sqlite_exec_tx_commit(&mut state, tx) {
+                    if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx)
+                    {
                         state.db_tx_handles.remove(&tx);
                         set_lasm_db_runtime_error_response(
                             response,
@@ -2011,11 +2001,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
         }
     };
     if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
-        persist_lasm_postgres_record_after_unlock(
-            &postgres_config,
-            &record,
-            compaction_snapshot,
-        );
+        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
     }
     set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     response.headers.insert(
@@ -2088,9 +2074,12 @@ fn handle_lasm_internal_db_query_one_operation(
         }
         match db_records_adapter {
             LasmDbRecordsAdapter::RecordsLog => {
-                if let Some(matched_source_record) =
-                    find_lasm_records_log_latest_match(&state, db, template.as_str(), params.as_str())
-                {
+                if let Some(matched_source_record) = find_lasm_records_log_latest_match(
+                    &state,
+                    db,
+                    template.as_str(),
+                    params.as_str(),
+                ) {
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
                         op: "queryOne".to_string(),
@@ -2133,7 +2122,9 @@ fn handle_lasm_internal_db_query_one_operation(
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                         let (record, compaction_snapshot) =
-                            append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record);
+                            append_lasm_db_record_in_memory_with_compaction_snapshot(
+                                &mut state, record,
+                            );
                         persist_lasm_postgres_record_after_unlock(
                             &config,
                             &record,
