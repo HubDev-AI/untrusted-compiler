@@ -1,9 +1,10 @@
-.PHONY: check run-records run-sqlite run-postgres smoke smoke-records smoke-sqlite smoke-postgres smoke-help clean-artifacts
+.PHONY: check run-records run-sqlite run-postgres smoke smoke-records smoke-sqlite smoke-postgres smoke-help bench-workbench bench-workbench-fast clean-artifacts
 
 DB_BASE ?= $(CURDIR)/.lasm-db
 PORT ?= 8088
 TIMEOUT_MS ?= 5000
 SCRIPT := ./scripts/run-smoke.sh
+WORKBENCH_MATRIX_SCRIPT := ../../benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh
 
 check:
 	cargo run -p sec4 -- check --path $(CURDIR)
@@ -62,6 +63,15 @@ smoke-postgres:
 
 smoke-help:
 	$(SCRIPT) --help
+
+bench-workbench:
+	$(WORKBENCH_MATRIX_SCRIPT)
+
+bench-workbench-fast:
+	BENCH_DURATION=10s \
+	BENCH_CONNECTIONS=32 \
+	BENCH_THREADS=4 \
+	$(WORKBENCH_MATRIX_SCRIPT)
 
 clean-artifacts:
 	[ -d "$(DB_BASE)" ] && rm -rf "$(DB_BASE)"

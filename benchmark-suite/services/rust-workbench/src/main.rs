@@ -250,6 +250,9 @@ fn require_auth(request: &Request, config: &ApiServerConfig) -> Result<(), HttpE
 }
 
 fn setup_schema(config: &ApiServerConfig) -> Result<(), HttpError> {
+    run_psql(config, "drop table if exists wb_labels;")?;
+    run_psql(config, "drop table if exists wb_comments;")?;
+    run_psql(config, "drop table if exists wb_tasks;")?;
     run_psql(
         config,
         "create table if not exists wb_tasks (id text primary key, title text not null, description text not null default '', status text not null, priority integer not null, created_at_ms bigint not null);",

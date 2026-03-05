@@ -256,3 +256,31 @@ export SEC4_ALPHA_FULL_DB_ADAPTER=postgres
 export SEC4_ALPHA_FULL_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
 ./scripts/run-smoke.sh
 ```
+
+## 9) Cross-backend benchmark matrix (sec4-lasm vs node/go/rust)
+
+This example is the operator baseline before running workbench benchmark matrix.
+
+Run from the example directory:
+
+```bash
+make bench-workbench
+```
+
+Fast local pass:
+
+```bash
+make bench-workbench-fast
+```
+
+Outputs:
+
+- `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+- `benchmark-suite/results/workbench-benchmark-report.md`
+
+Notes:
+
+- The local wrapper starts/stops repo-local postgres infra (`infra/local-postgres`).
+- `make bench-workbench` requires benchmark toolchain (`wrk2` or `wrk`, `jq`, `curl`, and language runtimes).
