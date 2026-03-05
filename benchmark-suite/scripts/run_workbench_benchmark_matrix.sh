@@ -6,12 +6,13 @@ usage() {
 usage: $0 [--dry-run] [--matrix path] [--impls sec4,sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
-          [--port <n>] [--out-runs path] [--out-compare path] [--out-analysis path] [--out-report path]
+          [--port <n>] [--out-runs path] [--out-compare path] [--out-analysis path]
+          [--out-report path] [--out-report-html path]
 
 Runs workbench benchmark profiles across implemented matrix lanes and emits:
 1) per-impl endpoint summaries
 2) per-impl report bundles
-3) cross-impl compare matrix + analysis + markdown report
+3) cross-impl compare matrix + analysis + markdown/html reports
 USAGE
 }
 
@@ -28,6 +29,7 @@ out_runs=""
 out_compare=""
 out_analysis=""
 out_report=""
+out_report_html=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -167,6 +169,18 @@ while [ "$#" -gt 0 ]; do
       out_report="${1#--out-report=}"
       shift
       ;;
+    --out-report-html)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      out_report_html="$2"
+      shift 2
+      ;;
+    --out-report-html=*)
+      out_report_html="${1#--out-report-html=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -197,13 +211,16 @@ fi
 if [ -z "$out_report" ]; then
   out_report="${suite_dir}/results/workbench-benchmark-report.md"
 fi
+if [ -z "$out_report_html" ]; then
+  out_report_html="${suite_dir}/results/workbench-benchmark-report.html"
+fi
 
 if [ ! -f "$matrix_path" ]; then
   echo "workbench matrix missing: $matrix_path" >&2
   exit 2
 fi
 
-mkdir -p "${suite_dir}/results/raw" "${suite_dir}/results/summaries" "$(dirname "$out_report")"
+mkdir -p "${suite_dir}/results/raw" "${suite_dir}/results/summaries" "$(dirname "$out_report")" "$(dirname "$out_report_html")"
 
 if [ -n "$impls_csv" ]; then
   selected_impls_json="$(
@@ -626,6 +643,7 @@ if [ "$dry_run" = "true" ]; then
   echo "run: ${suite_dir}/scripts/compare_matrix.sh ${suite_dir}/results/summaries ${out_compare} ${runnable_impls_csv}"
   echo "run: ${suite_dir}/scripts/analyze_matrix.sh ${out_compare} ${out_analysis}"
   echo "run: ${suite_dir}/scripts/publish_report.sh ${out_compare} ${out_report} \"\" ${out_analysis}"
+  echo "run: ${suite_dir}/scripts/render_workbench_benchmark_report_html.sh ${out_runs} ${out_compare} ${out_analysis} ${out_report_html}"
   exit 0
 fi
 
@@ -644,6 +662,7 @@ jq -n \
   --arg comparePath "$out_compare" \
   --arg analysisPath "$out_analysis" \
   --arg reportPath "$out_report" \
+  --arg reportHtmlPath "$out_report_html" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{
@@ -655,6 +674,7 @@ jq -n \
     comparePath: $comparePath,
     analysisPath: $analysisPath,
     reportPath: $reportPath,
+    reportHtmlPath: $reportHtmlPath,
     totals: $totals,
     runs: $runs
   }' >"$out_runs"
@@ -663,6 +683,7 @@ if [ -n "$passed_impls_csv" ]; then
   "${suite_dir}/scripts/compare_matrix.sh" "${suite_dir}/results/summaries" "$out_compare" "$passed_impls_csv"
   "${suite_dir}/scripts/analyze_matrix.sh" "$out_compare" "$out_analysis"
   "${suite_dir}/scripts/publish_report.sh" "$out_compare" "$out_report" "" "$out_analysis"
+  "${suite_dir}/scripts/render_workbench_benchmark_report_html.sh" "$out_runs" "$out_compare" "$out_analysis" "$out_report_html"
 fi
 
 echo "wrote workbench benchmark run summary: $out_runs"
@@ -670,6 +691,7 @@ if [ -n "$passed_impls_csv" ]; then
   echo "wrote workbench compare matrix: $out_compare"
   echo "wrote workbench analysis: $out_analysis"
   echo "wrote workbench report: $out_report"
+  echo "wrote workbench html report: $out_report_html"
 fi
 echo "totals: passed=${total_passed} failed=${total_failed} skipped=${total_skipped}"
 
