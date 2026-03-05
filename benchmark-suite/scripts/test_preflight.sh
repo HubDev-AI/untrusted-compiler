@@ -68,4 +68,16 @@ if ! grep -q '^MISSING  load generator (wrk2 required)$' /tmp/preflight-strict-w
   exit 1
 fi
 
+cat > "${tmp}/custom-wrk2" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${tmp}/custom-wrk2"
+
+strict_override_out="$(BENCH_REQUIRE_WRK2=1 BENCH_WRK2_BIN="${tmp}/custom-wrk2" PATH="${tmp}:/usr/bin:/bin:/usr/sbin:/sbin" "$root_dir/scripts/preflight.sh" --impls sec4,node)"
+if ! grep -q '^OK       load generator (wrk2)$' <<<"$strict_override_out"; then
+  echo "preflight strict wrk2 mode did not honor BENCH_WRK2_BIN override" >&2
+  exit 1
+fi
+
 echo "preflight test passed"
