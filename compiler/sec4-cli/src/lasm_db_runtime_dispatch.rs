@@ -1,9 +1,8 @@
-use crate::lasm_db_adapter_state::{
-    persist_lasm_dynamic_db_record_append, persist_lasm_dynamic_db_records_full_sync,
-};
 use crate::lasm_db_client::{
     cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
-    parse_lasm_db_template_and_params, run_lasm_db_exec_operation, run_lasm_db_exec_tx_operation,
+    ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
+    persist_lasm_db_record_after_unlock, persist_lasm_db_record_append,
+    persist_lasm_db_records_full_sync, run_lasm_db_exec_operation, run_lasm_db_exec_tx_operation,
     run_lasm_db_query_one_operation, run_lasm_db_tx_commit, run_lasm_db_tx_rollback,
     LasmDbExecOperationResult, LasmDbExecTxOperationResult, LasmDbQueryOneOperationError,
     LasmDbQueryOneOperationResult, LasmPreparedDbOperationParams,
@@ -11,9 +10,8 @@ use crate::lasm_db_client::{
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
-    lasm_dynamic_postgres_client_mut, normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
+    normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
 };
-use crate::lasm_db_runtime_postgres_persist::persist_lasm_postgres_record_after_unlock;
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
 };
@@ -482,7 +480,7 @@ fn persist_lasm_db_record_with_capacity_guard(
 ) {
     let dropped_before = state.db_records_dropped_total;
     let history_overflowed = append_lasm_dynamic_db_record(state, record.clone());
-    if let Err(message) = persist_lasm_dynamic_db_record_append(state, record) {
+    if let Err(message) = persist_lasm_db_record_append(state, record) {
         eprintln!("warning: LASM dynamic records store persistence failed: {message}");
     }
     // Avoid O(n) full-store sync on every request once history is over capacity.
@@ -493,7 +491,7 @@ fn persist_lasm_db_record_with_capacity_guard(
             .db_records_dropped_total
             .is_multiple_of(LASM_DB_RECORDS_COMPACTION_SYNC_DROPS_INTERVAL)
     {
-        if let Err(message) = persist_lasm_dynamic_db_records_full_sync(state) {
+        if let Err(message) = persist_lasm_db_records_full_sync(state) {
             eprintln!(
                 "warning: LASM dynamic records store compaction sync failed after \
                  in-memory overflow: {message}"
@@ -1587,7 +1585,9 @@ fn apply_lasm_internal_db_operation_materialization_single(
                         Some(state) => state,
                         None => return true,
                     };
-                if let Err(message) = lasm_dynamic_postgres_client_mut(&mut state) {
+                if let Err(message) =
+                    ensure_lasm_db_records_client_ready(&mut state, db_records_adapter)
+                {
                     set_lasm_db_runtime_error_response(response, "listRecords", &message, trace_id);
                     return true;
                 }
@@ -1807,7 +1807,12 @@ fn handle_lasm_internal_db_exec_operation(
         }
     };
     if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
-        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
     }
     set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     true
@@ -2001,7 +2006,12 @@ fn handle_lasm_internal_db_exec_tx_operation(
         }
     };
     if let Some((postgres_config, compaction_snapshot)) = persistence_payload {
-        persist_lasm_postgres_record_after_unlock(&postgres_config, &record, compaction_snapshot);
+        persist_lasm_db_record_after_unlock(
+            db_records_adapter,
+            &postgres_config,
+            &record,
+            compaction_snapshot,
+        );
     }
     set_lasm_db_exec_like_success_response(response, &record, record.affected_rows);
     response.headers.insert(
@@ -2125,7 +2135,8 @@ fn handle_lasm_internal_db_query_one_operation(
                             append_lasm_db_record_in_memory_with_compaction_snapshot(
                                 &mut state, record,
                             );
-                        persist_lasm_postgres_record_after_unlock(
+                        persist_lasm_db_record_after_unlock(
+                            db_records_adapter,
                             &config,
                             &record,
                             compaction_snapshot,
