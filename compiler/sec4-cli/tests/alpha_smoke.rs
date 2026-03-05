@@ -184,6 +184,144 @@ fn alpha_smoke_full_flow_init_check_build_run_oneshot() {
 }
 
 #[test]
+fn alpha_smoke_full_flow_lasm_init_check_build_run_oneshot() {
+    let project_dir = temp_dir("sec4-alpha-smoke-lasm");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let init_output = run_cli(&[
+        "init",
+        "--path",
+        &project_path,
+        "--name",
+        "alpha_smoke_lasm_demo",
+    ]);
+    assert!(
+        init_output.status.success(),
+        "init should succeed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&init_output.stdout),
+        String::from_utf8_lossy(&init_output.stderr)
+    );
+
+    let check_output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        check_output.status.success(),
+        "check should succeed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&check_output.stdout),
+        String::from_utf8_lossy(&check_output.stderr)
+    );
+
+    let build_output = run_cli(&["build", "--path", &project_path, "--emit", "lasm"]);
+    assert!(
+        build_output.status.success(),
+        "build --emit lasm should succeed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&build_output.stdout),
+        String::from_utf8_lossy(&build_output.stderr)
+    );
+    let build_stdout = String::from_utf8(build_output.stdout).expect("stdout should be utf-8");
+    assert!(
+        build_stdout.contains(".lasm v0"),
+        "build --emit lasm should include deterministic lasm header:\n{build_stdout}"
+    );
+
+    let port = find_available_tcp_port();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            project_path.as_str(),
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("LASM alpha smoke test could not connect to oneshot server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("LASM alpha smoke oneshot process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run --backend lasm --oneshot process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nhello from sec4"),
+        "response should include expected generated route body:\n{response}"
+    );
+    assert!(
+        response.contains("\r\nX-Trace-Id:"),
+        "response should include X-Trace-Id header:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn alpha_smoke_check_fails_with_diagnostics_for_broken_source() {
     let project_dir = temp_dir("sec4-alpha-smoke-negative");
     let project_path = project_dir

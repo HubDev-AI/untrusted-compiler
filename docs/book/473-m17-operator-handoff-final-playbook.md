@@ -4,11 +4,12 @@ This chapter closes M17 with one ordered playbook for local validation, CI parit
 
 ## What it is
 
-A canonical three-bundle command playbook:
+A canonical four-bundle command playbook:
 
 - Bundle A: local validation flow.
 - Bundle B: CI smoke + artifact inspection flow.
 - Bundle C: release packet assembly flow.
+- Bundle D: zed extension operator readiness flow.
 
 ## Why it exists
 
@@ -56,6 +57,19 @@ Expected release packet outputs:
 - `build/operator-release-packet/readiness-summary.json`
 - `build/operator-release-packet/closure-gates.json`
 - `build/operator-release-packet/artifact-manifest.txt`
+
+## Bundle D: Zed Extension Operator Readiness
+
+Run in order:
+
+1. `scripts/check-zed-extension-operator-readiness.sh --stage-output build/zed-extension-release-operator`
+2. `scripts/summarize-m17-operator-handoff-readiness.sh --repo-root . --artifacts-root build/operator-handoff-smoke --format text`
+
+Expected outcomes:
+
+- `scripts/check-zed-extension-operator-readiness.sh` completes successfully,
+- zed extension operator bundle manifest is present as:
+  - `build/zed-extension-release-operator/bundle-manifest.json`.
 
 ## Verification
 

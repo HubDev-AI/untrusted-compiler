@@ -280,6 +280,8 @@ jobs:
         run: scripts/test-runtime-smoke-workflow-contract-guard.sh
       - name: Validate runtime-smoke artifacts checker
         run: scripts/test-check-runtime-smoke-artifacts.sh
+      - name: Validate runtime-smoke db-adapter artifacts checker
+        run: scripts/test-check-runtime-smoke-db-adapter-artifacts.sh
       - name: Validate runtime-smoke branch index builder
         run: scripts/test-build-runtime-smoke-branch-index.sh
       - name: Validate runtime-smoke bundle checker
@@ -689,7 +691,6 @@ YAML
 cat > "$tmp/.github/workflows/runtime-smoke.yml" <<'YAML'
 name: Runtime Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -704,6 +705,10 @@ jobs:
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default
       - name: Run sec4 hello-api operator smoke (max-body)
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
+      - name: Run sec4 LASM DB adapter operator smoke (records-log)
+        run: scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter records-log --artifacts-dir build/runtime-smoke/lasm-db-records-log
+      - name: Run sec4 LASM DB adapter operator smoke (sqlite)
+        run: scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter sqlite --artifacts-dir build/runtime-smoke/lasm-db-sqlite
       - name: Validate runtime smoke bundle
         run: scripts/check-runtime-smoke-bundle.sh --artifacts-root build/runtime-smoke --index-path build/runtime-smoke/runtime-smoke-branch-index.json
       - name: Upload runtime smoke artifacts
@@ -717,7 +722,6 @@ YAML
 cat > "$tmp/.github/workflows/operator-handoff-smoke.yml" <<'YAML'
 name: Operator Handoff Smoke
 on:
-  pull_request:
   push:
     branches:
       - main

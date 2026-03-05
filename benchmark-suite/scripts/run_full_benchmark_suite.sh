@@ -3,7 +3,19 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records] [--sec-audit path]
+          [--lasm-db-adapter records-log|sqlite|postgres] [--lasm-db-postgres-dsn-file path]
+          [--include-lasm-mode-compare]
+          [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
+          [--saturation-profile ping|db-hot-write|db-hot-write-tx|db-hot-query-one]
+          [--saturation-warmup-path path]
+          [--saturation-build-profile debug|release] [--saturation-samples n]
+          [--saturation-wrk-processes n]
+          [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
+          [--saturation-connections n] [--saturation-target-requests n]
+          [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
+          [--saturation-cluster-accept-workers n] [--saturation-cluster-relay-accept-batch-max n]
+          [--saturation-cluster-relay-pump-batch-max n] [--saturation-fixed-reuse-port-mode]
 
 Runs fixed-target matrix + step-load matrix and emits a combined markdown report
 with step-load signals included.
@@ -11,9 +23,31 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="sec4,node,go,rust"
+impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
+lasm_db_adapter="${BENCH_LASM_DB_ADAPTER:-}"
+lasm_db_postgres_dsn_file="${BENCH_LASM_DB_POSTGRES_DSN_FILE:-}"
+include_lasm_mode_compare="${LASM_INCLUDE_MODE_COMPARE:-false}"
+include_lasm_saturation="false"
+saturation_skip_verify="false"
+saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
+saturation_profile="${LASM_CAPACITY_PROFILE:-}"
+saturation_warmup_path="${LASM_CAPACITY_WARMUP_PATH:-}"
+saturation_build_profile=""
+saturation_samples=""
+saturation_wrk_processes="${LASM_CAPACITY_WRK_PROCESSES:-}"
+saturation_project_path=""
+saturation_duration=""
+saturation_threads=""
+saturation_connections=""
+saturation_target_requests=""
+saturation_cluster_relay_workers=""
+saturation_cluster_relay_queue=""
+saturation_cluster_accept_workers=""
+saturation_cluster_relay_accept_batch_max=""
+saturation_cluster_relay_pump_batch_max=""
+saturation_fixed_reuse_port_mode="${LASM_CAPACITY_FIXED_REUSE_PORT_MODE:-false}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -57,6 +91,238 @@ while [ "$#" -gt 0 ]; do
       sec_audit_path="${1#--sec-audit=}"
       shift
       ;;
+    --lasm-db-adapter)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_adapter="$2"
+      shift 2
+      ;;
+    --lasm-db-adapter=*)
+      lasm_db_adapter="${1#--lasm-db-adapter=}"
+      shift
+      ;;
+    --lasm-db-postgres-dsn-file)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_postgres_dsn_file="$2"
+      shift 2
+      ;;
+    --lasm-db-postgres-dsn-file=*)
+      lasm_db_postgres_dsn_file="${1#--lasm-db-postgres-dsn-file=}"
+      shift
+      ;;
+    --include-lasm-saturation)
+      include_lasm_saturation="true"
+      shift
+      ;;
+    --include-lasm-mode-compare)
+      include_lasm_mode_compare="true"
+      shift
+      ;;
+    --saturation-skip-verify)
+      saturation_skip_verify="true"
+      shift
+      ;;
+    --saturation-boost-steps)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_boost_steps_csv="$2"
+      shift 2
+      ;;
+    --saturation-boost-steps=*)
+      saturation_boost_steps_csv="${1#--saturation-boost-steps=}"
+      shift
+      ;;
+    --saturation-profile)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_profile="$2"
+      shift 2
+      ;;
+    --saturation-profile=*)
+      saturation_profile="${1#--saturation-profile=}"
+      shift
+      ;;
+    --saturation-warmup-path)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_warmup_path="$2"
+      shift 2
+      ;;
+    --saturation-warmup-path=*)
+      saturation_warmup_path="${1#--saturation-warmup-path=}"
+      shift
+      ;;
+    --saturation-build-profile)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_build_profile="$2"
+      shift 2
+      ;;
+    --saturation-build-profile=*)
+      saturation_build_profile="${1#--saturation-build-profile=}"
+      shift
+      ;;
+    --saturation-samples)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_samples="$2"
+      shift 2
+      ;;
+    --saturation-samples=*)
+      saturation_samples="${1#--saturation-samples=}"
+      shift
+      ;;
+    --saturation-wrk-processes)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_wrk_processes="$2"
+      shift 2
+      ;;
+    --saturation-wrk-processes=*)
+      saturation_wrk_processes="${1#--saturation-wrk-processes=}"
+      shift
+      ;;
+    --saturation-project-path)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_project_path="$2"
+      shift 2
+      ;;
+    --saturation-project-path=*)
+      saturation_project_path="${1#--saturation-project-path=}"
+      shift
+      ;;
+    --saturation-duration)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_duration="$2"
+      shift 2
+      ;;
+    --saturation-duration=*)
+      saturation_duration="${1#--saturation-duration=}"
+      shift
+      ;;
+    --saturation-threads)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_threads="$2"
+      shift 2
+      ;;
+    --saturation-threads=*)
+      saturation_threads="${1#--saturation-threads=}"
+      shift
+      ;;
+    --saturation-connections)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_connections="$2"
+      shift 2
+      ;;
+    --saturation-connections=*)
+      saturation_connections="${1#--saturation-connections=}"
+      shift
+      ;;
+    --saturation-target-requests)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_target_requests="$2"
+      shift 2
+      ;;
+    --saturation-target-requests=*)
+      saturation_target_requests="${1#--saturation-target-requests=}"
+      shift
+      ;;
+    --saturation-cluster-relay-workers)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_workers="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-workers=*)
+      saturation_cluster_relay_workers="${1#--saturation-cluster-relay-workers=}"
+      shift
+      ;;
+    --saturation-cluster-relay-queue)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_queue="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-queue=*)
+      saturation_cluster_relay_queue="${1#--saturation-cluster-relay-queue=}"
+      shift
+      ;;
+    --saturation-cluster-accept-workers)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_accept_workers="$2"
+      shift 2
+      ;;
+    --saturation-cluster-accept-workers=*)
+      saturation_cluster_accept_workers="${1#--saturation-cluster-accept-workers=}"
+      shift
+      ;;
+    --saturation-cluster-relay-accept-batch-max)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_accept_batch_max="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-accept-batch-max=*)
+      saturation_cluster_relay_accept_batch_max="${1#--saturation-cluster-relay-accept-batch-max=}"
+      shift
+      ;;
+    --saturation-cluster-relay-pump-batch-max)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_pump_batch_max="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-pump-batch-max=*)
+      saturation_cluster_relay_pump_batch_max="${1#--saturation-cluster-relay-pump-batch-max=}"
+      shift
+      ;;
+    --saturation-fixed-reuse-port-mode)
+      saturation_fixed_reuse_port_mode="true"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -69,6 +335,36 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+contains_csv_token() {
+  local csv="$1"
+  local token="$2"
+  IFS=',' read -r -a _items <<< "${csv}"
+  for _item in "${_items[@]}"; do
+    local trimmed="${_item// /}"
+    if [ "${trimmed}" = "${token}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ "${include_lasm_saturation}" = "true" ] && ! contains_csv_token "${impls_csv}" "sec4-lasm"; then
+  echo "--include-lasm-saturation requires sec4-lasm in --impls" >&2
+  exit 2
+fi
+if [ "${include_lasm_mode_compare}" = "true" ] && ! contains_csv_token "${impls_csv}" "sec4-lasm"; then
+  echo "--include-lasm-mode-compare requires sec4-lasm in --impls" >&2
+  exit 2
+fi
+if [ "${include_lasm_mode_compare}" != "true" ] && [ "${include_lasm_mode_compare}" != "false" ]; then
+  echo "include lasm mode compare must be true or false, got: ${include_lasm_mode_compare}" >&2
+  exit 2
+fi
+if [ "${saturation_fixed_reuse_port_mode}" != "true" ] && [ "${saturation_fixed_reuse_port_mode}" != "false" ]; then
+  echo "saturation fixed reuse-port mode must be true or false, got: ${saturation_fixed_reuse_port_mode}" >&2
+  exit 2
+fi
+
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 summaries_dir="${root_dir}/results/summaries"
 results_dir="${root_dir}/results"
@@ -77,6 +373,8 @@ analysis_path="${summaries_dir}/analysis.json"
 step_matrix_path="${summaries_dir}/step-matrix.json"
 report_md_path="${results_dir}/benchmark-report.md"
 manifest_path="${results_dir}/artifact-manifest.json"
+saturation_summary_path="${summaries_dir}/sec4-lasm-cluster-saturation-boost-summary.md"
+mode_compare_summary_path="${summaries_dir}/sec4-lasm-cluster-mode-compare.json"
 
 if [ -z "$sec_audit_path" ]; then
   candidate="${root_dir}/../baselines/sec-audit/default-secure-prod.hello.json"
@@ -86,35 +384,161 @@ if [ -z "$sec_audit_path" ]; then
 fi
 
 echo "phase: fixed-target matrix"
+fixed_matrix_args=(--impls "$impls_csv" --endpoints "$endpoints_csv")
+if [ -n "$sec_audit_path" ]; then
+  fixed_matrix_args+=(--sec-audit "$sec_audit_path")
+fi
+if [ -n "$lasm_db_adapter" ]; then
+  fixed_matrix_args+=(--lasm-db-adapter "$lasm_db_adapter")
+fi
+if [ -n "$lasm_db_postgres_dsn_file" ]; then
+  fixed_matrix_args+=(--lasm-db-postgres-dsn-file "$lasm_db_postgres_dsn_file")
+fi
 if [ "$dry_run" = "true" ]; then
-  "${root_dir}/scripts/run_comparison_matrix.sh" --dry-run --impls "$impls_csv" --endpoints "$endpoints_csv" ${sec_audit_path:+--sec-audit "$sec_audit_path"}
+  "${root_dir}/scripts/run_comparison_matrix.sh" --dry-run "${fixed_matrix_args[@]}"
 else
-  "${root_dir}/scripts/run_comparison_matrix.sh" --impls "$impls_csv" --endpoints "$endpoints_csv" ${sec_audit_path:+--sec-audit "$sec_audit_path"}
+  "${root_dir}/scripts/run_comparison_matrix.sh" "${fixed_matrix_args[@]}"
 fi
 
 echo "phase: step-load matrix"
+step_matrix_args=(--impls "$impls_csv" --endpoints "$endpoints_csv")
+if [ -n "$lasm_db_adapter" ]; then
+  step_matrix_args+=(--lasm-db-adapter "$lasm_db_adapter")
+fi
+if [ -n "$lasm_db_postgres_dsn_file" ]; then
+  step_matrix_args+=(--lasm-db-postgres-dsn-file "$lasm_db_postgres_dsn_file")
+fi
 if [ "$dry_run" = "true" ]; then
-  "${root_dir}/scripts/run_step_matrix.sh" --dry-run --impls "$impls_csv" --endpoints "$endpoints_csv"
+  "${root_dir}/scripts/run_step_matrix.sh" --dry-run "${step_matrix_args[@]}"
 else
-  "${root_dir}/scripts/run_step_matrix.sh" --impls "$impls_csv" --endpoints "$endpoints_csv"
+  "${root_dir}/scripts/run_step_matrix.sh" "${step_matrix_args[@]}"
+fi
+
+if [ "${include_lasm_saturation}" = "true" ]; then
+  echo "phase: lasm saturation tuning bundle"
+  saturation_args=(
+    --boost-steps "$saturation_boost_steps_csv"
+    --summary-out "$saturation_summary_path"
+  )
+  if [ -n "${saturation_profile}" ]; then
+    saturation_args+=(--profile "${saturation_profile}")
+  fi
+  if [ -n "${saturation_warmup_path}" ]; then
+    saturation_args+=(--warmup-path "${saturation_warmup_path}")
+  fi
+  if [ -n "${saturation_project_path}" ]; then
+    saturation_args+=(--project-path "${saturation_project_path}")
+  fi
+  if [ -n "${saturation_duration}" ]; then
+    saturation_args+=(--duration "${saturation_duration}")
+  fi
+  if [ -n "${saturation_threads}" ]; then
+    saturation_args+=(--threads "${saturation_threads}")
+  fi
+  if [ -n "${saturation_connections}" ]; then
+    saturation_args+=(--connections "${saturation_connections}")
+  fi
+  if [ -n "${saturation_target_requests}" ]; then
+    saturation_args+=(--target-requests "${saturation_target_requests}")
+  fi
+  if [ -n "${saturation_build_profile}" ]; then
+    saturation_args+=(--build-profile "${saturation_build_profile}")
+  fi
+  if [ -n "${saturation_samples}" ]; then
+    saturation_args+=(--samples "${saturation_samples}")
+  fi
+  if [ -n "${saturation_wrk_processes}" ]; then
+    saturation_args+=(--wrk-processes "${saturation_wrk_processes}")
+  fi
+  if [ -n "${saturation_cluster_relay_workers}" ]; then
+    saturation_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_queue}" ]; then
+    saturation_args+=(--cluster-relay-queue "${saturation_cluster_relay_queue}")
+  fi
+  if [ -n "${saturation_cluster_accept_workers}" ]; then
+    saturation_args+=(--cluster-accept-workers "${saturation_cluster_accept_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_accept_batch_max}" ]; then
+    saturation_args+=(--cluster-relay-accept-batch-max "${saturation_cluster_relay_accept_batch_max}")
+  fi
+  if [ -n "${saturation_cluster_relay_pump_batch_max}" ]; then
+    saturation_args+=(--cluster-relay-pump-batch-max "${saturation_cluster_relay_pump_batch_max}")
+  fi
+  if [ "${saturation_fixed_reuse_port_mode}" = "true" ]; then
+    saturation_args+=(--fixed-reuse-port-mode)
+  fi
+  if [ "${saturation_skip_verify}" = "true" ]; then
+    saturation_args+=(--skip-verify)
+  fi
+  if [ "$dry_run" = "true" ]; then
+    saturation_args+=(--dry-run)
+  fi
+  "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" "${saturation_args[@]}"
+fi
+
+if [ "${include_lasm_mode_compare}" = "true" ]; then
+  echo "phase: lasm mode compare"
+  mode_compare_args=(
+    --project-path "${saturation_project_path:-examples/lasm-alpha-full}"
+  )
+  if [ -n "${saturation_duration}" ]; then
+    mode_compare_args+=(--duration "${saturation_duration}")
+  fi
+  if [ -n "${saturation_threads}" ]; then
+    mode_compare_args+=(--threads "${saturation_threads}")
+  fi
+  if [ -n "${saturation_connections}" ]; then
+    mode_compare_args+=(--connections "${saturation_connections}")
+  fi
+  if [ -n "${saturation_target_requests}" ]; then
+    mode_compare_args+=(--target-requests "${saturation_target_requests}")
+  fi
+  if [ -n "${saturation_build_profile}" ]; then
+    mode_compare_args+=(--build-profile "${saturation_build_profile}")
+  fi
+  if [ -n "${saturation_samples}" ]; then
+    mode_compare_args+=(--samples "${saturation_samples}")
+  fi
+  if [ -n "${saturation_wrk_processes}" ]; then
+    mode_compare_args+=(--wrk-processes "${saturation_wrk_processes}")
+  fi
+  if [ -n "${saturation_cluster_relay_workers}" ]; then
+    mode_compare_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_queue}" ]; then
+    mode_compare_args+=(--cluster-relay-queue "${saturation_cluster_relay_queue}")
+  fi
+  if [ -n "${saturation_cluster_accept_workers}" ]; then
+    mode_compare_args+=(--cluster-accept-workers "${saturation_cluster_accept_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_accept_batch_max}" ]; then
+    mode_compare_args+=(--cluster-relay-accept-batch-max "${saturation_cluster_relay_accept_batch_max}")
+  fi
+  if [ -n "${saturation_cluster_relay_pump_batch_max}" ]; then
+    mode_compare_args+=(--cluster-relay-pump-batch-max "${saturation_cluster_relay_pump_batch_max}")
+  fi
+  if [ "$dry_run" = "true" ]; then
+    mode_compare_args+=(--dry-run)
+  fi
+  "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" "${mode_compare_args[@]}"
 fi
 
 echo "phase: publish combined report"
+publish_args=("$matrix_path" "$report_md_path" "${sec_audit_path:-}" "$analysis_path" "$step_matrix_path")
+if [ "${include_lasm_saturation}" = "true" ]; then
+  publish_args+=("$saturation_summary_path")
+fi
+if [ "${include_lasm_mode_compare}" = "true" ]; then
+  publish_args+=("$mode_compare_summary_path")
+fi
 if [ "$dry_run" = "true" ]; then
-  if [ -n "$sec_audit_path" ]; then
-    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path} ${analysis_path} ${step_matrix_path}"
-  else
-    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} \"\" ${analysis_path} ${step_matrix_path}"
-  fi
+  echo "run: ${root_dir}/scripts/publish_report.sh ${publish_args[*]}"
   echo "run: ${root_dir}/scripts/build_artifact_manifest.sh ${results_dir} ${manifest_path}"
   exit 0
 fi
 
-if [ -n "$sec_audit_path" ]; then
-  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "$sec_audit_path" "$analysis_path" "$step_matrix_path"
-else
-  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "" "$analysis_path" "$step_matrix_path"
-fi
+"${root_dir}/scripts/publish_report.sh" "${publish_args[@]}"
 
 "${root_dir}/scripts/build_artifact_manifest.sh" "$results_dir" "$manifest_path"
 

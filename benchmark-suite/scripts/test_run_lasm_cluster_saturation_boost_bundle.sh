@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "$0")/.." && pwd)"
+
+out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --boost-steps 2,4,7 \
+  --project-path examples/lasm-alpha-full \
+  --request-path /health \
+  --request-header 'Authorization: Bearer token123' \
+  --duration 6s \
+  --threads 2 \
+  --connections 32 \
+  --target-requests 12345 \
+  --cluster-accept-workers 5 \
+  --cluster-relay-accept-batch-max 222 \
+  --cluster-relay-pump-batch-max 333 \
+  --build-profile debug \
+  --samples 3 \
+  --wrk-processes 4 \
+  --summary-out results/summaries/custom-saturation-boost-summary.md \
+  2>&1)"
+
+if ! grep -q 'sec4 LASM saturation boost bundle plan:' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing bundle plan header" >&2
+  exit 1
+fi
+if ! grep -q 'verifyRecommended=true' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing default verify mode marker" >&2
+  exit 1
+fi
+if ! grep -q 'profile=ping' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing default profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'sec4 LASM saturation boost matrix plan:' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing matrix plan passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'clusterAcceptWorkers=5' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing accept workers passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayAcceptBatchMax=222' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing relay accept batch passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayPumpBatchMax=333' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing relay pump batch passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'buildProfile=debug' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing build profile passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'samples=3' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing samples passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'wrkProcesses=4' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing wrk-processes passthrough" >&2
+  exit 1
+fi
+if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary.md ${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json" <<<"$out"; then
+  echo "saturation boost bundle dry-run missing summary command plan with verify artifact" >&2
+  exit 1
+fi
+
+out_db_profile="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --profile db-hot-query-one \
+  --boost-steps 2 \
+  2>&1)"
+if ! grep -q 'profile=db-hot-query-one' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile marker" >&2
+  exit 1
+fi
+if ! grep -q 'projectPath=benchmark-suite/services/sec4-lasm' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default project path" >&2
+  exit 1
+fi
+if ! grep -q 'requestPath=/db/hot-query-one' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default request path" >&2
+  exit 1
+fi
+if ! grep -q 'warmupPath=/db/hot-write' <<<"$out_db_profile"; then
+  echo "saturation boost bundle dry-run missing db profile default warmup path" >&2
+  exit 1
+fi
+
+out_skip_verify="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --skip-verify \
+  --summary-out results/summaries/custom-saturation-boost-summary-no-verify.md \
+  2>&1)"
+if ! grep -q 'verifyRecommended=false' <<<"$out_skip_verify"; then
+  echo "saturation boost bundle dry-run missing skip-verify mode marker" >&2
+  exit 1
+fi
+if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary-no-verify.md" <<<"$out_skip_verify"; then
+  echo "saturation boost bundle dry-run missing summary command plan without verify artifact" >&2
+  exit 1
+fi
+
+out_fixed="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --fixed-reuse-port-mode \
+  --instances 3 \
+  --autoscale-max-instances 9 \
+  --summary-out results/summaries/custom-saturation-boost-summary-fixed.md \
+  2>&1)"
+if ! grep -q 'fixedReusePortMode=true' <<<"$out_fixed"; then
+  echo "saturation boost bundle dry-run missing fixed reuse-port mode marker" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleMaxInstances=3' <<<"$out_fixed"; then
+  echo "saturation boost bundle dry-run missing delegated fixed-mode autoscale max override" >&2
+  exit 1
+fi
+
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --boost-steps 2,abc >/tmp/lasm-sat-boost-bundle-invalid-shape.log 2>&1; then
+  echo "saturation boost bundle accepted invalid boost-step shape" >&2
+  exit 1
+fi
+if ! grep -q 'boost-steps must contain positive integers, got: abc' /tmp/lasm-sat-boost-bundle-invalid-shape.log; then
+  echo "saturation boost bundle missing invalid-shape diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --samples 0 >/tmp/lasm-sat-boost-bundle-invalid-samples.log 2>&1; then
+  echo "saturation boost bundle accepted invalid samples value" >&2
+  exit 1
+fi
+if ! grep -q 'samples must be >= 1, got: 0' /tmp/lasm-sat-boost-bundle-invalid-samples.log; then
+  echo "saturation boost bundle missing invalid samples diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --wrk-processes 0 >/tmp/lasm-sat-boost-bundle-invalid-wrk-processes.log 2>&1; then
+  echo "saturation boost bundle accepted invalid wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q 'wrk-processes must be >= 1, got: 0' /tmp/lasm-sat-boost-bundle-invalid-wrk-processes.log; then
+  echo "saturation boost bundle missing invalid wrk-processes diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --wrk-processes nope >/tmp/lasm-sat-boost-bundle-invalid-wrk-processes-type.log 2>&1; then
+  echo "saturation boost bundle accepted non-integer wrk-processes value" >&2
+  exit 1
+fi
+if ! grep -q 'wrk-processes must be an integer >= 1' /tmp/lasm-sat-boost-bundle-invalid-wrk-processes-type.log; then
+  echo "saturation boost bundle missing invalid wrk-processes type diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --build-profile fast >/tmp/lasm-sat-boost-bundle-invalid-profile.log 2>&1; then
+  echo "saturation boost bundle accepted invalid build profile value" >&2
+  exit 1
+fi
+if ! grep -q 'build-profile must be one of: debug, release' /tmp/lasm-sat-boost-bundle-invalid-profile.log; then
+  echo "saturation boost bundle missing invalid build profile diagnostic passthrough" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --profile nope >/tmp/lasm-sat-boost-bundle-invalid-run-profile.log 2>&1; then
+  echo "saturation boost bundle accepted invalid profile value" >&2
+  exit 1
+fi
+if ! grep -q 'profile must be one of: ping, db-hot-write, db-hot-write-tx, db-hot-query-one' /tmp/lasm-sat-boost-bundle-invalid-run-profile.log; then
+  echo "saturation boost bundle missing invalid profile diagnostic" >&2
+  exit 1
+fi
+
+echo "run_lasm_cluster_saturation_boost_bundle test passed"

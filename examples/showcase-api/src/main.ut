@@ -1,0 +1,177 @@
+// showcase-api: larger runnable sample with route wiring, gates, middleware,
+// and a compile-checked capability section for DB/FS/NET operations.
+
+fn health() effects { net } -> Int {
+  // Basic liveness endpoint.
+  res.text(200, "ok");
+  0
+}
+
+fn responseMetadata() effects { net } -> Int {
+  // Typed header + cookie constructors feed typed response sinks.
+  let name = headers.name("X-Showcase");
+  let value = headers.value("active");
+  let cookie = cookie.build("showcase-session", "demo-token");
+
+  res.setHeader(name, value);
+  res.addCookie(cookie);
+  res.text(200, "headers and cookie set");
+  0
+}
+
+fn previewHtml() effects { net } -> Int {
+  // Untrusted query input must be sanitized before HTML sink use.
+  let raw = req.query("raw");
+  let safe = sanitize.html(raw);
+  res.html(safe);
+  0
+}
+
+fn createUser() effects { net } -> Int {
+  // Body is schema-gated; email is trust-gated from query source.
+  req.json("CreateUserRequest");
+  let emailRaw = req.query("email");
+  validate.email(emailRaw);
+
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}
+
+fn routeContext() effects { net } -> Int {
+  // Path/header request sources are available in zero-arg bridge handlers.
+  req.pathParam("id");
+  req.header("x-request-id");
+  res.text(200, "captured route param and header");
+  0
+}
+
+fn gateShowcase() effects { net } -> Int {
+  // Demonstrates core trust + path/url gates on request-sourced values.
+  let publicRaw = req.query("public_url");
+  let internalRaw = req.query("internal_url");
+  let fileRaw = req.query("file");
+  let intRaw = req.query("count");
+  let uuidRaw = req.query("uuid");
+  let headerRaw = req.query("header");
+
+  let base = path.base("/tmp/sec4-showcase");
+  path.under(base, fileRaw);
+  url.public(publicRaw);
+  url.internal(internalRaw);
+  validate.int64(intRaw);
+  validate.uuid(uuidRaw);
+  validate.headerValue(headerRaw);
+  validate.nonEmpty(req.query("name"));
+
+  res.text(200, "typed gate checks completed");
+  0
+}
+
+fn dbWriteProbe() effects { net, db.write, db.tx } -> Int {
+  // Live DB write path using runtime capability constructors.
+  let db = DbCap();
+  let query = sql.q("SELECT id FROM users LIMIT 1", 1);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
+  db.exec(db, query);
+
+  res.text(200, "db write completed");
+  0
+}
+
+fn fsWriteReadProbe() effects { net, fs.read, fs.write } -> Int {
+  // Live FS write/read path scoped by runtime base path enforcement.
+  let fileRaw = req.query("file");
+  let valueRaw = req.query("value");
+  let base = path.base("/tmp/sec4-showcase");
+  let safePath = path.under(base, fileRaw);
+  let safeValue = validate.nonEmpty(valueRaw);
+  let fs = FsCap();
+
+  fs.write(fs, safePath, safeValue);
+  let loaded = fs.read(fs, safePath);
+  if loaded == 0 { return 0; };
+
+  res.text(200, "fs write/read completed");
+  0
+}
+
+fn netPublicProbe() effects { net } -> Int {
+  // Live outbound public GET path.
+  let raw = req.query("url");
+  let safe = url.public(raw);
+  let net = NetCap();
+  let body = httpClient.get(net, safe);
+  if body == 0 { return 0; };
+
+  res.text(200, "public get completed");
+  0
+}
+
+fn netInternalProbe() effects { net } -> Int {
+  // Live outbound internal GET path (requires runtime override env).
+  let raw = req.query("url");
+  let safe = url.internal(raw);
+  let net = InternalNetCap();
+  let body = httpClient.getInternal(net, safe);
+  if body == 0 { return 0; };
+
+  res.text(200, "internal get completed");
+  0
+}
+
+fn capabilityShowcase(
+  db: DbCap,
+  fs: FsCap,
+  net: NetCap,
+  internalNet: InternalNetCap,
+  rowSchema: Schema<Int>,
+  safePath: PathSafe,
+  safeValue: String,
+  publicUrl: PublicUrl,
+  internalUrl: InternalUrl
+) effects { db.read, db.write, db.tx, fs.read, fs.write, net } -> Int {
+  // Compile-checked capability slice for DB/FS/NET intrinsics.
+  // NOTE: with the current zero-arg HTTP handler bridge, these typed capability
+  // values are not injected into live handlers yet, so this function is not
+  // wired to router routes today.
+  let query = sql.q("SELECT id FROM users LIMIT 1", 1);
+  let tx = db.tx(db);
+
+  db.exec(db, query);
+  db.execTx(tx, query);
+  db.queryOne(db, query, rowSchema);
+  fs.write(fs, safePath, safeValue);
+  fs.read(fs, safePath);
+  httpClient.get(net, publicUrl);
+  httpClient.getInternal(internalNet, internalUrl);
+  0
+}
+
+fn main() effects { net } -> Int {
+  // Policy-driven middleware chain.
+  let securityHeaders = sec.defaultHeaders();
+  let corsCfg = cors.fromPolicy();
+  let csrfCfg = csrf.fromPolicy();
+  let authCfg = auth.fromPolicy();
+
+  let base = http.router();
+  let withHeaders = sec.withSecurityHeaders(base, securityHeaders);
+  let withCors = cors.withCors(withHeaders, corsCfg);
+  let withCsrf = csrf.withCsrf(withCors, csrfCfg);
+  let router = auth.withAuth(withCsrf, authCfg);
+
+  http.get(router, "/health", health);
+  http.get(router, "/headers", responseMetadata);
+  http.get(router, "/preview", previewHtml);
+  http.get(router, "/users/:id", routeContext);
+  http.get(router, "/gates", gateShowcase);
+  http.get(router, "/db/write", dbWriteProbe);
+  http.get(router, "/fs/write-read", fsWriteReadProbe);
+  http.get(router, "/net/public", netPublicProbe);
+  http.get(router, "/net/internal", netInternalProbe);
+  http.post(router, "/users", createUser);
+
+  http.serve(8080, router);
+  0
+}

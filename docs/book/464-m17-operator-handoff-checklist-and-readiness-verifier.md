@@ -20,7 +20,9 @@ M16 already proves runtime behavior and CI coverage. M17-S1 packages those guara
    - `scripts/check-runtime-smoke-bundle.sh --artifacts-root <tmp> --index-path <tmp>/runtime-smoke-branch-index.json`
 4. Strict closure gate verification:
    - `scripts/check-milestone-closure.sh --fail-on-pending`
-5. Trend-note local fallback profile:
+5. Zed extension operator readiness:
+   - `scripts/check-zed-extension-operator-readiness.sh --stage-output <tmp>/zed-extension-release-operator`
+6. Trend-note local fallback profile:
    - `benchmark-suite/scripts/update_trend_note_from_ci.sh --prefer-local`
 
 ## 4) Expected outputs and artifacts
@@ -31,6 +33,7 @@ After the matrix passes:
 - `<tmp>/max-body/` contains the max-body runtime-smoke artifact set with matching run-flag shape metadata.
 - `<tmp>/runtime-smoke-branch-index.json` exists and includes `branchOrder: ["default","max-body"]`.
 - Closure gate prints `overall: PASS`.
+- `<tmp>/zed-extension-release-operator/bundle-manifest.json` exists and is updated by zed operator staging.
 - Trend note updater refreshes `docs/book/322-m13-first-trend-run-results-note.md` using local matrix evidence when remote fetch is unavailable.
 
 ## 5) Readiness verifier

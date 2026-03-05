@@ -58,6 +58,7 @@ Top-level keys:
 - `endpoint`
 - `targetRps`
 - `requestsPerSec`
+- `memory` (`rssKb`, `sampleSource`)
 - `latency`
 
 ### `compare-<endpoint>.json`
@@ -76,6 +77,7 @@ Each `compared[]` / `leader` row:
 - `p99`
 - `loadGenerator`
 - `constantRate`
+- `rssKb` (`number|null`)
 
 Contract invariants:
 - each row `endpoint` must match its endpoint-group `endpoint`,
@@ -104,6 +106,7 @@ Each `compared[]` / `leader` row:
 - `p99`
 - `loadGenerator`
 - `constantRate`
+- `rssKb` (`number|null`)
 
 ### `analysis.json`
 

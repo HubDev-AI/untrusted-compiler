@@ -279,11 +279,28 @@ impl Catalog {
 struct Analyzer<'a> {
     catalog: Catalog,
     policy: Policy,
+    profile: SemanticProfile,
     callable_forward_summaries: HashMap<String, String>,
     value_origins: HashMap<String, String>,
     diagnostics: Vec<Diagnostic>,
     interrupt: &'a dyn InterruptSignal,
     interrupted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SemanticProfile {
+    Server,
+    Browser,
+}
+
+impl SemanticProfile {
+    fn from_manifest_profile(profile: &str) -> Self {
+        if profile == "browser" {
+            Self::Browser
+        } else {
+            Self::Server
+        }
+    }
 }
 
 pub fn analyze_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
@@ -302,8 +319,16 @@ pub fn analyze_program_with_policy(
     program: &Program,
     policy: &Policy,
 ) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy_and_profile(program, policy, "server")
+}
+
+pub fn analyze_program_with_policy_and_profile(
+    program: &Program,
+    policy: &Policy,
+    profile: &str,
+) -> Result<(), Vec<Diagnostic>> {
     let interrupt = NeverInterrupt;
-    analyze_program_with_policy_and_interrupt(program, policy, &interrupt)
+    analyze_program_with_policy_profile_and_interrupt(program, policy, profile, &interrupt)
 }
 
 pub fn analyze_program_with_policy_and_interrupt(
@@ -311,9 +336,19 @@ pub fn analyze_program_with_policy_and_interrupt(
     policy: &Policy,
     interrupt: &dyn InterruptSignal,
 ) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy_profile_and_interrupt(program, policy, "server", interrupt)
+}
+
+pub fn analyze_program_with_policy_profile_and_interrupt(
+    program: &Program,
+    policy: &Policy,
+    profile: &str,
+    interrupt: &dyn InterruptSignal,
+) -> Result<(), Vec<Diagnostic>> {
     let mut analyzer = Analyzer {
         catalog: Catalog::new(),
         policy: policy.clone(),
+        profile: SemanticProfile::from_manifest_profile(profile),
         callable_forward_summaries: HashMap::new(),
         value_origins: HashMap::new(),
         diagnostics: Vec::new(),
@@ -1902,12 +1937,16 @@ impl<'a> Analyzer<'a> {
         self.enforce_json_encode_helper_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
+        if self.enforce_browser_profile_call_fence(callee_name, span.clone()) {
+            return;
+        }
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_cookie_build_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_sql_q_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_schema_row_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -3200,7 +3239,12 @@ impl<'a> Analyzer<'a> {
 
         if !(is_req_query_call(callee_name)
             || is_req_path_param_call(callee_name)
-            || is_req_header_call(callee_name))
+            || is_req_header_call(callee_name)
+            || is_req_cookie_call(callee_name)
+            || is_req_method_call(callee_name)
+            || is_req_path_call(callee_name)
+            || is_req_http_version_call(callee_name)
+            || is_ctx_current_call(callee_name))
         {
             return;
         }
@@ -3209,9 +3253,35 @@ impl<'a> Analyzer<'a> {
             "req.query"
         } else if is_req_path_param_call(callee_name) {
             "req.pathParam"
+        } else if is_req_cookie_call(callee_name) {
+            "req.cookie"
+        } else if is_ctx_current_call(callee_name) {
+            "ctx.current"
+        } else if is_req_method_call(callee_name) {
+            "req.method"
+        } else if is_req_path_call(callee_name) {
+            "req.path"
+        } else if is_req_http_version_call(callee_name) {
+            "req.httpVersion"
         } else {
             "req.header"
         };
+
+        if is_req_method_call(callee_name)
+            || is_req_path_call(callee_name)
+            || is_req_http_version_call(callee_name)
+            || is_ctx_current_call(callee_name)
+        {
+            if !args.is_empty() {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", format!("{call_name} expects no arguments"), span)
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(format!("use `{call_name}()`")),
+                );
+            }
+            return;
+        }
 
         if args.len() != 1 {
             self.diagnostics.push(
@@ -3340,6 +3410,57 @@ impl<'a> Analyzer<'a> {
         }
 
         self.enforce_sql_select_limit_policy(args);
+    }
+
+    fn enforce_schema_row_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_schema_row_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "schema.row expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note("use `schema.row(rowSchemaHandle)`"),
+            );
+            return;
+        }
+
+        if arg_types[0].contains_secret() || arg_types[0].contains_untrusted() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "schema.row argument cannot be `Secret<_>` or `Untrusted<_>`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("validate and convert schema handles before `schema.row(...)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "schema.row argument must be numeric",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("pass `Int`/`Int64` row schema handles into `schema.row(...)`"),
+            );
+        }
     }
 
     fn enforce_sql_select_limit_policy(&mut self, args: &[Expr]) {
@@ -3729,6 +3850,63 @@ impl<'a> Analyzer<'a> {
                     "enable internal net in `sec4.policy`:\n[net.internal]\nenabled = true",
                 ),
         );
+    }
+
+    fn enforce_browser_profile_call_fence(&mut self, callee_name: &str, span: Span) -> bool {
+        if self.profile != SemanticProfile::Browser {
+            return false;
+        }
+
+        let (message, note) = if is_db_exec_call(callee_name)
+            || is_db_exec_tx_call(callee_name)
+            || is_db_query_one_call(callee_name)
+            || is_db_tx_call(callee_name)
+            || is_sql_q_call(callee_name)
+        {
+            (
+                "database intrinsics are disabled in browser profile",
+                "browser profile forbids `db.*` and `sql.q`; use browser-local adapters or remote API calls",
+            )
+        } else if is_secret_get_call(callee_name)
+            || is_secret_redact_call(callee_name)
+            || is_secret_reveal_call(callee_name)
+        {
+            (
+                "secrets intrinsics are disabled in browser profile",
+                "browser profile forbids `secrets.*`; browser builds do not provide trusted app-secret sources",
+            )
+        } else if is_http_serve_call(callee_name) {
+            (
+                "inbound network listener is disabled in browser profile",
+                "browser profile forbids `http.serve`; use exported handler entrypoints in browser builds",
+            )
+        } else if is_ctx_current_call(callee_name) {
+            (
+                "request context intrinsics are disabled in browser profile",
+                "browser profile forbids `ctx.current`; browser builds do not expose server request context",
+            )
+        } else if is_net_internal_call(callee_name) || is_url_internal_gate(callee_name) {
+            (
+                "internal network intrinsics are disabled in browser profile",
+                "browser profile forbids internal-net sinks (`httpClient.getInternal`, `url.internal`)",
+            )
+        } else {
+            return false;
+        };
+
+        self.diagnostics.push(
+            Diagnostic::error("E2002", message, span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(format!(
+                    "`{callee_name}` is not available when `[build].profile = \"browser\"`"
+                ))
+                .with_note(note)
+                .with_note(
+                    "switch to `[build].profile = \"server\"` for server-side capability access",
+                ),
+        );
+        true
     }
 
     fn enforce_fs_sink_call_shapes(
@@ -5271,6 +5449,27 @@ impl<'a> Analyzer<'a> {
     fn resolve_type_expr(&mut self, expr: &TypeExpr, span: Span) -> Type {
         match &expr.kind {
             TypeExprKind::Named { name, args } => {
+                if self.profile == SemanticProfile::Browser
+                    && is_server_only_capability_type_name(name)
+                {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2002",
+                            "server-only capability type is disabled in browser profile",
+                            expr.span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("policy")
+                        .with_note(format!(
+                            "type `{name}` is not available when `[build].profile = \"browser\"`"
+                        ))
+                        .with_note(
+                            "switch to `[build].profile = \"server\"` for server capability types",
+                        ),
+                    );
+                    return Type::Unknown;
+                }
+
                 if !self.catalog.is_known_type_name(name) {
                     self.diagnostics.push(
                         Diagnostic::error("N3001", "unknown type", span)
@@ -5382,6 +5581,40 @@ impl<'a> Analyzer<'a> {
                 let err = self.analyze_expr(&args[0], env, used_effects, callable_aliases);
                 Some(Type::result(Type::Unknown, err))
             }
+            "Ctx" | "DbCap" | "FsCap" | "NetCap" | "InternalNetCap" | "SecretsCap" => {
+                if self.profile == SemanticProfile::Browser {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2002",
+                            "server-only capability constructor is disabled in browser profile",
+                            span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("policy")
+                        .with_note(format!(
+                            "constructor `{name}()` is not available when `[build].profile = \"browser\"`"
+                        ))
+                        .with_note(
+                            "switch to `[build].profile = \"server\"` for server capability constructors",
+                        ),
+                    );
+                    for arg in args {
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
+                    }
+                    return Some(Type::Unknown);
+                }
+
+                if !args.is_empty() {
+                    self.diagnostics.push(
+                        Diagnostic::error("T3103", "constructor argument count mismatch", span)
+                            .with_note(format!("`{name}` expects 0 arguments")),
+                    );
+                    for arg in args {
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
+                    }
+                }
+                Some(Type::named(name))
+            }
             _ => None,
         }
     }
@@ -5458,6 +5691,7 @@ enum IntrinsicReturnTy {
     Unknown,
     UntrustedString,
     UntrustedBytes,
+    SchemaInt,
     Named(&'static str),
 }
 
@@ -5468,6 +5702,10 @@ impl IntrinsicReturnTy {
             Self::Unknown => Type::Unknown,
             Self::UntrustedString => Type::untrusted(Type::named("String")),
             Self::UntrustedBytes => Type::untrusted(Type::named("Bytes")),
+            Self::SchemaInt => Type::Named {
+                name: "Schema".to_string(),
+                args: vec![Type::named("Int")],
+            },
             Self::Named(name) => Type::named(name),
         }
     }
@@ -5599,6 +5837,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "ctx_current" | "ctx.current" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Ctx"),
+        }),
         "err_validation" | "err.validation" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
@@ -5660,7 +5903,8 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             return_ty: IntrinsicReturnTy::UntrustedBytes,
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
-        | "req.header" => Some(IntrinsicSpec {
+        | "req.header" | "req_cookie" | "req.cookie" | "req_method" | "req.method" | "req_path"
+        | "req.path" | "req_http_version" | "req.httpVersion" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
@@ -5774,6 +6018,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             effect: None,
             required_capability: None,
             return_ty: IntrinsicReturnTy::Named("SqlQuery"),
+        }),
+        "schema_row" | "schema.row" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::SchemaInt,
         }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: Some("fs.read"),
@@ -5987,11 +6236,19 @@ fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> 
     }
 }
 
+fn is_server_only_capability_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Ctx" | "DbCap" | "FsCap" | "NetCap" | "InternalNetCap" | "SecretsCap"
+    )
+}
+
 fn is_intrinsic_namespace(name: &str) -> bool {
     matches!(
         name,
         "db" | "fs"
             | "sql"
+            | "schema"
             | "http"
             | "httpClient"
             | "json"
@@ -6000,6 +6257,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
             | "headers"
             | "cookie"
             | "req"
+            | "ctx"
             | "res"
             | "sanitize"
             | "sec"
@@ -6232,8 +6490,32 @@ fn is_req_header_call(name: &str) -> bool {
     matches!(name, "req_header" | "req.header")
 }
 
+fn is_req_cookie_call(name: &str) -> bool {
+    matches!(name, "req_cookie" | "req.cookie")
+}
+
+fn is_req_method_call(name: &str) -> bool {
+    matches!(name, "req_method" | "req.method")
+}
+
+fn is_req_path_call(name: &str) -> bool {
+    matches!(name, "req_path" | "req.path")
+}
+
+fn is_req_http_version_call(name: &str) -> bool {
+    matches!(name, "req_http_version" | "req.httpVersion")
+}
+
+fn is_ctx_current_call(name: &str) -> bool {
+    matches!(name, "ctx_current" | "ctx.current")
+}
+
 fn is_sql_q_call(name: &str) -> bool {
     matches!(name, "sql_q" | "sql.q")
+}
+
+fn is_schema_row_call(name: &str) -> bool {
+    matches!(name, "schema_row" | "schema.row")
 }
 
 fn is_cookie_build_call(name: &str) -> bool {

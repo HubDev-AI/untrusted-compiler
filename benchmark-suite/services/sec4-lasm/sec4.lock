@@ -1,0 +1,14 @@
+# Untrusted<T> lockfile v1 (deterministic)
+lock_version = 1
+
+[package]
+name = "benchmark-sec4-lasm"
+version = "0.1.0"
+edition = "2026"
+hash = "pkg_699883f8468f3255"
+
+[build]
+entry = "src/main.ut"
+profile = "server"
+hash = "bld_c560535abda06e76"
+manifest_hash = "man_369a9bb133f07ce6"

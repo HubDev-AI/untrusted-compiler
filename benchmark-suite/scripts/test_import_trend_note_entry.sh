@@ -17,18 +17,18 @@ EOF
 cat > "$entry" <<'EOF'
 ## Trend Entry (2026-02-13)
 
-| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
-| --- | --- | ---: | ---: | --- | --- |
-| ping | node | 18.20 | 90.00 | pass | pass |
+| Endpoint | Leader | p99 (ms) | Coverage (%) | RSS (KB) | Absolute Guard | Baseline Guard |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| ping | node | 18.20 | 90.00 | n/a | pass | pass |
 EOF
 
 entry_updated="${tmp}/entry-updated.md"
 cat > "$entry_updated" <<'EOF'
 ## Trend Entry (2026-02-13)
 
-| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
-| --- | --- | ---: | ---: | --- | --- |
-| ping | go | 12.00 | 91.00 | pass | pass |
+| Endpoint | Leader | p99 (ms) | Coverage (%) | RSS (KB) | Absolute Guard | Baseline Guard |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| ping | go | 12.00 | 91.00 | n/a | pass | pass |
 EOF
 
 "$root_dir/import_trend_note_entry.sh" --entry "$entry" --chapter "$chapter" >/dev/null
@@ -48,7 +48,7 @@ fi
 
 "$root_dir/import_trend_note_entry.sh" --entry "$entry_updated" --chapter "$chapter" --replace-existing >/dev/null
 
-if ! grep -q '| ping | go | 12.00 | 91.00 | pass | pass |' "$chapter"; then
+if ! grep -q '| ping | go | 12.00 | 91.00 | n/a | pass | pass |' "$chapter"; then
   echo "replace-existing did not refresh existing trend entry content" >&2
   exit 1
 fi

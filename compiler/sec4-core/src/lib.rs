@@ -3,12 +3,17 @@ pub mod audit;
 pub mod backend;
 pub mod build_metadata;
 pub mod c_backend;
+pub mod composition;
 pub mod diagnostics;
+pub mod lasm_backend;
+pub mod lasm_http_runtime;
+pub mod lasm_runtime;
 pub mod lexer;
 pub mod manifest;
 pub mod mir;
 pub mod parser;
 pub mod policy;
+pub mod project;
 pub mod sbom;
 pub mod security_map;
 pub mod semantic;
@@ -36,11 +41,22 @@ pub use build_metadata::{
     compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
 };
 pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
+pub use composition::{
+    collect_promote_binding_references, collect_promote_contract_violations,
+    PromoteBindingReference, PromoteContractViolation,
+};
 pub use diagnostics::{Diagnostic, Severity, Span};
+pub use lasm_backend::{emit_lasm_program, emit_lasm_program_json, lower_mir_to_lasm, LasmProgram};
+pub use lasm_http_runtime::{HttpExchange, HttpRequest, HttpResponse, LasmHttpRuntime};
+pub use lasm_runtime::{LasmAsyncRuntime, RunReport, RuntimeAction, TaskExit, TaskId};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use mir::{lower_program_to_mir, MirProgram};
 pub use parser::{parse_source, parse_source_with_interrupt};
 pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
+pub use project::{
+    resolve_modules_from_entry, resolve_project_modules, ResolvedModuleSource,
+    ResolvedProjectSources,
+};
 pub use sbom::{SbomDocument, SBOM_FILE_NAME};
 pub use security_map::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations,
@@ -48,7 +64,8 @@ pub use security_map::{
 };
 pub use semantic::{
     analyze_program, analyze_program_with_interrupt, analyze_program_with_policy,
-    analyze_program_with_policy_and_interrupt,
+    analyze_program_with_policy_and_interrupt, analyze_program_with_policy_and_profile,
+    analyze_program_with_policy_profile_and_interrupt,
 };
 
 use std::fs;
@@ -93,17 +110,36 @@ pub fn parse_entry_ast(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<ast::Program, Vec<Diagnostic>> {
-    let (entry_path, source) = read_entry_source(project_root, manifest)?;
-    let source_for_parser = security_map::strip_allow_annotations(&source);
-    parser::parse_source(&entry_path, &source_for_parser)
+    let entry_path = manifest.entry_path(project_root);
+    let resolved = project::resolve_project_modules(project_root, manifest)?;
+    let mut combined_items = Vec::new();
+
+    for module in resolved.modules {
+        let source_for_parser = security_map::strip_allow_annotations(&module.source_without_uses);
+        let parsed = parser::parse_source(&module.file_path, &source_for_parser)?;
+        combined_items.extend(parsed.items);
+    }
+
+    Ok(ast::Program {
+        items: combined_items,
+        span: Span::point(entry_path, 1, 1),
+    })
 }
 
 pub fn collect_allow_annotations(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<Vec<SecurityAllow>, Vec<Diagnostic>> {
-    let (entry_path, source) = read_entry_source(project_root, manifest)?;
-    security_map::parse_allow_annotations(&entry_path, &source)
+    let resolved = project::resolve_project_modules(project_root, manifest)?;
+    let mut allows = Vec::new();
+
+    for module in resolved.modules {
+        let mut module_allows =
+            security_map::parse_allow_annotations(&module.file_path, &module.raw_source)?;
+        allows.append(&mut module_allows);
+    }
+
+    Ok(allows)
 }
 
 pub fn analyze_entry_with_allows(
@@ -112,7 +148,7 @@ pub fn analyze_entry_with_allows(
 ) -> Result<(ast::Program, Vec<SecurityAllow>), Vec<Diagnostic>> {
     let program = parse_entry_ast(project_root, manifest)?;
     let policy = policy::load_policy(project_root)?;
-    semantic::analyze_program_with_policy(&program, &policy)?;
+    semantic::analyze_program_with_policy_and_profile(&program, &policy, manifest.build_profile())?;
     let allows = collect_allow_annotations(project_root, manifest)?;
     Ok((program, allows))
 }
@@ -151,25 +187,4 @@ pub fn write_security_map(
     }
 
     Ok(output_path)
-}
-
-fn read_entry_source(
-    project_root: &Path,
-    manifest: &Manifest,
-) -> Result<(PathBuf, String), Vec<Diagnostic>> {
-    let entry_path = manifest.entry_path(project_root);
-    let source = match fs::read_to_string(&entry_path) {
-        Ok(source) => source,
-        Err(err) => {
-            let diagnostic = Diagnostic::error(
-                "M0103",
-                "could not read entry source file",
-                Span::point(entry_path, 1, 1),
-            )
-            .with_note(err.to_string());
-            return Err(vec![diagnostic]);
-        }
-    };
-
-    Ok((entry_path, source))
 }

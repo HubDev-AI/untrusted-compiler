@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--artifacts-root <path>] [--index-path <path>]
 
-Validates runtime-smoke default/max-body artifact branches and builds aggregated branch index.
+Validates runtime-smoke hello-api and LASM db-adapter artifact branches and builds aggregated hello-api branch index.
 USAGE
 }
 
@@ -67,6 +67,21 @@ for branch in default max-body; do
     exit 1
   fi
   "${repo_root}/scripts/check-runtime-smoke-artifacts.sh" --artifacts-dir "${branch_dir}"
+done
+
+require_postgres_db_adapter="${LASM_SMOKE_REQUIRE_POSTGRES_DB_ADAPTER:-0}"
+db_branches=(lasm-db-records-log lasm-db-sqlite)
+if [ "${require_postgres_db_adapter}" = "1" ] || [ "${require_postgres_db_adapter}" = "true" ] || [ "${require_postgres_db_adapter}" = "TRUE" ]; then
+  db_branches+=(lasm-db-postgres)
+fi
+
+for branch in "${db_branches[@]}"; do
+  branch_dir="${artifacts_root}/${branch}"
+  if [ ! -d "${branch_dir}" ]; then
+    echo "runtime-smoke bundle missing branch directory: ${branch}" >&2
+    exit 1
+  fi
+  "${repo_root}/scripts/check-runtime-smoke-db-adapter-artifacts.sh" --artifacts-dir "${branch_dir}"
 done
 
 "${repo_root}/scripts/build-runtime-smoke-branch-index.sh" --artifacts-root "${artifacts_root}" --out "${index_path}"

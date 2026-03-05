@@ -23,9 +23,21 @@ if ! grep -q 'leader non-constant-rate run' <<<"${warn_out}"; then
   echo "expected non-constant-rate warning in quality output" >&2
   exit 1
 fi
+if ! grep -q 'leader rssKb missing/invalid' <<<"${warn_out}"; then
+  echo "expected rss quality warning when leader rss is missing" >&2
+  exit 1
+fi
 
 if "${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${warn_matrix}" --fail-on-warning >/dev/null 2>&1; then
   echo "expected --fail-on-warning to fail for warn matrix" >&2
+  exit 1
+fi
+
+rss_warn_matrix="${tmp}/rss-warn-matrix.json"
+jq '(.endpoints[0].compared[].rssKb) = null | .endpoints[0].leader.rssKb = null' "${good_matrix}" > "${rss_warn_matrix}"
+rss_warn_out="$("${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${rss_warn_matrix}")"
+if ! grep -q 'overall: WARN' <<<"${rss_warn_out}"; then
+  echo "expected WARN quality status when rss is missing on constant-rate evidence" >&2
   exit 1
 fi
 

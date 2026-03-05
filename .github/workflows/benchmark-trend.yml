@@ -43,6 +43,7 @@ jobs:
             --endpoint ping \
             --max-p99-ms 30 \
             --min-target-coverage 85 \
+            --max-rss-kb 500000 \
             --baseline benchmark-suite/baselines/node-ping-trend-baseline.json
 
       - name: Check regression thresholds (decode)
@@ -52,6 +53,7 @@ jobs:
             --endpoint decode \
             --max-p99-ms 80 \
             --min-target-coverage 60 \
+            --max-rss-kb 500000 \
             --baseline benchmark-suite/baselines/node-decode-trend-baseline.json
 
       - name: Render trend note entry artifact

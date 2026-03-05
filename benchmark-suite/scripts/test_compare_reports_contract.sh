@@ -17,10 +17,11 @@ if ! jq -e '
     a.impl == b.impl
     and a.endpoint == b.endpoint
     and a.targetRps == b.targetRps
-    and a.requestsPerSec == b.requestsPerSec
-    and a.p99 == b.p99
-    and a.loadGenerator == b.loadGenerator
-    and a.constantRate == b.constantRate;
+  and a.requestsPerSec == b.requestsPerSec
+  and a.p99 == b.p99
+  and a.loadGenerator == b.loadGenerator
+  and a.constantRate == b.constantRate
+  and a.rssKb == b.rssKb;
 
   .version == "0.1"
   and (.endpoint == "ping")
@@ -35,6 +36,8 @@ if ! jq -e '
     and (.p99 | type == "string")
     and (.loadGenerator | type == "string")
     and (.constantRate | type == "boolean")
+    and has("rssKb")
+    and ((.rssKb == null) or (.rssKb | type == "number"))
   ))
   and (
     (.leader.impl | type == "string")
@@ -45,6 +48,8 @@ if ! jq -e '
     and (.leader.p99 | type == "string")
     and (.leader.loadGenerator | type == "string")
     and (.leader.constantRate | type == "boolean")
+    and (.leader | has("rssKb"))
+    and ((.leader.rssKb == null) or (.leader.rssKb | type == "number"))
   )
   and (. as $doc | any($doc.compared[]; row_eq(.; $doc.leader)))
 ' "$out" >/dev/null; then

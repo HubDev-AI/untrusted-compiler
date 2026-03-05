@@ -36,7 +36,8 @@
         "requestsPerSec",
         "p99",
         "loadGenerator",
-        "constantRate"
+        "constantRate",
+        "rssKb"
       ],
       "properties": {
         "impl": { "type": "string" },
@@ -45,7 +46,8 @@
         "requestsPerSec": { "type": "number" },
         "p99": { "type": "string" },
         "loadGenerator": { "type": "string" },
-        "constantRate": { "type": "boolean" }
+        "constantRate": { "type": "boolean" },
+        "rssKb": { "type": ["number", "null"] }
       }
     }
   }

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get> [base_url]" >&2
+  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get|db-hot-write|db-hot-write-tx|db-hot-query-one|db-records> [base_url]" >&2
 }
 
 dry_run="false"
@@ -32,6 +32,10 @@ if [ -z "$step_rates" ]; then
     decode) step_rates="1000,2000,3000" ;;
     users-post) step_rates="200,500,800" ;;
     users-get) step_rates="1000,2000,5000" ;;
+    db-hot-write) step_rates="600,1000,1400" ;;
+    db-hot-write-tx) step_rates="400,700,1000" ;;
+    db-hot-query-one) step_rates="300,500,700" ;;
+    db-records) step_rates="600,1000,1400" ;;
     *)
       echo "unsupported endpoint: $endpoint" >&2
       usage
@@ -64,7 +68,7 @@ for raw_rate in "${rates[@]}"; do
     continue
   fi
 
-  BENCH_DURATION="$step_duration" BENCH_TARGET="$rate" "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
+  BENCH_SERVER_PID="${BENCH_SERVER_PID:-}" BENCH_DURATION="$step_duration" BENCH_TARGET="$rate" "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
   cp "${raw_dir}/${impl}-${endpoint}.txt" "$tagged_raw"
   cp "${sum_dir}/${impl}-${endpoint}.json" "$tagged_summary"
   summary_files+=("$tagged_summary")

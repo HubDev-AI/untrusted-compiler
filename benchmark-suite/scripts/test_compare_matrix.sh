@@ -41,6 +41,10 @@ if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader.constantRate ==
   echo "compare-matrix expected default constantRate=true metadata" >&2
   exit 1
 fi
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader | has("rssKb")' "$out" >/dev/null; then
+  echo "compare-matrix expected rssKb field on leader row" >&2
+  exit 1
+fi
 
 cat > "$tmp/steady-report.json" <<'EOF'
 {

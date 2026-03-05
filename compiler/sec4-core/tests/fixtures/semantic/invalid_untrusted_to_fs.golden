@@ -4,3 +4,10 @@ error[E1002]: untrusted value cannot flow into filesystem sink
   note: argument 2 has type `Untrusted<String>`
   note: origin: identifier `path` carries type `Untrusted<String>`
   note: validate input via `path.under(...)` before filesystem access
+
+error[E2002]: filesystem is disabled by active policy
+  --> invalid_untrusted_to_fs.ut:2:3
+  note: filesystem calls are blocked because `[fs].enabled` is `false` in the active policy
+  note: enable filesystem in `sec4.policy`:
+[fs]
+enabled = true

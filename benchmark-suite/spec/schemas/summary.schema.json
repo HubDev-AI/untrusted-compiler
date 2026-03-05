@@ -3,12 +3,20 @@
   "$id": "benchmark-suite/spec/schemas/summary.schema.json",
   "title": "BenchmarkSummary",
   "type": "object",
-  "required": ["impl", "endpoint", "targetRps", "requestsPerSec", "latency"],
+  "required": ["impl", "endpoint", "targetRps", "requestsPerSec", "memory", "latency"],
   "properties": {
     "impl": { "type": "string" },
     "endpoint": { "type": "string" },
     "targetRps": { "type": "number" },
     "requestsPerSec": { "type": "number" },
+    "memory": {
+      "type": "object",
+      "required": ["rssKb", "sampleSource"],
+      "properties": {
+        "rssKb": { "type": ["number", "null"] },
+        "sampleSource": { "type": "string" }
+      }
+    },
     "latency": { "type": "object" }
   }
 }

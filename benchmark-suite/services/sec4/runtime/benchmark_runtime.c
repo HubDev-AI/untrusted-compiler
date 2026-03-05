@@ -25,6 +25,11 @@
 #define ROUTE_PATH_MAX 128
 #define MAX_USERS 4096
 #define USER_ID_MAX 64
+#define MAX_DB_QUERIES 4096
+#define MAX_DB_TX 1024
+#define MAX_DB_RECORDS 8192
+#define DB_TEMPLATE_MAX 256
+#define DB_PARAMS_MAX 256
 
 typedef struct {
   char method[METHOD_MAX];
@@ -37,6 +42,30 @@ typedef struct {
   char id[USER_ID_MAX];
   char body[BODY_MAX];
 } UserEntry;
+
+typedef struct {
+  bool used;
+  int64_t handle;
+  char query_template[DB_TEMPLATE_MAX];
+  char params[DB_PARAMS_MAX];
+} DbQueryEntry;
+
+typedef struct {
+  bool used;
+  int64_t handle;
+  int64_t db;
+  int64_t tx;
+  char op[16];
+  int64_t query_handle;
+  char query_template[DB_TEMPLATE_MAX];
+  char params[DB_PARAMS_MAX];
+} DbRecordEntry;
+
+typedef struct {
+  bool used;
+  int64_t handle;
+  int64_t db;
+} DbTxEntry;
 
 typedef struct {
   char method[METHOD_MAX];
@@ -54,12 +83,21 @@ typedef struct {
 
   bool parsed_user_valid;
   char parsed_user_id[USER_ID_MAX];
+  int64_t last_db_record_handle;
+  int64_t last_db_query_one_source_handle;
+  int64_t last_db_query_one_row_schema;
 } RequestContext;
 
 static Route g_routes[MAX_ROUTES];
 static size_t g_route_count = 0;
 
 static UserEntry g_users[MAX_USERS];
+static DbQueryEntry g_db_queries[MAX_DB_QUERIES];
+static DbRecordEntry g_db_records[MAX_DB_RECORDS];
+static DbTxEntry g_db_txs[MAX_DB_TX];
+static int64_t g_db_query_counter = 0;
+static int64_t g_db_record_counter = 0;
+static int64_t g_db_tx_counter = 0;
 static uint64_t g_trace_counter = 0;
 static RequestContext g_ctx;
 
@@ -360,6 +398,76 @@ static bool upsert_user(const char *id, const char *body) {
   return false;
 }
 
+static DbQueryEntry *find_db_query(int64_t handle) {
+  for (size_t i = 0; i < MAX_DB_QUERIES; i++) {
+    if (g_db_queries[i].used && g_db_queries[i].handle == handle) {
+      return &g_db_queries[i];
+    }
+  }
+  return NULL;
+}
+
+static DbTxEntry *find_db_tx(int64_t handle) {
+  for (size_t i = 0; i < MAX_DB_TX; i++) {
+    if (g_db_txs[i].used && g_db_txs[i].handle == handle) {
+      return &g_db_txs[i];
+    }
+  }
+  return NULL;
+}
+
+static DbRecordEntry *find_db_record(int64_t handle) {
+  for (size_t i = 0; i < MAX_DB_RECORDS; i++) {
+    if (g_db_records[i].used && g_db_records[i].handle == handle) {
+      return &g_db_records[i];
+    }
+  }
+  return NULL;
+}
+
+static DbRecordEntry *latest_db_record_for_query(int64_t db, int64_t query_handle) {
+  for (size_t i = MAX_DB_RECORDS; i > 0; i--) {
+    DbRecordEntry *entry = &g_db_records[i - 1];
+    if (!entry->used) {
+      continue;
+    }
+    if (entry->db == db && entry->query_handle == query_handle) {
+      return entry;
+    }
+  }
+  return NULL;
+}
+
+static DbRecordEntry *append_db_record(
+    int64_t db,
+    int64_t tx,
+    const char *op,
+    int64_t query_handle,
+    const char *query_template,
+    const char *params) {
+  for (size_t i = 0; i < MAX_DB_RECORDS; i++) {
+    if (g_db_records[i].used) {
+      continue;
+    }
+    g_db_record_counter += 1;
+    DbRecordEntry *entry = &g_db_records[i];
+    entry->used = true;
+    entry->handle = g_db_record_counter;
+    entry->db = db;
+    entry->tx = tx;
+    entry->query_handle = query_handle;
+    snprintf(entry->op, sizeof(entry->op), "%s", op != NULL ? op : "exec");
+    snprintf(
+        entry->query_template,
+        sizeof(entry->query_template),
+        "%s",
+        query_template != NULL ? query_template : "");
+    snprintf(entry->params, sizeof(entry->params), "%s", params != NULL ? params : "");
+    return entry;
+  }
+  return NULL;
+}
+
 static bool read_request(
     int fd,
     char *method,
@@ -551,6 +659,136 @@ int64_t sec4_rt_req_path_param(const char *name) {
   return 1;
 }
 
+int64_t sec4_rt_db_cap(void) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  return 1;
+}
+
+int64_t sec4_rt_sql_q(const char *query_template, const char *params) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  if (query_template == NULL || query_template[0] == '\0') {
+    set_error_response(400, "DB.QUERY_INVALID", "query template must not be empty");
+    return 0;
+  }
+  for (size_t i = 0; i < MAX_DB_QUERIES; i++) {
+    if (g_db_queries[i].used) {
+      continue;
+    }
+    g_db_query_counter += 1;
+    g_db_queries[i].used = true;
+    g_db_queries[i].handle = g_db_query_counter;
+    snprintf(
+        g_db_queries[i].query_template,
+        sizeof(g_db_queries[i].query_template),
+        "%s",
+        query_template);
+    snprintf(g_db_queries[i].params, sizeof(g_db_queries[i].params), "%s", params != NULL ? params : "");
+    return g_db_queries[i].handle;
+  }
+  set_error_response(500, "DB.QUERY_CAPACITY", "query handle capacity exceeded");
+  return 0;
+}
+
+int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  DbQueryEntry *query_entry = find_db_query(query);
+  if (query_entry == NULL) {
+    set_error_response(400, "DB.QUERY_INVALID", "db.exec query handle not found");
+    return 0;
+  }
+  DbRecordEntry *record = append_db_record(
+      db, 0, "exec", query, query_entry->query_template, query_entry->params);
+  if (record == NULL) {
+    set_error_response(500, "DB.RECORD_CAPACITY", "db record capacity exceeded");
+    return 0;
+  }
+  g_ctx.last_db_record_handle = record->handle;
+  g_ctx.last_db_query_one_source_handle = 0;
+  g_ctx.last_db_query_one_row_schema = 0;
+  return record->handle;
+}
+
+int64_t sec4_rt_db_tx(int64_t db) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  for (size_t i = 0; i < MAX_DB_TX; i++) {
+    if (g_db_txs[i].used) {
+      continue;
+    }
+    g_db_tx_counter += 1;
+    g_db_txs[i].used = true;
+    g_db_txs[i].handle = g_db_tx_counter;
+    g_db_txs[i].db = db;
+    return g_db_txs[i].handle;
+  }
+  set_error_response(500, "DB.TX_CAPACITY", "db tx capacity exceeded");
+  return 0;
+}
+
+int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  DbTxEntry *tx_entry = find_db_tx(tx);
+  if (tx_entry == NULL) {
+    set_error_response(400, "DB.TX_INVALID", "db.execTx tx handle not found");
+    return 0;
+  }
+  DbQueryEntry *query_entry = find_db_query(query);
+  if (query_entry == NULL) {
+    set_error_response(400, "DB.QUERY_INVALID", "db.execTx query handle not found");
+    return 0;
+  }
+  DbRecordEntry *record = append_db_record(
+      tx_entry->db, tx, "execTx", query, query_entry->query_template, query_entry->params);
+  if (record == NULL) {
+    set_error_response(500, "DB.RECORD_CAPACITY", "db record capacity exceeded");
+    return 0;
+  }
+  g_ctx.last_db_record_handle = record->handle;
+  g_ctx.last_db_query_one_source_handle = 0;
+  g_ctx.last_db_query_one_row_schema = 0;
+  return record->handle;
+}
+
+int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema) {
+  if (g_ctx.failed) {
+    return 0;
+  }
+  DbQueryEntry *query_entry = find_db_query(query);
+  if (query_entry == NULL) {
+    set_error_response(400, "DB.QUERY_INVALID", "db.queryOne query handle not found");
+    return 0;
+  }
+  DbRecordEntry *source = latest_db_record_for_query(db, query);
+  if (source == NULL) {
+    set_error_response(404, "DB.QUERY_ONE_NOT_FOUND", "db.queryOne record not found");
+    return 0;
+  }
+
+  DbRecordEntry *query_record = append_db_record(
+      db, 0, "queryOne", query, query_entry->query_template, query_entry->params);
+  if (query_record == NULL) {
+    set_error_response(500, "DB.RECORD_CAPACITY", "db record capacity exceeded");
+    return 0;
+  }
+  g_ctx.last_db_record_handle = query_record->handle;
+  g_ctx.last_db_query_one_source_handle = source->handle;
+  g_ctx.last_db_query_one_row_schema = row_schema;
+  return query_record->handle;
+}
+
+int64_t sec4_rt_schema_row(int64_t value) {
+  return value;
+}
+
 int64_t sec4_rt_res_text(int64_t status, const char *text) {
   if (g_ctx.failed) {
     return 0;
@@ -590,25 +828,111 @@ int64_t sec4_rt_res_ok(int64_t status, const char *schema_name, int64_t value) {
 }
 
 int64_t sec4_rt_res_json(int64_t status, const char *schema_name, int64_t value) {
-  (void)schema_name;
   (void)value;
-
   if (g_ctx.failed) {
     return 0;
   }
+
+  g_ctx.status = (int)status;
+  snprintf(g_ctx.content_type, sizeof(g_ctx.content_type), "%s", "application/json; charset=utf-8");
+
+  if (schema_name != NULL && strcmp(schema_name, "DbExecResponse") == 0) {
+    DbRecordEntry *record = find_db_record(g_ctx.last_db_record_handle);
+    if (record == NULL) {
+      set_error_response(500, "DB.EXEC_MISSING", "db.exec did not produce a record");
+      return 0;
+    }
+    snprintf(
+        g_ctx.response_body,
+        sizeof(g_ctx.response_body),
+        "{\"ok\":true,\"recordId\":%lld,\"db\":%lld,\"tx\":%lld,\"op\":\"%s\",\"template\":\"%s\",\"params\":\"%s\",\"affectedRows\":0}",
+        (long long)record->handle,
+        (long long)record->db,
+        (long long)record->tx,
+        record->op,
+        record->query_template,
+        record->params);
+    return 1;
+  }
+  if (schema_name != NULL && strcmp(schema_name, "DbExecTxResponse") == 0) {
+    DbRecordEntry *record = find_db_record(g_ctx.last_db_record_handle);
+    if (record == NULL) {
+      set_error_response(500, "DB.EXEC_TX_MISSING", "db.execTx did not produce a record");
+      return 0;
+    }
+    snprintf(
+        g_ctx.response_body,
+        sizeof(g_ctx.response_body),
+        "{\"ok\":true,\"recordId\":%lld,\"db\":%lld,\"tx\":%lld,\"op\":\"%s\",\"template\":\"%s\",\"params\":\"%s\",\"affectedRows\":0}",
+        (long long)record->handle,
+        (long long)record->db,
+        (long long)record->tx,
+        record->op,
+        record->query_template,
+        record->params);
+    return 1;
+  }
+  if (schema_name != NULL && strcmp(schema_name, "DbQueryOneResponse") == 0) {
+    DbRecordEntry *record = find_db_record(g_ctx.last_db_record_handle);
+    DbRecordEntry *source = find_db_record(g_ctx.last_db_query_one_source_handle);
+    if (record == NULL || source == NULL) {
+      set_error_response(500, "DB.QUERY_ONE_MISSING", "db.queryOne did not produce a record");
+      return 0;
+    }
+    snprintf(
+        g_ctx.response_body,
+        sizeof(g_ctx.response_body),
+        "{\"ok\":true,\"recordId\":%lld,\"rowSchema\":%lld,\"record\":{\"id\":%lld,\"db\":%lld,\"tx\":%lld,\"op\":\"%s\",\"template\":\"%s\",\"params\":\"%s\"}}",
+        (long long)record->handle,
+        (long long)g_ctx.last_db_query_one_row_schema,
+        (long long)source->handle,
+        (long long)source->db,
+        (long long)source->tx,
+        source->op,
+        source->query_template,
+        source->params);
+    return 1;
+  }
+  if (schema_name != NULL && strcmp(schema_name, "DbListRecordsResponse") == 0) {
+    int64_t count = 0;
+    DbRecordEntry *latest = NULL;
+    for (size_t i = 0; i < MAX_DB_RECORDS; i++) {
+      if (!g_db_records[i].used) {
+        continue;
+      }
+      count += 1;
+      if (latest == NULL || g_db_records[i].handle > latest->handle) {
+        latest = &g_db_records[i];
+      }
+    }
+    if (latest == NULL) {
+      snprintf(g_ctx.response_body, sizeof(g_ctx.response_body), "%s", "{\"ok\":true,\"count\":0}");
+    } else {
+      snprintf(
+          g_ctx.response_body,
+          sizeof(g_ctx.response_body),
+          "{\"ok\":true,\"count\":%lld,\"latest\":{\"recordId\":%lld,\"db\":%lld,\"tx\":%lld,\"op\":\"%s\",\"template\":\"%s\",\"params\":\"%s\"}}",
+          (long long)count,
+          (long long)latest->handle,
+          (long long)latest->db,
+          (long long)latest->tx,
+          latest->op,
+          latest->query_template,
+          latest->params);
+    }
+    return 1;
+  }
+
   if (!g_ctx.has_path_id) {
     set_error_response(400, "VALIDATION.UUID_INVALID", "id must be UUID v4");
     return 0;
   }
-
   UserEntry *entry = find_user(g_ctx.path_id);
   if (entry == NULL) {
     set_error_response(404, "HTTP.NOT_FOUND", "user not found");
     return 0;
   }
 
-  g_ctx.status = (int)status;
-  snprintf(g_ctx.content_type, sizeof(g_ctx.content_type), "%s", "application/json; charset=utf-8");
   snprintf(g_ctx.response_body, sizeof(g_ctx.response_body), "%s", entry->body);
   return 1;
 }

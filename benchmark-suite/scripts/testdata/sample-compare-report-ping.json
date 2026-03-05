@@ -9,7 +9,8 @@
       "requestsPerSec": 9801.5,
       "p99": "4.30ms",
       "loadGenerator": "wrk2",
-      "constantRate": true
+      "constantRate": true,
+      "rssKb": null
     },
     {
       "impl": "go",
@@ -18,7 +19,8 @@
       "requestsPerSec": 9700.1,
       "p99": "4.80ms",
       "loadGenerator": "wrk2",
-      "constantRate": true
+      "constantRate": true,
+      "rssKb": null
     }
   ],
   "leader": {
@@ -28,6 +30,7 @@
     "requestsPerSec": 9801.5,
     "p99": "4.30ms",
     "loadGenerator": "wrk2",
-    "constantRate": true
+    "constantRate": true,
+    "rssKb": null
   }
 }

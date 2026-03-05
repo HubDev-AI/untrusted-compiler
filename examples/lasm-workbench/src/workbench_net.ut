@@ -1,0 +1,35 @@
+// workbench_net
+//
+// Demonstrates outbound network intrinsics for public + internal client paths.
+
+fn publicGetProbe() effects { net } -> Int {
+  // Required query arg:
+  // - url=<url>
+  let raw = req.query("url");
+  let publicUrl = url.public(raw);
+  let net = NetCap();
+  let body = httpClient.get(net, publicUrl);
+  if body == 0 {
+    res.text(500, "public get returned empty body handle");
+    return 0;
+  };
+
+  res.text(200, "public get succeeded");
+  0
+}
+
+fn internalGetProbe() effects { net } -> Int {
+  // Required query arg:
+  // - url=<url>
+  let raw = req.query("url");
+  let internalUrl = url.internal(raw);
+  let net = InternalNetCap();
+  let body = httpClient.getInternal(net, internalUrl);
+  if body == 0 {
+    res.text(500, "internal get returned empty body handle");
+    return 0;
+  };
+
+  res.text(200, "internal get succeeded");
+  0
+}

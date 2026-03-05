@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get> [base_url]" >&2
+  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get|db-hot-write|db-hot-write-tx|db-hot-query-one|db-records> [base_url]" >&2
 }
 
 dry_run="false"
@@ -64,6 +64,29 @@ warn_wrk_fallback() {
   fi
 }
 
+sample_rss_kb() {
+  local pid="$1"
+  local ps_rss=""
+  if [ -z "$pid" ]; then
+    echo ""
+    return
+  fi
+  if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+    echo ""
+    return
+  fi
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo ""
+    return
+  fi
+  ps_rss="$(ps -o rss= -p "$pid" 2>/dev/null | awk 'NF { print $1; exit }')"
+  if [[ "$ps_rss" =~ ^[0-9]+$ ]]; then
+    echo "$ps_rss"
+    return
+  fi
+  echo ""
+}
+
 build_wrk_cmd() {
   local script_path="${1:-}"
   local url="$2"
@@ -106,6 +129,30 @@ case "$endpoint" in
     target="${BENCH_TARGET:-$target}"
     build_wrk_cmd "${root_dir}/load/wrk2/get_user.lua" "${base_url}"
     ;;
+  db-hot-write)
+    target=1000
+    target="${BENCH_TARGET_DB_HOT_WRITE:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-write"
+    ;;
+  db-hot-write-tx)
+    target=800
+    target="${BENCH_TARGET_DB_HOT_WRITE_TX:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-write-tx"
+    ;;
+  db-hot-query-one)
+    target=700
+    target="${BENCH_TARGET_DB_HOT_QUERY_ONE:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/hot-query-one"
+    ;;
+  db-records)
+    target=1000
+    target="${BENCH_TARGET_DB_RECORDS:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    build_wrk_cmd "" "${base_url}/db/records"
+    ;;
   *)
     echo "unsupported endpoint: $endpoint" >&2
     usage
@@ -118,6 +165,10 @@ echo "command: ${cmd[*]}"
 echo "raw: $raw"
 echo "summary: $summary"
 warn_wrk_fallback
+server_pid="${BENCH_SERVER_PID:-}"
+if [ -n "$server_pid" ]; then
+  echo "service pid: ${server_pid}"
+fi
 
 if [ "$dry_run" = "true" ]; then
   if [ "$endpoint" = "users-get" ] && [ -f "$payload_path" ]; then
@@ -162,4 +213,10 @@ else
   "${cmd[@]}" | tee "$raw"
 fi
 
-"${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary"
+rss_kb="$(sample_rss_kb "$server_pid")"
+rss_source="unavailable"
+if [ -n "$rss_kb" ]; then
+  rss_source="ps"
+fi
+
+"${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary" "$rss_kb" "$rss_source"

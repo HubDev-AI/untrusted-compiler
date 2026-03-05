@@ -177,6 +177,12 @@ fn runtime_identity_for_return_type(type_name: Option<&str>) -> Option<&'static 
 
 fn lower_c_expr(expr: &str) -> String {
     let mut lowered = expr.to_string();
+    lowered = lowered.replace("InternalNetCap(", "__SEC4_CONSTRUCTOR_INTERNAL_NET_CAP__(");
+    lowered = lowered.replace("SecretsCap(", "__SEC4_CONSTRUCTOR_SECRETS_CAP__(");
+    lowered = lowered.replace("NetCap(", "__SEC4_CONSTRUCTOR_NET_CAP__(");
+    lowered = lowered.replace("DbCap(", "__SEC4_CONSTRUCTOR_DB_CAP__(");
+    lowered = lowered.replace("FsCap(", "__SEC4_CONSTRUCTOR_FS_CAP__(");
+    lowered = lowered.replace("Ctx(", "__SEC4_CONSTRUCTOR_CTX__(");
     lowered = lowered.replace("time.now(", "__SEC4_INTRINSIC_TIME_NOW__(");
     lowered = lowered.replace("time_now(", "__SEC4_INTRINSIC_TIME_NOW__(");
     lowered = lowered.replace("log.info(", "__SEC4_INTRINSIC_LOG_INFO__(");
@@ -226,6 +232,14 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("req_path_param(", "__SEC4_INTRINSIC_REQ_PATH_PARAM__(");
     lowered = lowered.replace("req.header(", "__SEC4_INTRINSIC_REQ_HEADER__(");
     lowered = lowered.replace("req_header(", "__SEC4_INTRINSIC_REQ_HEADER__(");
+    lowered = lowered.replace("req.cookie(", "__SEC4_INTRINSIC_REQ_COOKIE__(");
+    lowered = lowered.replace("req_cookie(", "__SEC4_INTRINSIC_REQ_COOKIE__(");
+    lowered = lowered.replace("req.method(", "__SEC4_INTRINSIC_REQ_METHOD__(");
+    lowered = lowered.replace("req_method(", "__SEC4_INTRINSIC_REQ_METHOD__(");
+    lowered = lowered.replace("req.path(", "__SEC4_INTRINSIC_REQ_PATH__(");
+    lowered = lowered.replace("req_path(", "__SEC4_INTRINSIC_REQ_PATH__(");
+    lowered = lowered.replace("req.httpVersion(", "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(");
+    lowered = lowered.replace("req_http_version(", "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(");
     lowered = lowered.replace("res.json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res_json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res.okMeta(", "__SEC4_INTRINSIC_RES_OK_META__(");
@@ -244,6 +258,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("set_cookie(", "__SEC4_INTRINSIC_SET_COOKIE__(");
     lowered = lowered.replace("sql.q(", "__SEC4_INTRINSIC_SQL_Q__(");
     lowered = lowered.replace("sql_q(", "__SEC4_INTRINSIC_SQL_Q__(");
+    lowered = lowered.replace("schema.row(", "__SEC4_INTRINSIC_SCHEMA_ROW__(");
+    lowered = lowered.replace("schema_row(", "__SEC4_INTRINSIC_SCHEMA_ROW__(");
     lowered = lowered.replace("db.execTx(", "__SEC4_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db_exec_tx(", "__SEC4_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db.tx(", "__SEC4_INTRINSIC_DB_TX__(");
@@ -363,6 +379,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("csrf_from_policy(", "__SEC4_INTRINSIC_CSRF_FROM_POLICY__(");
     lowered = lowered.replace("auth.fromPolicy(", "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(");
     lowered = lowered.replace("auth_from_policy(", "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(");
+    lowered = lowered.replace("ctx.current(", "__SEC4_INTRINSIC_CTX_CURRENT__(");
+    lowered = lowered.replace("ctx_current(", "__SEC4_INTRINSIC_CTX_CURRENT__(");
     lowered = lowered.replace("auth.requireRole(", "__SEC4_INTRINSIC_AUTH_REQUIRE_ROLE__(");
     lowered = lowered.replace(
         "auth_require_role(",
@@ -398,6 +416,16 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("err_internal(", "__SEC4_INTRINSIC_ERR_INTERNAL__(");
     lowered = lowered.replace("err.auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
     lowered = lowered.replace("err_auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
+    lowered = rewrite_res_json_status_form_to_res_ok(&lowered);
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_CTX__(", "sec4_rt_ctx(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_DB_CAP__(", "sec4_rt_db_cap(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_FS_CAP__(", "sec4_rt_fs_cap(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_NET_CAP__(", "sec4_rt_net_cap(");
+    lowered = lowered.replace(
+        "__SEC4_CONSTRUCTOR_INTERNAL_NET_CAP__(",
+        "sec4_rt_internal_net_cap(",
+    );
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_SECRETS_CAP__(", "sec4_rt_secrets_cap(");
     lowered = lowered.replace("__SEC4_INTRINSIC_TIME_NOW__(", "sec4_rt_time_now(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_INFO__(", "sec4_rt_log_info(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_WARN__(", "sec4_rt_log_warn(");
@@ -436,6 +464,13 @@ fn lower_c_expr(expr: &str) -> String {
         "sec4_rt_req_path_param(",
     );
     lowered = lowered.replace("__SEC4_INTRINSIC_REQ_HEADER__(", "sec4_rt_req_header(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_REQ_COOKIE__(", "sec4_rt_req_cookie(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_REQ_METHOD__(", "sec4_rt_req_method(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_REQ_PATH__(", "sec4_rt_req_path(");
+    lowered = lowered.replace(
+        "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(",
+        "sec4_rt_req_http_version(",
+    );
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_JSON__(", "sec4_rt_res_json(");
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_OK__(", "sec4_rt_res_ok(");
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_OK_META__(", "sec4_rt_res_ok_meta(");
@@ -445,6 +480,7 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__SEC4_INTRINSIC_COOKIE_BUILD__(", "sec4_rt_cookie_build(");
     lowered = lowered.replace("__SEC4_INTRINSIC_SET_COOKIE__(", "sec4_rt_set_cookie(");
     lowered = lowered.replace("__SEC4_INTRINSIC_SQL_Q__(", "sec4_rt_sql_q(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_SCHEMA_ROW__(", "sec4_rt_schema_row(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_EXEC__(", "sec4_rt_db_exec(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_TX__(", "sec4_rt_db_tx(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_EXEC_TX__(", "sec4_rt_db_exec_tx(");
@@ -539,6 +575,7 @@ fn lower_c_expr(expr: &str) -> String {
         "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(",
         "sec4_rt_auth_from_policy(",
     );
+    lowered = lowered.replace("__SEC4_INTRINSIC_CTX_CURRENT__(", "sec4_rt_ctx_current(");
     lowered = lowered.replace("__SEC4_INTRINSIC_AUTH_REQUIRE__(", "sec4_rt_auth_require(");
     lowered = lowered.replace(
         "__SEC4_INTRINSIC_AUTH_REQUIRE_ROLE__(",
@@ -580,4 +617,145 @@ fn lower_c_expr(expr: &str) -> String {
         "sec4_rt_err_with_cause(",
     );
     lowered
+}
+
+fn rewrite_res_json_status_form_to_res_ok(lowered: &str) -> String {
+    rewrite_call_marker_by_min_arg_count(
+        lowered,
+        "__SEC4_INTRINSIC_RES_JSON__(",
+        "__SEC4_INTRINSIC_RES_OK__(",
+        3,
+    )
+}
+
+fn rewrite_call_marker_by_min_arg_count(
+    source: &str,
+    from_marker: &str,
+    to_marker: &str,
+    min_args: usize,
+) -> String {
+    let mut rewritten = String::with_capacity(source.len());
+    let mut cursor = 0usize;
+
+    while let Some(relative_start) = source[cursor..].find(from_marker) {
+        let call_start = cursor + relative_start;
+        rewritten.push_str(&source[cursor..call_start]);
+        let open_paren_index = call_start + from_marker.len() - 1;
+        let Some(call_end) = find_matching_call_paren(source, open_paren_index) else {
+            rewritten.push_str(&source[call_start..]);
+            cursor = source.len();
+            break;
+        };
+
+        let args_start = open_paren_index + 1;
+        let args = &source[args_start..call_end];
+        if count_top_level_arguments(args) >= min_args {
+            rewritten.push_str(to_marker);
+        } else {
+            rewritten.push_str(from_marker);
+        }
+        rewritten.push_str(args);
+        rewritten.push(')');
+        cursor = call_end + 1;
+    }
+
+    rewritten.push_str(&source[cursor..]);
+    rewritten
+}
+
+fn find_matching_call_paren(source: &str, open_paren_index: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut string_quote = '\0';
+    let mut escaped = false;
+
+    for (index, ch) in source
+        .char_indices()
+        .skip_while(|(index, _)| *index < open_paren_index)
+    {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == string_quote {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => {
+                in_string = true;
+                string_quote = ch;
+            }
+            '(' => depth += 1,
+            ')' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn count_top_level_arguments(args: &str) -> usize {
+    if args.trim().is_empty() {
+        return 0;
+    }
+
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut in_string = false;
+    let mut string_quote = '\0';
+    let mut escaped = false;
+    let mut comma_count = 0usize;
+
+    for ch in args.chars() {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == string_quote {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => {
+                in_string = true;
+                string_quote = ch;
+            }
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            ',' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                comma_count += 1;
+            }
+            _ => {}
+        }
+    }
+
+    comma_count + 1
 }
