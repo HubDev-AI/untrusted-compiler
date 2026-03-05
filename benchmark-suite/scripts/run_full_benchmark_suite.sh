@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records] [--sec-audit path]
+usage: $0 [--dry-run] [--impls sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records] [--sec-audit path]
           [--lasm-db-adapter records-log|sqlite|postgres] [--lasm-db-postgres-dsn-file path]
           [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
@@ -23,7 +23,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="sec4,sec4-lasm,node,go,rust"
+impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
 lasm_db_adapter="${BENCH_LASM_DB_ADAPTER:-}"

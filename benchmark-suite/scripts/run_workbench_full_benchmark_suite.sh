@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--matrix path] [--impls sec4,sec4-lasm,node,go,rust]
+usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--port <n>] [--out-runs path] [--out-fixed-runs path] [--out-step-runs path]
@@ -17,7 +17,7 @@ USAGE
 
 dry_run="false"
 matrix_path=""
-impls_csv="sec4,sec4-lasm,node,go,rust"
+impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"

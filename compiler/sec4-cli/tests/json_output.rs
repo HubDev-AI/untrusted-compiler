@@ -8451,8 +8451,6 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
 
     let binary_path = hello_path.join("build").join("hello");
     assert!(binary_path.exists(), "compiled binary should exist");
-    let copied_runtime_header = hello_path.join("build").join("sec4_runtime.h");
-    let copied_runtime_source = hello_path.join("build").join("sec4_runtime.c");
     let canonical_runtime_header = workspace_root()
         .join("runtime")
         .join("c")
@@ -8462,9 +8460,8 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
         .join("c")
         .join("sec4_runtime.c");
     assert!(
-        (copied_runtime_header.exists() && copied_runtime_source.exists())
-            || (canonical_runtime_header.exists() && canonical_runtime_source.exists()),
-        "runtime sources should be available either in build/ fallback or canonical runtime/c"
+        canonical_runtime_header.exists() && canonical_runtime_source.exists(),
+        "runtime sources should be available in canonical runtime/c"
     );
 
     let run = Command::new(&binary_path)

@@ -7792,42 +7792,16 @@ fn compile_c_binary(
         return Err(2);
     }
 
-    let runtime_assets = match backend_emit.runtime_assets {
-        Some(runtime_assets) => runtime_assets,
-        None => {
-            eprintln!("selected backend does not provide C runtime assets");
-            return Err(2);
-        }
-    };
+    if backend_emit.runtime_assets.is_none() {
+        eprintln!("selected backend does not provide C runtime assets");
+        return Err(2);
+    }
 
     let (runtime_source_path, runtime_include_dir) = match canonical_runtime_sources() {
-        Some(source_path) => {
-            let include_dir = source_path
-                .parent()
-                .expect("runtime source should have parent directory")
-                .to_path_buf();
-            (source_path, include_dir)
-        }
-        None => {
-            let runtime_header_path = build_dir.join("sec4_runtime.h");
-            if let Err(err) = fs::write(&runtime_header_path, runtime_assets.header) {
-                eprintln!(
-                    "could not write runtime header `{}`: {err}",
-                    runtime_header_path.display()
-                );
-                return Err(2);
-            }
-
-            let runtime_source_path = build_dir.join("sec4_runtime.c");
-            if let Err(err) = fs::write(&runtime_source_path, runtime_assets.source) {
-                eprintln!(
-                    "could not write runtime source `{}`: {err}",
-                    runtime_source_path.display()
-                );
-                return Err(2);
-            }
-
-            (runtime_source_path, build_dir.to_path_buf())
+        Ok(paths) => paths,
+        Err(message) => {
+            eprintln!("{message}");
+            return Err(2);
         }
     };
 
@@ -7929,19 +7903,25 @@ fn compile_c_binary(
     Ok((c_path, binary_path))
 }
 
-fn canonical_runtime_sources() -> Option<PathBuf> {
+fn canonical_runtime_sources() -> Result<(PathBuf, PathBuf), String> {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .and_then(|path| path.parent())?
+        .and_then(|path| path.parent())
+        .ok_or_else(|| {
+            "could not resolve repository root for canonical C runtime sources".to_string()
+        })?
         .to_path_buf();
     let runtime_dir = repo_root.join("runtime").join("c");
     let header = runtime_dir.join("sec4_runtime.h");
     let source = runtime_dir.join("sec4_runtime.c");
-    if header.exists() && source.exists() {
-        Some(source)
-    } else {
-        None
+    if !header.exists() || !source.exists() {
+        return Err(format!(
+            "canonical C runtime sources are required but missing: header=`{}` source=`{}`",
+            header.display(),
+            source.display()
+        ));
     }
+    Ok((source, runtime_dir))
 }
 
 fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
@@ -8164,6 +8144,10 @@ fn cmd_run(
     }
     if backend != RunBackend::Lasm && overflow_probe_timeout_ms.is_some() {
         eprintln!("run failed: --overflow-probe-timeout-ms is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_adapter.is_some() {
+        eprintln!("run failed: --db-adapter is only supported with --backend lasm");
         return Err(2);
     }
     let resolved_db_cli = match validate_and_resolve_run_db_cli_options(
