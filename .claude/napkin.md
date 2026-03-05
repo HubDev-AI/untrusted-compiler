@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-05 | self | I diagnosed Postgres tutorial failures as runtime DB logic first, but one major failure mode was docs/scripts using `infra/local-postgres/.env` while local infra auto-remapped host port and emitted the real DSN in `.runtime.env`. | For local Postgres tutorial/smoke flows, source `.runtime.env` when present (fallback `.env`) and normalize both DSN env aliases to one resolved value before `sec4 run`. |
+| 2026-03-05 | self | LASM Postgres `db.execTx` started with `SAVEPOINT` outside an explicit transaction, which caused deterministic `sqlstate=25P01` (`no active SQL transaction`). | For first Postgres tx step, issue `BEGIN; SAVEPOINT {tx}` and finalize with `RELEASE SAVEPOINT {tx}; COMMIT` (rollback closes transaction) so `execTx` is valid and deterministic. |
 | 2026-03-05 | self | C-backend workbench step profiling could terminate the sec4 runtime process when a client socket closed during response writes. | Ignore `SIGPIPE` in runtime socket write path (`sec4_rt_ensure_sigpipe_ignored`) so load-step writes fail with `send()` errors instead of killing the process. |
 | 2026-03-05 | self | Native/Homebrew `wrk2` installation on Apple Silicon repeatedly failed due upstream LuaJIT/linker/toolchain issues. | Install a deterministic Docker-backed `wrk2` wrapper at `/opt/homebrew/bin/wrk2` using an arm64 image build (`wrk2-arm64-local`) and keep native `wrk` fallback available for local comparisons. |
 | 2026-03-05 | self | I switched LASM DB dispatch and main module wiring to `lasm_db_client` but left the old `lasm_db_runtime_adapters.rs` as a shadow implementation. | Consolidate DB adapter logic to a single source (`lasm_db_client`) and remove duplicate adapter implementation files after parity verification to avoid accidental drift. |
@@ -454,11 +456,13 @@
 - Add all design/spec changes into docs/book and keep roadmap aligned.
 - Security-first language direction is mandatory.
 - Avoid adding absolute local machine paths to committed docs.
+- Keep user-facing docs as a single navigable portal (setup -> plugin -> first server -> real Postgres -> examples -> benchmarks), not scattered README fragments.
 
 ## Patterns That Work
 - Small vertical M4 slices with matching docs chapter updates reduce churn and keep progress reviewable.
 - Deterministic `sec4 audit` findings with sample evidence improve traceability for policy/security posture.
 - After transient execution issues, retrying full verification in the same session often recovers and avoids false blockers.
+- Add one top-level docs index page that links all runnable examples and exact commands; this removes repeated back-and-forth about where to start.
 
 ## Patterns That Don't Work
 - Launching multiple `cargo run` commands in parallel can cause lock contention/timeouts and noisy diagnostics.

@@ -2,6 +2,10 @@
 
 This folder is the long-form, chapter-oriented documentation track for Untrusted<T>.
 
+If you want a guided, operator-friendly entrypoint instead of the full chapter list, start with:
+
+- `docs/tutorial-portal/README.md`
+
 ## Chapter order
 - `00-preface.md`
 - `10-project-setup-and-architecture.md`
@@ -1520,5 +1524,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1549-m39-postgres-dsn-alias-same-value-hardening.md`
 - `1550-m39-workbench-wrk-fallback-timeout-bounding.md`
 - `1551-m39-c-bin-canonical-runtime-source-only.md`
+- `1552-beginner-zed-plugin-postgres-lasm-tutorial.md`
 
 As milestones progress, chapters will be added and linked from this index.

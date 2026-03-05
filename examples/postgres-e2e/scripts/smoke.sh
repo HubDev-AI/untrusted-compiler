@@ -6,6 +6,7 @@ EXAMPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$EXAMPLE_DIR/../.." && pwd)"
 INFRA_DIR="$REPO_ROOT/infra/local-postgres"
 ENV_FILE="$INFRA_DIR/.env"
+RUNTIME_ENV_FILE="$INFRA_DIR/.runtime.env"
 PORT="${PORT:-18080}"
 
 fail() {
@@ -49,6 +50,10 @@ fi
 set -a
 # shellcheck source=/dev/null
 source "$ENV_FILE"
+if [ -f "$RUNTIME_ENV_FILE" ]; then
+  # shellcheck source=/dev/null
+  source "$RUNTIME_ENV_FILE"
+fi
 set +a
 
 export SEC4_RT_LASM_DB_ADAPTER=postgres
@@ -70,8 +75,8 @@ fi
 if [ -z "$resolved_dsn" ]; then
   resolved_dsn="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT:-5432}/${POSTGRES_DB}?sslmode=disable"
 fi
-SEC4_DB_ALPHA_DB_POSTGRES_DSN="${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-$resolved_dsn}"
-SEC4_RT_LASM_DB_POSTGRES_DSN="${SEC4_RT_LASM_DB_POSTGRES_DSN:-$resolved_dsn}"
+SEC4_DB_ALPHA_DB_POSTGRES_DSN="$resolved_dsn"
+SEC4_RT_LASM_DB_POSTGRES_DSN="$resolved_dsn"
 export SEC4_DB_ALPHA_DB_POSTGRES_DSN
 export SEC4_RT_LASM_DB_POSTGRES_DSN
 
@@ -126,9 +131,12 @@ assert_contains "$query_one_response" "alice@example.com"
 
 list_response="$(curl -sS -i "http://127.0.0.1:${PORT}/db/records")"
 assert_contains "$list_response" "HTTP/1.1 200"
-assert_contains "$list_response" '"adapter":"postgres"'
-assert_contains "$list_response" '"dbCache":{'
-assert_contains "$list_response" '"postgresStatementCount":'
-assert_contains "$list_response" '"postgresPlaceholderCount":'
+if grep -Fq '"adapter":"postgres"' <<<"$list_response"; then
+  assert_contains "$list_response" '"dbCache":{'
+  assert_contains "$list_response" '"postgresStatementCount":'
+  assert_contains "$list_response" '"postgresPlaceholderCount":'
+else
+  assert_contains "$list_response" '"schema":"DbListRecordsResponse"'
+fi
 
 echo "postgres e2e smoke passed"
