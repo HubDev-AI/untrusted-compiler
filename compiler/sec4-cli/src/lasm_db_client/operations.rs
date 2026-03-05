@@ -5,6 +5,9 @@ use crate::lasm_db_runtime_postgres::{
     run_lasm_postgres_exec_tx, run_lasm_postgres_query_one_thread_local, LasmPostgresParam,
     LasmPostgresThreadLocalConfig,
 };
+use crate::lasm_db_runtime_records_log::{
+    build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
+};
 use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
     run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
@@ -62,6 +65,9 @@ pub(crate) enum LasmDbQueryOneOperationResult {
         row: serde_json::Value,
     },
     Sqlite {
+        row: serde_json::Value,
+    },
+    RecordsLog {
         row: serde_json::Value,
     },
 }
@@ -238,7 +244,10 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
 pub(crate) fn run_lasm_db_query_one_operation(
     state: &mut LasmDynamicResponseState,
     db_records_adapter: LasmDbRecordsAdapter,
+    db: i64,
     template: &str,
+    params: &str,
+    row_schema: i64,
     prepared_params: &LasmPreparedDbOperationParams,
 ) -> Result<LasmDbQueryOneOperationResult, LasmDbQueryOneOperationError> {
     match db_records_adapter {
@@ -274,8 +283,15 @@ pub(crate) fn run_lasm_db_query_one_operation(
                 None => Err(LasmDbQueryOneOperationError::NotFound),
             }
         }
-        LasmDbRecordsAdapter::RecordsLog => Err(LasmDbQueryOneOperationError::Runtime(
-            "records log queryOne helper is handled by dispatch".to_string(),
-        )),
+        LasmDbRecordsAdapter::RecordsLog => {
+            let Some(matched_source_record) =
+                find_lasm_records_log_latest_match(state, db, template, params)
+            else {
+                return Err(LasmDbQueryOneOperationError::NotFound);
+            };
+            let row =
+                build_lasm_records_log_query_one_row_object(&matched_source_record, row_schema);
+            Ok(LasmDbQueryOneOperationResult::RecordsLog { row })
+        }
     }
 }

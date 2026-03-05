@@ -1514,5 +1514,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1542-m39-workbench-full-suite-local-bundle-wrapper.md`
 - `1543-m39-workbench-matrix-step-local-postgres-wrappers.md`
 - `1544-m39-lasm-postgres-dsn-legacy-alpha-env-cleanup.md`
+- `1546-m39-lasm-db-records-queryone-client-path-unification.md`
 
 As milestones progress, chapters will be added and linked from this index.

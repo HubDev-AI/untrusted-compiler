@@ -37,6 +37,7 @@ Use it to keep speed high without losing architecture direction.
 Status notes:
 - `LasmDbExecTx` tx lifecycle (commit/rollback + cleanup trigger points) is now routed through `lasm_db_client` to keep dispatch free of adapter internals.
 - `Lasm DB` runtime now routes PostgreSQL listRecords bootstrap and post-unlock record persistence through `lasm_db_client` helpers (`ensure_lasm_db_records_client_ready`, `persist_lasm_db_record_after_unlock`) so dispatch stays orchestration-focused.
+- `Lasm DB` `queryOne` now routes records-adapter lookup/materialization through `lasm_db_client` (`run_lasm_db_query_one_operation`) instead of dispatch-local records-log special handling, aligning all adapters under the same intrinsic client path.
 
 ### P2: Composition Contract Analyzer (`M39-S2`) after P1
 

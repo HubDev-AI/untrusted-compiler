@@ -12,9 +12,6 @@ use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
     normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
 };
-use crate::lasm_db_runtime_records_log::{
-    build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
-};
 use crate::{
     append_lasm_dynamic_db_record, lasm_db_record_to_json, lasm_error_envelope,
     lasm_internal_db_indexed_header, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
@@ -2084,38 +2081,59 @@ fn handle_lasm_internal_db_query_one_operation(
         }
         match db_records_adapter {
             LasmDbRecordsAdapter::RecordsLog => {
-                if let Some(matched_source_record) = find_lasm_records_log_latest_match(
-                    &state,
+                match run_lasm_db_query_one_operation(
+                    &mut state,
+                    db_records_adapter,
                     db,
                     template.as_str(),
                     params.as_str(),
+                    row_schema,
+                    &prepared_params,
                 ) {
-                    let record = LasmDbRecord {
-                        id: state.next_db_record_id,
-                        op: "queryOne".to_string(),
-                        db,
-                        template: template.clone(),
-                        params: params.clone(),
-                        tx: 0,
-                        affected_rows: 1,
-                        created_at_ms: lasm_now_ms(),
-                    };
-                    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
-                    persist_lasm_db_record_with_capacity_guard(&mut state, &record);
-                    let row_object = build_lasm_records_log_query_one_row_object(
-                        &matched_source_record,
-                        row_schema,
-                    );
-                    Some((record, row_object))
-                } else {
-                    None
+                    Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => {
+                        let record = LasmDbRecord {
+                            id: state.next_db_record_id,
+                            op: "queryOne".to_string(),
+                            db,
+                            template: template.clone(),
+                            params: params.clone(),
+                            tx: 0,
+                            affected_rows: 1,
+                            created_at_ms: lasm_now_ms(),
+                        };
+                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                        persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+                        Some((record, row))
+                    }
+                    Ok(LasmDbQueryOneOperationResult::Postgres { .. })
+                    | Ok(LasmDbQueryOneOperationResult::Sqlite { .. }) => {
+                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
+                        return true;
+                    }
+                    Err(LasmDbQueryOneOperationError::NotFound) => None,
+                    Err(LasmDbQueryOneOperationError::Runtime(message)) => {
+                        set_lasm_db_runtime_error_response(
+                            response,
+                            "queryOne",
+                            message.as_str(),
+                            trace_id,
+                        );
+                        return true;
+                    }
+                    Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
+                        set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
+                        return true;
+                    }
                 }
             }
             LasmDbRecordsAdapter::Postgres => {
                 match run_lasm_db_query_one_operation(
                     &mut state,
                     db_records_adapter,
+                    db,
                     template.as_str(),
+                    params.as_str(),
+                    row_schema,
                     &prepared_params,
                 ) {
                     Ok(LasmDbQueryOneOperationResult::Postgres { config, row }) => {
@@ -2143,7 +2161,8 @@ fn handle_lasm_internal_db_query_one_operation(
                         );
                         Some((record, row_object))
                     }
-                    Ok(LasmDbQueryOneOperationResult::Sqlite { row: _ }) => {
+                    Ok(LasmDbQueryOneOperationResult::Sqlite { row: _ })
+                    | Ok(LasmDbQueryOneOperationResult::RecordsLog { row: _ }) => {
                         set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
                         return true;
                     }
@@ -2167,7 +2186,10 @@ fn handle_lasm_internal_db_query_one_operation(
                 match run_lasm_db_query_one_operation(
                     &mut state,
                     db_records_adapter,
+                    db,
                     template.as_str(),
+                    params.as_str(),
+                    row_schema,
                     &prepared_params,
                 ) {
                     Ok(LasmDbQueryOneOperationResult::Sqlite { row }) => {
@@ -2186,7 +2208,8 @@ fn handle_lasm_internal_db_query_one_operation(
                         persist_lasm_db_record_with_capacity_guard(&mut state, &record);
                         Some((record, row_object))
                     }
-                    Ok(LasmDbQueryOneOperationResult::Postgres { .. }) => {
+                    Ok(LasmDbQueryOneOperationResult::Postgres { .. })
+                    | Ok(LasmDbQueryOneOperationResult::RecordsLog { row: _ }) => {
                         set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
                         return true;
                     }
