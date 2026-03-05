@@ -10,7 +10,7 @@ use crate::lasm_db_runtime_postgres_persist::persist_lasm_postgres_record_after_
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
 };
-use crate::lasm_db_runtime_adapters::{
+use crate::lasm_db_client::{
     cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
     parse_lasm_db_template_and_params, run_lasm_db_exec_operation,
     run_lasm_db_exec_tx_operation, run_lasm_db_query_one_operation,

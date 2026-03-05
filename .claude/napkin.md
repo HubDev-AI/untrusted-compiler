@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-05 | self | I switched LASM DB dispatch and main module wiring to `lasm_db_client` but left the old `lasm_db_runtime_adapters.rs` as a shadow implementation. | Consolidate DB adapter logic to a single source (`lasm_db_client`) and remove duplicate adapter implementation files after parity verification to avoid accidental drift. |
 | 2026-03-04 | self | I assumed `records.log` existed for every LASM DB adapter and did not explain sqlite persistence differences clearly in docs/scripts. | Make artifact assertions adapter-specific (`records.log` vs `records.sqlite3`) and ignore generated `.lasm-db` directories to prevent confusion and untracked clutter. |
 | 2026-03-04 | self | I left `docs/codex-operator-handoff.md` showing `M39-S2` as deferred while the roadmap had `M39-S2` and the perf-sequencing lock already marked complete. | Keep `docs/codex-operator-handoff.md` synchronized with `docs/05-sec4-master-roadmap.md` for lock state transitions before marking gating items closed. |
 | 2026-03-04 | self | Handoff/roadmap snapshot lagged behind the current LASM DB example + smoke-doc updates (`SEC4_ALPHA_FULL_*` DSN/auth tokens, runtime env aliases). | Sync `docs/codex-operator-handoff.md`, `docs/05-sec4-master-roadmap.md`, and `.claude/napkin.md` immediately after this slice so operator docs, execution docs, and correction log stay aligned to branch state. |
