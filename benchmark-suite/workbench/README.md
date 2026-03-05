@@ -73,6 +73,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
    - outputs:
      - `benchmark-suite/results/summaries/workbench-full-runs.json`
      - `benchmark-suite/results/workbench-full-benchmark-report.md`
+     - `benchmark-suite/results/workbench-full-benchmark-report.html`
 8. Run repeated full workbench benchmark suites (same settings, run-scoped artifacts):
    - `make -C benchmark-suite workbench-full-bench-repeats-dry`
    - `make -C benchmark-suite workbench-full-bench-repeats`
