@@ -23,6 +23,7 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+require_wrk2="${BENCH_WORKBENCH_REQUIRE_WRK2:-1}"
 out_runs=""
 out_compare=""
 out_analysis=""
@@ -292,9 +293,9 @@ runnable_impls_csv="$(
 )"
 
 if [ "$dry_run" = "true" ]; then
-  "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv" --dry-run-only
+  BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv" --dry-run-only
 else
-  "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
+  BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
 base_url="http://127.0.0.1:${bench_port}"
@@ -565,7 +566,7 @@ while IFS= read -r impl_row; do
         break
       fi
       run_tag="${impl}-${endpoint}-$(date +%s%N)"
-      if ! BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
+      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
         "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$base_url"; then
         result="failed"
         reason="profile failed endpoint=${endpoint}"

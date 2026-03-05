@@ -58,4 +58,14 @@ if ! grep -q '^preflight passed$' <<<"$fallback_out"; then
   exit 1
 fi
 
+if BENCH_REQUIRE_WRK2=1 PATH="${tmp}:/usr/bin:/bin:/usr/sbin:/sbin" \
+  "$root_dir/scripts/preflight.sh" --impls sec4,node >/tmp/preflight-strict-wrk2.log 2>&1; then
+  echo "preflight strict wrk2 mode unexpectedly passed without wrk2" >&2
+  exit 1
+fi
+if ! grep -q '^MISSING  load generator (wrk2 required)$' /tmp/preflight-strict-wrk2.log; then
+  echo "preflight strict wrk2 mode missing expected diagnostic" >&2
+  exit 1
+fi
+
 echo "preflight test passed"

@@ -24,6 +24,7 @@ This folder defines a prompt-first workflow for generating and benchmarking equi
 3. Validate parity against contract.
 4. Run smoke parity matrix:
    - `make -C benchmark-suite workbench-smoke`
+   - strict load-generator default for benchmark lanes: `BENCH_WORKBENCH_REQUIRE_WRK2=1` (default); set `BENCH_WORKBENCH_REQUIRE_WRK2=0` only for local fallback runs.
 5. Run load benchmark matrix:
    - `make -C benchmark-suite workbench-bench-dry`
    - `make -C benchmark-suite workbench-bench`
