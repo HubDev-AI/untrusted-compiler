@@ -34,6 +34,9 @@ Use it to keep speed high without losing architecture direction.
 3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
 4. Extract adapter layers into packages/modules now that runtime execution is stable.
 
+Status notes:
+- `LasmDbExecTx` tx lifecycle (commit/rollback + cleanup trigger points) is now routed through `lasm_db_client` to keep dispatch free of adapter internals.
+
 ### P2: Composition Contract Analyzer (`M39-S2`) after P1
 
 1. Implement analyzer guarantees for promotion-ready composition contracts.
