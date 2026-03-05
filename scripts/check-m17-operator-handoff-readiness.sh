@@ -87,11 +87,16 @@ require_token_via_contract_suite() {
       && rg -Fq -- "${token}" "${suite_script}"; then
       return 0
     fi
-  elif grep -Fq -- "${token}" "${file}"; then
+    return 1
+  fi
+
+  if grep -Fq -- "${token}" "${file}"; then
     return 0
-  elif rg -Fq 'scripts/run-naming-lock-contract-suite.sh' "${file}" >/dev/null 2>&1 \
+  fi
+
+  if grep -Fq 'scripts/run-naming-lock-contract-suite.sh' "${file}" \
     && [ -f "${suite_script}" ] \
-    && rg -Fq -- "${token}" "${suite_script}" >/dev/null 2>&1; then
+    && grep -Fq -- "${token}" "${suite_script}"; then
     return 0
   fi
 
