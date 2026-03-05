@@ -8166,6 +8166,10 @@ fn cmd_run(
         eprintln!("run failed: --overflow-probe-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_adapter.is_some() {
+        eprintln!("run failed: --db-adapter is only supported with --backend lasm");
+        return Err(2);
+    }
     let resolved_db_cli = match validate_and_resolve_run_db_cli_options(
         path,
         backend,
