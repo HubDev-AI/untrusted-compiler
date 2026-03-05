@@ -12178,6 +12178,11 @@ M13-S1 go/no-go note:
   - DSN file alias sources now resolve when they point to the same normalized file path, while conflicting file sources remain deterministic errors.
   - Runtime env files now accept duplicate DSN alias keys only when values match, preserving conflict failures on mismatched values.
   - documented in `docs/book/1549-m39-postgres-dsn-alias-same-value-hardening.md`.
+- [x] Workbench benchmark fallback hardening completed:
+  - `run_profile.sh` and `run_workbench_profile.sh` now apply explicit timeout caps when falling back from `wrk2` to `wrk` (`--timeout`, default `10s`, configurable via `BENCH_WRK_FALLBACK_TIMEOUT`).
+  - fallback warning text and raw benchmark headers now include effective fallback timeout for artifact-level traceability.
+  - operator docs updated in benchmark-suite and alpha-full example readmes.
+  - documented in `docs/book/1550-m39-workbench-wrk-fallback-timeout-bounding.md`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

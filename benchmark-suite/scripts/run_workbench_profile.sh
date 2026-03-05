@@ -8,6 +8,7 @@ usage: $0 [--dry-run] <impl> <endpoint:wb-tasks-post|wb-tasks-with-comment|wb-ta
 env:
   BENCH_REQUIRE_WRK2=1        Enforce wrk2-only load generation
   BENCH_WRK2_BIN=/abs/path    Explicit wrk2 binary path
+  BENCH_WRK_FALLBACK_TIMEOUT  wrk fallback timeout (default: 10s)
 USAGE
 }
 
@@ -46,6 +47,8 @@ load_bin=""
 load_supports_rate="false"
 require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
 wrk2_bin_override="${BENCH_WRK2_BIN:-}"
+wrk_fallback_timeout_default="10s"
+wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
 
 is_truthy() {
   case "$1" in
@@ -97,7 +100,7 @@ select_load_generator
 
 warn_wrk_fallback() {
   if [ "${load_supports_rate}" != "true" ]; then
-    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement" >&2
+    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement (timeout=${wrk_fallback_timeout})" >&2
   fi
 }
 
@@ -132,6 +135,8 @@ build_wrk_cmd() {
   local_cmd=("${load_bin}" --latency -t"${threads}" -c"${conns}" -d"${duration}")
   if [ "${load_supports_rate}" = "true" ]; then
     local_cmd+=(-R"${target}")
+  else
+    local_cmd+=(--timeout "${wrk_fallback_timeout}")
   fi
   if [ -n "${script_path}" ]; then
     local_cmd+=(-s "${script_path}")
@@ -220,6 +225,7 @@ fi
 {
   echo "# sec4-bench-load-bin=${load_bin}"
   echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+  echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
 } >"$raw"
 
 if [ "${#endpoint_env[@]}" -gt 0 ]; then
