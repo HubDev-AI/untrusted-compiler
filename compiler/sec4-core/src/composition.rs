@@ -284,7 +284,7 @@ fn collect_repo_interface_parity_issues(
         .cloned()
         .collect::<Vec<_>>();
 
-    if browser_methods.is_empty() || server_methods.is_empty() {
+    if browser_methods.is_empty() && server_methods.is_empty() {
         return issues;
     }
 
