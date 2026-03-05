@@ -1576,7 +1576,7 @@ fn apply_lasm_internal_db_operation_materialization_single(
     let operation = operation.trim();
     match operation {
         "listRecords" => {
-            if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+            {
                 let mut state =
                     match lock_lasm_dynamic_state_or_respond(dynamic_state, response, trace_id) {
                         Some(state) => state,
