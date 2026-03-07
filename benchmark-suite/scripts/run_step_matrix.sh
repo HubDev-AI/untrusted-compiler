@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records]
+usage: $0 [--dry-run] [--impls sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get,db-hot-write,db-hot-write-tx,db-hot-query-one,db-records]
           [--lasm-db-adapter records-log|sqlite|postgres] [--lasm-db-postgres-dsn-file path]
 
 Runs step-load benchmark profiles for each implementation/endpoint and emits
@@ -12,7 +12,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="sec4,sec4-lasm,node,go,rust"
+impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 lasm_db_adapter="${BENCH_LASM_DB_ADAPTER:-}"
 lasm_db_postgres_dsn_file="${BENCH_LASM_DB_POSTGRES_DSN_FILE:-}"

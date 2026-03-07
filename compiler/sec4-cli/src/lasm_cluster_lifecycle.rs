@@ -1,8 +1,9 @@
 use socket2::{Domain, Protocol, Socket, Type};
+use std::fs;
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::lasm_db_config::{LASM_DB_POSTGRES_DSN_FILE_KEYS, LASM_DB_POSTGRES_RUNTIME_ENV_KEYS};
 use crate::{
@@ -10,6 +11,8 @@ use crate::{
     push_optional_db_postgres_tls_mode_run_arg, LasmClusterConfig, LasmClusterState,
     LasmClusterWorker,
 };
+
+const LASM_CLUSTER_READY_FILE_ENV: &str = "SEC4_RT_LASM_READY_FILE";
 
 fn forward_env_if_set(cmd: &mut Command, env_key: &str) {
     if let Ok(value) = std::env::var(env_key) {
@@ -141,9 +144,21 @@ fn push_optional_string_run_arg(cmd: &mut Command, flag: &str, value: Option<&st
     }
 }
 
+fn build_lasm_cluster_ready_file_path(worker_port: u16) -> PathBuf {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "sec4-lasm-ready-{}-{worker_port}-{stamp}.signal",
+        std::process::id()
+    ))
+}
+
 fn spawn_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
+    ready_file: Option<&Path>,
 ) -> Result<Child, String> {
     let current_exe = std::env::current_exe().map_err(|err| {
         format!("could not resolve current sec4 executable for cluster mode: {err}")
@@ -160,6 +175,10 @@ fn spawn_lasm_cluster_worker(
         .arg("1");
     if config.reuse_port_workers {
         cmd.arg("--reuse-port");
+    }
+    if let Some(ready_file) = ready_file {
+        let _ = fs::remove_file(ready_file);
+        cmd.env(LASM_CLUSTER_READY_FILE_ENV, ready_file);
     }
 
     push_optional_u64_run_arg(&mut cmd, "--max-header-bytes", config.max_header_bytes);
@@ -243,6 +262,16 @@ fn spawn_lasm_cluster_worker(
         &mut cmd,
         "--db-postgres-shared-client-max-total-idle",
         config.db_postgres_shared_client_max_total_idle,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-shared-client-max-active-per-key",
+        config.db_postgres_shared_client_max_active_per_key,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-shared-client-max-active-total",
+        config.db_postgres_shared_client_max_active_total,
     );
     push_optional_u64_run_arg(
         &mut cmd,
@@ -364,30 +393,40 @@ fn wait_for_lasm_cluster_worker_ready(
     }
 }
 
-fn wait_for_lasm_cluster_worker_alive(
+fn wait_for_lasm_cluster_worker_ready_file(
     child: &mut Child,
     worker_port: u16,
+    ready_file: &Path,
     timeout_ms: u64,
 ) -> Result<(), String> {
-    let grace_ms = timeout_ms.clamp(200, 2000);
+    let timeout = Duration::from_millis(timeout_ms.max(200));
     let start = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                let _ = fs::remove_file(ready_file);
                 return Err(format!(
                     "LASM cluster worker on port {worker_port} exited early with status {status}"
                 ));
             }
-            Ok(None) => {
-                if start.elapsed() >= Duration::from_millis(grace_ms) {
-                    return Ok(());
-                }
-            }
+            Ok(None) => {}
             Err(err) => {
+                let _ = fs::remove_file(ready_file);
                 return Err(format!(
                     "could not check LASM cluster worker status on port {worker_port}: {err}"
                 ));
             }
+        }
+        if fs::metadata(ready_file).is_ok() {
+            let _ = fs::remove_file(ready_file);
+            return Ok(());
+        }
+        if start.elapsed() >= timeout {
+            let _ = fs::remove_file(ready_file);
+            return Err(format!(
+                "LASM cluster worker on port {worker_port} did not become ready within {} ms",
+                timeout.as_millis()
+            ));
         }
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -397,9 +436,17 @@ pub(crate) fn spawn_and_wait_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
 ) -> Result<LasmClusterWorker, String> {
-    let mut child = spawn_lasm_cluster_worker(config, worker_port)?;
-    let wait_result = if config.reuse_port_workers {
-        wait_for_lasm_cluster_worker_alive(&mut child, worker_port, config.worker_ready_timeout_ms)
+    let ready_file = config
+        .reuse_port_workers
+        .then(|| build_lasm_cluster_ready_file_path(worker_port));
+    let mut child = spawn_lasm_cluster_worker(config, worker_port, ready_file.as_deref())?;
+    let wait_result = if let Some(ready_file) = ready_file.as_deref() {
+        wait_for_lasm_cluster_worker_ready_file(
+            &mut child,
+            worker_port,
+            ready_file,
+            config.worker_ready_timeout_ms,
+        )
     } else {
         wait_for_lasm_cluster_worker_ready(&mut child, worker_port, config.worker_ready_timeout_ms)
     };

@@ -10,6 +10,7 @@ impls_csv="sec4,sec4-lasm,node,go,rust,c"
 dry_run_only="false"
 require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
 wrk2_bin_override="${BENCH_WRK2_BIN:-}"
+root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -73,6 +74,10 @@ is_truthy() {
 resolve_wrk2_bin() {
   if [ -n "$wrk2_bin_override" ] && [ -x "$wrk2_bin_override" ]; then
     printf '%s\n' "$wrk2_bin_override"
+    return 0
+  fi
+  if [ -x "${root_dir}/bin/wrk2" ]; then
+    printf '%s\n' "${root_dir}/bin/wrk2"
     return 0
   fi
   if command -v wrk2 >/dev/null 2>&1; then

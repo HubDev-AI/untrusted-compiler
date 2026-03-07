@@ -44,8 +44,13 @@ load_bin=""
 load_supports_rate="false"
 
 select_load_generator() {
+  if [ -x "${root_dir}/bin/wrk2" ]; then
+    load_bin="${root_dir}/bin/wrk2"
+    load_supports_rate="true"
+    return
+  fi
   if command -v wrk2 >/dev/null 2>&1; then
-    load_bin="wrk2"
+    load_bin="$(command -v wrk2)"
     load_supports_rate="true"
     return
   fi
@@ -68,25 +73,129 @@ warn_wrk_fallback() {
 
 sample_rss_kb() {
   local pid="$1"
+  local fallback_pid=""
+  local -a tree_pids=()
   local ps_rss=""
+  local pid_rss=""
+  local rss_sum=0
+  local saw_rss="false"
   if [ -z "$pid" ]; then
-    echo ""
-    return
+    if [ -n "${BENCH_SERVER_PORT:-}" ]; then
+      fallback_pid="$(resolve_listener_pid_by_port "${BENCH_SERVER_PORT}")"
+      pid="$fallback_pid"
+    fi
+    if [ -z "$pid" ]; then
+      echo ""
+      return
+    fi
   fi
   if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-    echo ""
-    return
+    if [ -n "${BENCH_SERVER_PORT:-}" ]; then
+      fallback_pid="$(resolve_listener_pid_by_port "${BENCH_SERVER_PORT}")"
+      if [[ "$fallback_pid" =~ ^[0-9]+$ ]]; then
+        pid="$fallback_pid"
+      else
+        echo ""
+        return
+      fi
+    else
+      echo ""
+      return
+    fi
   fi
-  if ! kill -0 "$pid" >/dev/null 2>&1; then
-    echo ""
-    return
+  collect_process_tree_pids "$pid" tree_pids
+  if [ "${#tree_pids[@]}" -eq 0 ]; then
+    if [ -n "${BENCH_SERVER_PORT:-}" ]; then
+      fallback_pid="$(resolve_listener_pid_by_port "${BENCH_SERVER_PORT}")"
+      if [[ "$fallback_pid" =~ ^[0-9]+$ ]] && [ "$fallback_pid" != "$pid" ]; then
+        collect_process_tree_pids "$fallback_pid" tree_pids
+      fi
+    fi
+    if [ "${#tree_pids[@]}" -eq 0 ]; then
+      echo ""
+      return
+    fi
   fi
-  ps_rss="$(ps -o rss= -p "$pid" 2>/dev/null | awk 'NF { print $1; exit }')"
-  if [[ "$ps_rss" =~ ^[0-9]+$ ]]; then
-    echo "$ps_rss"
+  for pid_rss in "${tree_pids[@]}"; do
+    ps_rss="$(ps -o rss= -p "$pid_rss" 2>/dev/null | awk 'NF { print $1; exit }')"
+    if [[ "$ps_rss" =~ ^[0-9]+$ ]]; then
+      rss_sum=$((rss_sum + ps_rss))
+      saw_rss="true"
+    fi
+  done
+  if [ "$saw_rss" = "true" ]; then
+    echo "$rss_sum"
     return
   fi
   echo ""
+}
+
+resolve_listener_pid_by_port() {
+  local port="$1"
+  local pid=""
+  if [ -z "$port" ] || ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    pid="$(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NF { print; exit }')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    pid="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F'pid=|,' '/pid=/{print $2; exit}')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+collect_process_tree_pids() {
+  local root_pid="$1"
+  local out_var="$2"
+  local current_pid=""
+  local child_pid=""
+  local children=""
+  local -a queue=()
+  local -a seen=()
+  local -a collected=()
+
+  if [ -z "$root_pid" ] || ! [[ "$root_pid" =~ ^[0-9]+$ ]]; then
+    eval "$out_var=()"
+    return
+  fi
+
+  queue=("$root_pid")
+  while [ "${#queue[@]}" -gt 0 ]; do
+    current_pid="${queue[0]}"
+    queue=("${queue[@]:1}")
+
+    case " ${seen[*]} " in
+      *" ${current_pid} "*) continue ;;
+    esac
+    seen+=("$current_pid")
+
+    if kill -0 "$current_pid" >/dev/null 2>&1; then
+      collected+=("$current_pid")
+    fi
+
+    children="$(pgrep -P "$current_pid" 2>/dev/null || true)"
+    if [ -z "$children" ]; then
+      continue
+    fi
+    while IFS= read -r child_pid; do
+      if [ -n "$child_pid" ]; then
+        queue+=("$child_pid")
+      fi
+    done <<EOF
+$children
+EOF
+  done
+
+  eval "$out_var=(\"\${collected[@]}\")"
 }
 
 build_wrk_cmd() {

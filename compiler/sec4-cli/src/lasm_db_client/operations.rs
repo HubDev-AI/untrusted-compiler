@@ -1,9 +1,23 @@
-use crate::lasm_db_config::LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE;
+use super::config::build_lasm_postgres_thread_local_config;
+use super::drop_lasm_db_tx_handle;
+use super::{run_lasm_db_tx_commit, run_lasm_db_tx_rollback};
+use super::records::{
+    allocate_lasm_db_runtime_record, append_lasm_db_record_in_memory_with_compaction_snapshot,
+    persist_lasm_db_record_with_capacity_guard,
+};
+use crate::lasm_db_runtime_common::allocate_lasm_db_tx_handle;
+use super::persist_lasm_db_record_after_unlock;
 use crate::lasm_db_runtime_postgres::{
+    connect_lasm_postgres_tx_client, discard_lasm_postgres_tx_client,
     parse_lasm_postgres_query_template_and_params,
-    parse_lasm_postgres_query_template_and_params_value, run_lasm_postgres_exec_thread_local,
-    run_lasm_postgres_exec_tx, run_lasm_postgres_query_one_thread_local, LasmPostgresParam,
-    LasmPostgresThreadLocalConfig,
+    parse_lasm_postgres_query_template_and_params_value, return_lasm_postgres_tx_client_to_pool,
+    put_lasm_postgres_tx_client,
+    run_lasm_postgres_exec_tx_commit_on_client, run_lasm_postgres_exec_tx_on_client,
+    run_lasm_postgres_exec_tx_one_shot_on_client,
+    run_lasm_postgres_exec_tx_rollback_on_client, run_lasm_postgres_exec_thread_local,
+    run_lasm_postgres_query_one_thread_local, take_lasm_postgres_tx_client_if_present,
+    LasmPostgresParam,
+    LasmPostgresThreadLocalClient, LasmPostgresThreadLocalConfig,
 };
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
@@ -12,7 +26,8 @@ use crate::lasm_db_runtime_sqlite::{
     parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
     run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
-use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
+use crate::{LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState};
+use std::sync::Mutex;
 
 pub(crate) enum LasmPreparedDbOperationParams {
     Postgres {
@@ -26,24 +41,11 @@ pub(crate) enum LasmPreparedDbOperationParams {
 }
 
 pub(crate) enum LasmDbExecOperationResult {
-    Postgres {
-        config: LasmPostgresThreadLocalConfig,
-        affected_rows: u64,
-    },
-    Sqlite {
-        affected_rows: u64,
-    },
-    RecordsLog {
-        affected_rows: u64,
-    },
+    Sqlite { affected_rows: u64 },
+    RecordsLog { affected_rows: u64 },
 }
 
 pub(crate) enum LasmDbExecTxOperationResult {
-    Postgres {
-        config: LasmPostgresThreadLocalConfig,
-        affected_rows: u64,
-        tx_started: bool,
-    },
     Sqlite {
         affected_rows: u64,
         tx_started: bool,
@@ -59,17 +61,19 @@ pub(crate) struct LasmDbExecTxError {
     pub(crate) tx_started: bool,
 }
 
+pub(crate) struct LasmPostgresExecTxClientSuccess {
+    pub(crate) affected_rows: u64,
+    pub(crate) active: bool,
+    pub(crate) retained_client: Option<LasmPostgresThreadLocalClient>,
+}
+
+pub(crate) struct LasmPostgresExecTxClientError {
+    pub(crate) message: String,
+}
+
 pub(crate) enum LasmDbQueryOneOperationResult {
-    Postgres {
-        config: LasmPostgresThreadLocalConfig,
-        row: serde_json::Value,
-    },
-    Sqlite {
-        row: serde_json::Value,
-    },
-    RecordsLog {
-        row: serde_json::Value,
-    },
+    Sqlite { row: serde_json::Value },
+    RecordsLog { row: serde_json::Value },
 }
 
 #[derive(Debug)]
@@ -79,23 +83,80 @@ pub(crate) enum LasmDbQueryOneOperationError {
     Runtime(String),
 }
 
-pub(crate) fn build_lasm_postgres_thread_local_config(
-    state: &LasmDynamicResponseState,
-) -> Result<LasmPostgresThreadLocalConfig, String> {
-    let dsn = state
-        .db_records_postgres_dsn
-        .as_deref()
-        .ok_or_else(|| LASM_DB_POSTGRES_DSN_CONFIG_ERROR_MESSAGE.to_string())?;
-    Ok(LasmPostgresThreadLocalConfig {
-        dsn: dsn.to_string(),
-        tls_mode: state.db_postgres_tls_mode,
-        statement_timeout_ms: state.db_postgres_statement_timeout_ms.max(1),
-        lock_timeout_ms: state.db_postgres_lock_timeout_ms.max(1),
-        connect_timeout_ms: state.db_postgres_connect_timeout_ms.max(1),
-        db_postgres_statement_cache_max: state.db_postgres_statement_cache_max,
-        db_postgres_placeholder_cache_max: state.db_postgres_placeholder_cache_max,
-        retryable_conflict_retry_max: state.db_postgres_retryable_conflict_retry_max,
-    })
+pub(crate) enum LasmUnlockedPostgresOperationError {
+    StateUnavailable,
+    AdapterMismatch,
+    PreparationMismatch,
+    NotFound,
+    Runtime(String),
+}
+
+pub(crate) struct LasmUnlockedPostgresExecSuccess {
+    pub(crate) record: LasmDbRecord,
+}
+
+pub(crate) struct LasmLockedExecSuccess {
+    pub(crate) record: LasmDbRecord,
+}
+
+pub(crate) enum LasmExecTxSource {
+    AllocateFromDb(i64),
+    ExistingTx(i64),
+}
+
+pub(crate) struct LasmResolvedExecTxStateBindings {
+    pub(crate) db: i64,
+    pub(crate) tx: i64,
+    pub(crate) tx_active: bool,
+    pub(crate) allocated_tx_handle: Option<i64>,
+}
+
+pub(crate) struct LasmUnlockedPostgresQueryOneSuccess {
+    pub(crate) record: LasmDbRecord,
+    pub(crate) row_object: serde_json::Value,
+}
+
+pub(crate) struct LasmLockedQueryOneSuccess {
+    pub(crate) record: LasmDbRecord,
+    pub(crate) row_object: serde_json::Value,
+}
+
+pub(crate) struct LasmUnlockedPostgresExecTxSuccess {
+    pub(crate) record: LasmDbRecord,
+}
+
+pub(crate) enum LasmLockedOperationError {
+    StateUnavailable,
+    AdapterMismatch,
+    Capacity { max_handles: usize },
+    InvalidHandle,
+    ConflictInUse,
+    Runtime(String),
+}
+
+pub(crate) enum LasmLockedQueryOneOperationError {
+    StateUnavailable,
+    AdapterMismatch,
+    NotFound,
+    PreparationMismatch,
+    Runtime(String),
+}
+
+pub(crate) enum LasmUnlockedPostgresExecTxOperationError {
+    StateUnavailable,
+    AdapterMismatch,
+    PreparationMismatch,
+    Runtime(String),
+}
+
+pub(crate) struct LasmLockedExecTxSuccess {
+    pub(crate) record: LasmDbRecord,
+}
+
+pub(crate) enum LasmLockedExecTxOperationError {
+    StateUnavailable,
+    AdapterMismatch,
+    Runtime(String),
 }
 
 pub(crate) fn parse_lasm_db_template_and_params(
@@ -139,19 +200,9 @@ pub(crate) fn run_lasm_db_exec_operation(
     prepared_params: &LasmPreparedDbOperationParams,
 ) -> Result<LasmDbExecOperationResult, String> {
     match db_records_adapter {
-        LasmDbRecordsAdapter::Postgres => {
-            let LasmPreparedDbOperationParams::Postgres { template, params } = prepared_params
-            else {
-                return Err("internal db operation preparation mismatch".to_string());
-            };
-            let config = build_lasm_postgres_thread_local_config(state)?;
-            let affected_rows =
-                run_lasm_postgres_exec_thread_local(&config, template, params.as_slice())?;
-            Ok(LasmDbExecOperationResult::Postgres {
-                config,
-                affected_rows,
-            })
-        }
+        LasmDbRecordsAdapter::Postgres => Err(
+            "internal postgres exec must run through the unlocked thread-local path".to_string(),
+        ),
         LasmDbRecordsAdapter::Sqlite => {
             let LasmPreparedDbOperationParams::Sqlite { params } = prepared_params else {
                 return Err("internal db operation preparation mismatch".to_string());
@@ -180,43 +231,11 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
         })
     };
     match db_records_adapter {
-        LasmDbRecordsAdapter::Postgres => {
-            let LasmPreparedDbOperationParams::Postgres {
-                template: parsed_template,
-                params,
-            } = prepared_params
-            else {
-                return to_error(
-                    "internal db operation preparation mismatch".to_string(),
-                    false,
-                );
-            };
-            let config = match build_lasm_postgres_thread_local_config(state) {
-                Ok(config) => config,
-                Err(message) => return to_error(message, false),
-            };
-            match run_lasm_postgres_exec_tx(
-                state,
-                tx,
-                parsed_template,
-                params.as_slice(),
-                tx_active,
-            ) {
-                Ok((affected_rows, tx_started)) => {
-                    if tx_started {
-                        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                            tx_state.active = true;
-                        }
-                    }
-                    Ok(LasmDbExecTxOperationResult::Postgres {
-                        config,
-                        affected_rows,
-                        tx_started,
-                    })
-                }
-                Err((message, tx_started)) => to_error(message, tx_started),
-            }
-        }
+        LasmDbRecordsAdapter::Postgres => Err(LasmDbExecTxError {
+            message: "internal postgres execTx must run through the unlocked helper path"
+                .to_string(),
+            tx_started: false,
+        }),
         LasmDbRecordsAdapter::Sqlite => {
             let LasmPreparedDbOperationParams::Sqlite { params } = prepared_params else {
                 return to_error(
@@ -241,6 +260,582 @@ pub(crate) fn run_lasm_db_exec_tx_operation(
     }
 }
 
+pub(crate) fn run_lasm_postgres_exec_tx_client_operation(
+    config: &LasmPostgresThreadLocalConfig,
+    tx: i64,
+    tx_active: bool,
+    keep_allocated_tx_handle: bool,
+    template: &str,
+    params: &[LasmPostgresParam],
+    existing_tx_client: Option<LasmPostgresThreadLocalClient>,
+) -> Result<LasmPostgresExecTxClientSuccess, LasmPostgresExecTxClientError> {
+    let mut tx_client = Some(match existing_tx_client {
+        Some(client) => client,
+        None => connect_lasm_postgres_tx_client(config)
+            .map_err(|message| LasmPostgresExecTxClientError { message })?,
+    });
+    if !tx_active && !keep_allocated_tx_handle {
+        let affected_rows = match run_lasm_postgres_exec_tx_one_shot_on_client(
+            tx_client
+                .as_mut()
+                .expect("postgres tx client should exist during one-shot execTx"),
+            template,
+            params,
+            config.retryable_conflict_retry_max,
+        ) {
+            Ok(affected_rows) => affected_rows,
+            Err(err) => {
+                if err.discard_client {
+                    if let Some(client) = tx_client.take() {
+                        discard_lasm_postgres_tx_client(config, client);
+                    }
+                } else if let Some(client) = tx_client.take() {
+                    return_lasm_postgres_tx_client_to_pool(config, client);
+                }
+                return Err(LasmPostgresExecTxClientError {
+                    message: err.message,
+                });
+            }
+        };
+        return_lasm_postgres_tx_client_to_pool(
+            config,
+            tx_client
+                .take()
+                .expect("postgres tx client should exist when returning one-shot client"),
+        );
+        return Ok(LasmPostgresExecTxClientSuccess {
+            affected_rows,
+            active: false,
+            retained_client: None,
+        });
+    }
+    let operation_result = run_lasm_postgres_exec_tx_on_client(
+        tx_client
+            .as_mut()
+            .expect("postgres tx client should exist during execTx"),
+        tx,
+        template,
+        params,
+        tx_active,
+        config.retryable_conflict_retry_max,
+    );
+    let (affected_rows, tx_started) = match operation_result {
+        Ok(value) => value,
+        Err((message, tx_started)) => {
+            let rollback_succeeded = if tx_started || tx_active {
+                run_lasm_postgres_exec_tx_rollback_on_client(
+                    tx_client
+                        .as_mut()
+                        .expect("postgres tx client should exist during rollback"),
+                    tx,
+                )
+                .is_ok()
+            } else {
+                false
+            };
+            if rollback_succeeded {
+                return_lasm_postgres_tx_client_to_pool(
+                    config,
+                    tx_client
+                        .take()
+                        .expect("postgres tx client should exist when returning to pool"),
+                );
+            } else if let Some(client) = tx_client.take() {
+                discard_lasm_postgres_tx_client(config, client);
+            }
+            return Err(LasmPostgresExecTxClientError { message });
+        }
+    };
+
+    let should_finalize_postgres_tx = !keep_allocated_tx_handle && (tx_started || tx_active);
+    if should_finalize_postgres_tx {
+        if let Err(message) = run_lasm_postgres_exec_tx_commit_on_client(
+            tx_client
+                .as_mut()
+                .expect("postgres tx client should exist during commit"),
+            tx,
+        ) {
+            if let Some(client) = tx_client.take() {
+                discard_lasm_postgres_tx_client(config, client);
+            }
+            return Err(LasmPostgresExecTxClientError { message });
+        }
+        return_lasm_postgres_tx_client_to_pool(
+            config,
+            tx_client
+                .take()
+                .expect("postgres tx client should exist when returning committed client"),
+        );
+        Ok(LasmPostgresExecTxClientSuccess {
+            affected_rows,
+            active: false,
+            retained_client: None,
+        })
+    } else {
+        Ok(LasmPostgresExecTxClientSuccess {
+            affected_rows,
+            active: tx_started || tx_active,
+            retained_client: tx_client.take(),
+        })
+    }
+}
+
+pub(crate) fn run_lasm_postgres_exec_unlocked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db: i64,
+    template: &str,
+    params: &str,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmUnlockedPostgresExecSuccess, LasmUnlockedPostgresOperationError> {
+    let LasmPreparedDbOperationParams::Postgres {
+        template: postgres_template,
+        params: postgres_params,
+    } = prepared_params
+    else {
+        return Err(LasmUnlockedPostgresOperationError::PreparationMismatch);
+    };
+    let config = {
+        let state = dynamic_state
+            .lock()
+            .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
+        }
+        build_lasm_postgres_thread_local_config(&state)
+            .map_err(LasmUnlockedPostgresOperationError::Runtime)?
+    };
+    let affected_rows = run_lasm_postgres_exec_thread_local(
+        &config,
+        postgres_template.as_str(),
+        postgres_params.as_slice(),
+    )
+    .map_err(LasmUnlockedPostgresOperationError::Runtime)?;
+    let (record, compaction_snapshot) = {
+        let mut state = dynamic_state
+            .lock()
+            .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
+        }
+        let record =
+            allocate_lasm_db_runtime_record(&mut state, "exec", db, template, params, 0, affected_rows);
+        append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
+    };
+    persist_lasm_db_record_after_unlock(
+        LasmDbRecordsAdapter::Postgres,
+        &config,
+        &record,
+        compaction_snapshot,
+    );
+    Ok(LasmUnlockedPostgresExecSuccess { record })
+}
+
+pub(crate) fn run_lasm_non_postgres_exec_locked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    db: i64,
+    template: &str,
+    params: &str,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmLockedExecSuccess, LasmLockedOperationError> {
+    let mut state = dynamic_state
+        .lock()
+        .map_err(|_| LasmLockedOperationError::StateUnavailable)?;
+    if state.db_records_adapter != db_records_adapter
+        || db_records_adapter == LasmDbRecordsAdapter::Postgres
+    {
+        return Err(LasmLockedOperationError::AdapterMismatch);
+    }
+    let operation_result = run_lasm_db_exec_operation(
+        &mut state,
+        db_records_adapter,
+        template,
+        prepared_params,
+    )
+    .map_err(LasmLockedOperationError::Runtime)?;
+    let affected_rows = match operation_result {
+        LasmDbExecOperationResult::Sqlite { affected_rows }
+        | LasmDbExecOperationResult::RecordsLog { affected_rows } => affected_rows,
+    };
+    let record =
+        allocate_lasm_db_runtime_record(&mut state, "exec", db, template, params, 0, affected_rows);
+    persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+    Ok(LasmLockedExecSuccess { record })
+}
+
+pub(crate) fn run_lasm_db_tx_allocate_locked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    db: i64,
+) -> Result<i64, LasmLockedOperationError> {
+    let mut state = dynamic_state
+        .lock()
+        .map_err(|_| LasmLockedOperationError::StateUnavailable)?;
+    if state.db_records_adapter != db_records_adapter {
+        return Err(LasmLockedOperationError::AdapterMismatch);
+    }
+    let Some(tx) = allocate_lasm_db_tx_handle(&mut state, db) else {
+        return Err(LasmLockedOperationError::Capacity {
+            max_handles: state.db_tx_max_handles,
+        });
+    };
+    Ok(tx)
+}
+
+pub(crate) fn resolve_lasm_exec_tx_state_bindings_locked(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    tx_source: &LasmExecTxSource,
+) -> Result<LasmResolvedExecTxStateBindings, LasmLockedOperationError> {
+    let mut state = dynamic_state
+        .lock()
+        .map_err(|_| LasmLockedOperationError::StateUnavailable)?;
+    if state.db_records_adapter != db_records_adapter {
+        return Err(LasmLockedOperationError::AdapterMismatch);
+    }
+    match tx_source {
+        LasmExecTxSource::AllocateFromDb(db_value) => {
+            let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, *db_value) else {
+                return Err(LasmLockedOperationError::Capacity {
+                    max_handles: state.db_tx_max_handles,
+                });
+            };
+            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_value) {
+                tx_state.in_use = true;
+            }
+            Ok(LasmResolvedExecTxStateBindings {
+                db: *db_value,
+                tx: tx_value,
+                tx_active: false,
+                allocated_tx_handle: Some(tx_value),
+            })
+        }
+        LasmExecTxSource::ExistingTx(tx_value) => {
+            let Some(tx_state) = state.db_tx_handles.get_mut(tx_value) else {
+                return Err(LasmLockedOperationError::InvalidHandle);
+            };
+            if tx_state.in_use {
+                return Err(LasmLockedOperationError::ConflictInUse);
+            }
+            tx_state.in_use = true;
+            Ok(LasmResolvedExecTxStateBindings {
+                db: tx_state.db,
+                tx: *tx_value,
+                tx_active: tx_state.active,
+                allocated_tx_handle: None,
+            })
+        }
+    }
+}
+
+pub(crate) fn run_lasm_postgres_query_one_unlocked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db: i64,
+    template: &str,
+    params: &str,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmUnlockedPostgresQueryOneSuccess, LasmUnlockedPostgresOperationError> {
+    let LasmPreparedDbOperationParams::Postgres {
+        template: postgres_template,
+        params: postgres_params,
+    } = prepared_params
+    else {
+        return Err(LasmUnlockedPostgresOperationError::PreparationMismatch);
+    };
+    let config = {
+        let state = dynamic_state
+            .lock()
+            .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
+        }
+        build_lasm_postgres_thread_local_config(&state)
+            .map_err(LasmUnlockedPostgresOperationError::Runtime)?
+    };
+    let row_object = match run_lasm_postgres_query_one_thread_local(
+        &config,
+        postgres_template.as_str(),
+        postgres_params.as_slice(),
+    ) {
+        Ok(Some(value)) => value,
+        Ok(None) => return Err(LasmUnlockedPostgresOperationError::NotFound),
+        Err(message) => return Err(LasmUnlockedPostgresOperationError::Runtime(message)),
+    };
+    let (record, compaction_snapshot) = {
+        let mut state = dynamic_state
+            .lock()
+            .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
+        }
+        let record = allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
+        append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
+    };
+    persist_lasm_db_record_after_unlock(
+        LasmDbRecordsAdapter::Postgres,
+        &config,
+        &record,
+        compaction_snapshot,
+    );
+    Ok(LasmUnlockedPostgresQueryOneSuccess { record, row_object })
+}
+
+pub(crate) fn run_lasm_non_postgres_query_one_locked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    db: i64,
+    template: &str,
+    params: &str,
+    row_schema: i64,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmLockedQueryOneSuccess, LasmLockedQueryOneOperationError> {
+    let mut state = dynamic_state
+        .lock()
+        .map_err(|_| LasmLockedQueryOneOperationError::StateUnavailable)?;
+    if state.db_records_adapter != db_records_adapter
+        || db_records_adapter == LasmDbRecordsAdapter::Postgres
+    {
+        return Err(LasmLockedQueryOneOperationError::AdapterMismatch);
+    }
+    let row_object = match run_lasm_db_query_one_operation(
+        &mut state,
+        db_records_adapter,
+        db,
+        template,
+        params,
+        row_schema,
+        prepared_params,
+    ) {
+        Ok(LasmDbQueryOneOperationResult::Sqlite { row })
+        | Ok(LasmDbQueryOneOperationResult::RecordsLog { row }) => row,
+        Err(LasmDbQueryOneOperationError::NotFound) => {
+            return Err(LasmLockedQueryOneOperationError::NotFound);
+        }
+        Err(LasmDbQueryOneOperationError::PreparationMismatch) => {
+            return Err(LasmLockedQueryOneOperationError::PreparationMismatch);
+        }
+        Err(LasmDbQueryOneOperationError::Runtime(message)) => {
+            return Err(LasmLockedQueryOneOperationError::Runtime(message));
+        }
+    };
+    let record = allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
+    persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+    Ok(LasmLockedQueryOneSuccess { record, row_object })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db: i64,
+    tx: i64,
+    tx_active: bool,
+    allocated_tx_handle: Option<i64>,
+    keep_allocated_tx_handle: bool,
+    template: &str,
+    params: &str,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmUnlockedPostgresExecTxSuccess, LasmUnlockedPostgresExecTxOperationError> {
+    let LasmPreparedDbOperationParams::Postgres {
+        template: postgres_template,
+        params: postgres_params,
+    } = prepared_params
+    else {
+        return Err(LasmUnlockedPostgresExecTxOperationError::PreparationMismatch);
+    };
+    let (config, existing_tx_client) = {
+        let mut state = dynamic_state
+            .lock()
+            .map_err(|_| LasmUnlockedPostgresExecTxOperationError::StateUnavailable)?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
+        }
+        let config = match build_lasm_postgres_thread_local_config(&state) {
+            Ok(config) => config,
+            Err(message) => {
+                if keep_allocated_tx_handle {
+                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                        tx_state.active = false;
+                        tx_state.in_use = false;
+                    }
+                } else if allocated_tx_handle.is_some() {
+                    drop_lasm_db_tx_handle(&mut state, tx);
+                } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                    tx_state.in_use = false;
+                }
+                return Err(LasmUnlockedPostgresExecTxOperationError::Runtime(message));
+            }
+        };
+        let existing_tx_client = take_lasm_postgres_tx_client_if_present(&mut state, tx);
+        (config, existing_tx_client)
+    };
+    let client_result = run_lasm_postgres_exec_tx_client_operation(
+        &config,
+        tx,
+        tx_active,
+        keep_allocated_tx_handle,
+        postgres_template.as_str(),
+        postgres_params.as_slice(),
+        existing_tx_client,
+    );
+    let LasmPostgresExecTxClientSuccess {
+        affected_rows,
+        active: retained_tx_active,
+        retained_client,
+    } = match client_result {
+        Ok(value) => value,
+        Err(error) => {
+            let mut state = dynamic_state
+                .lock()
+                .map_err(|_| LasmUnlockedPostgresExecTxOperationError::StateUnavailable)?;
+            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                tx_state.active = false;
+                tx_state.in_use = false;
+            }
+            if keep_allocated_tx_handle {
+                if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                    tx_state.active = false;
+                }
+            } else {
+                drop_lasm_db_tx_handle(&mut state, tx);
+            }
+            return Err(LasmUnlockedPostgresExecTxOperationError::Runtime(
+                error.message,
+            ));
+        }
+    };
+    let mut retained_client = retained_client;
+    let should_finalize_postgres_tx = retained_client.is_none();
+    let (record, compaction_snapshot) = {
+        let mut state = dynamic_state
+            .lock()
+            .map_err(|_| {
+                if let Some(client) = retained_client.take() {
+                    discard_lasm_postgres_tx_client(&config, client);
+                }
+                LasmUnlockedPostgresExecTxOperationError::StateUnavailable
+            })?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            if let Some(client) = retained_client.take() {
+                discard_lasm_postgres_tx_client(&config, client);
+            }
+            return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
+        }
+        if should_finalize_postgres_tx {
+            drop_lasm_db_tx_handle(&mut state, tx);
+        } else {
+            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                tx_state.active = retained_tx_active;
+                tx_state.in_use = false;
+            }
+            if let Some(client) = retained_client.take() {
+                put_lasm_postgres_tx_client(&mut state, tx, client);
+            }
+        }
+        let record =
+            allocate_lasm_db_runtime_record(&mut state, "execTx", db, template, params, tx, affected_rows);
+        append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
+    };
+    persist_lasm_db_record_after_unlock(
+        LasmDbRecordsAdapter::Postgres,
+        &config,
+        &record,
+        compaction_snapshot,
+    );
+    Ok(LasmUnlockedPostgresExecTxSuccess { record })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_lasm_non_postgres_exec_tx_locked_operation(
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    db: i64,
+    tx: i64,
+    tx_active: bool,
+    allocated_tx_handle: Option<i64>,
+    keep_allocated_tx_handle: bool,
+    template: &str,
+    params: &str,
+    prepared_params: &LasmPreparedDbOperationParams,
+) -> Result<LasmLockedExecTxSuccess, LasmLockedExecTxOperationError> {
+    let mut state = dynamic_state
+        .lock()
+        .map_err(|_| LasmLockedExecTxOperationError::StateUnavailable)?;
+    if state.db_records_adapter != db_records_adapter
+        || db_records_adapter == LasmDbRecordsAdapter::Postgres
+    {
+        return Err(LasmLockedExecTxOperationError::AdapterMismatch);
+    }
+    let operation_result =
+        match run_lasm_db_exec_tx_operation(
+            &mut state,
+            db_records_adapter,
+            tx,
+            tx_active,
+            template,
+            prepared_params,
+        ) {
+            Ok(value) => value,
+            Err(error) => {
+                if error.tx_started {
+                    let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
+                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                        tx_state.active = false;
+                        tx_state.in_use = false;
+                    }
+                    if !keep_allocated_tx_handle {
+                        drop_lasm_db_tx_handle(&mut state, tx);
+                    }
+                } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                    tx_state.in_use = false;
+                }
+                if let Some(tx_handle) = allocated_tx_handle {
+                    if keep_allocated_tx_handle {
+                        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
+                            tx_state.active = false;
+                            tx_state.in_use = false;
+                        }
+                    } else {
+                        drop_lasm_db_tx_handle(&mut state, tx_handle);
+                    }
+                }
+                return Err(LasmLockedExecTxOperationError::Runtime(error.message));
+            }
+        };
+
+    let (affected_rows, tx_started, should_commit_tx) = match operation_result {
+        LasmDbExecTxOperationResult::Sqlite {
+            affected_rows,
+            tx_started,
+        } => (affected_rows, tx_started, true),
+        LasmDbExecTxOperationResult::RecordsLog { affected_rows } => (affected_rows, false, false),
+    };
+
+    if should_commit_tx && tx_started && !keep_allocated_tx_handle {
+        if let Err(message) = run_lasm_db_tx_commit(&mut state, db_records_adapter, tx) {
+            drop_lasm_db_tx_handle(&mut state, tx);
+            return Err(LasmLockedExecTxOperationError::Runtime(message));
+        }
+        drop_lasm_db_tx_handle(&mut state, tx);
+    }
+    if let Some(tx_handle) = allocated_tx_handle {
+        if !keep_allocated_tx_handle {
+            drop_lasm_db_tx_handle(&mut state, tx_handle);
+        } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
+            tx_state.active = tx_started || tx_active;
+            tx_state.in_use = false;
+        }
+    } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+        if keep_allocated_tx_handle {
+            tx_state.active = tx_started || tx_active;
+        }
+        tx_state.in_use = false;
+    }
+    let record =
+        allocate_lasm_db_runtime_record(&mut state, "execTx", db, template, params, tx, affected_rows);
+    persist_lasm_db_record_with_capacity_guard(&mut state, &record);
+    Ok(LasmLockedExecTxSuccess { record })
+}
+
 pub(crate) fn run_lasm_db_query_one_operation(
     state: &mut LasmDynamicResponseState,
     db_records_adapter: LasmDbRecordsAdapter,
@@ -251,27 +846,10 @@ pub(crate) fn run_lasm_db_query_one_operation(
     prepared_params: &LasmPreparedDbOperationParams,
 ) -> Result<LasmDbQueryOneOperationResult, LasmDbQueryOneOperationError> {
     match db_records_adapter {
-        LasmDbRecordsAdapter::Postgres => {
-            let LasmPreparedDbOperationParams::Postgres {
-                template: parsed_template,
-                params,
-            } = prepared_params
-            else {
-                return Err(LasmDbQueryOneOperationError::PreparationMismatch);
-            };
-            let config = build_lasm_postgres_thread_local_config(state)
-                .map_err(LasmDbQueryOneOperationError::Runtime)?;
-            let row = run_lasm_postgres_query_one_thread_local(
-                &config,
-                parsed_template,
-                params.as_slice(),
-            )
-            .map_err(LasmDbQueryOneOperationError::Runtime)?;
-            match row {
-                Some(value) => Ok(LasmDbQueryOneOperationResult::Postgres { config, row: value }),
-                None => Err(LasmDbQueryOneOperationError::NotFound),
-            }
-        }
+        LasmDbRecordsAdapter::Postgres => Err(LasmDbQueryOneOperationError::Runtime(
+            "internal postgres queryOne must run through the unlocked thread-local path"
+                .to_string(),
+        )),
         LasmDbRecordsAdapter::Sqlite => {
             let LasmPreparedDbOperationParams::Sqlite { params } = prepared_params else {
                 return Err(LasmDbQueryOneOperationError::PreparationMismatch);

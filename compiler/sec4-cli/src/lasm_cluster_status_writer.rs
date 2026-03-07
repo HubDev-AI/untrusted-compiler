@@ -21,7 +21,10 @@ use crate::lasm_db_runtime_dispatch::{
     lasm_db_query_one_row_max_columns_limit, lasm_db_sql_template_max_bytes_limit,
 };
 use crate::lasm_db_runtime_postgres::{
-    lasm_postgres_shared_client_pool_idle_total, lasm_postgres_shared_client_pool_key_count,
+    lasm_postgres_shared_client_max_active_per_key, lasm_postgres_shared_client_max_active_total,
+    lasm_postgres_shared_client_pool_active_key_count,
+    lasm_postgres_shared_client_pool_active_total, lasm_postgres_shared_client_pool_idle_total,
+    lasm_postgres_shared_client_pool_key_count,
 };
 use crate::lasm_db_runtime_postgres_persist::{
     lasm_postgres_persist_queue_backpressure_total, lasm_postgres_persist_queue_depth,
@@ -320,6 +323,14 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                     .db_postgres_shared_client_max_idle_per_key,
                 db_postgres_shared_client_max_total_idle: shared_config
                     .db_postgres_shared_client_max_total_idle,
+                db_postgres_shared_client_max_active_per_key: shared_config
+                    .db_postgres_shared_client_max_active_per_key
+                    .or_else(|| {
+                        u64::try_from(lasm_postgres_shared_client_max_active_per_key()).ok()
+                    }),
+                db_postgres_shared_client_max_active_total: shared_config
+                    .db_postgres_shared_client_max_active_total
+                    .or_else(|| u64::try_from(lasm_postgres_shared_client_max_active_total()).ok()),
                 db_postgres_persist_workers: shared_config.db_postgres_persist_workers,
                 db_postgres_persist_queue_capacity: shared_config
                     .db_postgres_persist_queue_capacity,
@@ -332,6 +343,10 @@ pub(crate) fn spawn_lasm_cluster_status_writer(
                 db_postgres_shared_client_pool_keys: lasm_postgres_shared_client_pool_key_count(),
                 db_postgres_shared_client_pool_idle_total:
                     lasm_postgres_shared_client_pool_idle_total(),
+                db_postgres_shared_client_pool_active_keys:
+                    lasm_postgres_shared_client_pool_active_key_count(),
+                db_postgres_shared_client_pool_active_total:
+                    lasm_postgres_shared_client_pool_active_total(),
                 db_postgres_persist_workers_available: lasm_postgres_persist_workers_available(),
                 db_postgres_persist_queue_depth: lasm_postgres_persist_queue_depth(),
                 db_postgres_persist_queue_backpressure_total:

@@ -13,6 +13,23 @@ analysis_path="${4:-}"
 step_matrix_path="${5:-}"
 saturation_summary_path="${6:-}"
 mode_compare_path="${7:-}"
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+
+normalize_repo_path() {
+  local path="$1"
+  if [ -z "$path" ]; then
+    printf '%s' "$path"
+    return
+  fi
+  case "$path" in
+    "$repo_root"/*)
+      printf '%s' "${path#${repo_root}/}"
+      ;;
+    *)
+      printf '%s' "$path"
+      ;;
+  esac
+}
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -97,29 +114,36 @@ if [ "$memory_missing_count" -gt 0 ]; then
   quality_status="WARN"
 fi
 
+matrix_path_display="$(normalize_repo_path "$matrix_path")"
+sec_audit_path_display="$(normalize_repo_path "$sec_audit_path")"
+analysis_path_display="$(normalize_repo_path "$analysis_path")"
+step_matrix_path_display="$(normalize_repo_path "$step_matrix_path")"
+saturation_summary_path_display="$(normalize_repo_path "$saturation_summary_path")"
+mode_compare_path_display="$(normalize_repo_path "$mode_compare_path")"
+
 {
   echo "# Benchmark Comparative Report (v0.1)"
   echo
   echo "- Generated UTC: ${now_utc}"
-  echo "- Matrix source: ${matrix_path}"
+  echo "- Matrix source: ${matrix_path_display}"
   echo "- Implementations in matrix (${impl_count}): ${impl_list}"
   echo "- Endpoints in matrix (${endpoint_count}): ${endpoint_list}"
   echo "- Evidence run mode: ${run_mode}"
   echo "- Evidence quality status: ${quality_status}"
   if [ -n "$sec_audit_path" ]; then
-    echo "- Security source: ${sec_audit_path}"
+    echo "- Security source: ${sec_audit_path_display}"
   fi
   if [ -n "$analysis_path" ]; then
-    echo "- Analysis source: ${analysis_path}"
+    echo "- Analysis source: ${analysis_path_display}"
   fi
   if [ -n "$step_matrix_path" ]; then
-    echo "- Step matrix source: ${step_matrix_path}"
+    echo "- Step matrix source: ${step_matrix_path_display}"
   fi
   if [ -n "$saturation_summary_path" ]; then
-    echo "- Saturation summary source: ${saturation_summary_path}"
+    echo "- Saturation summary source: ${saturation_summary_path_display}"
   fi
   if [ -n "$mode_compare_path" ]; then
-    echo "- Mode compare source: ${mode_compare_path}"
+    echo "- Mode compare source: ${mode_compare_path_display}"
   fi
   echo
 
@@ -283,7 +307,7 @@ fi
     sat_pass_runs="$(extract_summary_value '- Pass runs: ' "$saturation_summary_path")"
     sat_verify_reqps="$(extract_summary_value '- Requests/sec: ' "$saturation_summary_path")"
 
-    echo "- Summary source: ${saturation_summary_path}"
+    echo "- Summary source: ${saturation_summary_path_display}"
     echo "- Recommended boost step: ${sat_recommended}"
     echo "- Selection mode: ${sat_selection_mode}"
     echo "- Pass runs: ${sat_pass_runs}"
@@ -315,7 +339,7 @@ fi
     mode_compare_live_sender_fixed="$(jq -r '.comparison.relayLiveSenderCountFixed // "n/a"' "$mode_compare_path")"
     mode_compare_live_sender_delta="$(jq -r '.comparison.relayLiveSenderCountDelta // "n/a"' "$mode_compare_path")"
 
-    echo "- Mode compare source: ${mode_compare_path}"
+    echo "- Mode compare source: ${mode_compare_path_display}"
     echo "- Recommended mode: ${mode_compare_recommended_mode}"
     echo "- Proxy pass: ${mode_compare_proxy_pass}"
     echo "- Fixed reuse-port pass: ${mode_compare_fixed_pass}"

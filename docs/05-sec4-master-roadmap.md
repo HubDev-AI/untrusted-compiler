@@ -53,8 +53,37 @@ Roadmap impact:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
 - Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
 - Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
-- `c-bin` compile path now prefers canonical runtime sources from `runtime/c/` with deterministic build-folder fallback when canonical files are unavailable.
+- `c-bin` compile path now requires canonical runtime sources from `runtime/c/` and fails deterministically when they are missing.
 - LASM DB operator docs/runbooks are synchronized for this slice (`examples/lasm-alpha-full`): smoke and README now reflect the current Postgres DSN alias set and tokenized runtime env overrides used by cluster/runtime forwarding.
+
+## Final Alpha Closeout Status (2026-03-07)
+
+Final alpha readiness is now declared complete.
+
+Final closeout truth:
+
+- `scripts/check-naming-lock.sh`: pass
+- `scripts/check-milestone-closure.sh --fail-on-pending`: pass
+- Final proof-bundle chain passed on the tuned baseline:
+  - `scripts/run-final-alpha-proof-bundle.sh --artifacts-dir build/release-alpha-gate`
+  - refreshed outputs:
+    - `build/release-alpha-gate/summary.txt`
+    - `build/release-alpha-gate/checksums.txt`
+    - `build/release-alpha-gate/publish-manifest.json`
+- Canonical same-contract DB-backed benchmark publication family for closeout is:
+  - `benchmark-suite/results/workbench-benchmark-report.md`
+  - `benchmark-suite/results/workbench-benchmark-report.html`
+  - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+  - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+  - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+- Final readiness decision is recorded in:
+  - `docs/plans/2026-03-07-final-alpha-readiness-summary.md`
+
+Important closeout note:
+
+- `workbench-full-benchmark-*` outputs are tuning/exploration artifacts, not the canonical alpha publication family.
+- The refreshed canonical cross-runtime publication run (`startedAt=2026-03-07T18:29:46Z`, `finishedAt=2026-03-07T18:38:37Z`) now records `passed=4 failed=0 skipped=0` across `sec4-lasm`, `node`, `go`, and `rust` on the same six-endpoint DB-backed workload.
+- For the mixed-workload publication run, the stable LASM topology is `single` mode. Earlier proxy/fixed notes remain targeted tuning evidence for specific routes, not the current publication default.
 
 ## Execution Mode Lock (2026-02-17)
 
@@ -103,6 +132,48 @@ Execution order is now fixed to avoid scope drift:
 3. After full DB client completion, implement `M39-S2` Composition Contract Analyzer.
 4. Defer performance-tuning feature work (including 1M req/s optimization campaign) until after `M39-S2` completion.
 5. Before step 4, only allow performance changes that are required for deterministic correctness/stability.
+
+## Canonical Workbench Delivery Lock (2026-03-06)
+
+This supersedes the analyzer-first post-alpha sequencing above.
+
+Execution order is now:
+
+1. Close strict no-stub alpha functionality checklist first (runtime/compiler behavior criteria in this roadmap).
+2. Build one canonical LASM app around the existing workbench contract with real Postgres and multi-file structure.
+3. Use that app as the shared source for:
+   - example/tutorial flow,
+   - operator smoke/e2e flow,
+   - benchmark workload,
+   - DB/runtime cleanup discovery.
+4. Benchmark `sec4-lasm` against `node`, `go`, and `rust` under the same DB-backed workload and endpoint contract.
+5. Close the remaining DB/runtime cleanup exposed by the canonical app.
+6. After that cleanup, prioritize scaling/runtime tuning on the same app/workload.
+7. Defer Composition Contract Analyzer follow-up and other non-blocking analyzer work until after steps 1-6.
+
+This lock exists to keep execution on one proof path instead of splitting effort across abstract subsystems.
+
+Workbench runtime status note (2026-03-07):
+
+- LASM Postgres `db.execTx` now runs client connect/exec/commit/rollback outside the global dynamic-state mutex, with tx handles marked `in_use` while borrowed so canonical `wb-tasks-with-comment` no longer collapses into timeout-only wrk2 runs.
+- Workbench benchmark summary/profile gating now fails runs with zero completed requests or any socket errors, not only non-2xx/3xx responses.
+- Workbench preflight now enforces one canonical success-envelope contract across implementations; the sec4 LASM workbench no longer relies on legacy `op` / `rowObject` benchmark exceptions.
+- Workbench benchmark runners now accept LASM cluster-mode controls on the canonical Postgres app (`--lasm-instances`, `--lasm-autoscale-max-instances`, relay tuning flags), so scaling work can be measured on the same DB-backed workload instead of only on synthetic capacity probes.
+- Workbench step-load write benchmarks now derive unique run tags per step rate, preventing fake 409/non-2xx collisions between sequential write-rate passes.
+- Workbench now has a dedicated LASM mode-compare runner (`benchmark-suite/scripts/run_workbench_lasm_mode_compare.sh`) that compares `single`, `cluster-fixed`, and `cluster-proxy` on the canonical Postgres workload and emits a deterministic `recommendedMode`; proxy-cluster RSS capture is now stable through live listener PID/process-tree sampling.
+- Postgres `db.execTx` now has a one-shot fast path for non-retained transactional routes: detached tx clients run `BEGIN` / execute / `COMMIT` directly, while retained multi-step tx handles stay on the savepoint path.
+- Shared Postgres pool wakeups were narrowed from `notify_all()` to `notify_one()` on release/connect-failure paths, reducing thundering-herd wakeups under clustered load.
+- Dynamic-state DB record compaction now clears latest-signature indexes in `O(1)` when a signature count drops to zero instead of reverse-scanning the full record history under the global lock.
+- Unlocked Postgres `db.exec` and `db.queryOne` now execute behind focused DB-client helpers in `compiler/sec4-cli/src/lasm_db_client/*`; `lasm_db_runtime_dispatch.rs` keeps request resolution and response shaping, while DB-client modules own the lock/unlock/build-config/execute/re-lock record path.
+- Postgres `db.execTx` now follows the same ownership split: dispatch resolves tx sources and maps HTTP envelopes, while `lasm_db_client` owns config build, tx-client lifecycle, transactional execution, and record append/persist for the unlocked Postgres path.
+- The remaining sqlite/records-log `db.execTx` lifecycle now follows the same pattern: dispatch resolves tx sources and response envelopes, while `lasm_db_client` owns locked adapter execution, commit/rollback decisions, tx-handle cleanup, and record persistence.
+- The remaining sqlite/records-log `db.exec` and `db.queryOne` paths now follow the same helper-driven pattern: dispatch resolves request inputs and HTTP envelopes, while `lasm_db_client` owns locked adapter execution, row materialization, and record persistence for non-Postgres adapters.
+- `db.tx` allocation and `execTx` state-binding resolution now also live behind `lasm_db_client`, so top-level DB dispatch no longer owns tx-handle allocation or in-use binding state directly.
+- Focused explicit-tx step rerun on the canonical Postgres route improved from about `443.68 req/s` / `p99 3.76s` to about `489.63 req/s` / `p99 154.75ms` at the `500`-target lane.
+- Current tuned same-workload fixed compare on Postgres keeps `sec4-lasm` in front on the canonical tx routes:
+  - `wb-tasks-with-comment`: about `198.35 req/s`, `p99 36.54ms`
+  - `wb-tasks-with-comment-tx`: about `199.08 req/s`, `p99 41.22ms`
+- The remaining code-facing follow-up is now a fresh same-workload benchmark/tuning pass on the cleaner helper-driven runtime surface, not more dispatch/package extraction on the same seam.
 
 ## Backend Engine Transition Lock (2026-02-17)
 
@@ -1894,10 +1965,15 @@ Post-alpha track acceptance anchors:
       - cluster status JSON now emits `relayIoBurstMax` so active fairness tuning is visible in operator/benchmark snapshots.
       - documented in `docs/book/1486-m39-lasm-relay-io-burst-runtime-tuning-and-status-field.md`.
    - [x] Added runtime-tunable relay idle-backoff cap + status field:
-      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` (bounded `0..32`, default `1`) and threads the resolved value into relay pump initialization,
+      - cluster runtime now resolves `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` (bounded `0..32`, default `0`) and threads the resolved value into relay pump initialization,
       - relay pump now applies bounded per-connection idle deferral after fully idle ticks and resets backoff immediately on any real IO progress,
       - cluster status JSON now emits `relayIdleBackoffMax` so active idle-scheduling tuning is visible in operator/benchmark snapshots.
       - documented in `docs/book/1487-m39-lasm-relay-idle-backoff-runtime-tuning.md`.
+   - [x] Lowered relay idle-backoff default to zero for the canonical Postgres proxy-cluster workload:
+      - `LasmClusterRelayPump` now defaults `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` to `0` instead of `1`, preserving the runtime override but removing one extra deferred tick from fully idle proxy relays,
+      - direct validation on `wb-tasks-with-comment` with real Postgres and proxy cluster mode (`instances=2`, `autoscale-max-instances=4`, `cluster-accept-workers=2`, `cluster-relay-pump-batch-max=128`) held `350.01 req/s` at `24.30ms` p99 with zero socket errors,
+      - this replaces the slower proxy baseline from the earlier short mode compare and becomes the new default tuning floor for subsequent proxy hot-path work.
+      - documented in `docs/book/1559-m39-lasm-proxy-relay-idle-backoff-default-zero.md`.
    - [x] Made relay pump budget accounting backoff-skip aware:
       - relay pumps now emit explicit `BackoffDeferred` steps when idle-backoff countdown is active,
       - relay worker loop now uses separate bounded scan-budget accounting so deferred-idle scans do not consume main per-tick pump budget,
@@ -12183,6 +12259,11 @@ M13-S1 go/no-go note:
   - fallback warning text and raw benchmark headers now include effective fallback timeout for artifact-level traceability.
   - operator docs updated in benchmark-suite and alpha-full example readmes.
   - documented in `docs/book/1550-m39-workbench-wrk-fallback-timeout-bounding.md`.
+- [x] LASM Postgres bounded client-pool + proxy RSS benchmark honesty completed:
+  - LASM Postgres shared-client handling now bounds active checkouts instead of only reusing idle clients, preventing `sqlstate=53300` failures under the canonical Postgres workbench cluster benchmark.
+  - tx-client acquisition now routes through the same bounded pool and releases active slots on discard paths.
+  - workbench benchmark samplers now tolerate worker churn, resolve live listener PIDs for proxy mode, and report real process-tree RSS for proxy-cluster runs.
+  - documented in `docs/book/1557-m39-lasm-postgres-bounded-client-pool-and-proxy-rss-fix.md`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -12281,3 +12362,94 @@ Day 14:
 ---
 
 This roadmap is the canonical execution path until v0.1-alpha is running and documented as a coherent book.
+
+## 8. Current Execution Note (2026-03-06)
+
+- The canonical LASM workbench app now exposes a real public operator contract on top of the benchmark-compatible alpha wire format:
+  - `POST /wb/tasks` accepts JSON bodies and persists labels to `wb_labels`
+  - `POST /wb/tasks/with-comment` accepts nested JSON task/comment bodies
+  - `POST /wb/tasks/:id/comments` accepts JSON bodies and returns deterministic `TASK.NOT_FOUND` on missing task ids
+  - `GET /wb/tasks/:id` and `GET /wb/tasks` no longer require public callers to pass `row_schema=1`
+  - `GET /wb/tasks` accepts public filters (`status`, `priorityMin`, `priorityMax`, `label`, `limit`, `offset`) while still accepting the old benchmark `params` contract
+- Public workbench request validation now fails before DB execution for the canonical JSON/query contract:
+  - `POST /wb/tasks` rejects invalid `title`, `status`, `priority`, and `labels` with deterministic `400 VALIDATION.INVALID` envelopes
+  - `POST /wb/tasks/with-comment` rejects invalid nested `task` / `comment` payloads before transaction planning
+  - `POST /wb/tasks/:id/comments` rejects invalid `body` payloads before DB writes
+  - `GET /wb/tasks` rejects malformed `status`, `priorityMin`, `priorityMax`, `limit`, and `offset` query values before query execution
+- Operator/public verification now has a dedicated script:
+  - `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+  - that smoke now also covers deterministic negative validation cases on public create/list requests
+- Same-workload benchmark rerun status after this slice:
+  - `sec4-lasm` remains green on the canonical Postgres-backed workload
+  - benchmark runner false Rust `AddrInUse` failures were fixed by process-tree shutdown + listener-port drain
+  - Go still emits non-2xx responses on `wb-tasks-post` under this workload and should currently be treated as a baseline-service limitation, not a LASM regression
+- `wb-tasks-with-comment` hot-path correction:
+  - the real regression was the request-bridge combine path, not the one-statement SQL route
+  - restoring the one-statement route plus a flat query-array combiner recovered the short Postgres mode-compare run to:
+    - `single`: `350.73 req/s`
+    - `fixed`: `350.55 req/s`
+    - `proxy`: `264.99 req/s`
+  - `single` is now the current recommended mode for that endpoint on the short run, while `fixed` still keeps much lower p99
+- Response-side fast path after the same hot-path correction:
+  - success-envelope shaping now extracts the first string id from flat query arrays without full JSON deserialization on the fast path
+  - same-workload Postgres rerun on `wb-tasks-with-comment` after that change landed at:
+    - `sec4-lasm`: `256.64 req/s`, `p99 54.81ms`
+    - `node`: `10.58 req/s`, `p99 701.95ms`
+    - `go`: `59.03 req/s`, `p99 837.12ms`
+    - `rust`: `44.07 req/s`, `p99 947.71ms`
+  - `sec4-lasm` remains the leader on the touched real DB-backed endpoint in the current rerun
+- Follow-up cleanup exposed by the same slice:
+  - the explicit multi-step route proof now exists at:
+    - `POST /wb/tasks/with-comment-tx`
+  - the real tx-sequence/runtime bug on that path was:
+    - reused tx handles resolved from `db.tx` source were not marked retained for the rest of the indexed sequence
+    - so Postgres/sqlite finalize-on-step adapters could drop the handle after the first `execTx`
+  - that retain bug is now fixed in the sequence runtime, and `smoke-public.sh` passes on the explicit tx route
+- LASM Postgres active shared-client limits are now wired through:
+  - `sec4 run`
+  - cluster worker forwarding
+  - cluster status JSON
+  - DB smoke/records operator surfaces
+  - canonical workbench benchmark runners
+- Fixed reuse-port cluster lifecycle now uses explicit worker readiness:
+  - cluster workers receive `SEC4_RT_LASM_READY_FILE`
+  - child workers signal readiness only after listener/runtime bootstrap finishes
+  - parent bootstrap waits on that signal instead of the old alive-only grace check
+- Workbench request hot-path cleanup landed:
+  - workbench query augmentation now parses JSON bodies only for routes that actually need synthesized params
+  - `SEC4_RT_DEBUG_WORKBENCH_JSON` is now cached once per process instead of read on every request/response pass
+- public `POST /wb/tasks/with-comment` and `POST /wb/tasks/with-comment-tx` now synthesize `task_params`, `comment_params`, and combined `params` from one shared payload builder instead of traversing and serializing the same request payload multiple times per request
+- ordinary Postgres `db.exec` now mirrors the `execTx` lock-shrinking pattern:
+  - `handle_lasm_internal_db_exec_operation` builds config and validates adapter state under the mutex, runs `run_lasm_postgres_exec_thread_local(...)` after unlock, then re-locks only for record append/persistence scheduling
+  - on the canonical Postgres one-statement route (`wb-tasks-with-comment`), the focused 1-second rerun moved from roughly `160.36 req/s`, `p99 586.24ms` to `347.26 req/s`, `p99 109.82ms`
+- Benchmark harness cleanup on the same slice:
+  - `benchmark-suite/scripts/run_workbench_profile.sh` now preflights `perl` before wrk template rendering
+- Repeated LASM mode-compare is now wired into the canonical full-suite runner:
+  - `benchmark-suite/scripts/run_workbench_full_benchmark_suite.sh` accepts `--lasm-mode-compare-repeats <n>` and threads the resulting artifact into the full-suite summary and report publish path.
+  - current sequential repeated result on the explicit tx Postgres endpoint (`wb-tasks-with-comment-tx`) is:
+    - `single`: median `347.595 req/s`, median `p99 34.205ms`, median `rss 45280 KB`
+    - `fixed`: median `350.79 req/s`, median `p99 32.945ms`, median `rss 95408 KB`
+    - `proxy`: median `351.205 req/s`, median `p99 27.335ms`, median `rss 102376 KB`
+  - recommendation artifact currently selects `proxy` by median throughput on that endpoint, but the spread remains tight enough that runtime-path gains matter more than cluster-mode selection at this load.
+- Fresh alpha-closure reruns exposed two more benchmark-critical correctness issues after that note:
+  - Postgres record persistence workers were still allowed to run compaction full-sync and append batches concurrently for the same config/DSN, which produced `23505` / `55P03` / `40P01` failures under load.
+  - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh --lasm-mode auto` reused the tx-only mode-compare recommendation artifact for the full mixed workload and silently selected `cluster-proxy`, which destabilized `wb-tasks-list`.
+- Those are now corrected by:
+  - per-config Postgres persist serialization in `compiler/sec4-cli/src/lasm_db_runtime_postgres_persist.rs`
+  - workload-aware auto-mode fallback in `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh`
+- Operational consequence:
+  - `--lasm-mode auto` now falls back to `fixed` when the available recommendation artifact was generated for a different endpoint set or DB adapter than the requested benchmark run.
+- Fresh canonical publication outcome on the mixed workload:
+  - `BENCH_WORKBENCH_REQUIRE_WRK2=1 BENCH_DURATION=20s BENCH_WORKBENCH_PG_DSN=... benchmark-suite/scripts/run_workbench_benchmark_matrix.sh --impls sec4-lasm,node,go,rust --endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list --lasm-db-adapter postgres --lasm-mode single`
+  - totals: `passed=4 failed=0 skipped=0`
+  - `sec4-lasm` led all six published endpoints:
+    - `wb-tasks-post`: `491.81 req/s`, `p99 20.48ms`
+    - `wb-tasks-with-comment`: `198.00 req/s`, `p99 28.41ms`
+    - `wb-tasks-with-comment-tx`: `198.13 req/s`, `p99 28.62ms`
+    - `wb-task-comment-post`: `491.79 req/s`, `p99 16.88ms`
+    - `wb-task-get`: `2465.50 req/s`, `p99 7.38ms`
+    - `wb-tasks-list`: `1458.07 req/s`, `p99 12.76ms`
+- The canonical next step remains:
+  1. continue deeper scaling/runtime tuning from the now-clean canonical publication baseline,
+  2. use repeated mode-compare/full-suite artifacts only for post-alpha tuning, not alpha proof,
+  3. keep the mixed-workload publication default conservative unless a workload-matching recommendation artifact proves another topology is better.

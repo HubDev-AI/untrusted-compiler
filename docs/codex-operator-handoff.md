@@ -1,6 +1,6 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-03-05  
+Updated: 2026-03-07
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
 
@@ -19,7 +19,22 @@ Use it to keep speed high without losing architecture direction.
 6. Composition Contract Analyzer (`M39-S2`) is completed, and the docs+perf-sequencing lock is now lifted.
 7. `M39-S2K` is in-progress: Zed operator readiness (`scripts/check-zed-extension-operator-readiness.sh`) is part of release-operator handoff lane checks.
 
-## 3) Backlog Priority (Immediate)
+## 3) Current Execution Lock (2026-03-06)
+
+This supersedes older analyzer-first sequencing notes in this file.
+
+1. The next major deliverable is one canonical LASM app built around the existing workbench contract, with real Postgres and multi-file project structure.
+2. That app is not just a benchmark fixture. It is the canonical alpha proof app and must be the shared source for:
+   - example/tutorial flow,
+   - operator smoke/e2e flow,
+   - benchmark workload,
+   - DB/runtime cleanup discovery.
+3. Benchmarking must compare `sec4-lasm` against `node`, `go`, and `rust` under the same DB-backed workload and the same endpoint contract.
+4. After the canonical app is in place, close the remaining DB/runtime cleanup exposed by that app before starting new subsystem work.
+5. After that cleanup, prioritize scaling/runtime tuning on the same app/workload.
+6. Composition Contract Analyzer and other non-blocking analyzer work are deferred until after the workbench app, same-workload benchmarks, DB/runtime cleanup, and scaling/runtime tuning.
+
+## 4) Backlog Priority (Immediate)
 
 ### P0: Close strict no-stub alpha functionality checklist (blocking)
 
@@ -27,27 +42,71 @@ Use it to keep speed high without losing architecture direction.
 2. Remove remaining compatibility-only branches on alpha-critical paths where real deterministic behavior is required.
 3. Keep implementation-first cadence: targeted checks for touched functionality, broad runs only near merge confidence.
 
-### P1: Full LASM DB client package cleanup after P0
+### P1: Canonical workbench app on LASM + real Postgres
 
 1. Replace LASM DB compatibility-bridge handling with full intrinsic runtime client dispatch (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`, `sql.q`).
-2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
-3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
-4. Extract adapter layers into packages/modules now that runtime execution is stable.
+2. Promote the workbench contract into the first-class example/tutorial/operator app:
+   - real Postgres path,
+   - multi-file project layout,
+   - deterministic auth-gated task/comment routes,
+   - one-command smoke/e2e flow.
+3. Keep the workbench app and benchmark harness on the same endpoint/data contract so benchmark results reflect the real app.
+4. Run and publish benchmark comparisons for `sec4-lasm`, `node`, `go`, and `rust` under the same DB-backed workload.
 
 Status notes:
 - `LasmDbExecTx` tx lifecycle (commit/rollback + cleanup trigger points) is now routed through `lasm_db_client` to keep dispatch free of adapter internals.
 - `Lasm DB` runtime now routes PostgreSQL listRecords bootstrap and post-unlock record persistence through `lasm_db_client` helpers (`ensure_lasm_db_records_client_ready`, `persist_lasm_db_record_after_unlock`) so dispatch stays orchestration-focused.
 - `Lasm DB` `queryOne` now routes records-adapter lookup/materialization through `lasm_db_client` (`run_lasm_db_query_one_operation`) instead of dispatch-local records-log special handling, aligning all adapters under the same intrinsic client path.
+- `Lasm DB` Postgres `db.execTx` no longer holds the global dynamic-state mutex across client connect/exec/commit/rollback; tx handles are now marked `in_use` while borrowed so `wb-tasks-with-comment` no longer degrades into wrk2 timeout-only runs under the canonical benchmark workload.
+- Workbench benchmark failure gating now treats zero completed requests and any wrk2 socket errors as hard failures; non-2xx/3xx counts are no longer the only failure signal.
+- Workbench preflight no longer carries sec4-only legacy payload exceptions; the canonical LASM workbench endpoints now satisfy the shared success-envelope contract directly.
+- Workbench fixed-target and step-load benchmark runners now support LASM cluster mode on the real Postgres app (`--lasm-instances`, `--lasm-autoscale-max-instances`, relay tuning flags), and step-load write benchmarks now derive unique run tags per rate so scaling data is not polluted by request-ID collisions.
+- Workbench now also has a dedicated LASM mode-compare runner (`benchmark-suite/scripts/run_workbench_lasm_mode_compare.sh`) that compares `single`, `cluster-fixed`, and `cluster-proxy` on the real Postgres app and emits one recommendation artifact; proxy-cluster RSS capture is now fixed via live listener PID/process-tree sampling, so memory deltas are real instead of `null`.
+- Relay idle-backoff tuning is now folded into the runtime default instead of living only as an experiment flag: `SEC4_RT_LASM_CLUSTER_RELAY_IDLE_BACKOFF_MAX` defaults to `0`, and the canonical proxy-cluster Postgres validation currently holds `350.01 req/s` at `24.30ms` p99 on `wb-tasks-with-comment` with zero socket errors.
+- Non-retained Postgres `db.execTx` now uses a one-shot fast path on detached tx clients (`BEGIN` / execute / `COMMIT`) while retained multi-step tx handles stay on the savepoint path.
+- Shared Postgres client-pool wakeups now use `notify_one()` instead of `notify_all()` on release/connect-failure paths.
+- Dynamic-state DB record compaction no longer reverse-scans history when the final signature record drops; zero-count signatures now clear the latest-record index in `O(1)`.
+- Unlocked Postgres `db.exec` / `db.queryOne` execution is no longer owned directly by `lasm_db_runtime_dispatch.rs`; the DB-client layer now owns that lock/unlock/build-config/execute/re-lock record path, with dispatch reduced to request resolution and response shaping for those operations.
+- Postgres `db.execTx` now follows the same split: dispatch resolves tx sources and HTTP envelopes, while `lasm_db_client` owns config build, tx-client lifecycle, transactional execution, and record persistence for the unlocked Postgres path.
+- sqlite/records-log `db.execTx` now follows the same ownership rule: dispatch resolves tx sources and HTTP envelopes, while `lasm_db_client` owns locked adapter execution, commit/rollback cleanup, and record persistence for the non-Postgres path.
+- sqlite/records-log `db.exec` and `db.queryOne` now follow the same helper-driven rule: dispatch resolves request inputs and HTTP envelopes, while `lasm_db_client` owns locked adapter execution, row materialization, and record persistence on the non-Postgres path.
+- `db.tx` allocation and `execTx` binding resolution now also live behind `lasm_db_client`, so dispatch no longer owns tx-handle allocation or in-use binding state directly.
+- Focused explicit-tx step rerun on the real Postgres route improved from about `443.68 req/s` / `p99 3.76s` to about `489.63 req/s` / `p99 154.75ms` at the `500` target.
+- Current tuned same-workload fixed compare on Postgres:
+  - `sec4-lasm`
+    - `wb-tasks-with-comment`: about `198.35 req/s`, `p99 36.54ms`
+    - `wb-tasks-with-comment-tx`: about `199.08 req/s`, `p99 41.22ms`
+  - `go`
+    - `wb-tasks-with-comment`: about `120.88 req/s`
+    - `wb-tasks-with-comment-tx`: about `118.80 req/s`
+  - `rust`
+    - `wb-tasks-with-comment`: about `42.20 req/s`
+    - `wb-tasks-with-comment-tx`: about `42.57 req/s`
+- `node`
+    - later tuned reruns still showed socket instability on the same workload; treat that as competitor-lane evidence, not a sec4 blocker
+- Fresh canonical publication rerun is now complete on the full six-endpoint DB-backed workload:
+  - `BENCH_WORKBENCH_REQUIRE_WRK2=1 BENCH_DURATION=20s BENCH_WORKBENCH_PG_DSN=... benchmark-suite/scripts/run_workbench_benchmark_matrix.sh --impls sec4-lasm,node,go,rust --endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list --lasm-db-adapter postgres --lasm-mode single`
+  - totals: `passed=4 failed=0 skipped=0`
+  - `sec4-lasm` leads all six endpoints in the published report family.
+  - For this mixed-workload publication run, the chosen LASM topology is `single` mode; earlier proxy/fixed results remain route-specific tuning evidence only.
 
-### P2: Composition Contract Analyzer (`M39-S2`) after P1
+### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 
-1. Implement analyzer guarantees for promotion-ready composition contracts.
-2. Add deterministic pass/fail fixture coverage and operator docs.
+1. Close the remaining non-contract DB/runtime seams that the workbench app surfaces in real usage.
+2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
+3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
+4. Next concrete code task: rerun the canonical DB-backed benchmark baseline on the cleaner helper-driven runtime surface, then continue the next scaling/runtime tuning pass from that evidence.
 
-### P3: Performance tuning deferred until after P2
+### P3: Scaling/runtime tuning after P2
 
-1. Defer proxy/runtime feature-level performance tuning (including 1M req/s optimization campaign) until P2 is completed.
-2. Before P2 completion, only accept performance work that is required to preserve correctness/stability contracts.
+1. The first focused runtime/scaling tuning pass on the canonical Postgres workload is complete.
+2. Use the same DB-backed workbench workload as the tuning target for any later regressions or new runtime controls.
+3. Keep results comparable across `sec4-lasm`, `node`, `go`, and `rust`.
+
+### P4: Deferred analyzer/post-app work
+
+1. Resume Composition Contract Analyzer follow-up only after P3.
+2. Keep non-blocking analyzer/design work out of the critical path until the canonical app + benchmarks + DB cleanup + scaling sequence is complete.
 
 ## Release Snapshot (2026-03-05)
 
@@ -58,7 +117,34 @@ Status notes:
    - `cargo test -p sec4 --test commands promote_apply_rewrites_composition_root_and_generates_scaffold -- --exact`
    - `cargo test -p sec4 --test commands promote_dry_run_reports_blocking_preconditions_for_invalid_project -- --exact`
 
-## 4) DB Status (Explicit)
+## Final Readiness-Summary Lane Status (2026-03-07)
+
+Alpha is now ready to mark done.
+
+Final closeout state:
+
+1. `scripts/check-naming-lock.sh`: pass
+2. `scripts/check-milestone-closure.sh --fail-on-pending`: pass
+3. Final proof bundle passed and refreshed:
+   - `build/release-alpha-gate/summary.txt`
+   - `build/release-alpha-gate/checksums.txt`
+   - `build/release-alpha-gate/publish-manifest.json`
+4. Final readiness decision is recorded in:
+   - `docs/plans/2026-03-07-final-alpha-readiness-summary.md`
+5. Canonical benchmark publication family for alpha closeout is the `workbench-benchmark-*` set, not the exploratory `workbench-full-benchmark-*` outputs:
+   - `benchmark-suite/results/workbench-benchmark-report.md`
+   - `benchmark-suite/results/workbench-benchmark-report.html`
+   - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+   - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+   - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+
+Residual follow-up, not alpha blockers:
+
+- broader same-workload runtime/scaling tuning after alpha merge
+- repeated full-suite/mode-compare tuning passes on the canonical workload
+- competitor benchmark cleanup remains optional and informational
+
+## 5) DB Status (Explicit)
 
 LASM DB runtime execution paths are now implemented across adapters (`records.log`, `sqlite`, `postgres`).
 
@@ -84,7 +170,7 @@ Current runtime status:
 
 Remaining full-client work focuses on adapter extraction/package boundaries and parity hardening without changing language contracts.
 
-## 5) Mandatory Workflow (All Agents)
+## 6) Mandatory Workflow (All Agents)
 
 ### Branching and PR policy
 
@@ -112,7 +198,7 @@ gh pr merge --auto --squash --delete-branch
 
 If checks fail, fix on the same branch and push; keep auto-merge enabled.
 
-## 6) Speed Contract
+## 7) Speed Contract
 
 1. Batch related work: target one PR per meaningful chunk (roughly 5-10 connected slices), not micro-PR spam.
 2. More implementation, fewer broad test loops.
@@ -120,7 +206,7 @@ If checks fail, fix on the same branch and push; keep auto-merge enabled.
 4. Run full/broad suites only near merge confidence or when contract risk is high.
 5. Cargo commands must run sequentially (no parallel cargo in this repo).
 
-## 7) Validation Policy
+## 8) Validation Policy
 
 For each slice:
 
@@ -128,7 +214,7 @@ For each slice:
 2. Record exact commands and results in PR description.
 3. Do not expand to unrelated suites unless failure indicates cross-cut impact.
 
-## 8) Documentation Contract
+## 9) Documentation Contract
 
 For each merged implementation chunk:
 
@@ -137,7 +223,7 @@ For each merged implementation chunk:
 3. Update `docs/book/README.md` index.
 4. Log mistakes/corrections in `.claude/napkin.md`.
 
-## 9) Recommended Lane Split (Low-Conflict)
+## 10) Recommended Lane Split (Low-Conflict)
 
 ### Lane A: LASM runtime execution
 
@@ -159,15 +245,17 @@ For each merged implementation chunk:
 ### Lane C: Examples/docs
 
 - Files:
+  - `benchmark-suite/services/sec4-lasm-workbench/*`
+  - `benchmark-suite/workbench/*`
   - `examples/lasm-alpha-full/*`
   - `docs/05-sec4-master-roadmap.md`
   - `docs/book/*`
   - `docs/book/README.md`
 - Focus:
-  - executable operator-facing LASM+DB demonstration
+  - canonical workbench app/tutorial/operator story
   - roadmap/book sync
 
-## 10) Copy/Paste Prompt for Another Agent
+## 11) Copy/Paste Prompt for Another Agent
 
 Use this exact prompt in another editor:
 
@@ -183,11 +271,44 @@ Execution mode:
 - Implementation-first.
 - Follow strict sequence:
   1) close strict no-stub alpha functionality checklist,
-  2) implement full LASM DB client path,
-  3) implement Composition Contract Analyzer (`M39-S2`),
-  4) only then resume performance tuning feature work.
+  2) build the canonical LASM workbench app on real Postgres,
+  3) benchmark `sec4-lasm` vs `node` vs `go` vs `rust` on the same DB-backed workload,
+  4) close DB/runtime cleanup exposed by that app,
+  5) then prioritize scaling/runtime tuning on the same workload.
 - Keep Cargo runs sequential.
 - Run only targeted tests for touched behavior.
+- Latest completed slice:
+  - canonical LASM workbench public API is now usable directly on Postgres:
+    - JSON `POST /wb/tasks`
+    - JSON `POST /wb/tasks/with-comment`
+    - JSON `POST /wb/tasks/:id/comments`
+    - `GET /wb/tasks/:id` and `GET /wb/tasks` without public `row_schema`
+    - task labels persisted + label filter on list
+    - missing-task comment writes return `TASK.NOT_FOUND`
+  - canonical LASM workbench public request validation now fails before DB execution:
+    - invalid task title/status/priority/labels -> deterministic `400 VALIDATION.INVALID`
+    - invalid nested transaction payloads -> deterministic `400 VALIDATION.INVALID`
+    - invalid list query filters (`status`, `priorityMin`, `priorityMax`, `limit`, `offset`) -> deterministic `400 VALIDATION.INVALID`
+  - public operator smoke exists at `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+    - includes negative validation checks for invalid create/list requests
+  - benchmark runner now kills service trees and drains listener ports between impls, removing the false Rust `AddrInUse` compare failure path.
+  - fixed reuse-port LASM cluster workers no longer use alive-only bootstrap:
+    - parent now passes `SEC4_RT_LASM_READY_FILE`
+    - child signals readiness only after listener/runtime bootstrap completes
+    - fixed-cluster worker bootstrap now waits on explicit readiness
+  - workbench request hot-path cleanup landed:
+    - query augmentation now parses JSON bodies only on routes that actually need synthesized params
+    - `SEC4_RT_DEBUG_WORKBENCH_JSON` is cached once per process instead of read on every request/response pass
+  - benchmark runner preflights `perl` before wrk template rendering
+  - alpha-closure reruns exposed and closed two more real benchmark blockers:
+    - Postgres persist workers now serialize by config key so compaction full-sync cannot race append batches for the same DSN/config
+    - benchmark `--lasm-mode auto` now validates workload compatibility and falls back to `fixed` when the recommendation artifact came from a different endpoint set / DB adapter
+- Immediate next implementation target:
+  - finish the fresh same-workload DB-backed full-suite rerun on the corrected auto-mode path
+  - publish the final benchmark/report artifact set from that rerun
+  - run the final alpha proof bundle
+  - then write the final readiness summary / merge batch
+  - do not spend time tuning C runtime paths; LASM is the runtime priority
 
 Git/PR contract:
 - branch from `origin/dev` using `codex/<topic>` name.
@@ -200,7 +321,7 @@ For each merged chunk:
 - keep `.claude/napkin.md` updated with corrections.
 ---
 
-## 11) Quick Start Commands
+## 12) Quick Start Commands
 
 ```bash
 cd $REPO_ROOT
@@ -214,7 +335,7 @@ git log --oneline -n 12
 git status --short
 ```
 
-## 12) Definition of Done (Per PR)
+## 13) Definition of Done (Per PR)
 
 1. Real behavior implemented (no new placeholder path).
 2. Focused tests green for changed behavior.

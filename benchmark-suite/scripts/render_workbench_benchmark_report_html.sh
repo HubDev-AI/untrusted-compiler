@@ -22,17 +22,30 @@ runs_json="$(cat "$runs_path")"
 compare_json="$(cat "$compare_path")"
 analysis_json="$(cat "$analysis_path")"
 generated_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 
 data_json="$(jq -nc \
   --arg generatedUtc "$generated_utc" \
+  --arg repoRoot "$repo_root" \
   --argjson runs "$runs_json" \
   --argjson compare "$compare_json" \
   --argjson analysis "$analysis_json" \
-  '{
+  '
+  def sanitize:
+    if type == "string" then
+      if startswith($repoRoot + "/") then .[($repoRoot | length + 1):] else . end
+    elif type == "object" then
+      with_entries(.value |= sanitize)
+    elif type == "array" then
+      map(sanitize)
+    else
+      .
+    end;
+  {
     generatedUtc: $generatedUtc,
-    runs: $runs,
-    compare: $compare,
-    analysis: $analysis
+    runs: ($runs | sanitize),
+    compare: ($compare | sanitize),
+    analysis: ($analysis | sanitize)
   }')"
 
 mkdir -p "$(dirname "$out_path")"

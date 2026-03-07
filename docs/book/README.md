@@ -2,6 +2,31 @@
 
 This folder is the long-form, chapter-oriented documentation track for Untrusted<T>.
 
+If you want a guided, operator-friendly entrypoint instead of the full chapter list, start with:
+
+- `docs/tutorial-portal/README.md`
+
+## Alpha Closeout Status (2026-03-07)
+
+The alpha closeout lane is complete.
+
+Canonical evidence set:
+
+1. Final readiness decision:
+   - `docs/plans/2026-03-07-final-alpha-readiness-summary.md`
+2. Final proof-bundle artifacts:
+   - `build/release-alpha-gate/summary.txt`
+   - `build/release-alpha-gate/checksums.txt`
+   - `build/release-alpha-gate/publish-manifest.json`
+3. Canonical benchmark publication family:
+   - `benchmark-suite/results/workbench-benchmark-report.md`
+   - `benchmark-suite/results/workbench-benchmark-report.html`
+   - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+   - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+   - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+
+`workbench-full-benchmark-*` outputs are tuning artifacts and are not the canonical alpha publication family.
+
 ## Chapter order
 - `00-preface.md`
 - `10-project-setup-and-architecture.md`
@@ -1519,5 +1544,32 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1548-m39-lasm-pattern-route-indexed-lookup.md`
 - `1549-m39-postgres-dsn-alias-same-value-hardening.md`
 - `1550-m39-workbench-wrk-fallback-timeout-bounding.md`
+- `1551-m39-c-bin-canonical-runtime-source-only.md`
+- `1552-beginner-zed-plugin-postgres-lasm-tutorial.md`
+- `1553-m39-lasm-postgres-exectx-unlock-and-benchmark-failure-gating.md`
+- `1554-m39-lasm-postgres-tx-cache-reuse.md`
+- `1555-m39-workbench-lasm-cluster-benchmark-path.md`
+- `1556-m39-workbench-lasm-mode-compare-runner.md`
+- `1557-m39-lasm-postgres-bounded-client-pool-and-proxy-rss-fix.md`
+- `1558-m39-lasm-postgres-active-pool-operator-surfaces-and-workbench-tuning.md`
+- `1559-m39-lasm-proxy-relay-idle-backoff-default-zero.md`
+- `1560-m39-workbench-canonical-public-api-and-benchmark-cleanup.md`
+- `1561-m39-workbench-public-request-validation.md`
+- `1562-m39-workbench-with-comment-flat-query-combine-hotpath.md`
+- `1563-m39-workbench-response-id-fastpath-and-cross-runtime-rerun.md`
+- `1564-m39-workbench-explicit-tx-sequence-retain-fix.md`
+- `1565-m39-lasm-reuse-port-readiness-and-workbench-request-hotpath-cleanup.md`
+- `1566-m39-workbench-full-suite-repeated-lasm-mode-compare.md`
+- `1567-m39-workbench-shared-with-comment-payload-builder.md`
+- `1568-m39-postgres-exec-unlocked-on-workbench-one-statement-route.md`
+- `1569-m39-lasm-postgres-one-shot-tx-fastpath-and-o1-record-compaction.md`
+- `1570-m39-postgres-unlocked-dispatch-seam-extraction.md`
+- `1571-m39-postgres-exectx-dispatch-seam-extraction.md`
+- `1572-m39-remaining-exectx-locked-dispatch-seam-extraction.md`
+- `1573-m39-remaining-locked-exec-queryone-dispatch-seam-extraction.md`
+- `1574-m39-tx-control-seams-extracted-from-dispatch.md`
+- `1575-m39-postgres-persist-serialization-and-workload-aware-auto-mode.md`
+- `1576-m39-final-alpha-closeout-proof-bundle-and-readiness.md`
+- `1577-m39-workbench-cross-runtime-rerun-and-list-slice-closeout.md`
 
 As milestones progress, chapters will be added and linked from this index.

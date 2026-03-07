@@ -29,8 +29,12 @@ pub(crate) struct LasmSmokeDbSummary {
     pub(crate) sqlite_synchronous: String,
     pub(crate) postgres_shared_client_pool_keys: usize,
     pub(crate) postgres_shared_client_pool_idle_total: usize,
+    pub(crate) postgres_shared_client_pool_active_keys: usize,
+    pub(crate) postgres_shared_client_pool_active_total: usize,
     pub(crate) postgres_shared_client_max_idle_per_key: usize,
     pub(crate) postgres_shared_client_max_total_idle: usize,
+    pub(crate) postgres_shared_client_max_active_per_key: usize,
+    pub(crate) postgres_shared_client_max_active_total: usize,
     pub(crate) postgres_persist_workers: usize,
     pub(crate) postgres_persist_queue_capacity: usize,
     pub(crate) postgres_persist_batch_max: usize,
@@ -72,10 +76,18 @@ pub(crate) fn build_lasm_smoke_db_summary(state: &LasmDynamicResponseState) -> L
             lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_key_count(),
         postgres_shared_client_pool_idle_total:
             lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_idle_total(),
+        postgres_shared_client_pool_active_keys:
+            lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_active_key_count(),
+        postgres_shared_client_pool_active_total:
+            lasm_db_runtime_postgres::lasm_postgres_shared_client_pool_active_total(),
         postgres_shared_client_max_idle_per_key:
             lasm_db_runtime_postgres::lasm_postgres_shared_client_max_idle_per_key(),
         postgres_shared_client_max_total_idle:
             lasm_db_runtime_postgres::lasm_postgres_shared_client_max_total_idle(),
+        postgres_shared_client_max_active_per_key:
+            lasm_db_runtime_postgres::lasm_postgres_shared_client_max_active_per_key(),
+        postgres_shared_client_max_active_total:
+            lasm_db_runtime_postgres::lasm_postgres_shared_client_max_active_total(),
         postgres_persist_workers:
             lasm_db_runtime_postgres_persist::lasm_postgres_persist_workers_configured(),
         postgres_persist_queue_capacity:
@@ -124,8 +136,12 @@ impl LasmSmokeDbSummary {
                 "sharedClient": {
                     "poolKeys": self.postgres_shared_client_pool_keys,
                     "poolIdleTotal": self.postgres_shared_client_pool_idle_total,
+                    "poolActiveKeys": self.postgres_shared_client_pool_active_keys,
+                    "poolActiveTotal": self.postgres_shared_client_pool_active_total,
                     "maxIdlePerKey": self.postgres_shared_client_max_idle_per_key,
-                    "maxTotalIdle": self.postgres_shared_client_max_total_idle
+                    "maxTotalIdle": self.postgres_shared_client_max_total_idle,
+                    "maxActivePerKey": self.postgres_shared_client_max_active_per_key,
+                    "maxActiveTotal": self.postgres_shared_client_max_active_total
                 },
                 "persist": {
                     "workers": self.postgres_persist_workers,

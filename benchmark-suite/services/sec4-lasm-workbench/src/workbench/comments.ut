@@ -1,0 +1,15 @@
+fn wbAddComment() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+
+  db.exec(
+    db,
+    sql.q(
+      "insert into wb_comments (id, task_id, body, created_at_ms) values ($1, $2, $3, $4)",
+      params
+    )
+  );
+  res.json(201, "DbExecResponse", 0);
+  0
+}

@@ -1,0 +1,100 @@
+fn wbCreateTask() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+  let labelParams = validate.nonEmpty(req.query("label_params"));
+
+  db.exec(
+    db,
+    sql.q(
+      "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
+      params
+    )
+  );
+  db.exec(
+    db,
+    sql.q(
+      "insert into wb_labels (task_id, name) select $1, value from jsonb_array_elements_text(cast(cast($2 as text) as jsonb)) as value on conflict (task_id, name) do nothing",
+      labelParams
+    )
+  );
+  res.json(201, "DbExecResponse", 0);
+  0
+}
+
+fn wbCreateTaskWithComment() effects { net, db.write } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+
+  db.exec(
+    db,
+    sql.q(
+      "with inserted_task as (insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)) insert into wb_comments (id, task_id, body, created_at_ms) values ($7, $1, $8, $9)",
+      params
+    )
+  );
+
+  res.json(201, "DbExecResponse", 0);
+  0
+}
+
+fn wbCreateTaskWithCommentTx() effects { net, db.write, db.tx } -> Int {
+  auth.require(ctx.current());
+  let db = DbCap();
+  let taskParams = validate.nonEmpty(req.query("task_params"));
+  let commentParams = validate.nonEmpty(req.query("comment_params"));
+
+  let tx = db.tx(db);
+  db.execTx(
+    tx,
+    sql.q(
+      "insert into wb_tasks (id, title, description, status, priority, created_at_ms) values ($1, $2, $3, $4, cast($5 as bigint), $6)",
+      taskParams
+    )
+  );
+  db.execTx(
+    tx,
+    sql.q(
+      "insert into wb_comments (id, task_id, body, created_at_ms) values ($1, $2, $3, $4)",
+      commentParams
+    )
+  );
+
+  res.json(201, "DbExecResponse", 0);
+  0
+}
+
+fn wbGetTask() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let id = validate.nonEmpty(req.pathParam("id"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.queryOne(
+    db,
+    sql.q(
+      "select id, title, description, status, priority, created_at_ms, (select count(*) from wb_comments c where c.task_id = wb_tasks.id) as comments_count, coalesce((select json_agg(name order by name) from wb_labels l where l.task_id = wb_tasks.id), '[]'::json) as labels from wb_tasks where id = $1 limit 1",
+      id
+    ),
+    rowSchema
+  );
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn wbListTasksWindow() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+
+  db.queryOne(
+    db,
+    sql.q(
+      "with filtered as (select id, title, description, status, priority, created_at_ms from wb_tasks where ($1 = '' or status = $1) and (nullif($2, '') is null or priority >= cast($2 as bigint)) and (nullif($3, '') is null or priority <= cast($3 as bigint)) and (nullif($4, '') is null or exists (select 1 from wb_labels l where l.task_id = wb_tasks.id and l.name = $4))), meta as (select count(*) as count, case when cast($5 as bigint) < 1 then 1 when cast($5 as bigint) > 100 then 100 else cast($5 as bigint) end as limit_value, case when cast($6 as bigint) < 0 then 0 else cast($6 as bigint) end as offset_value from filtered), page as (select id, title, description, status, priority, created_at_ms from filtered order by created_at_ms desc, id desc limit (select limit_value from meta) offset (select offset_value from meta)) select meta.count, meta.limit_value, meta.offset_value, coalesce(json_agg(json_build_object('id', page.id, 'title', page.title, 'description', page.description, 'status', page.status, 'priority', page.priority, 'created_at_ms', page.created_at_ms) order by page.created_at_ms desc, page.id desc) filter (where page.id is not null), '[]'::json) as items from meta left join page on true group by meta.count, meta.limit_value, meta.offset_value",
+      params
+    ),
+    rowSchema
+  );
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}

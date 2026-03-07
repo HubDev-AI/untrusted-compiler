@@ -1,0 +1,6 @@
+fn wbRecords() effects { net } -> Int {
+  // Deterministic operation history for benchmark introspection.
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("listRecords"));
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}

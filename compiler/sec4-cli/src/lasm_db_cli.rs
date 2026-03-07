@@ -158,6 +158,15 @@ fn run_db_postgres_persist_queue_full_mode_arg_value(
     }
 }
 
+fn run_db_postgres_persist_queue_full_mode_env_value(
+    mode: RunDbPostgresPersistQueueFullMode,
+) -> &'static str {
+    match mode {
+        RunDbPostgresPersistQueueFullMode::Block => "block",
+        RunDbPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
+    }
+}
+
 pub(crate) fn push_optional_db_postgres_persist_queue_full_mode_run_arg(
     cmd: &mut Command,
     value: Option<RunDbPostgresPersistQueueFullMode>,
@@ -165,6 +174,81 @@ pub(crate) fn push_optional_db_postgres_persist_queue_full_mode_run_arg(
     if let Some(value) = value {
         cmd.arg("--db-postgres-persist-queue-full-mode")
             .arg(run_db_postgres_persist_queue_full_mode_arg_value(value));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn apply_lasm_postgres_runtime_env_overrides(
+    db_postgres_shared_client_max_idle_per_key: Option<u64>,
+    db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
+    db_postgres_persist_workers: Option<u64>,
+    db_postgres_persist_queue_capacity: Option<u64>,
+    db_postgres_persist_batch_max: Option<u64>,
+    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
+    db_postgres_statement_cache_max: Option<u64>,
+    db_postgres_placeholder_cache_max: Option<u64>,
+) {
+    if let Some(value) = db_postgres_shared_client_max_idle_per_key {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_shared_client_max_total_idle {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_shared_client_max_active_per_key {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_shared_client_max_active_total {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_workers {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_WORKERS",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_queue_capacity {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_CAPACITY",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_persist_batch_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_statement_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(value) = db_postgres_placeholder_cache_max {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
+            value.to_string(),
+        );
+    }
+    if let Some(mode) = db_postgres_persist_queue_full_mode {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE",
+            run_db_postgres_persist_queue_full_mode_env_value(mode),
+        );
     }
 }
 
@@ -199,6 +283,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -289,6 +375,18 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if backend != RunBackend::Lasm && db_postgres_shared_client_max_total_idle.is_some() {
         return Err(
             "--db-postgres-shared-client-max-total-idle is only supported with --backend lasm"
+                .to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_shared_client_max_active_per_key.is_some() {
+        return Err(
+            "--db-postgres-shared-client-max-active-per-key is only supported with --backend lasm"
+                .to_string(),
+        );
+    }
+    if backend != RunBackend::Lasm && db_postgres_shared_client_max_active_total.is_some() {
+        return Err(
+            "--db-postgres-shared-client-max-active-total is only supported with --backend lasm"
                 .to_string(),
         );
     }
@@ -385,6 +483,12 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
     if db_postgres_shared_client_max_total_idle == Some(0) {
         return Err("--db-postgres-shared-client-max-total-idle must be >= 1".to_string());
     }
+    if db_postgres_shared_client_max_active_per_key == Some(0) {
+        return Err("--db-postgres-shared-client-max-active-per-key must be >= 1".to_string());
+    }
+    if db_postgres_shared_client_max_active_total == Some(0) {
+        return Err("--db-postgres-shared-client-max-active-total must be >= 1".to_string());
+    }
     if db_postgres_persist_workers == Some(0) {
         return Err("--db-postgres-persist-workers must be >= 1".to_string());
     }
@@ -458,6 +562,22 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
             "--db-postgres-shared-client-max-total-idle exceeds platform limits".to_string(),
         );
     }
+    if db_postgres_shared_client_max_active_per_key
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err(
+            "--db-postgres-shared-client-max-active-per-key exceeds platform limits".to_string(),
+        );
+    }
+    if db_postgres_shared_client_max_active_total
+        .map(|value| usize::try_from(value).is_err())
+        .unwrap_or(false)
+    {
+        return Err(
+            "--db-postgres-shared-client-max-active-total exceeds platform limits".to_string(),
+        );
+    }
     if db_postgres_persist_workers
         .map(|value| usize::try_from(value).is_err())
         .unwrap_or(false)
@@ -514,6 +634,8 @@ pub(crate) fn validate_and_resolve_run_db_cli_options(
         || db_postgres_connect_timeout_ms.is_some()
         || db_postgres_shared_client_max_idle_per_key.is_some()
         || db_postgres_shared_client_max_total_idle.is_some()
+        || db_postgres_shared_client_max_active_per_key.is_some()
+        || db_postgres_shared_client_max_active_total.is_some()
         || db_postgres_persist_workers.is_some()
         || db_postgres_persist_queue_capacity.is_some()
         || db_postgres_persist_batch_max.is_some()

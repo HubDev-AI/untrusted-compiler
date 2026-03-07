@@ -168,7 +168,9 @@ fn dispatch_route(
         ));
     }
 
-    if *method == Method::Post && path == "/wb/tasks/with-comment" {
+    if *method == Method::Post
+        && (path == "/wb/tasks/with-comment" || path == "/wb/tasks/with-comment-tx")
+    {
         require_auth(request, config)?;
         let data = create_task_with_comment(config, query)?;
         return Ok(RouteResponse::json(

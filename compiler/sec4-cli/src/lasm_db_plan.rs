@@ -900,6 +900,65 @@ fn is_lasm_headers_value_call(callee: &sec4_core::ast::Expr) -> bool {
                 && matches!(
                     object.kind,
                     sec4_core::ast::ExprKind::Identifier(ref namespace) if namespace == "headers"
-                )
+            )
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_lasm_db_operations, LasmDbOperationPlan, LasmDbTxPlan};
+    use sec4_core::{ast::ItemKind, parse_source};
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    fn parse_functions(source: &str) -> HashMap<String, sec4_core::ast::FunctionDecl> {
+        let program =
+            parse_source(Path::new("lasm-db-plan-test.ut"), source).expect("source should parse");
+        program
+            .items
+            .into_iter()
+            .filter_map(|item| match item.kind {
+                ItemKind::Function(function) => Some((function.name.clone(), function)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn repeated_exec_tx_from_same_tx_binding_reuses_db_source_plan() {
+        let functions = parse_functions(
+            r#"
+fn handler() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let tx = db.tx(db);
+  db.execTx(tx, sql.q("SELECT 1", "[]"));
+  db.execTx(tx, sql.q("SELECT 2", "[]"));
+  res.text(200, "ok");
+  0
+}
+"#,
+        );
+        let function_refs = functions
+            .iter()
+            .map(|(name, function)| (name.as_str(), function))
+            .collect::<HashMap<_, _>>();
+
+        let operations = extract_lasm_db_operations(&function_refs, "handler");
+        assert_eq!(operations.len(), 3, "expected tx + two execTx operations");
+
+        match &operations[0] {
+            LasmDbOperationPlan::Tx { db } => assert_eq!(db, "1"),
+            other => panic!("expected first op to be tx, got {other:?}"),
+        }
+
+        for operation in &operations[1..] {
+            match operation {
+                LasmDbOperationPlan::ExecTx {
+                    tx: LasmDbTxPlan::FromDb { db },
+                    ..
+                } => assert_eq!(db, "1"),
+                other => panic!("expected execTx to reuse db source plan, got {other:?}"),
+            }
+        }
+    }
 }

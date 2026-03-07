@@ -93,6 +93,31 @@ Behavior:
 2. On any failure, rollback both inserts.
 3. Return `201` with `{ taskId, commentId }`.
 
+### 2b) `POST /wb/tasks/with-comment-tx`
+
+Auth required: yes  
+Body:
+
+```json
+{
+  "task": {
+    "title": "string",
+    "description": "string",
+    "status": "open",
+    "priority": 3
+  },
+  "comment": {
+    "body": "string"
+  }
+}
+```
+
+Behavior:
+
+1. Same external contract as `POST /wb/tasks/with-comment`.
+2. Implemented as an explicit multi-step transaction path.
+3. Return `201` with `{ taskId, commentId }`.
+
 ### 3) `POST /wb/tasks/:id/comments`
 
 Auth required: yes  
@@ -147,10 +172,13 @@ For deterministic cross-backend parity in this alpha slice, implementations must
 2. `POST /wb/tasks/with-comment`:
    - `task_params=[id,title,description,status,priority,created_at_ms]`
    - `comment_params=[id,task_id,body,created_at_ms]`
-3. `POST /wb/tasks/:id/comments`:
+3. `POST /wb/tasks/with-comment-tx`:
+   - `task_params=[id,title,description,status,priority,created_at_ms]`
+   - `comment_params=[id,task_id,body,created_at_ms]`
+4. `POST /wb/tasks/:id/comments`:
    - `params=[id,task_id,body,created_at_ms]`
    - `task_id` from params must match route task id.
-4. `GET /wb/tasks`:
+5. `GET /wb/tasks`:
    - `params=[status,limit,offset]`
 
 These alpha wire-format keys are benchmark harness contracts, not language semantics. They can evolve once a shared benchmark request-generator profile is introduced.

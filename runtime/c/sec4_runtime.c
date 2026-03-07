@@ -16,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
+#include <signal.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -374,6 +375,7 @@ static bool sec4_rt_log_json_for_handle(
     char *buffer,
     size_t buffer_size
 );
+static void sec4_rt_ensure_sigpipe_ignored(void);
 static sec4_rt_log_event_state *sec4_rt_log_event_state_for_handle(int64_t handle);
 static int64_t sec4_rt_log_register_event(const char *event_name);
 static int64_t sec4_rt_log_register_value(const char *json_value, uint64_t salt);
@@ -6608,6 +6610,8 @@ static const char *sec4_rt_status_text(int64_t status) {
 }
 
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size) {
+  sec4_rt_ensure_sigpipe_ignored();
+
   size_t written = 0;
   while (written < size) {
     ssize_t rc = send(socket_fd, buffer + written, size - written, 0);
@@ -6617,6 +6621,17 @@ static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size) {
     written += (size_t) rc;
   }
   return 0;
+}
+
+static void sec4_rt_ensure_sigpipe_ignored(void) {
+  static bool configured = false;
+  if (configured) {
+    return;
+  }
+#ifdef SIGPIPE
+  (void) signal(SIGPIPE, SIG_IGN);
+#endif
+  configured = true;
 }
 
 static int sec4_rt_send_response_with_extra_headers(
