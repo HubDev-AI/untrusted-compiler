@@ -145,9 +145,11 @@ case "$endpoint" in
       --argjson priority 3 \
       --argjson created 1700000000001 \
       '[ $id, $title, $description, $status, $priority, $created ]')"
+    label_params="$(jq -nc --arg id "$probe_task_id" '[ $id, "[]" ]')"
     params_uri="$(printf '%s' "$params" | jq -sRr @uri)"
+    label_params_uri="$(printf '%s' "$label_params" | jq -sRr @uri)"
     method="POST"
-    path="/wb/tasks?params=${params_uri}"
+    path="/wb/tasks?params=${params_uri}&label_params=${label_params_uri}"
     expected_statuses_json='[200,201]'
     request_body='{}'
     curl_headers=(-H "$auth_header" -H 'Content-Type: application/json')

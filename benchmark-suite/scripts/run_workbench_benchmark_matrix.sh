@@ -6,7 +6,9 @@ usage() {
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
+          [--lasm-db-records-persist-enabled 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
+          [--lasm-endpoint-modes default=fixed,wb-tasks-list=proxy]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
           [--lasm-db-postgres-shared-client-max-active-total <n>]
           [--lasm-instances <n>] [--lasm-autoscale-max-instances <n>]
@@ -29,12 +31,13 @@ matrix_path=""
 impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
-bench_port_base="$bench_port"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_db_records_persist_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_PERSIST_ENABLED:-0}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
+lasm_endpoint_modes="${BENCH_WORKBENCH_LASM_ENDPOINT_MODES:-}"
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
 lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
 lasm_instances="${BENCH_WORKBENCH_LASM_INSTANCES:-1}"
@@ -143,6 +146,18 @@ while [ "$#" -gt 0 ]; do
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
       shift
       ;;
+    --lasm-db-records-persist-enabled)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_records_persist_enabled="$2"
+      shift 2
+      ;;
+    --lasm-db-records-persist-enabled=*)
+      lasm_db_records_persist_enabled="${1#--lasm-db-records-persist-enabled=}"
+      shift
+      ;;
     --lasm-mode)
       if [ "$#" -lt 2 ]; then
         usage
@@ -165,6 +180,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-mode-compare-repeats-file=*)
       lasm_mode_compare_repeats_file="${1#--lasm-mode-compare-repeats-file=}"
+      shift
+      ;;
+    --lasm-endpoint-modes)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_endpoint_modes="$2"
+      shift 2
+      ;;
+    --lasm-endpoint-modes=*)
+      lasm_endpoint_modes="${1#--lasm-endpoint-modes=}"
       shift
       ;;
     --lasm-db-postgres-shared-client-max-active-per-key)
@@ -371,6 +398,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+bench_port_base="$bench_port"
+
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
 
@@ -560,59 +589,139 @@ if [ -z "$lasm_autoscale_max_instances" ]; then
   lasm_autoscale_max_instances="$lasm_instances"
 fi
 
-lasm_cluster_mode="single"
-if [ "$lasm_instances" != "1" ]; then
-  if [ "$lasm_autoscale_max_instances" = "$lasm_instances" ]; then
-    lasm_cluster_mode="cluster-fixed"
-  else
-    lasm_cluster_mode="cluster-proxy"
-  fi
-fi
-
-if [ "$lasm_cluster_mode" = "single" ] && [ "$lasm_autoscale_max_instances" != "1" ]; then
+if [ "$lasm_instances" = "1" ] && [ "$lasm_autoscale_max_instances" != "1" ]; then
   echo "LASM workbench benchmark cluster flags invalid: --lasm-autoscale-max-instances requires --lasm-instances > 1" >&2
   exit 2
 fi
 
-if [ "$lasm_cluster_mode" != "cluster-proxy" ] && {
-  [ -n "$lasm_cluster_relay_workers" ] ||
-  [ -n "$lasm_cluster_relay_queue" ] ||
-  [ -n "$lasm_cluster_accept_workers" ] ||
-  [ -n "$lasm_cluster_relay_accept_batch_max" ] ||
-  [ -n "$lasm_cluster_relay_pump_batch_max" ];
-}; then
-  echo "LASM workbench benchmark relay tuning flags require proxy cluster mode (--lasm-instances > 1 with --lasm-autoscale-max-instances > --lasm-instances)" >&2
-  exit 2
-fi
+trim_bench_value() {
+  printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
 
-lasm_cluster_run_args=()
-if [ "$lasm_cluster_mode" != "single" ]; then
-  lasm_cluster_run_args+=(--instances "$lasm_instances")
-  lasm_cluster_run_args+=(--autoscale-max-instances "$lasm_autoscale_max_instances")
-  lasm_cluster_run_args+=(--autoscale-target-connections "$lasm_autoscale_target_connections")
-  lasm_cluster_run_args+=(--autoscale-check-ms "$lasm_autoscale_check_ms")
-  if [ -n "$lasm_cluster_relay_workers" ]; then
-    lasm_cluster_run_args+=(--cluster-relay-workers "$lasm_cluster_relay_workers")
+resolve_endpoint_lasm_mode() {
+  local endpoint="$1"
+  local pair=""
+  local key=""
+  local value=""
+  local default_mode=""
+
+  if [ -z "$lasm_endpoint_modes" ]; then
+    printf '%s\n' "$lasm_mode"
+    return 0
   fi
-  if [ -n "$lasm_cluster_relay_queue" ]; then
-    lasm_cluster_run_args+=(--cluster-relay-queue "$lasm_cluster_relay_queue")
+
+  IFS=',' read -r -a endpoint_mode_pairs <<<"$lasm_endpoint_modes"
+  for pair in "${endpoint_mode_pairs[@]}"; do
+    pair="$(trim_bench_value "$pair")"
+    [ -z "$pair" ] && continue
+    key="$(trim_bench_value "${pair%%=*}")"
+    value="$(trim_bench_value "${pair#*=}")"
+    if [ "$key" = "$endpoint" ]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+    if [ "$key" = "default" ]; then
+      default_mode="$value"
+    fi
+  done
+
+  if [ -n "$default_mode" ]; then
+    printf '%s\n' "$default_mode"
+  else
+    printf '%s\n' "$lasm_mode"
   fi
-  if [ -n "$lasm_cluster_accept_workers" ]; then
-    lasm_cluster_run_args+=(--cluster-accept-workers "$lasm_cluster_accept_workers")
+}
+
+current_lasm_mode="$lasm_mode"
+current_lasm_cluster_mode="single"
+current_lasm_instances="$lasm_instances"
+current_lasm_autoscale_max_instances="$lasm_autoscale_max_instances"
+current_lasm_cluster_run_args=()
+
+configure_current_lasm_mode() {
+  local requested_mode="$1"
+  current_lasm_mode="$requested_mode"
+  current_lasm_instances="$lasm_instances"
+  current_lasm_autoscale_max_instances="$lasm_autoscale_max_instances"
+  current_lasm_cluster_mode="single"
+  current_lasm_cluster_run_args=()
+
+  case "$current_lasm_mode" in
+    single)
+      current_lasm_instances="1"
+      current_lasm_autoscale_max_instances="1"
+      current_lasm_cluster_mode="single"
+      ;;
+    fixed)
+      if [ "$current_lasm_instances" -lt 2 ]; then
+        current_lasm_instances="2"
+      fi
+      current_lasm_autoscale_max_instances="$current_lasm_instances"
+      current_lasm_cluster_mode="cluster-fixed"
+      ;;
+    proxy)
+      if [ "$current_lasm_instances" -lt 2 ]; then
+        current_lasm_instances="2"
+      fi
+      if [ -z "$current_lasm_autoscale_max_instances" ] || [ "$current_lasm_autoscale_max_instances" -le "$current_lasm_instances" ]; then
+        current_lasm_autoscale_max_instances="$((current_lasm_instances + 2))"
+      fi
+      current_lasm_cluster_mode="cluster-proxy"
+      ;;
+    "")
+      if [ "$current_lasm_instances" != "1" ]; then
+        if [ "$current_lasm_autoscale_max_instances" = "$current_lasm_instances" ]; then
+          current_lasm_mode="fixed"
+          current_lasm_cluster_mode="cluster-fixed"
+        else
+          current_lasm_mode="proxy"
+          current_lasm_cluster_mode="cluster-proxy"
+        fi
+      else
+        current_lasm_mode="single"
+        current_lasm_cluster_mode="single"
+      fi
+      ;;
+    *)
+      echo "unsupported LASM mode: $current_lasm_mode" >&2
+      exit 2
+      ;;
+  esac
+
+  if [ "$current_lasm_cluster_mode" != "single" ]; then
+    current_lasm_cluster_run_args+=(--instances "$current_lasm_instances")
+    current_lasm_cluster_run_args+=(--autoscale-max-instances "$current_lasm_autoscale_max_instances")
+    current_lasm_cluster_run_args+=(--autoscale-target-connections "$lasm_autoscale_target_connections")
+    current_lasm_cluster_run_args+=(--autoscale-check-ms "$lasm_autoscale_check_ms")
   fi
-  if [ -n "$lasm_cluster_relay_accept_batch_max" ]; then
-    lasm_cluster_run_args+=(--cluster-relay-accept-batch-max "$lasm_cluster_relay_accept_batch_max")
+
+  if [ "$current_lasm_cluster_mode" = "cluster-proxy" ]; then
+    if [ -n "$lasm_cluster_relay_workers" ]; then
+      current_lasm_cluster_run_args+=(--cluster-relay-workers "$lasm_cluster_relay_workers")
+    fi
+    if [ -n "$lasm_cluster_relay_queue" ]; then
+      current_lasm_cluster_run_args+=(--cluster-relay-queue "$lasm_cluster_relay_queue")
+    fi
+    if [ -n "$lasm_cluster_accept_workers" ]; then
+      current_lasm_cluster_run_args+=(--cluster-accept-workers "$lasm_cluster_accept_workers")
+    fi
+    if [ -n "$lasm_cluster_relay_accept_batch_max" ]; then
+      current_lasm_cluster_run_args+=(--cluster-relay-accept-batch-max "$lasm_cluster_relay_accept_batch_max")
+    fi
+    if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then
+      current_lasm_cluster_run_args+=(--cluster-relay-pump-batch-max "$lasm_cluster_relay_pump_batch_max")
+    fi
   fi
-  if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then
-    lasm_cluster_run_args+=(--cluster-relay-pump-batch-max "$lasm_cluster_relay_pump_batch_max")
+
+  if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
+    current_lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
   fi
-fi
-if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
-  lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
-fi
-if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then
-  lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-total "$lasm_db_postgres_shared_client_max_active_total")
-fi
+  if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then
+    current_lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-total "$lasm_db_postgres_shared_client_max_active_total")
+  fi
+}
+
+configure_current_lasm_mode "$lasm_mode"
 
 runnable_impls_csv="$(
   jq -r '.[].impl' <<<"$runnable_rows_json" | paste -sd, -
@@ -729,6 +838,7 @@ start_impl_service() {
         fi
         (
           cd "$repo_root"
+          SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           cargo run -q -p sec4 -- run \
             --path "$service_abs" \
             --backend lasm \
@@ -736,19 +846,20 @@ start_impl_service() {
             --db-base "$service_temp_dir" \
             --port "$current_bench_port" \
             --serve-timeout-ms 20000 \
-            "${lasm_cluster_run_args[@]}"
+            "${current_lasm_cluster_run_args[@]}"
         ) >"$log_file" 2>&1 &
       else
         (
           cd "$repo_root"
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
+          SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \
               --backend lasm \
               --db-adapter postgres \
               --port "$current_bench_port" \
               --serve-timeout-ms 20000 \
-              "${lasm_cluster_run_args[@]}"
+              "${current_lasm_cluster_run_args[@]}"
         ) >"$log_file" 2>&1 &
       fi
       ;;
@@ -918,9 +1029,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
@@ -945,6 +1056,9 @@ while IFS= read -r impl_row; do
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
       [ -z "$endpoint" ] && continue
+      if [ "$impl" = "sec4-lasm" ]; then
+        configure_current_lasm_mode "$(resolve_endpoint_lasm_mode "$endpoint")"
+      fi
       cleanup_impl
       profile_service_pid=""
       start_impl_service "$impl" "$service_abs" "$log_file" || {
@@ -960,7 +1074,7 @@ while IFS= read -r impl_row; do
         continue
       fi
       profile_service_pid="$service_pid"
-      if [ "$impl" = "sec4-lasm" ] && [ "$lasm_cluster_mode" = "proxy" ]; then
+      if [ "$impl" = "sec4-lasm" ] && [ "$current_lasm_cluster_mode" = "cluster-proxy" ]; then
         resolved_listener_pid="$(resolve_listener_pid_by_port "$current_bench_port" || true)"
         if [[ "$resolved_listener_pid" =~ ^[0-9]+$ ]]; then
           profile_service_pid="$resolved_listener_pid"
@@ -1030,9 +1144,10 @@ while IFS= read -r impl_row; do
   if [ "$impl" = "sec4-lasm" ]; then
     lasm_row_json="$(jq -nc \
       --arg dbAdapter "$lasm_db_adapter" \
-      --arg mode "$lasm_cluster_mode" \
-      --argjson instances "$lasm_instances" \
-      --argjson autoscaleMaxInstances "$lasm_autoscale_max_instances" \
+      --arg mode "$(if [ -n "$lasm_endpoint_modes" ]; then printf '%s' mixed; else printf '%s' "$current_lasm_cluster_mode"; fi)" \
+      --arg endpointModes "$lasm_endpoint_modes" \
+      --argjson instances "$current_lasm_instances" \
+      --argjson autoscaleMaxInstances "$current_lasm_autoscale_max_instances" \
       --argjson autoscaleTargetConnections "$lasm_autoscale_target_connections" \
       --argjson autoscaleCheckMs "$lasm_autoscale_check_ms" \
       --argjson clusterRelayWorkers "$(if [ -n "$lasm_cluster_relay_workers" ]; then printf '%s' "$lasm_cluster_relay_workers"; else printf 'null'; fi)" \
@@ -1045,6 +1160,7 @@ while IFS= read -r impl_row; do
       '{
         dbAdapter: $dbAdapter,
         mode: $mode,
+        endpointModes: (if $endpointModes == "" then null else $endpointModes end),
         instances: $instances,
         autoscaleMaxInstances: $autoscaleMaxInstances,
         autoscaleTargetConnections: $autoscaleTargetConnections,

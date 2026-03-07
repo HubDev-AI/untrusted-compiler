@@ -14,7 +14,32 @@ use crate::lasm_db_runtime_sqlite::{
 };
 use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
 use std::collections::BTreeSet;
+use std::env;
 use std::sync::Mutex;
+use std::sync::OnceLock;
+
+const LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS: [&str; 2] = [
+    "SEC4_DB_ALPHA_DB_RECORDS_PERSIST_ENABLED",
+    "SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED",
+];
+
+static LASM_DB_RECORDS_PERSIST_ENABLED: OnceLock<bool> = OnceLock::new();
+
+pub(crate) fn lasm_db_records_persist_enabled() -> bool {
+    *LASM_DB_RECORDS_PERSIST_ENABLED.get_or_init(|| {
+        for key in LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS {
+            let Ok(raw) = env::var(key) else {
+                continue;
+            };
+            let normalized = raw.trim().to_ascii_lowercase();
+            if normalized.is_empty() {
+                continue;
+            }
+            return !matches!(normalized.as_str(), "0" | "false" | "no" | "off");
+        }
+        true
+    })
+}
 
 struct PendingLasmPostgresSequenceTxCleanup {
     handle: i64,
@@ -26,6 +51,7 @@ pub(crate) fn ensure_lasm_db_records_client_ready(
     db_records_adapter: LasmDbRecordsAdapter,
 ) -> Result<(), String> {
     match db_records_adapter {
+        LasmDbRecordsAdapter::Postgres if !lasm_db_records_persist_enabled() => Ok(()),
         LasmDbRecordsAdapter::Postgres => lasm_dynamic_postgres_client_mut(state).map(|_client| ()),
         LasmDbRecordsAdapter::Sqlite | LasmDbRecordsAdapter::RecordsLog => Ok(()),
     }
@@ -141,6 +167,9 @@ pub(crate) fn persist_lasm_db_record_after_unlock(
     record: &crate::LasmDbRecord,
     compaction_snapshot: Option<Vec<crate::LasmDbRecord>>,
 ) {
+    if !lasm_db_records_persist_enabled() {
+        return;
+    }
     match db_records_adapter {
         LasmDbRecordsAdapter::Postgres => {
             persist_lasm_postgres_record_after_unlock(config, record, compaction_snapshot)
@@ -153,11 +182,17 @@ pub(crate) fn persist_lasm_db_record_append(
     state: &mut LasmDynamicResponseState,
     record: &crate::LasmDbRecord,
 ) -> Result<(), String> {
+    if !lasm_db_records_persist_enabled() {
+        return Ok(());
+    }
     persist_lasm_dynamic_db_record_append(state, record)
 }
 
 pub(crate) fn persist_lasm_db_records_full_sync(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
+    if !lasm_db_records_persist_enabled() {
+        return Ok(());
+    }
     persist_lasm_dynamic_db_records_full_sync(state)
 }

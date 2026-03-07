@@ -82,7 +82,8 @@ Final closeout truth:
 Important closeout note:
 
 - `workbench-full-benchmark-*` outputs are tuning/exploration artifacts, not the canonical alpha publication family.
-- The canonical benchmark publication remains fresh and complete, but `workbench-benchmark-runs.json` still records impl-level runner failures (`sec4-lasm` on `wb-tasks-list`, `node` on several write-heavy endpoints). Those are explicit post-alpha runtime/benchmark follow-up items, not functional alpha blockers.
+- The refreshed canonical cross-runtime publication run (`startedAt=2026-03-07T18:29:46Z`, `finishedAt=2026-03-07T18:38:37Z`) now records `passed=4 failed=0 skipped=0` across `sec4-lasm`, `node`, `go`, and `rust` on the same six-endpoint DB-backed workload.
+- For the mixed-workload publication run, the stable LASM topology is `single` mode. Earlier proxy/fixed notes remain targeted tuning evidence for specific routes, not the current publication default.
 
 ## Execution Mode Lock (2026-02-17)
 
@@ -12438,7 +12439,17 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
   - workload-aware auto-mode fallback in `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh`
 - Operational consequence:
   - `--lasm-mode auto` now falls back to `fixed` when the available recommendation artifact was generated for a different endpoint set or DB adapter than the requested benchmark run.
+- Fresh canonical publication outcome on the mixed workload:
+  - `BENCH_WORKBENCH_REQUIRE_WRK2=1 BENCH_DURATION=20s BENCH_WORKBENCH_PG_DSN=... benchmark-suite/scripts/run_workbench_benchmark_matrix.sh --impls sec4-lasm,node,go,rust --endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list --lasm-db-adapter postgres --lasm-mode single`
+  - totals: `passed=4 failed=0 skipped=0`
+  - `sec4-lasm` led all six published endpoints:
+    - `wb-tasks-post`: `491.81 req/s`, `p99 20.48ms`
+    - `wb-tasks-with-comment`: `198.00 req/s`, `p99 28.41ms`
+    - `wb-tasks-with-comment-tx`: `198.13 req/s`, `p99 28.62ms`
+    - `wb-task-comment-post`: `491.79 req/s`, `p99 16.88ms`
+    - `wb-task-get`: `2465.50 req/s`, `p99 7.38ms`
+    - `wb-tasks-list`: `1458.07 req/s`, `p99 12.76ms`
 - The canonical next step remains:
-  1. close the remaining DB/runtime cleanup exposed by the canonical app,
-  2. rerun targeted same-workload LASM mode/matrix comparisons through the repeated full-suite path,
-  3. then continue deeper scaling/runtime tuning with those repeated measurements as the baseline.
+  1. continue deeper scaling/runtime tuning from the now-clean canonical publication baseline,
+  2. use repeated mode-compare/full-suite artifacts only for post-alpha tuning, not alpha proof,
+  3. keep the mixed-workload publication default conservative unless a workload-matching recommendation artifact proves another topology is better.
