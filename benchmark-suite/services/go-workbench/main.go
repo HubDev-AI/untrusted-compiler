@@ -128,7 +128,7 @@ func (s *apiServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, traceID, successEnvelope(http.StatusCreated, traceID, data))
 		return
 	}
-	if r.Method == http.MethodPost && r.URL.Path == "/wb/tasks/with-comment" {
+	if r.Method == http.MethodPost && (r.URL.Path == "/wb/tasks/with-comment" || r.URL.Path == "/wb/tasks/with-comment-tx") {
 		if err := s.requireAuth(r); err != nil {
 			writeAPIError(w, traceID, *err)
 			return

@@ -5,10 +5,10 @@ use crate::lasm_db_runtime_postgres::{
 };
 use crate::LasmDbRecord;
 use crossbeam_channel::{bounded, SendError, Sender, TryRecvError, TrySendError};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 const LASM_POSTGRES_PERSIST_WORKERS_ENV: &str = "SEC4_RT_LASM_DB_POSTGRES_PERSIST_WORKERS";
@@ -33,6 +33,8 @@ static LASM_POSTGRES_PERSIST_BATCH_MAX_RESOLVED: OnceLock<usize> = OnceLock::new
 static LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_RESOLVED: OnceLock<LasmPostgresPersistQueueFullMode> =
     OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE: OnceLock<Sender<LasmPostgresPersistTask>> = OnceLock::new();
+static LASM_POSTGRES_PERSIST_CONFIG_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+    OnceLock::new();
 static LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL: AtomicUsize = AtomicUsize::new(0);
@@ -183,6 +185,15 @@ fn lasm_postgres_persist_config_key(config: &LasmPostgresThreadLocalConfig) -> S
     )
 }
 
+fn lasm_postgres_persist_config_lock(key: &str) -> Arc<Mutex<()>> {
+    let locks = LASM_POSTGRES_PERSIST_CONFIG_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = locks.lock().expect("persist config locks poisoned");
+    guard
+        .entry(key.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
 fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
     if tasks.is_empty() {
         return;
@@ -211,6 +222,9 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
         }
     }
     for (_, (config, records, compaction_snapshot)) in grouped {
+        let config_key = lasm_postgres_persist_config_key(&config);
+        let config_lock = lasm_postgres_persist_config_lock(config_key.as_str());
+        let _config_guard = config_lock.lock().expect("persist config lock poisoned");
         let mut append_records = records;
         let mut full_sync_failed = false;
         if let Some(snapshot) = compaction_snapshot.as_deref() {

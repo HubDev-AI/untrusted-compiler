@@ -433,14 +433,10 @@ fn rebuild_lasm_db_records_tracking(state: &mut LasmDynamicResponseState) {
             .db_latest_record_by_signature
             .insert(signature, record.clone());
     }
-    let next_db_record_id = state
-        .db_records
-        .iter()
-        .map(|record| record.id)
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
-    state.next_db_record_id = next_db_record_id;
+    state.next_db_record_id = crate::lasm_dynamic_state::next_lasm_db_record_counter(
+        state.db_records_adapter,
+        &state.db_records,
+    );
 }
 
 fn truncate_lasm_db_records_for_capacity(
@@ -492,7 +488,11 @@ pub(crate) fn allocate_lasm_db_tx_handle(
     let start_tx = tx;
     loop {
         if let std::collections::hash_map::Entry::Vacant(entry) = state.db_tx_handles.entry(tx) {
-            entry.insert(LasmDbTxState { db, active: false });
+            entry.insert(LasmDbTxState {
+                db,
+                active: false,
+                in_use: false,
+            });
             state.next_db_tx_handle = if tx == i64::MAX { 1 } else { tx + 1 };
             return Some(tx);
         }

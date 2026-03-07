@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] <impl> <endpoint:wb-tasks-post|wb-tasks-with-comment|wb-task-comment-post|wb-task-get|wb-tasks-list> [base_url]" >&2
+  echo "usage: $0 [--dry-run] <impl> <endpoint:wb-tasks-post|wb-tasks-with-comment|wb-tasks-with-comment-tx|wb-task-comment-post|wb-task-get|wb-tasks-list> [base_url]" >&2
 }
 
 dry_run="false"
@@ -29,7 +29,7 @@ step_rates="${BENCH_STEP_RATES:-}"
 if [ -z "$step_rates" ]; then
   case "$endpoint" in
     wb-tasks-post) step_rates="200,500,800" ;;
-    wb-tasks-with-comment) step_rates="120,300,500" ;;
+    wb-tasks-with-comment|wb-tasks-with-comment-tx) step_rates="120,300,500" ;;
     wb-task-comment-post) step_rates="200,500,800" ;;
     wb-task-get) step_rates="800,1500,2500" ;;
     wb-tasks-list) step_rates="500,1000,1500" ;;
@@ -50,6 +50,7 @@ if [ "${#rates[@]}" -eq 0 ]; then
 fi
 
 summary_files=()
+base_run_tag="${BENCH_WB_RUN_TAG:-$(date +%s%N)}"
 for raw_rate in "${rates[@]}"; do
   rate="${raw_rate// /}"
   [ -z "$rate" ] && continue
@@ -67,7 +68,7 @@ for raw_rate in "${rates[@]}"; do
 
   BENCH_SERVER_PID="${BENCH_SERVER_PID:-}" \
     BENCH_WB_TASK_ID="${BENCH_WB_TASK_ID:-}" \
-    BENCH_WB_RUN_TAG="${BENCH_WB_RUN_TAG:-}" \
+    BENCH_WB_RUN_TAG="${base_run_tag}-r${rate}" \
     BENCH_DURATION="$step_duration" \
     BENCH_TARGET="$rate" \
     "${root_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$base_url"

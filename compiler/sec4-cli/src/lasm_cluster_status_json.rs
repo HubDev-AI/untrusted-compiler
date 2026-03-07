@@ -52,12 +52,16 @@ pub(crate) struct LasmClusterStatusSnapshot {
     pub(crate) db_postgres_connect_timeout_ms: Option<u64>,
     pub(crate) db_postgres_shared_client_max_idle_per_key: Option<u64>,
     pub(crate) db_postgres_shared_client_max_total_idle: Option<u64>,
+    pub(crate) db_postgres_shared_client_max_active_per_key: Option<u64>,
+    pub(crate) db_postgres_shared_client_max_active_total: Option<u64>,
     pub(crate) db_postgres_persist_workers: Option<u64>,
     pub(crate) db_postgres_persist_queue_capacity: Option<u64>,
     pub(crate) db_postgres_persist_batch_max: Option<u64>,
     pub(crate) db_postgres_persist_queue_full_mode: Option<String>,
     pub(crate) db_postgres_shared_client_pool_keys: usize,
     pub(crate) db_postgres_shared_client_pool_idle_total: usize,
+    pub(crate) db_postgres_shared_client_pool_active_keys: usize,
+    pub(crate) db_postgres_shared_client_pool_active_total: usize,
     pub(crate) db_postgres_persist_workers_available: bool,
     pub(crate) db_postgres_persist_queue_depth: usize,
     pub(crate) db_postgres_persist_queue_backpressure_total: usize,
@@ -137,6 +141,10 @@ impl PartialEq for LasmClusterStatusSnapshot {
                 == other.db_postgres_shared_client_max_idle_per_key
             && self.db_postgres_shared_client_max_total_idle
                 == other.db_postgres_shared_client_max_total_idle
+            && self.db_postgres_shared_client_max_active_per_key
+                == other.db_postgres_shared_client_max_active_per_key
+            && self.db_postgres_shared_client_max_active_total
+                == other.db_postgres_shared_client_max_active_total
             && self.db_postgres_persist_workers == other.db_postgres_persist_workers
             && self.db_postgres_persist_queue_capacity == other.db_postgres_persist_queue_capacity
             && self.db_postgres_persist_batch_max == other.db_postgres_persist_batch_max
@@ -144,6 +152,10 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.db_postgres_shared_client_pool_keys == other.db_postgres_shared_client_pool_keys
             && self.db_postgres_shared_client_pool_idle_total
                 == other.db_postgres_shared_client_pool_idle_total
+            && self.db_postgres_shared_client_pool_active_keys
+                == other.db_postgres_shared_client_pool_active_keys
+            && self.db_postgres_shared_client_pool_active_total
+                == other.db_postgres_shared_client_pool_active_total
             && self.db_postgres_persist_workers_available
                 == other.db_postgres_persist_workers_available
             && self.db_postgres_persist_queue_depth == other.db_postgres_persist_queue_depth
@@ -231,12 +243,16 @@ struct LasmClusterStatusPayload<'a> {
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
     db_postgres_persist_queue_full_mode: Option<&'a str>,
     db_postgres_shared_client_pool_keys: usize,
     db_postgres_shared_client_pool_idle_total: usize,
+    db_postgres_shared_client_pool_active_keys: usize,
+    db_postgres_shared_client_pool_active_total: usize,
     db_postgres_persist_workers_available: bool,
     db_postgres_persist_queue_depth: usize,
     db_postgres_persist_queue_backpressure_total: usize,
@@ -355,6 +371,10 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_postgres_shared_client_max_idle_per_key: snapshot
             .db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle: snapshot.db_postgres_shared_client_max_total_idle,
+        db_postgres_shared_client_max_active_per_key: snapshot
+            .db_postgres_shared_client_max_active_per_key,
+        db_postgres_shared_client_max_active_total: snapshot
+            .db_postgres_shared_client_max_active_total,
         db_postgres_persist_workers: snapshot.db_postgres_persist_workers,
         db_postgres_persist_queue_capacity: snapshot.db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max: snapshot.db_postgres_persist_batch_max,
@@ -364,6 +384,10 @@ pub(crate) fn write_lasm_cluster_status_json(
         db_postgres_shared_client_pool_keys: snapshot.db_postgres_shared_client_pool_keys,
         db_postgres_shared_client_pool_idle_total: snapshot
             .db_postgres_shared_client_pool_idle_total,
+        db_postgres_shared_client_pool_active_keys: snapshot
+            .db_postgres_shared_client_pool_active_keys,
+        db_postgres_shared_client_pool_active_total: snapshot
+            .db_postgres_shared_client_pool_active_total,
         db_postgres_persist_workers_available: snapshot.db_postgres_persist_workers_available,
         db_postgres_persist_queue_depth: snapshot.db_postgres_persist_queue_depth,
         db_postgres_persist_queue_backpressure_total: snapshot

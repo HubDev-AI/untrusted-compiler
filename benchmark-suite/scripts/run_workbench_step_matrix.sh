@@ -4,8 +4,16 @@ set -euo pipefail
 usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
-          [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
+          [--lasm-db-postgres-shared-client-max-active-per-key <n>]
+          [--lasm-db-postgres-shared-client-max-active-total <n>]
+          [--lasm-instances <n>] [--lasm-autoscale-max-instances <n>]
+          [--lasm-autoscale-target-connections <n>] [--lasm-autoscale-check-ms <n>]
+          [--lasm-cluster-relay-workers <n>] [--lasm-cluster-relay-queue <n>]
+          [--lasm-cluster-accept-workers <n>] [--lasm-cluster-relay-accept-batch-max <n>]
+          [--lasm-cluster-relay-pump-batch-max <n>]
           [--port <n>] [--out-step-matrix path] [--out-runs path]
 
 Runs workbench step-load benchmark profiles across implemented matrix lanes and emits:
@@ -22,6 +30,19 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
+lasm_mode_compare_repeats_file=""
+lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
+lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
+lasm_instances="${BENCH_WORKBENCH_LASM_INSTANCES:-1}"
+lasm_autoscale_max_instances="${BENCH_WORKBENCH_LASM_AUTOSCALE_MAX_INSTANCES:-}"
+lasm_autoscale_target_connections="${BENCH_WORKBENCH_LASM_AUTOSCALE_TARGET_CONNECTIONS:-256}"
+lasm_autoscale_check_ms="${BENCH_WORKBENCH_LASM_AUTOSCALE_CHECK_MS:-1000}"
+lasm_cluster_relay_workers="${BENCH_WORKBENCH_LASM_CLUSTER_RELAY_WORKERS:-}"
+lasm_cluster_relay_queue="${BENCH_WORKBENCH_LASM_CLUSTER_RELAY_QUEUE:-}"
+lasm_cluster_accept_workers="${BENCH_WORKBENCH_LASM_CLUSTER_ACCEPT_WORKERS:-}"
+lasm_cluster_relay_accept_batch_max="${BENCH_WORKBENCH_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
+lasm_cluster_relay_pump_batch_max="${BENCH_WORKBENCH_LASM_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 require_wrk2="${BENCH_WORKBENCH_REQUIRE_WRK2:-1}"
 out_step_matrix=""
 out_runs=""
@@ -116,6 +137,162 @@ while [ "$#" -gt 0 ]; do
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
       shift
       ;;
+    --lasm-mode)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_mode="$2"
+      shift 2
+      ;;
+    --lasm-mode=*)
+      lasm_mode="${1#--lasm-mode=}"
+      shift
+      ;;
+    --lasm-mode-compare-repeats-file)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_mode_compare_repeats_file="$2"
+      shift 2
+      ;;
+    --lasm-mode-compare-repeats-file=*)
+      lasm_mode_compare_repeats_file="${1#--lasm-mode-compare-repeats-file=}"
+      shift
+      ;;
+    --lasm-db-postgres-shared-client-max-active-per-key)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_postgres_shared_client_max_active_per_key="$2"
+      shift 2
+      ;;
+    --lasm-db-postgres-shared-client-max-active-per-key=*)
+      lasm_db_postgres_shared_client_max_active_per_key="${1#--lasm-db-postgres-shared-client-max-active-per-key=}"
+      shift
+      ;;
+    --lasm-db-postgres-shared-client-max-active-total)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_postgres_shared_client_max_active_total="$2"
+      shift 2
+      ;;
+    --lasm-db-postgres-shared-client-max-active-total=*)
+      lasm_db_postgres_shared_client_max_active_total="${1#--lasm-db-postgres-shared-client-max-active-total=}"
+      shift
+      ;;
+    --lasm-instances)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_instances="$2"
+      shift 2
+      ;;
+    --lasm-instances=*)
+      lasm_instances="${1#--lasm-instances=}"
+      shift
+      ;;
+    --lasm-autoscale-max-instances)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_autoscale_max_instances="$2"
+      shift 2
+      ;;
+    --lasm-autoscale-max-instances=*)
+      lasm_autoscale_max_instances="${1#--lasm-autoscale-max-instances=}"
+      shift
+      ;;
+    --lasm-autoscale-target-connections)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_autoscale_target_connections="$2"
+      shift 2
+      ;;
+    --lasm-autoscale-target-connections=*)
+      lasm_autoscale_target_connections="${1#--lasm-autoscale-target-connections=}"
+      shift
+      ;;
+    --lasm-autoscale-check-ms)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_autoscale_check_ms="$2"
+      shift 2
+      ;;
+    --lasm-autoscale-check-ms=*)
+      lasm_autoscale_check_ms="${1#--lasm-autoscale-check-ms=}"
+      shift
+      ;;
+    --lasm-cluster-relay-workers)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_cluster_relay_workers="$2"
+      shift 2
+      ;;
+    --lasm-cluster-relay-workers=*)
+      lasm_cluster_relay_workers="${1#--lasm-cluster-relay-workers=}"
+      shift
+      ;;
+    --lasm-cluster-relay-queue)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_cluster_relay_queue="$2"
+      shift 2
+      ;;
+    --lasm-cluster-relay-queue=*)
+      lasm_cluster_relay_queue="${1#--lasm-cluster-relay-queue=}"
+      shift
+      ;;
+    --lasm-cluster-accept-workers)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_cluster_accept_workers="$2"
+      shift 2
+      ;;
+    --lasm-cluster-accept-workers=*)
+      lasm_cluster_accept_workers="${1#--lasm-cluster-accept-workers=}"
+      shift
+      ;;
+    --lasm-cluster-relay-accept-batch-max)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_cluster_relay_accept_batch_max="$2"
+      shift 2
+      ;;
+    --lasm-cluster-relay-accept-batch-max=*)
+      lasm_cluster_relay_accept_batch_max="${1#--lasm-cluster-relay-accept-batch-max=}"
+      shift
+      ;;
+    --lasm-cluster-relay-pump-batch-max)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_cluster_relay_pump_batch_max="$2"
+      shift 2
+      ;;
+    --lasm-cluster-relay-pump-batch-max=*)
+      lasm_cluster_relay_pump_batch_max="${1#--lasm-cluster-relay-pump-batch-max=}"
+      shift
+      ;;
     --out-step-matrix)
       if [ "$#" -lt 2 ]; then
         usage
@@ -154,6 +331,22 @@ done
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
+
+normalize_repo_path() {
+  local path="$1"
+  if [ -z "$path" ]; then
+    printf '%s' "$path"
+    return
+  fi
+  case "$path" in
+    "$repo_root"/*)
+      printf '%s' "${path#${repo_root}/}"
+      ;;
+    *)
+      printf '%s' "$path"
+      ;;
+  esac
+}
 
 if [ -z "$matrix_path" ]; then
   matrix_path="${suite_dir}/workbench/matrix.backends.json"
@@ -197,7 +390,7 @@ is_selected_impl() {
 
 supported_endpoint() {
   case "$1" in
-    wb-tasks-post|wb-tasks-with-comment|wb-task-comment-post|wb-task-get|wb-tasks-list)
+    wb-tasks-post|wb-tasks-with-comment|wb-tasks-with-comment-tx|wb-task-comment-post|wb-task-get|wb-tasks-list)
       return 0
       ;;
     *)
@@ -236,6 +429,106 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   exit 2
 fi
 
+if [ -z "$lasm_mode_compare_repeats_file" ]; then
+  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
+fi
+
+if [ -n "$lasm_mode" ]; then
+  if [ "$lasm_mode" = "auto" ]; then
+    if [ ! -f "$lasm_mode_compare_repeats_file" ]; then
+      echo "LASM auto mode requires mode-compare artifact: $lasm_mode_compare_repeats_file" >&2
+      exit 2
+    fi
+    lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
+    if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
+      echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
+      exit 2
+    fi
+  fi
+  case "$lasm_mode" in
+    single)
+      lasm_instances="1"
+      lasm_autoscale_max_instances="1"
+      ;;
+    fixed)
+      if [ "$lasm_instances" -lt 2 ]; then
+        lasm_instances="2"
+      fi
+      lasm_autoscale_max_instances="$lasm_instances"
+      ;;
+    proxy)
+      if [ "$lasm_instances" -lt 2 ]; then
+        lasm_instances="2"
+      fi
+      if [ -z "$lasm_autoscale_max_instances" ] || [ "$lasm_autoscale_max_instances" -le "$lasm_instances" ]; then
+        lasm_autoscale_max_instances="$((lasm_instances + 2))"
+      fi
+      ;;
+    *)
+      echo "unsupported LASM mode: $lasm_mode" >&2
+      exit 2
+      ;;
+  esac
+fi
+
+if [ -z "$lasm_autoscale_max_instances" ]; then
+  lasm_autoscale_max_instances="$lasm_instances"
+fi
+
+lasm_cluster_mode="single"
+if [ "$lasm_instances" != "1" ]; then
+  if [ "$lasm_autoscale_max_instances" = "$lasm_instances" ]; then
+    lasm_cluster_mode="cluster-fixed"
+  else
+    lasm_cluster_mode="cluster-proxy"
+  fi
+fi
+
+if [ "$lasm_cluster_mode" = "single" ] && [ "$lasm_autoscale_max_instances" != "1" ]; then
+  echo "LASM workbench step benchmark cluster flags invalid: --lasm-autoscale-max-instances requires --lasm-instances > 1" >&2
+  exit 2
+fi
+
+if [ "$lasm_cluster_mode" != "cluster-proxy" ] && {
+  [ -n "$lasm_cluster_relay_workers" ] ||
+  [ -n "$lasm_cluster_relay_queue" ] ||
+  [ -n "$lasm_cluster_accept_workers" ] ||
+  [ -n "$lasm_cluster_relay_accept_batch_max" ] ||
+  [ -n "$lasm_cluster_relay_pump_batch_max" ];
+}; then
+  echo "LASM workbench step benchmark relay tuning flags require proxy cluster mode (--lasm-instances > 1 with --lasm-autoscale-max-instances > --lasm-instances)" >&2
+  exit 2
+fi
+
+lasm_cluster_run_args=()
+if [ "$lasm_cluster_mode" != "single" ]; then
+  lasm_cluster_run_args+=(--instances "$lasm_instances")
+  lasm_cluster_run_args+=(--autoscale-max-instances "$lasm_autoscale_max_instances")
+  lasm_cluster_run_args+=(--autoscale-target-connections "$lasm_autoscale_target_connections")
+  lasm_cluster_run_args+=(--autoscale-check-ms "$lasm_autoscale_check_ms")
+  if [ -n "$lasm_cluster_relay_workers" ]; then
+    lasm_cluster_run_args+=(--cluster-relay-workers "$lasm_cluster_relay_workers")
+  fi
+  if [ -n "$lasm_cluster_relay_queue" ]; then
+    lasm_cluster_run_args+=(--cluster-relay-queue "$lasm_cluster_relay_queue")
+  fi
+  if [ -n "$lasm_cluster_accept_workers" ]; then
+    lasm_cluster_run_args+=(--cluster-accept-workers "$lasm_cluster_accept_workers")
+  fi
+  if [ -n "$lasm_cluster_relay_accept_batch_max" ]; then
+    lasm_cluster_run_args+=(--cluster-relay-accept-batch-max "$lasm_cluster_relay_accept_batch_max")
+  fi
+  if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then
+    lasm_cluster_run_args+=(--cluster-relay-pump-batch-max "$lasm_cluster_relay_pump_batch_max")
+  fi
+fi
+if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
+  lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
+fi
+if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then
+  lasm_cluster_run_args+=(--db-postgres-shared-client-max-active-total "$lasm_db_postgres_shared_client_max_active_total")
+fi
+
 runnable_rows_json='[]'
 while IFS= read -r impl_row; do
   impl="$(jq -r '.impl' <<<"$impl_row")"
@@ -262,7 +555,9 @@ else
   BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
-base_url="http://127.0.0.1:${bench_port}"
+bench_port_base="$bench_port"
+current_bench_port="$bench_port_base"
+current_base_url="http://127.0.0.1:${current_bench_port}"
 pg_dsn="${BENCH_WORKBENCH_PG_DSN:-${SEC4_DB_ALPHA_DB_POSTGRES_DSN:-${SEC4_RT_LASM_DB_POSTGRES_DSN:-postgresql://127.0.0.1:5432/postgres?sslmode=disable}}}"
 lasm_postgres_dsn=""
 if [ "$lasm_db_adapter" = "postgres" ]; then
@@ -283,11 +578,45 @@ service_pid=""
 service_temp_dir=""
 cleanup_temp_dir="false"
 
+kill_process_tree_recursive() {
+  local root_pid="$1"
+  local child_pid=""
+  if [ -z "$root_pid" ] || ! [[ "$root_pid" =~ ^[0-9]+$ ]]; then
+    return
+  fi
+  while IFS= read -r child_pid; do
+    [ -z "$child_pid" ] && continue
+    kill_process_tree_recursive "$child_pid"
+  done < <(pgrep -P "$root_pid" 2>/dev/null || true)
+  kill "$root_pid" >/dev/null 2>&1 || true
+}
+
+wait_for_listener_port_release() {
+  local wait_port="$1"
+  local attempts=0
+  local listener_pid=""
+  while [ "$attempts" -lt 50 ]; do
+    listener_pid="$(resolve_listener_pid_by_port "$wait_port" || true)"
+    if ! [[ "$listener_pid" =~ ^[0-9]+$ ]]; then
+      return 0
+    fi
+    kill_process_tree_recursive "$listener_pid"
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  listener_pid="$(resolve_listener_pid_by_port "$wait_port" || true)"
+  if [[ "$listener_pid" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  return 0
+}
+
 cleanup_impl() {
   if [ -n "$service_pid" ] && kill -0 "$service_pid" >/dev/null 2>&1; then
-    kill "$service_pid" >/dev/null 2>&1 || true
+    kill_process_tree_recursive "$service_pid"
     wait "$service_pid" >/dev/null 2>&1 || true
   fi
+  wait_for_listener_port_release "$current_bench_port" >/dev/null 2>&1 || true
   service_pid=""
   if [ "$cleanup_temp_dir" = "true" ] && [ -n "$service_temp_dir" ] && [ -d "$service_temp_dir" ]; then
     rm -rf "$service_temp_dir"
@@ -313,7 +642,7 @@ start_impl_service() {
         SEC4_RT_DB_BASE="$service_temp_dir" cargo run -q -p sec4 -- run \
           --path "$service_abs" \
           --backend c \
-          --port "$bench_port" \
+          --port "$current_bench_port" \
           --serve-timeout-ms 20000
       ) >"$log_file" 2>&1 &
       ;;
@@ -334,8 +663,9 @@ start_impl_service() {
             --backend lasm \
             --db-adapter sqlite \
             --db-base "$service_temp_dir" \
-            --port "$bench_port" \
-            --serve-timeout-ms 20000
+            --port "$current_bench_port" \
+            --serve-timeout-ms 20000 \
+            "${lasm_cluster_run_args[@]}"
         ) >"$log_file" 2>&1 &
       else
         (
@@ -345,27 +675,28 @@ start_impl_service() {
               --path "$service_abs" \
               --backend lasm \
               --db-adapter postgres \
-              --port "$bench_port" \
-              --serve-timeout-ms 20000
+              --port "$current_bench_port" \
+              --serve-timeout-ms 20000 \
+              "${lasm_cluster_run_args[@]}"
         ) >"$log_file" 2>&1 &
       fi
       ;;
     node)
       (
         cd "$service_abs"
-        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$bench_port" node server.mjs
+        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$current_bench_port" node server.mjs
       ) >"$log_file" 2>&1 &
       ;;
     go)
       (
         cd "$service_abs"
-        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$bench_port" go run .
+        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$current_bench_port" go run .
       ) >"$log_file" 2>&1 &
       ;;
     rust)
       (
         cd "$service_abs"
-        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$bench_port" cargo run --quiet
+        BENCH_WORKBENCH_PG_DSN="$pg_dsn" PORT="$current_bench_port" cargo run --quiet
       ) >"$log_file" 2>&1 &
       ;;
     *)
@@ -379,7 +710,7 @@ start_impl_service() {
 
 wait_ready() {
   local pid="$1"
-  local health_file="/tmp/workbench-step-health-${bench_port}.txt"
+  local health_file="/tmp/workbench-step-health-${current_bench_port}.txt"
   local ready_timeout_seconds="${BENCH_WORKBENCH_READY_TIMEOUT_SECONDS:-90}"
   local ready_probe_interval_seconds="${BENCH_WORKBENCH_READY_PROBE_INTERVAL_SECONDS:-0.1}"
   local health_body=""
@@ -389,7 +720,7 @@ wait_ready() {
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       return 2
     fi
-    if curl -fsS "${base_url}/health" >"$health_file" 2>/dev/null; then
+    if curl -fsS "${current_base_url}/health" >"$health_file" 2>/dev/null; then
       health_body="$(tr -d '\r\n[:space:]' <"$health_file" 2>/dev/null || true)"
       if [ "$health_body" = "ok" ] || [ "$health_body" = "\"ok\"" ]; then
         return 0
@@ -397,6 +728,26 @@ wait_ready() {
     fi
     sleep "$ready_probe_interval_seconds"
   done
+  return 1
+}
+
+resolve_listener_pid_by_port() {
+  local port="$1"
+  local pid=""
+  if command -v lsof >/dev/null 2>&1; then
+    pid="$(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NF { print; exit }')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    pid="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F'pid=|,' '/pid=/{print $2; exit}')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+  fi
   return 1
 }
 
@@ -408,7 +759,7 @@ seed_impl_state() {
 
   local setup_status
   setup_status="$(curl -sS -o "/tmp/workbench-step-${impl}-setup.json" -w '%{http_code}' \
-    -X POST -H "$auth_header" "${base_url}/wb/setup")"
+    -X POST -H "$auth_header" "${current_base_url}/wb/setup")"
   if [ "$setup_status" != "200" ]; then
     echo "workbench step setup failed impl=${impl} status=${setup_status}" >&2
     return 1
@@ -431,7 +782,7 @@ seed_impl_state() {
   seed_task_params_uri="$(printf '%s' "$seed_task_params" | jq -sRr @uri)"
   seed_task_status="$(curl -sS -o "/tmp/workbench-step-${impl}-seed-task.json" -w '%{http_code}' \
     -X POST -H "$auth_header" \
-    "${base_url}/wb/tasks?params=${seed_task_params_uri}")"
+    "${current_base_url}/wb/tasks?params=${seed_task_params_uri}")"
   case "$seed_task_status" in
     200|201) ;;
     *)
@@ -453,7 +804,7 @@ seed_impl_state() {
   seed_comment_params_uri="$(printf '%s' "$seed_comment_params" | jq -sRr @uri)"
   seed_comment_status="$(curl -sS -o "/tmp/workbench-step-${impl}-seed-comment.json" -w '%{http_code}' \
     -X POST -H "$auth_header" \
-    "${base_url}/wb/tasks/${seed_task_id}/comments?params=${seed_comment_params_uri}")"
+    "${current_base_url}/wb/tasks/${seed_task_id}/comments?params=${seed_comment_params_uri}")"
   case "$seed_comment_status" in
     200|201) ;;
     *)
@@ -465,6 +816,18 @@ seed_impl_state() {
   printf '%s' "$seed_task_id"
 }
 
+probe_endpoint_once() {
+  local impl="$1"
+  local endpoint="$2"
+  local seed_task_id="$3"
+  local run_tag="$4"
+  bash "${suite_dir}/scripts/workbench_preflight_probe.sh" \
+    --impl "$impl" \
+    --task-id "$seed_task_id" \
+    --run-tag "$run_tag" \
+    "$endpoint" "$current_base_url"
+}
+
 trap cleanup_impl EXIT
 
 started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -473,28 +836,31 @@ total_passed=0
 total_failed=0
 total_skipped=0
 passed_impls_csv=""
+impl_index=0
 
 while IFS= read -r impl_row; do
   impl="$(jq -r '.impl' <<<"$impl_row")"
   status="$(jq -r '.status' <<<"$impl_row")"
   service_rel="$(jq -r '.servicePath' <<<"$impl_row")"
   service_abs="${repo_root}/${service_rel}"
+  current_bench_port=$((bench_port_base + impl_index))
+  current_base_url="http://127.0.0.1:${current_bench_port}"
   log_file="${suite_dir}/results/raw/${impl}-workbench-step-service.log"
 
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port} lasmDbAdapter=${lasm_db_adapter} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port} lasmDbAdapter=${lasm_db_adapter} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
-      echo "start: impl=${impl} servicePath=${service_rel} port=${bench_port}"
+      echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
     fi
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
       [ -z "$endpoint" ] && continue
-      echo "run: ${suite_dir}/scripts/run_workbench_step_profile.sh --dry-run ${impl} ${endpoint} ${base_url}"
+      echo "run: ${suite_dir}/scripts/run_workbench_step_profile.sh --dry-run ${impl} ${endpoint} ${current_base_url}"
       echo "run: ${suite_dir}/scripts/analyze_step_profile.sh ${suite_dir}/results/summaries/${impl}-${endpoint}-step.json ${suite_dir}/results/summaries/${impl}-${endpoint}-step-analysis.json"
     done
     continue
@@ -504,6 +870,7 @@ while IFS= read -r impl_row; do
   reason=""
   exit_code=0
   seed_task_id=""
+  profile_service_pid=""
 
   start_impl_service "$impl" "$service_abs" "$log_file" || {
     result="failed"
@@ -514,8 +881,16 @@ while IFS= read -r impl_row; do
   if [ "$result" = "passed" ]; then
     if ! wait_ready "$service_pid"; then
       result="failed"
-      reason="service failed readiness on ${base_url}/health"
+      reason="service failed readiness on ${current_base_url}/health"
       exit_code=1
+    else
+      profile_service_pid="$service_pid"
+      if [ "$impl" = "sec4-lasm" ] && [ "$lasm_cluster_mode" = "proxy" ]; then
+        resolved_listener_pid="$(resolve_listener_pid_by_port "$current_bench_port" || true)"
+        if [[ "$resolved_listener_pid" =~ ^[0-9]+$ ]]; then
+          profile_service_pid="$resolved_listener_pid"
+        fi
+      fi
     fi
   fi
 
@@ -532,9 +907,22 @@ while IFS= read -r impl_row; do
     for raw_endpoint in "${endpoints[@]}"; do
       endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
       [ -z "$endpoint" ] && continue
-      run_tag="${impl}-${endpoint}-step-$(date +%s%N)"
-      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$service_pid" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
-        "${suite_dir}/scripts/run_workbench_step_profile.sh" "$impl" "$endpoint" "$base_url"; then
+      run_tag="${seed_task_id}-${endpoint}-step"
+      probe_run_tag="${seed_task_id}-${endpoint}-probe"
+      probe_json=""
+      if ! probe_json="$(probe_endpoint_once "$impl" "$endpoint" "$seed_task_id" "$probe_run_tag")"; then
+        probe_reason="$(jq -r '.reason // empty' <<<"$probe_json" 2>/dev/null || true)"
+        result="failed"
+        if [ -n "$probe_reason" ]; then
+          reason="preflight failed ${probe_reason}"
+        else
+          reason="preflight failed endpoint=${endpoint}"
+        fi
+        exit_code=1
+        break
+      fi
+      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$profile_service_pid" BENCH_SERVER_PORT="$current_bench_port" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
+        "${suite_dir}/scripts/run_workbench_step_profile.sh" "$impl" "$endpoint" "$current_base_url"; then
         result="failed"
         reason="step profile failed endpoint=${endpoint}"
         exit_code=1
@@ -576,6 +964,19 @@ while IFS= read -r impl_row; do
     --arg reason "$reason" \
     --argjson exitCode "$exit_code" \
     --arg endpoints "$endpoints_csv" \
+    --arg lasmDbAdapter "$lasm_db_adapter" \
+    --arg lasmClusterMode "$lasm_cluster_mode" \
+    --argjson lasmInstances "$lasm_instances" \
+    --argjson lasmAutoscaleMaxInstances "$lasm_autoscale_max_instances" \
+    --argjson lasmAutoscaleTargetConnections "$lasm_autoscale_target_connections" \
+    --argjson lasmAutoscaleCheckMs "$lasm_autoscale_check_ms" \
+    --argjson lasmClusterRelayWorkers "$(if [ -n "$lasm_cluster_relay_workers" ]; then printf '%s' "$lasm_cluster_relay_workers"; else printf 'null'; fi)" \
+    --argjson lasmClusterRelayQueue "$(if [ -n "$lasm_cluster_relay_queue" ]; then printf '%s' "$lasm_cluster_relay_queue"; else printf 'null'; fi)" \
+    --argjson lasmClusterAcceptWorkers "$(if [ -n "$lasm_cluster_accept_workers" ]; then printf '%s' "$lasm_cluster_accept_workers"; else printf 'null'; fi)" \
+    --argjson lasmClusterRelayAcceptBatchMax "$(if [ -n "$lasm_cluster_relay_accept_batch_max" ]; then printf '%s' "$lasm_cluster_relay_accept_batch_max"; else printf 'null'; fi)" \
+    --argjson lasmClusterRelayPumpBatchMax "$(if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then printf '%s' "$lasm_cluster_relay_pump_batch_max"; else printf 'null'; fi)" \
+    --argjson lasmDbPostgresSharedClientMaxActivePerKey "$(if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_per_key"; else printf 'null'; fi)" \
+    --argjson lasmDbPostgresSharedClientMaxActiveTotal "$(if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_total"; else printf 'null'; fi)" \
     '{
       impl: $impl,
       status: $status,
@@ -583,11 +984,42 @@ while IFS= read -r impl_row; do
       stepResult: $result,
       reason: (if $reason == "" then null else $reason end),
       exitCode: $exitCode,
-      endpoints: ($endpoints | split(","))
+      endpoints: ($endpoints | split(",")),
+      lasm: (if $impl == "sec4-lasm" then {
+        dbAdapter: $lasmDbAdapter,
+        mode: $lasmClusterMode,
+        instances: $lasmInstances,
+        autoscaleMaxInstances: $lasmAutoscaleMaxInstances,
+        autoscaleTargetConnections: $lasmAutoscaleTargetConnections,
+        autoscaleCheckMs: $lasmAutoscaleCheckMs,
+        clusterRelayWorkers: $lasmClusterRelayWorkers,
+        clusterRelayQueue: $lasmClusterRelayQueue,
+        clusterAcceptWorkers: $lasmClusterAcceptWorkers,
+        clusterRelayAcceptBatchMax: $lasmClusterRelayAcceptBatchMax,
+        clusterRelayPumpBatchMax: $lasmClusterRelayPumpBatchMax,
+        dbPostgresSharedClientMaxActivePerKey: $lasmDbPostgresSharedClientMaxActivePerKey,
+        dbPostgresSharedClientMaxActiveTotal: $lasmDbPostgresSharedClientMaxActiveTotal
+      } else null end),
+      lasmRuntime: (if $impl == "sec4-lasm" then {
+        dbAdapter: $lasmDbAdapter,
+        mode: $lasmClusterMode,
+        instances: $lasmInstances,
+        autoscaleMaxInstances: $lasmAutoscaleMaxInstances,
+        autoscaleTargetConnections: $lasmAutoscaleTargetConnections,
+        autoscaleCheckMs: $lasmAutoscaleCheckMs,
+        clusterRelayWorkers: $lasmClusterRelayWorkers,
+        clusterRelayQueue: $lasmClusterRelayQueue,
+        clusterAcceptWorkers: $lasmClusterAcceptWorkers,
+        clusterRelayAcceptBatchMax: $lasmClusterRelayAcceptBatchMax,
+        clusterRelayPumpBatchMax: $lasmClusterRelayPumpBatchMax,
+        dbPostgresSharedClientMaxActivePerKey: $lasmDbPostgresSharedClientMaxActivePerKey,
+        dbPostgresSharedClientMaxActiveTotal: $lasmDbPostgresSharedClientMaxActiveTotal
+      } else null end)
     }')"
   runs_json="$(jq -c --argjson row "$run_row" '. + [$row]' <<<"$runs_json")"
 
   cleanup_impl
+  impl_index=$((impl_index + 1))
 done < <(jq -c '.[]' <<<"$runnable_rows_json")
 
 if [ "$dry_run" = "true" ]; then
@@ -597,13 +1029,15 @@ fi
 
 finished_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 mkdir -p "$(dirname "$out_runs")"
+matrix_path_rel="$(normalize_repo_path "$matrix_path")"
+out_step_matrix_rel="$(normalize_repo_path "$out_step_matrix")"
 jq -n \
   --arg version "0.1" \
   --arg startedAt "$started_at" \
   --arg finishedAt "$finished_at" \
-  --arg matrixPath "$matrix_path" \
+  --arg matrixPath "$matrix_path_rel" \
   --arg endpoints "$endpoints_csv" \
-  --arg stepMatrixPath "$out_step_matrix" \
+  --arg stepMatrixPath "$out_step_matrix_rel" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{

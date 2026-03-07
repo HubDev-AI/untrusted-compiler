@@ -19,7 +19,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod lasm_cluster_accept_dispatch;
@@ -82,11 +82,13 @@ use lasm_cluster_runtime_config::{
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{
+    apply_lasm_postgres_runtime_env_overrides,
     push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, resolve_lasm_db_usize_options,
     run_db_adapter_to_lasm_db_records_adapter,
     run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode, validate_and_resolve_run_db_cli_options,
 };
+use lasm_db_client::build_lasm_postgres_thread_local_config;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, lasm_internal_db_indexed_header,
     LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
@@ -96,6 +98,7 @@ pub(crate) use lasm_db_headers::{
     LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
+use lasm_db_runtime_postgres::prewarm_lasm_postgres_shared_client_pools;
 use lasm_db_smoke_summary::build_lasm_smoke_db_summary;
 pub(crate) use lasm_dynamic_state::{
     append_lasm_dynamic_db_record, build_lasm_dynamic_response_state, lasm_db_record_signature_key,
@@ -103,8 +106,10 @@ pub(crate) use lasm_dynamic_state::{
     LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
 pub(crate) use lasm_request_template::{
-    contains_lasm_request_placeholder_tokens, escape_lasm_html,
-    materialize_lasm_request_placeholders,
+    augment_lasm_workbench_query_params_from_body, contains_lasm_request_placeholder_tokens,
+    escape_lasm_html, materialize_lasm_request_placeholders,
+    parse_lasm_flat_json_array_string_element, resolve_lasm_request_query_value,
+    LASM_WORKBENCH_PUBLIC_REQUEST_MARKER,
 };
 pub(crate) use lasm_sql_safety::has_lasm_sql_non_trailing_statement_separator;
 
@@ -202,6 +207,10 @@ enum Commands {
         db_postgres_shared_client_max_idle_per_key: Option<u64>,
         #[arg(long)]
         db_postgres_shared_client_max_total_idle: Option<u64>,
+        #[arg(long)]
+        db_postgres_shared_client_max_active_per_key: Option<u64>,
+        #[arg(long)]
+        db_postgres_shared_client_max_active_total: Option<u64>,
         #[arg(long)]
         db_postgres_persist_workers: Option<u64>,
         #[arg(long)]
@@ -349,6 +358,10 @@ enum Commands {
         #[arg(long)]
         db_postgres_shared_client_max_total_idle: Option<u64>,
         #[arg(long)]
+        db_postgres_shared_client_max_active_per_key: Option<u64>,
+        #[arg(long)]
+        db_postgres_shared_client_max_active_total: Option<u64>,
+        #[arg(long)]
         db_postgres_persist_workers: Option<u64>,
         #[arg(long)]
         db_postgres_persist_queue_capacity: Option<u64>,
@@ -486,75 +499,6 @@ enum RunDbPostgresTlsMode {
 enum RunDbPostgresPersistQueueFullMode {
     Block,
     SyncFallback,
-}
-
-fn run_db_postgres_persist_queue_full_mode_to_env_value(
-    mode: RunDbPostgresPersistQueueFullMode,
-) -> &'static str {
-    match mode {
-        RunDbPostgresPersistQueueFullMode::Block => "block",
-        RunDbPostgresPersistQueueFullMode::SyncFallback => "sync-fallback",
-    }
-}
-
-fn apply_lasm_postgres_runtime_env_overrides(
-    db_postgres_shared_client_max_idle_per_key: Option<u64>,
-    db_postgres_shared_client_max_total_idle: Option<u64>,
-    db_postgres_persist_workers: Option<u64>,
-    db_postgres_persist_queue_capacity: Option<u64>,
-    db_postgres_persist_batch_max: Option<u64>,
-    db_postgres_persist_queue_full_mode: Option<RunDbPostgresPersistQueueFullMode>,
-    db_postgres_statement_cache_max: Option<u64>,
-    db_postgres_placeholder_cache_max: Option<u64>,
-) {
-    if let Some(value) = db_postgres_shared_client_max_idle_per_key {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_shared_client_max_total_idle {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_persist_workers {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_WORKERS",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_persist_queue_capacity {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_CAPACITY",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_persist_batch_max {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_BATCH_MAX",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_statement_cache_max {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_CACHE_MAX",
-            value.to_string(),
-        );
-    }
-    if let Some(value) = db_postgres_placeholder_cache_max {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_PLACEHOLDER_CACHE_MAX",
-            value.to_string(),
-        );
-    }
-    if let Some(mode) = db_postgres_persist_queue_full_mode {
-        std::env::set_var(
-            "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE",
-            run_db_postgres_persist_queue_full_mode_to_env_value(mode),
-        );
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -770,6 +714,8 @@ fn main() {
             db_postgres_connect_timeout_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -832,6 +778,8 @@ fn main() {
             db_postgres_connect_timeout_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -907,6 +855,8 @@ fn main() {
             db_sqlite_lock_retry_delay_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -952,6 +902,8 @@ fn main() {
             db_sqlite_lock_retry_delay_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -1056,6 +1008,8 @@ fn cmd_lasm_smoke(
     db_sqlite_lock_retry_delay_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -1146,6 +1100,8 @@ fn cmd_lasm_smoke(
         db_postgres_connect_timeout_ms,
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
+        db_postgres_shared_client_max_active_per_key,
+        db_postgres_shared_client_max_active_total,
         db_postgres_persist_workers,
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
@@ -1214,6 +1170,8 @@ fn cmd_lasm_smoke(
     apply_lasm_postgres_runtime_env_overrides(
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
+        db_postgres_shared_client_max_active_per_key,
+        db_postgres_shared_client_max_active_total,
         db_postgres_persist_workers,
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
@@ -1414,11 +1372,13 @@ fn cmd_lasm_smoke(
             &mut exchange.response,
             &smoke_request,
             &exchange.path_params,
+            "rt-smoke",
         );
         apply_lasm_header_placeholder_materialization(
             &mut exchange.response,
             &smoke_request,
             &exchange.path_params,
+            "rt-smoke",
         );
         let runtime_error_code = find_lasm_header_key_case_insensitive(
             &exchange.response.headers,
@@ -1517,7 +1477,7 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} errorCode={} errorKind={} firstDurationMs={} pathParams={} headerCount={} dbAdapter={} dbRecordsMax={} dbTxMaxHandles={} dbOpSequenceMax={} dbStorePath={} dbSqliteStorePath={} dbPostgresDsnConfigured={} dbPostgresTlsMode={} dbPostgresStatementTimeoutMs={} dbPostgresLockTimeoutMs={} dbPostgresConnectTimeoutMs={} dbPostgresRetryableConflictRetryMax={} dbPostgresStatementCacheMax={} dbPostgresPlaceholderCacheMax={} dbPostgresSharedClientPoolKeys={} dbPostgresSharedClientPoolIdleTotal={} dbPostgresSharedClientMaxIdlePerKey={} dbPostgresSharedClientMaxTotalIdle={} dbPostgresPersistWorkers={} dbPostgresPersistQueueCapacity={} dbPostgresPersistBatchMax={} dbPostgresPersistQueueFullMode={} dbPostgresPersistWorkersAvailable={} dbPostgresPersistQueueDepth={} dbPostgresPersistQueueBackpressureTotal={} dbPostgresPersistSyncFallbackTotal={} dbSqliteBusyTimeoutMs={} dbSqliteLockRetryMax={} dbSqliteLockRetryDelayMs={} dbSqliteJournalMode={} dbSqliteSynchronous={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} errorCode={} errorKind={} firstDurationMs={} pathParams={} headerCount={} dbAdapter={} dbRecordsMax={} dbTxMaxHandles={} dbOpSequenceMax={} dbStorePath={} dbSqliteStorePath={} dbPostgresDsnConfigured={} dbPostgresTlsMode={} dbPostgresStatementTimeoutMs={} dbPostgresLockTimeoutMs={} dbPostgresConnectTimeoutMs={} dbPostgresRetryableConflictRetryMax={} dbPostgresStatementCacheMax={} dbPostgresPlaceholderCacheMax={} dbPostgresSharedClientPoolKeys={} dbPostgresSharedClientPoolIdleTotal={} dbPostgresSharedClientPoolActiveKeys={} dbPostgresSharedClientPoolActiveTotal={} dbPostgresSharedClientMaxIdlePerKey={} dbPostgresSharedClientMaxTotalIdle={} dbPostgresSharedClientMaxActivePerKey={} dbPostgresSharedClientMaxActiveTotal={} dbPostgresPersistWorkers={} dbPostgresPersistQueueCapacity={} dbPostgresPersistBatchMax={} dbPostgresPersistQueueFullMode={} dbPostgresPersistWorkersAvailable={} dbPostgresPersistQueueDepth={} dbPostgresPersistQueueBackpressureTotal={} dbPostgresPersistSyncFallbackTotal={} dbSqliteBusyTimeoutMs={} dbSqliteLockRetryMax={} dbSqliteLockRetryDelayMs={} dbSqliteJournalMode={} dbSqliteSynchronous={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
@@ -1559,8 +1519,12 @@ fn cmd_lasm_smoke(
                 smoke_db_summary.postgres_placeholder_cache_max,
                 smoke_db_summary.postgres_shared_client_pool_keys,
                 smoke_db_summary.postgres_shared_client_pool_idle_total,
+                smoke_db_summary.postgres_shared_client_pool_active_keys,
+                smoke_db_summary.postgres_shared_client_pool_active_total,
                 smoke_db_summary.postgres_shared_client_max_idle_per_key,
                 smoke_db_summary.postgres_shared_client_max_total_idle,
+                smoke_db_summary.postgres_shared_client_max_active_per_key,
+                smoke_db_summary.postgres_shared_client_max_active_total,
                 smoke_db_summary.postgres_persist_workers,
                 smoke_db_summary.postgres_persist_queue_capacity,
                 smoke_db_summary.postgres_persist_batch_max,
@@ -8003,6 +7967,8 @@ fn cmd_run(
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -8173,6 +8139,8 @@ fn cmd_run(
         db_postgres_connect_timeout_ms,
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
+        db_postgres_shared_client_max_active_per_key,
+        db_postgres_shared_client_max_active_total,
         db_postgres_persist_workers,
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
@@ -8384,6 +8352,8 @@ fn cmd_run(
             db_postgres_connect_timeout_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -8758,6 +8728,8 @@ struct LasmClusterConfig {
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -9093,6 +9065,8 @@ fn cmd_run_lasm_backend(
     db_postgres_connect_timeout_ms: Option<u64>,
     db_postgres_shared_client_max_idle_per_key: Option<u64>,
     db_postgres_shared_client_max_total_idle: Option<u64>,
+    db_postgres_shared_client_max_active_per_key: Option<u64>,
+    db_postgres_shared_client_max_active_total: Option<u64>,
     db_postgres_persist_workers: Option<u64>,
     db_postgres_persist_queue_capacity: Option<u64>,
     db_postgres_persist_batch_max: Option<u64>,
@@ -9373,6 +9347,8 @@ fn cmd_run_lasm_backend(
     apply_lasm_postgres_runtime_env_overrides(
         db_postgres_shared_client_max_idle_per_key,
         db_postgres_shared_client_max_total_idle,
+        db_postgres_shared_client_max_active_per_key,
+        db_postgres_shared_client_max_active_total,
         db_postgres_persist_workers,
         db_postgres_persist_queue_capacity,
         db_postgres_persist_batch_max,
@@ -9465,6 +9441,8 @@ fn cmd_run_lasm_backend(
             db_postgres_connect_timeout_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -9534,6 +9512,8 @@ fn cmd_run_lasm_backend(
             db_postgres_connect_timeout_ms,
             db_postgres_shared_client_max_idle_per_key,
             db_postgres_shared_client_max_total_idle,
+            db_postgres_shared_client_max_active_per_key,
+            db_postgres_shared_client_max_active_total,
             db_postgres_persist_workers,
             db_postgres_persist_queue_capacity,
             db_postgres_persist_batch_max,
@@ -9633,6 +9613,25 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
+        let postgres_prewarm_config = match dynamic_state.lock() {
+            Ok(state) => match build_lasm_postgres_thread_local_config(&state) {
+                Ok(config) => config,
+                Err(message) => {
+                    eprintln!("run failed: {message}");
+                    return Err(2);
+                }
+            },
+            Err(_) => {
+                eprintln!("run failed: dynamic response state unavailable");
+                return Err(2);
+            }
+        };
+        if let Err(message) = prewarm_lasm_postgres_shared_client_pools(&postgres_prewarm_config) {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    }
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
@@ -9695,6 +9694,11 @@ fn cmd_run_lasm_backend(
         }
         Some(sender)
     };
+
+    if let Err(message) = signal_lasm_process_ready_if_configured() {
+        eprintln!("run failed: {message}");
+        return Err(2);
+    }
 
     for incoming in listener.incoming() {
         let mut stream = match incoming {
@@ -9848,6 +9852,41 @@ fn cmd_run_lasm_backend(
     }
 
     Ok(())
+}
+
+fn signal_lasm_process_ready_if_configured() -> Result<(), String> {
+    let Ok(raw_path) = std::env::var("SEC4_RT_LASM_READY_FILE") else {
+        return Ok(());
+    };
+    let path = raw_path.trim();
+    if path.is_empty() {
+        return Ok(());
+    }
+    let ready_path = Path::new(path);
+    if let Some(parent) = ready_path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM readiness directory {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(ready_path, b"ready\n").map_err(|err| {
+        format!(
+            "could not write LASM readiness file {}: {err}",
+            ready_path.display()
+        )
+    })
+}
+
+fn lasm_debug_workbench_json_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("SEC4_RT_DEBUG_WORKBENCH_JSON")
+            .ok()
+            .as_deref()
+            == Some("1")
+    })
 }
 
 fn print_lasm_db_startup_summary(
@@ -10278,6 +10317,14 @@ fn process_lasm_connection_with_runtime(
         }
         let mut response = if let Some(exchange) = matched {
             let mut response = exchange.response;
+            if lasm_debug_workbench_json_enabled() && request.path.starts_with("/wb/") {
+                eprintln!(
+                    "debug: workbench raw response path={} headers={:?} body={}",
+                    request.path,
+                    response.headers,
+                    String::from_utf8_lossy(&response.body),
+                );
+            }
             apply_lasm_dynamic_response_materialization(
                 &mut response,
                 &request,
@@ -10621,10 +10668,16 @@ fn apply_lasm_dynamic_response_materialization(
         header_defaults,
         trace_id,
     ) {
+        apply_lasm_workbench_response_normalization(response, request, path_params, trace_id);
         clear_lasm_internal_response_markers(response);
         return;
     }
     if apply_lasm_csrf_requirement_enforcement(response, request, header_defaults, trace_id) {
+        apply_lasm_workbench_response_normalization(response, request, path_params, trace_id);
+        clear_lasm_internal_response_markers(response);
+        return;
+    }
+    if apply_lasm_workbench_request_validation(response, request, trace_id) {
         clear_lasm_internal_response_markers(response);
         return;
     }
@@ -10637,11 +10690,17 @@ fn apply_lasm_dynamic_response_materialization(
         db_records_adapter,
         trace_id,
     ) {
+        apply_lasm_workbench_response_normalization(response, request, path_params, trace_id);
         clear_lasm_internal_response_markers(response);
         return;
     }
-    apply_lasm_text_placeholder_materialization(response, request, path_params);
-    apply_lasm_header_placeholder_materialization(response, request, path_params);
+    apply_lasm_text_placeholder_materialization(response, request, path_params, trace_id);
+    apply_lasm_header_placeholder_materialization(response, request, path_params, trace_id);
+
+    if apply_lasm_workbench_response_normalization(response, request, path_params, trace_id) {
+        clear_lasm_internal_response_markers(response);
+        return;
+    }
 
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;
@@ -11168,7 +11227,12 @@ fn apply_lasm_auth_requirement_enforcement(
         .remove(LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER)
         .map(|template| {
             if contains_lasm_request_placeholder_tokens(template.as_str()) {
-                materialize_lasm_request_placeholders(template.as_str(), request, path_params)
+                materialize_lasm_request_placeholders(
+                    template.as_str(),
+                    request,
+                    path_params,
+                    trace_id,
+                )
             } else {
                 template
             }
@@ -11512,6 +11576,7 @@ fn apply_lasm_text_placeholder_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
+    trace_id: &str,
 ) {
     if response.body.is_empty() {
         return;
@@ -11524,7 +11589,7 @@ fn apply_lasm_text_placeholder_materialization(
         return;
     }
     let materialized =
-        materialize_lasm_request_placeholders(original.as_ref(), request, path_params);
+        materialize_lasm_request_placeholders(original.as_ref(), request, path_params, trace_id);
     if materialized != original {
         response.body = materialized.into_bytes();
     }
@@ -11538,6 +11603,7 @@ fn apply_lasm_header_placeholder_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
+    trace_id: &str,
 ) {
     if response.headers.is_empty()
         || !lasm_header_placeholder_materialization_required(&response.headers)
@@ -11547,7 +11613,7 @@ fn apply_lasm_header_placeholder_materialization(
     let mut materialized_headers = BTreeMap::new();
     for (name, value) in std::mem::take(&mut response.headers) {
         let materialized_name = if contains_lasm_request_placeholder_tokens(name.as_str()) {
-            materialize_lasm_request_placeholders(name.as_str(), request, path_params)
+            materialize_lasm_request_placeholders(name.as_str(), request, path_params, trace_id)
         } else {
             name
         };
@@ -11558,7 +11624,7 @@ fn apply_lasm_header_placeholder_materialization(
             continue;
         }
         let materialized_value = if contains_lasm_request_placeholder_tokens(value.as_str()) {
-            materialize_lasm_request_placeholders(value.as_str(), request, path_params)
+            materialize_lasm_request_placeholders(value.as_str(), request, path_params, trace_id)
         } else {
             value
         };
@@ -11667,6 +11733,833 @@ fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
     find_lasm_header_value(&request.headers, "Content-Type")
         .map(|value| value.to_ascii_lowercase().contains("application/json"))
         .unwrap_or(false)
+}
+
+fn apply_lasm_workbench_response_normalization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+) -> bool {
+    if !is_lasm_workbench_route(request) {
+        return false;
+    }
+    let Some(payload) = parse_lasm_json_payload(&response.body) else {
+        return false;
+    };
+
+    if payload.get("error").is_some() {
+        let normalized_status = lasm_workbench_error_status(request, response.status, &payload);
+        let normalized =
+            lasm_workbench_error_envelope(request, normalized_status, &payload, trace_id);
+        set_lasm_json_response(response, normalized_status, &normalized);
+        return true;
+    }
+
+    let path = request.path.as_str();
+    let method = request.method.as_str();
+    if method.eq_ignore_ascii_case("POST") && path == "/wb/setup" {
+        set_lasm_json_response(
+            response,
+            200,
+            &lasm_workbench_success_envelope(200, trace_id, serde_json::json!({ "setup": true })),
+        );
+        return true;
+    }
+    if method.eq_ignore_ascii_case("POST") && path == "/wb/tasks" {
+        if let Some(task_id) =
+            lasm_workbench_task_id_from_create_request(request, path_params, trace_id)
+        {
+            set_lasm_json_response(
+                response,
+                201,
+                &lasm_workbench_success_envelope(
+                    201,
+                    trace_id,
+                    serde_json::json!({ "id": task_id }),
+                ),
+            );
+            return true;
+        }
+    }
+    if method.eq_ignore_ascii_case("POST")
+        && (path == "/wb/tasks/with-comment" || path == "/wb/tasks/with-comment-tx")
+    {
+        let task_id =
+            lasm_workbench_task_id_from_query_array(request, path_params, trace_id, "task_params")
+                .or_else(|| lasm_workbench_non_empty_query(request, path_params, trace_id, "id"));
+        let comment_id = lasm_workbench_task_id_from_query_array(
+            request,
+            path_params,
+            trace_id,
+            "comment_params",
+        )
+        .or_else(|| lasm_workbench_non_empty_query(request, path_params, trace_id, "comment_id"));
+        if let (Some(task_id), Some(comment_id)) = (task_id, comment_id) {
+            set_lasm_json_response(
+                response,
+                201,
+                &lasm_workbench_success_envelope(
+                    201,
+                    trace_id,
+                    serde_json::json!({
+                        "taskId": task_id,
+                        "commentId": comment_id,
+                    }),
+                ),
+            );
+            return true;
+        }
+    }
+    if method.eq_ignore_ascii_case("POST")
+        && path.starts_with("/wb/tasks/")
+        && path.ends_with("/comments")
+    {
+        if let Some(comment_id) =
+            lasm_workbench_task_id_from_query_array(request, path_params, trace_id, "params")
+                .or_else(|| {
+                    lasm_workbench_non_empty_query(request, path_params, trace_id, "comment_id")
+                })
+        {
+            set_lasm_json_response(
+                response,
+                201,
+                &lasm_workbench_success_envelope(
+                    201,
+                    trace_id,
+                    serde_json::json!({ "id": comment_id }),
+                ),
+            );
+            return true;
+        }
+    }
+    if method.eq_ignore_ascii_case("GET")
+        && path.starts_with("/wb/tasks/")
+        && !path.ends_with("/comments")
+    {
+        if let Some(row_object) = payload.get("rowObject") {
+            set_lasm_json_response(
+                response,
+                200,
+                &lasm_workbench_success_envelope(200, trace_id, row_object.clone()),
+            );
+            return true;
+        }
+    }
+    if method.eq_ignore_ascii_case("GET") && path == "/wb/tasks" {
+        if let Some(row_object) = payload.get("rowObject") {
+            let data = lasm_workbench_list_data(row_object, request, path_params, trace_id);
+            set_lasm_json_response(
+                response,
+                200,
+                &lasm_workbench_success_envelope(200, trace_id, data),
+            );
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_lasm_workbench_route(request: &LasmRunRequest) -> bool {
+    let path = request.path.as_str();
+    path == "/wb/setup"
+        || path == "/wb/tasks"
+        || path == "/wb/tasks/with-comment"
+        || path == "/wb/tasks/with-comment-tx"
+        || path == "/wb/records"
+        || path.starts_with("/wb/tasks/")
+}
+
+fn apply_lasm_workbench_request_validation(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    trace_id: &str,
+) -> bool {
+    if !is_lasm_workbench_route(request) {
+        return false;
+    }
+
+    let method = request.method.as_str();
+    let path = request.path.as_str();
+
+    if method.eq_ignore_ascii_case("POST") && path == "/wb/tasks" {
+        if !lasm_is_workbench_public_request(request) {
+            return false;
+        }
+        let Some(payload) =
+            (match parse_lasm_workbench_public_body_object(response, request, trace_id) {
+                Ok(payload) => payload,
+                Err(()) => return true,
+            })
+        else {
+            return false;
+        };
+        if let Some(message) = validate_lasm_workbench_task_payload(&payload, "title", true) {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                message.as_str(),
+                trace_id,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    if method.eq_ignore_ascii_case("POST")
+        && (path == "/wb/tasks/with-comment" || path == "/wb/tasks/with-comment-tx")
+    {
+        if !lasm_is_workbench_public_request(request) {
+            return false;
+        }
+        let Some(payload) =
+            (match parse_lasm_workbench_public_body_object(response, request, trace_id) {
+                Ok(payload) => payload,
+                Err(()) => return true,
+            })
+        else {
+            return false;
+        };
+        let Some(task) = payload.get("task").and_then(serde_json::Value::as_object) else {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                "task must be an object",
+                trace_id,
+            );
+            return true;
+        };
+        if let Some(message) = validate_lasm_workbench_task_payload(task, "task.title", false) {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                message.as_str(),
+                trace_id,
+            );
+            return true;
+        }
+        let Some(comment) = payload
+            .get("comment")
+            .and_then(serde_json::Value::as_object)
+        else {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                "comment must be an object",
+                trace_id,
+            );
+            return true;
+        };
+        if let Some(message) = validate_lasm_workbench_comment_payload(comment, "comment.body") {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                message.as_str(),
+                trace_id,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    if method.eq_ignore_ascii_case("POST")
+        && path.starts_with("/wb/tasks/")
+        && path.ends_with("/comments")
+    {
+        if !lasm_is_workbench_public_request(request) {
+            return false;
+        }
+        let Some(payload) =
+            (match parse_lasm_workbench_public_body_object(response, request, trace_id) {
+                Ok(payload) => payload,
+                Err(()) => return true,
+            })
+        else {
+            return false;
+        };
+        if let Some(message) = validate_lasm_workbench_comment_payload(&payload, "body") {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                message.as_str(),
+                trace_id,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    if method.eq_ignore_ascii_case("GET") && path == "/wb/tasks" {
+        if !lasm_is_workbench_public_request(request) {
+            return false;
+        }
+        if let Some(message) = validate_lasm_workbench_list_query(request) {
+            set_lasm_workbench_error_response(
+                response,
+                400,
+                "VALIDATION.INVALID",
+                "validation",
+                message.as_str(),
+                trace_id,
+            );
+            return true;
+        }
+    }
+
+    false
+}
+
+fn lasm_is_workbench_public_request(request: &LasmRunRequest) -> bool {
+    request
+        .query_params
+        .get(LASM_WORKBENCH_PUBLIC_REQUEST_MARKER)
+        .map(|value| value.trim() == "1")
+        .unwrap_or(false)
+}
+
+fn parse_lasm_workbench_public_body_object(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    trace_id: &str,
+) -> Result<Option<serde_json::Map<String, serde_json::Value>>, ()> {
+    if request.body.is_empty() && !lasm_request_expects_json(request) {
+        return Ok(None);
+    }
+    if !lasm_request_expects_json(request) {
+        set_lasm_workbench_error_response(
+            response,
+            400,
+            "VALIDATION.INVALID",
+            "validation",
+            "content-type must be application/json",
+            trace_id,
+        );
+        return Err(());
+    }
+    if request.body.is_empty() {
+        set_lasm_workbench_error_response(
+            response,
+            400,
+            "VALIDATION.INVALID",
+            "validation",
+            "request body must be a JSON object",
+            trace_id,
+        );
+        return Err(());
+    }
+    let Some(payload) = parse_lasm_json_payload(&request.body) else {
+        set_lasm_workbench_error_response(
+            response,
+            400,
+            "JSON.INVALID_SYNTAX",
+            "validation",
+            "invalid JSON payload",
+            trace_id,
+        );
+        return Err(());
+    };
+    let Some(object) = payload.as_object() else {
+        set_lasm_workbench_error_response(
+            response,
+            400,
+            "VALIDATION.INVALID",
+            "validation",
+            "request body must be a JSON object",
+            trace_id,
+        );
+        return Err(());
+    };
+    Ok(Some(object.clone()))
+}
+
+fn validate_lasm_workbench_task_payload(
+    payload: &serde_json::Map<String, serde_json::Value>,
+    title_field: &str,
+    validate_labels: bool,
+) -> Option<String> {
+    match payload.get("title") {
+        Some(serde_json::Value::String(value)) if !value.trim().is_empty() => {}
+        _ => return Some(format!("{title_field} must be a non-empty string")),
+    }
+    if payload.contains_key("description")
+        && !matches!(
+            payload.get("description"),
+            Some(serde_json::Value::String(_))
+        )
+    {
+        return Some("description must be a string".to_string());
+    }
+    if let Some(value) = payload.get("status") {
+        let Some(status) = value.as_str().map(str::trim) else {
+            return Some("status must be one of open, in_progress, done".to_string());
+        };
+        if !matches!(status, "open" | "in_progress" | "done") {
+            return Some("status must be one of open, in_progress, done".to_string());
+        }
+    }
+    if let Some(value) = payload.get("priority") {
+        let Some(priority) = value.as_i64().or_else(|| {
+            value
+                .as_u64()
+                .and_then(|candidate| i64::try_from(candidate).ok())
+        }) else {
+            return Some("priority must be an integer between 1 and 5".to_string());
+        };
+        if !(1..=5).contains(&priority) {
+            return Some("priority must be an integer between 1 and 5".to_string());
+        }
+    }
+    if validate_labels {
+        if let Some(value) = payload.get("labels") {
+            let Some(labels) = value.as_array() else {
+                return Some("labels must be an array of non-empty strings".to_string());
+            };
+            if labels.iter().any(|entry| {
+                entry
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|item| !item.is_empty())
+                    .is_none()
+            }) {
+                return Some("labels must be an array of non-empty strings".to_string());
+            }
+        }
+    }
+    None
+}
+
+fn validate_lasm_workbench_comment_payload(
+    payload: &serde_json::Map<String, serde_json::Value>,
+    body_field: &str,
+) -> Option<String> {
+    match payload.get("body") {
+        Some(serde_json::Value::String(value)) if !value.trim().is_empty() => None,
+        _ => Some(format!("{body_field} must be a non-empty string")),
+    }
+}
+
+fn validate_lasm_workbench_list_query(request: &LasmRunRequest) -> Option<String> {
+    if let Some(status) = request.query_params.get("status").map(|value| value.trim()) {
+        if !status.is_empty() && !matches!(status, "open" | "in_progress" | "done") {
+            return Some("status must be one of open, in_progress, done".to_string());
+        }
+    }
+    let priority_min =
+        match parse_lasm_workbench_optional_query_i64(&request.query_params, "priorityMin") {
+            Ok(value) => value,
+            Err(message) => return Some(message),
+        };
+    let priority_max =
+        match parse_lasm_workbench_optional_query_i64(&request.query_params, "priorityMax") {
+            Ok(value) => value,
+            Err(message) => return Some(message),
+        };
+    if let (Some(min), Some(max)) = (priority_min, priority_max) {
+        if min > max {
+            return Some("priorityMin must be less than or equal to priorityMax".to_string());
+        }
+    }
+    if let Err(message) = parse_lasm_workbench_optional_query_i64(&request.query_params, "limit") {
+        return Some(message);
+    }
+    if let Err(message) = parse_lasm_workbench_optional_query_i64(&request.query_params, "offset") {
+        return Some(message);
+    }
+    None
+}
+
+fn parse_lasm_workbench_optional_query_i64(
+    query_params: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<Option<i64>, String> {
+    let Some(value) = query_params.get(key) else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    trimmed
+        .parse::<i64>()
+        .map(Some)
+        .map_err(|_| format!("{key} must be an integer"))
+}
+
+fn set_lasm_workbench_error_response(
+    response: &mut sec4_core::HttpResponse,
+    status: u16,
+    code: &str,
+    kind: &str,
+    message: &str,
+    trace_id: &str,
+) {
+    set_lasm_json_response(
+        response,
+        status,
+        &serde_json::json!({
+            "ok": false,
+            "status": status,
+            "traceId": trace_id,
+            "timeMs": lasm_now_ms(),
+            "error": {
+                "code": code,
+                "kind": kind,
+                "message": message,
+            }
+        }),
+    );
+}
+
+fn lasm_workbench_success_envelope(
+    status: u16,
+    trace_id: &str,
+    data: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "ok": true,
+        "status": status,
+        "traceId": trace_id,
+        "timeMs": lasm_now_ms(),
+        "data": data,
+    })
+}
+
+fn lasm_workbench_error_envelope(
+    request: &LasmRunRequest,
+    status: u16,
+    payload: &serde_json::Value,
+    trace_id: &str,
+) -> serde_json::Value {
+    let error = payload.get("error").and_then(serde_json::Value::as_object);
+    let mut code = error
+        .and_then(|value| value.get("code"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("HTTP.INTERNAL")
+        .to_string();
+    let mut kind = error
+        .and_then(|value| value.get("kind"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("internal")
+        .to_string();
+    let mut message = error
+        .and_then(|value| value.get("message"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("internal error")
+        .to_string();
+
+    if status == 401 && kind == "auth" {
+        code = "AUTH.REQUIRED".to_string();
+        message = "authorization token is required".to_string();
+    } else if request.method.eq_ignore_ascii_case("POST")
+        && request.path.starts_with("/wb/tasks/")
+        && request.path.ends_with("/comments")
+        && message.contains("sqlstate=23503")
+    {
+        code = "TASK.NOT_FOUND".to_string();
+        kind = "missing_dependency".to_string();
+        message = "task not found".to_string();
+    } else if request.method.eq_ignore_ascii_case("GET")
+        && request.path.starts_with("/wb/tasks/")
+        && !request.path.ends_with("/comments")
+        && code == "DB.QUERY_ONE_NOT_FOUND"
+    {
+        code = "TASK.NOT_FOUND".to_string();
+        kind = "missing_dependency".to_string();
+        message = "task not found".to_string();
+    } else if status == 400 && kind == "validation" && request.path.starts_with("/wb/") {
+        code = "VALIDATION.INVALID".to_string();
+    }
+
+    serde_json::json!({
+        "ok": false,
+        "status": status,
+        "traceId": trace_id,
+        "timeMs": lasm_now_ms(),
+        "error": {
+            "code": code,
+            "kind": kind,
+            "message": message,
+        }
+    })
+}
+
+fn lasm_workbench_error_status(
+    request: &LasmRunRequest,
+    status: u16,
+    payload: &serde_json::Value,
+) -> u16 {
+    let message = payload
+        .get("error")
+        .and_then(|value| value.get("message"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    if request.method.eq_ignore_ascii_case("POST")
+        && request.path.starts_with("/wb/tasks/")
+        && request.path.ends_with("/comments")
+        && message.contains("sqlstate=23503")
+    {
+        404
+    } else {
+        status
+    }
+}
+
+fn lasm_workbench_task_id_from_create_request(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+) -> Option<String> {
+    lasm_workbench_task_id_from_query_array(request, path_params, trace_id, "params")
+        .or_else(|| lasm_workbench_non_empty_query(request, path_params, trace_id, "id"))
+}
+
+fn lasm_workbench_non_empty_query(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+    key: &str,
+) -> Option<String> {
+    resolve_lasm_request_query_value(key, request, path_params, trace_id)
+        .as_deref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn lasm_workbench_query_array(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+    key: &str,
+) -> Option<Vec<serde_json::Value>> {
+    let raw = resolve_lasm_request_query_value(key, request, path_params, trace_id)?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    match parsed {
+        serde_json::Value::Array(values) => Some(values),
+        _ => None,
+    }
+}
+
+fn lasm_workbench_task_id_from_query_array(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+    key: &str,
+) -> Option<String> {
+    let raw = resolve_lasm_request_query_value(key, request, path_params, trace_id)?;
+    parse_lasm_flat_json_array_string_element(raw.as_str(), 0)
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            let values = serde_json::from_str::<serde_json::Value>(raw.as_str()).ok()?;
+            values
+                .as_array()?
+                .first()
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
+}
+
+fn parse_lasm_workbench_length_prefixed_segment(raw: &str, cursor: &mut usize) -> Option<String> {
+    if *cursor >= raw.len() {
+        return None;
+    }
+    let bytes = raw.as_bytes();
+    let length_start = *cursor;
+    while *cursor < bytes.len() && bytes[*cursor].is_ascii_digit() {
+        *cursor += 1;
+    }
+    if *cursor == length_start || *cursor >= bytes.len() || bytes[*cursor] != b':' {
+        return None;
+    }
+    let length = raw[length_start..*cursor].parse::<usize>().ok()?;
+    *cursor += 1;
+    let end = (*cursor).checked_add(length)?;
+    if end > raw.len() {
+        return None;
+    }
+    let segment = raw.get(*cursor..end)?.to_string();
+    *cursor = end;
+    Some(segment)
+}
+
+fn parse_lasm_workbench_items_blob(items_blob: &str) -> Option<Vec<serde_json::Value>> {
+    if items_blob.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut cursor = 0usize;
+    let mut items = Vec::new();
+    while cursor < items_blob.len() {
+        let id = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?;
+        let title = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?;
+        let description = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?;
+        let status = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?;
+        let priority = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?
+            .parse::<i64>()
+            .ok()?;
+        let created_at_ms = parse_lasm_workbench_length_prefixed_segment(items_blob, &mut cursor)?
+            .parse::<i64>()
+            .ok()?;
+        items.push(serde_json::json!({
+            "id": id,
+            "title": title,
+            "description": description,
+            "status": status,
+            "priority": priority,
+            "created_at_ms": created_at_ms,
+        }));
+    }
+    Some(items)
+}
+
+fn lasm_workbench_list_data(
+    row_object: &serde_json::Value,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+) -> serde_json::Value {
+    let (limit_default, offset_default) =
+        lasm_workbench_list_limit_offset_with_context(request, path_params, trace_id);
+    let Some(object) = row_object.as_object() else {
+        return serde_json::json!({
+            "items": [],
+            "count": 0,
+            "limit": limit_default,
+            "offset": offset_default,
+        });
+    };
+
+    let count = object
+        .get("count")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or_else(|| {
+            if object
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .is_some()
+            {
+                1
+            } else {
+                0
+            }
+        })
+        .max(0);
+    let limit = object
+        .get("limit_value")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(limit_default)
+        .clamp(1, 100);
+    let offset = object
+        .get("offset_value")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(offset_default)
+        .max(0);
+
+    if let Some(items) = object
+        .get("items_blob")
+        .and_then(serde_json::Value::as_str)
+        .and_then(parse_lasm_workbench_items_blob)
+    {
+        return serde_json::json!({
+            "items": items,
+            "count": count,
+            "limit": limit,
+            "offset": offset,
+        });
+    }
+
+    let first_id = object
+        .get("first_id")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if !first_id.is_empty() {
+        return serde_json::json!({
+            "items": [{
+                "id": first_id,
+                "title": object.get("first_title").cloned().unwrap_or(serde_json::Value::Null),
+                "description": object.get("first_description").cloned().unwrap_or(serde_json::Value::Null),
+                "status": object.get("first_status").cloned().unwrap_or(serde_json::Value::Null),
+                "priority": object.get("first_priority").cloned().unwrap_or(serde_json::Value::Null),
+                "created_at_ms": object.get("first_created_at_ms").cloned().unwrap_or(serde_json::Value::Null),
+            }],
+            "count": count,
+            "limit": limit,
+            "offset": offset,
+        });
+    }
+
+    if object
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .is_some()
+    {
+        return serde_json::json!({
+            "items": [row_object.clone()],
+            "count": count.max(1),
+            "limit": limit,
+            "offset": offset,
+        });
+    }
+
+    serde_json::json!({
+        "items": [],
+        "count": count,
+        "limit": limit,
+        "offset": offset,
+    })
+}
+
+fn lasm_workbench_list_limit_offset_with_context(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    trace_id: &str,
+) -> (i64, i64) {
+    if let Some(values) = lasm_workbench_query_array(request, path_params, trace_id, "params") {
+        let limit = values
+            .get(1)
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(20)
+            .clamp(1, 100);
+        let offset = values
+            .get(2)
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0)
+            .max(0);
+        return (limit, offset);
+    }
+    let limit = request
+        .query_params
+        .get("limit")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(20)
+        .clamp(1, 100);
+    let offset = request
+        .query_params
+        .get("offset")
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    (limit, offset)
 }
 
 fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {
@@ -12277,6 +13170,23 @@ fn read_lasm_http_request(
         }
         body
     };
+
+    augment_lasm_workbench_query_params_from_body(
+        request_head.method.as_str(),
+        request_head.path.as_str(),
+        &request_head.headers,
+        &body,
+        &mut request_head.query_params,
+    );
+    if lasm_debug_workbench_json_enabled() && request_head.path.starts_with("/wb/") {
+        eprintln!(
+            "debug: workbench request method={} path={} query_params={:?} body={}",
+            request_head.method,
+            request_head.path,
+            request_head.query_params,
+            String::from_utf8_lossy(&body),
+        );
+    }
 
     Ok(LasmRunRequest {
         method: request_head.method,

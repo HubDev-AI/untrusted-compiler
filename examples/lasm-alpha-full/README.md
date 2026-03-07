@@ -11,6 +11,12 @@ Full LASM alpha example app that combines:
 
 Use this app to test LASM + DB behavior end-to-end.
 
+Canonical alpha/operator proof path is:
+
+- `benchmark-suite/services/sec4-lasm-workbench/README.md`
+- `benchmark-suite/services/sec4-lasm-workbench/smoke.sh`
+- `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+
 ## 1) Start
 
 Default adapter (`records.log`):
@@ -259,7 +265,7 @@ export SEC4_ALPHA_FULL_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgre
 
 ## 9) Cross-backend benchmark matrix (sec4/sec4-lasm/node/go/rust)
 
-This example is the operator baseline before running workbench benchmark matrix.
+This example is a supplementary feature reference before/alongside the canonical workbench benchmark matrix.
 
 Run from the example directory:
 

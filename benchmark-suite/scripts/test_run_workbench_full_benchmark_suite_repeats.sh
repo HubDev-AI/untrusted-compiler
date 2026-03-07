@@ -28,6 +28,15 @@ if ! jq -e '.mode == "workbench-full-benchmark-suite-repeats" and .dryRun == tru
   echo "invalid repeats summary contract for dry-run output" >&2
   exit 1
 fi
+if ! jq -e '
+  (.scripts.wrapper | startswith("benchmark-suite/scripts/"))
+  and (.scripts.inner | startswith("benchmark-suite/scripts/"))
+  and ([.runs[].summary, .runs[].fixedRuns, .runs[].stepRuns, .runs[].compareMatrix, .runs[].analysis, .runs[].stepMatrix, .runs[].report]
+    | all(startswith("benchmark-suite/results/summaries/workbench-full-benchmark-runs/")))
+' "$tmp_out" >/dev/null; then
+  echo "expected repeats summary artifact references to be repo-relative" >&2
+  exit 1
+fi
 
 if "$root_dir/scripts/run_workbench_full_benchmark_suite_repeats.sh" --runs 0 --dry-run --impls sec4 --endpoints wb-task-get >/dev/null 2>&1; then
   echo "expected --runs 0 to fail" >&2

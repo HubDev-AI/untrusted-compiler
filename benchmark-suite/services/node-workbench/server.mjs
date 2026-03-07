@@ -262,18 +262,8 @@ function runPsql(sql) {
 }
 
 function runPsqlTx(statements) {
-  runPsql('BEGIN;');
-  try {
-    for (const sql of statements) runPsql(sql);
-    runPsql('COMMIT;');
-  } catch (err) {
-    try {
-      runPsql('ROLLBACK;');
-    } catch {
-      // ignore rollback errors to preserve primary failure
-    }
-    throw err;
-  }
+  const script = ['BEGIN;', ...statements, 'COMMIT;'].join('\n');
+  runPsql(script);
 }
 
 function setupSchema() {
@@ -420,7 +410,10 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && pathname === '/wb/tasks/with-comment') {
+    if (
+      req.method === 'POST'
+      && (pathname === '/wb/tasks/with-comment' || pathname === '/wb/tasks/with-comment-tx')
+    ) {
       requireAuth(req);
       const data = createTaskWithComment(url);
       writeJson(res, 201, successEnvelope(201, traceId, data), traceId);

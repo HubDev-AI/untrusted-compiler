@@ -11,7 +11,7 @@ It is organized for a new user first, then for operators who need deeper example
 | Install tools and verify local setup | `00-environment-setup.md` |
 | Use Zed with plugin + language server | `01-zed-plugin-workflow.md` |
 | Build and run a first server quickly | `02-build-your-first-server.md` |
-| Run LASM with a real Postgres DB | `03-real-db-postgres-lasm.md` |
+| Run the canonical LASM + Postgres operator app | `03-real-db-postgres-lasm.md` |
 | Explore all runnable examples | `04-example-catalog.md` |
 | Run cross-backend benchmarks and capacity probes | `05-benchmarks-capacity.md` |
 | Resolve common failures quickly | `06-troubleshooting.md` |
@@ -31,10 +31,12 @@ It is organized for a new user first, then for operators who need deeper example
   - `sec4 init`, `sec4 check`, `sec4 build`, `sec4 run`
 - IDE workflow:
   - Zed extension install/update/rollback + smoke checks
-- Runtime backends:
-  - LASM default runtime
-  - C backend compatibility path (still present, not primary path)
-- Real DB adapters in LASM:
+- Canonical alpha runtime path:
+  - LASM + Postgres via `benchmark-suite/services/sec4-lasm-workbench`
+  - canonical operator smoke contracts:
+    - `benchmark-suite/services/sec4-lasm-workbench/smoke.sh`
+    - `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+- Additional adapter coverage (non-canonical examples):
   - `records` (`records.log`)
   - `sqlite` (`records.sqlite3`)
   - `postgres` (real Postgres DSN)
@@ -51,4 +53,3 @@ It is organized for a new user first, then for operators who need deeper example
 - Long-form implementation book: `docs/book/README.md`
 - Roadmap/state: `docs/05-sec4-master-roadmap.md`
 - Operator handoff contract: `docs/codex-operator-handoff.md`
-

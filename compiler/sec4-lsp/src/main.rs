@@ -1590,7 +1590,7 @@ fn project_root_for_uri(uri: &str) -> Option<PathBuf> {
             break;
         }
     }
-    path.parent().map(|parent| parent.to_path_buf())
+    None
 }
 
 fn collect_ai_files(root: &PathBuf, out: &mut Vec<PathBuf>) {

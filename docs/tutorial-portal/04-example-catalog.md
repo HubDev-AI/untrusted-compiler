@@ -10,19 +10,20 @@ This page maps every active example to its purpose and best use case.
 | `examples/hello-api` | minimal HTTP route flow | none | baseline server path |
 | `examples/showcase-api` | typed sinks + DB/FS/NET route coverage | records/FS/NET runtime | backend-agnostic showcase |
 | `examples/zed-plugin-smoke` | plugin/LSP smoke project | n/a | diagnostics/format/nav fixture |
+| `benchmark-suite/services/sec4-lasm-workbench` | canonical LASM alpha app (tutorial/operator/benchmark contract) | postgres | primary operator and benchmark proof path |
 | `examples/lasm-db-alpha` | LASM DB adapter validation | records/sqlite/postgres | focused DB alpha sample |
 | `examples/postgres-e2e` | LASM + real Postgres end-to-end | postgres | strict DB reality check |
-| `examples/lasm-alpha-full` | full alpha app (middleware, users, DB) | records/sqlite/postgres | primary operator demo |
+| `examples/lasm-alpha-full` | full feature reference app (middleware, users, DB) | records/sqlite/postgres | supplementary operator sample (non-canonical) |
 | `examples/lasm-alpha-showcase` | multi-file showcase with db/fs/net | records/sqlite/postgres | module layout + runtime behavior |
-| `examples/lasm-workbench` | large manual verification app | records/sqlite/postgres | deep smoke, multi-module |
+| `examples/lasm-workbench` | legacy/manual workbench variant | records/sqlite/postgres | keep for local experiments; canonical flow is under benchmark-suite |
 
 ## Recommended usage order
 
 1. `examples/hello-api` for first run.
 2. `examples/zed-plugin-smoke` for IDE workflow.
-3. `examples/postgres-e2e` for real DB proof.
-4. `examples/lasm-alpha-full` for full alpha behavior.
-5. `examples/lasm-workbench` for larger operator validation.
+3. `benchmark-suite/services/sec4-lasm-workbench` for canonical real DB/operator proof.
+4. `examples/postgres-e2e` for focused DB sanity checks.
+5. `examples/lasm-alpha-full` for full feature/reference behavior.
 
 ## Command quick refs
 
@@ -39,6 +40,14 @@ cargo run -p sec4 -- run --path examples/hello-api --backend lasm --port 8080
 sec4 check --path examples/zed-plugin-smoke
 sec4 fmt --path examples/zed-plugin-smoke
 scripts/run-zed-plugin-smoke.sh --fast
+```
+
+### sec4-lasm-workbench (canonical)
+
+```bash
+cargo run -p sec4 -- check --path benchmark-suite/services/sec4-lasm-workbench
+benchmark-suite/services/sec4-lasm-workbench/smoke.sh
+benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh
 ```
 
 ### postgres-e2e
@@ -59,7 +68,7 @@ make run-records
 make smoke
 ```
 
-### lasm-workbench
+### lasm-workbench (legacy/manual)
 
 ```bash
 cd examples/lasm-workbench
@@ -76,6 +85,7 @@ cd examples/lasm-workbench
 - `examples/postgres-e2e/README.md`
 - `examples/showcase-api/README.md`
 - `examples/zed-plugin-smoke/README.md`
+- `benchmark-suite/services/sec4-lasm-workbench/README.md`
 
 ## Next step
 

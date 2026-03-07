@@ -14,7 +14,7 @@ use crate::{
 use postgres::types::ToSql;
 use postgres::{Client as PostgresClient, GenericClient, Statement as PostgresStatement};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -38,8 +38,8 @@ pub(crate) struct LasmPostgresThreadLocalConfig {
     pub(crate) retryable_conflict_retry_max: usize,
 }
 
-struct LasmPostgresThreadLocalClient {
-    client: PostgresClient,
+pub(crate) struct LasmPostgresThreadLocalClient {
+    pub(crate) client: PostgresClient,
     statement_cache: HashMap<String, PostgresStatement>,
     statement_cache_order: VecDeque<String>,
     statement_cache_evictions_total: u64,
@@ -129,11 +129,46 @@ const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_ENV: &str =
 const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_DEFAULT: usize = 128;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MAX: usize = 4096;
-static LASM_POSTGRES_SHARED_CLIENTS: OnceLock<
-    Mutex<HashMap<String, Vec<LasmPostgresThreadLocalClient>>>,
-> = OnceLock::new();
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_ENV: &str =
+    "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY";
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT: usize = 32;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN: usize = 1;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MAX: usize = 1024;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV: &str =
+    "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL";
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT: usize = 64;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN: usize = 1;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MAX: usize = 4096;
+
+#[derive(Default)]
+struct LasmPostgresSharedClientPoolState {
+    idle: HashMap<String, Vec<LasmPostgresThreadLocalClient>>,
+    idle_total: usize,
+    active_by_key: HashMap<String, usize>,
+    active_total: usize,
+}
+
+type LasmPostgresSharedClientPool = (Mutex<LasmPostgresSharedClientPoolState>, Condvar);
+type LasmPostgresSchemaEnsureTracker = (
+    Mutex<HashMap<String, LasmPostgresSchemaEnsureState>>,
+    Condvar,
+);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LasmPostgresSchemaEnsureState {
+    InProgress,
+    Ready,
+}
+
+static LASM_POSTGRES_SHARED_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
+static LASM_POSTGRES_PERSIST_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
+static LASM_POSTGRES_SHARED_TX_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
+static LASM_POSTGRES_SCHEMA_ENSURE_TRACKER: OnceLock<LasmPostgresSchemaEnsureTracker> =
+    OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
+static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED: OnceLock<usize> = OnceLock::new();
 
 fn resolve_lasm_postgres_shared_client_max_idle_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED.get_or_init(|| {
@@ -173,6 +208,44 @@ fn resolve_lasm_postgres_shared_client_max_total_idle() -> usize {
     })
 }
 
+fn resolve_lasm_postgres_shared_client_max_active_per_key() -> usize {
+    *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED.get_or_init(|| {
+        let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_ENV) else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN,
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MAX,
+        )
+    })
+}
+
+fn resolve_lasm_postgres_shared_client_max_active_total() -> usize {
+    *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED.get_or_init(|| {
+        let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV) else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+        }
+        let Ok(parsed) = trimmed.parse::<usize>() else {
+            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+        };
+        parsed.clamp(
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN,
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MAX,
+        )
+    })
+}
+
 pub(crate) fn lasm_postgres_shared_client_max_idle_per_key() -> usize {
     resolve_lasm_postgres_shared_client_max_idle_per_key()
 }
@@ -181,26 +254,64 @@ pub(crate) fn lasm_postgres_shared_client_max_total_idle() -> usize {
     resolve_lasm_postgres_shared_client_max_total_idle()
 }
 
+pub(crate) fn lasm_postgres_shared_client_max_active_per_key() -> usize {
+    resolve_lasm_postgres_shared_client_max_active_per_key()
+}
+
+pub(crate) fn lasm_postgres_shared_client_max_active_total() -> usize {
+    resolve_lasm_postgres_shared_client_max_active_total()
+}
+
 pub(crate) fn lasm_postgres_shared_client_pool_key_count() -> usize {
-    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    match pool.lock() {
-        Ok(guard) => guard.len(),
+    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    match pool.0.lock() {
+        Ok(guard) => guard.idle.len(),
         Err(_) => 0,
     }
 }
 
 pub(crate) fn lasm_postgres_shared_client_pool_idle_total() -> usize {
-    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    match pool.lock() {
-        Ok(guard) => guard.values().map(Vec::len).sum(),
+    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    match pool.0.lock() {
+        Ok(guard) => guard.idle_total,
         Err(_) => 0,
     }
 }
 
-fn lasm_postgres_shared_pool_idle_total_locked(
-    pool: &HashMap<String, Vec<LasmPostgresThreadLocalClient>>,
-) -> usize {
-    pool.values().map(Vec::len).sum()
+pub(crate) fn lasm_postgres_shared_client_pool_active_key_count() -> usize {
+    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    match pool.0.lock() {
+        Ok(guard) => guard.active_by_key.len(),
+        Err(_) => 0,
+    }
+}
+
+pub(crate) fn lasm_postgres_shared_client_pool_active_total() -> usize {
+    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    match pool.0.lock() {
+        Ok(guard) => guard.active_total,
+        Err(_) => 0,
+    }
 }
 
 fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgresParam {
@@ -961,6 +1072,11 @@ fn is_lasm_postgres_retryable_tx_error(err: &postgres::Error) -> bool {
     is_lasm_postgres_retryable_tx_sqlstate(err.code().map(|code| code.code()))
 }
 
+fn is_lasm_postgres_retryable_tx_message(message: &str) -> bool {
+    let normalized = message.to_ascii_uppercase();
+    normalized.contains("SQLSTATE=40001") || normalized.contains("SQLSTATE=40P01")
+}
+
 fn is_lasm_postgres_reconnectable_sqlstate(code: Option<&str>) -> bool {
     let Some(value) = code else {
         return false;
@@ -1182,12 +1298,428 @@ fn run_lasm_postgres_tx_command(
     context: &str,
     command: &str,
 ) -> Result<(), String> {
+    if let Some(client) = state.db_postgres_tx_clients.get_mut(&tx_handle) {
+        return run_lasm_postgres_tx_command_on_client(client, tx_handle, context, command);
+    }
     let savepoint = lasm_postgres_tx_savepoint_name(tx_handle);
     let sql = command.replace("{tx}", savepoint.as_str());
     let client = lasm_dynamic_postgres_client_mut(state)?;
     client
         .batch_execute(sql.as_str())
         .map_err(|err| format_lasm_postgres_runtime_error(context, &err))
+}
+
+pub(crate) fn ensure_lasm_postgres_tx_client(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+) -> Result<(), String> {
+    if state.db_postgres_tx_clients.contains_key(&tx_handle) {
+        return Ok(());
+    }
+    let config = crate::lasm_db_client::build_lasm_postgres_thread_local_config(state)?;
+    let client = connect_lasm_postgres_tx_client(&config)?;
+    state.db_postgres_tx_clients.insert(tx_handle, client);
+    Ok(())
+}
+
+pub(crate) fn connect_lasm_postgres_tx_client(
+    config: &LasmPostgresThreadLocalConfig,
+) -> Result<LasmPostgresThreadLocalClient, String> {
+    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    checkout_lasm_postgres_shared_client_from_pool(pool, config).map_err(|err| match err {
+        LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+        LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+            format_lasm_postgres_runtime_error(
+                "postgres transaction client connect failed",
+                &query_err,
+            )
+        }
+        LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+    })
+}
+
+pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
+    config: &LasmPostgresThreadLocalConfig,
+) -> Result<(), String> {
+    let shared_pool = lasm_postgres_shared_clients_pool();
+    let shared_client = checkout_lasm_postgres_shared_client_from_pool(shared_pool, config)
+        .map_err(|err| match err {
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres shared client prewarm failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })?;
+    release_lasm_postgres_shared_client_to_pool(shared_pool, config, shared_client, true);
+
+    let persist_pool = lasm_postgres_persist_clients_pool();
+    let persist_client = checkout_lasm_postgres_shared_client_from_pool(persist_pool, config)
+        .map_err(|err| match err {
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres persist client prewarm failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })?;
+    release_lasm_postgres_shared_client_to_pool(persist_pool, config, persist_client, true);
+
+    let tx_client = connect_lasm_postgres_tx_client(config)?;
+    return_lasm_postgres_tx_client_to_pool(config, tx_client);
+    Ok(())
+}
+
+pub(crate) fn return_lasm_postgres_tx_client_to_pool(
+    config: &LasmPostgresThreadLocalConfig,
+    client: LasmPostgresThreadLocalClient,
+) {
+    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    release_lasm_postgres_shared_client_to_pool(pool, config, client, true);
+}
+
+pub(crate) fn discard_lasm_postgres_tx_client(
+    config: &LasmPostgresThreadLocalConfig,
+    client: LasmPostgresThreadLocalClient,
+) {
+    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    });
+    release_lasm_postgres_shared_client_to_pool(pool, config, client, false);
+}
+
+pub(crate) fn take_lasm_postgres_tx_client_if_present(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+) -> Option<LasmPostgresThreadLocalClient> {
+    state.db_postgres_tx_clients.remove(&tx_handle)
+}
+
+pub(crate) fn put_lasm_postgres_tx_client(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+    client: LasmPostgresThreadLocalClient,
+) {
+    state.db_postgres_tx_clients.insert(tx_handle, client);
+}
+
+fn lasm_postgres_tx_client_mut(
+    state: &mut LasmDynamicResponseState,
+    tx_handle: i64,
+) -> Result<&mut LasmPostgresThreadLocalClient, String> {
+    ensure_lasm_postgres_tx_client(state, tx_handle)?;
+    state
+        .db_postgres_tx_clients
+        .get_mut(&tx_handle)
+        .ok_or_else(|| "postgres transaction client missing for tx handle".to_string())
+}
+
+fn run_lasm_postgres_tx_command_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    tx_handle: i64,
+    context: &str,
+    command: &str,
+) -> Result<(), String> {
+    let savepoint = lasm_postgres_tx_savepoint_name(tx_handle);
+    let sql = command.replace("{tx}", savepoint.as_str());
+    client
+        .client
+        .batch_execute(sql.as_str())
+        .map_err(|err| format_lasm_postgres_runtime_error(context, &err))
+}
+
+fn run_lasm_postgres_exec_tx_recover_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    tx_handle: i64,
+) -> Result<(), String> {
+    run_lasm_postgres_tx_command_on_client(
+        client,
+        tx_handle,
+        "postgres transaction reset failed",
+        "ROLLBACK TO SAVEPOINT {tx}",
+    )
+    .or_else(|message| {
+        if is_lasm_postgres_no_such_savepoint_error(message.as_str()) {
+            Ok(())
+        } else {
+            Err(message)
+        }
+    })
+}
+
+fn run_lasm_postgres_plain_tx_command_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    context: &str,
+    command: &str,
+) -> Result<(), String> {
+    client
+        .client
+        .batch_execute(command)
+        .map_err(|err| format_lasm_postgres_runtime_error(context, &err))
+}
+
+fn validate_lasm_postgres_exec_tx_query_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+) -> Result<bool, String> {
+    let required_params = client.max_placeholder_index_cached(query_template);
+    validate_lasm_postgres_parameter_arity(required_params, params.len())?;
+    let use_prepared = required_params > 0;
+    if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
+    }
+    Ok(use_prepared)
+}
+
+fn run_lasm_postgres_exec_tx_execute_once_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+    use_prepared: bool,
+) -> Result<u64, String> {
+    if use_prepared {
+        let mut stale_refresh_attempted = false;
+        loop {
+            let result =
+                run_lasm_postgres_thread_local_prepared_exec_with_count(client, query_template, params);
+            match result {
+                Ok(value) => return Ok(value),
+                Err(err)
+                    if is_lasm_postgres_stale_prepared_statement_error(&err)
+                        && !stale_refresh_attempted =>
+                {
+                    stale_refresh_attempted = true;
+                    client.invalidate_statement_cached(query_template);
+                }
+                Err(err) => {
+                    return Err(format_lasm_postgres_runtime_error(
+                        "postgres transaction execution failed",
+                        &err,
+                    ))
+                }
+            }
+        }
+    } else {
+        run_lasm_postgres_unprepared_exec_with_count(&mut client.client, query_template).map_err(
+            |err| format_lasm_postgres_runtime_error("postgres transaction execution failed", &err),
+        )
+    }
+}
+
+pub(crate) struct LasmPostgresExecTxOneShotError {
+    pub(crate) message: String,
+    pub(crate) discard_client: bool,
+}
+
+pub(crate) fn run_lasm_postgres_exec_tx_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    tx_handle: i64,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+    tx_active: bool,
+    retry_max: usize,
+) -> Result<(u64, bool), (String, bool)> {
+    let mut tx_started = false;
+    let to_err_tuple = |message: String, tx_started: bool| (message, tx_started);
+    let use_prepared = validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params)
+        .map_err(|message| to_err_tuple(message, false))?;
+
+    if !tx_active {
+        run_lasm_postgres_tx_command_on_client(
+            client,
+            tx_handle,
+            "postgres transaction begin failed",
+            "BEGIN; SAVEPOINT {tx}",
+        )
+        .map_err(|message| to_err_tuple(message, false))?;
+        tx_started = true;
+    }
+
+    let initial =
+        run_lasm_postgres_exec_tx_execute_once_on_client(client, query_template, params, use_prepared);
+    let affected_rows = match initial {
+        Ok(count) => count,
+        Err(err) if is_lasm_postgres_retryable_tx_message(err.as_str()) => {
+            if tx_started {
+                let _ = run_lasm_postgres_exec_tx_recover_on_client(client, tx_handle);
+            }
+            let mut recovered = None;
+            for attempt_index in 0..retry_max {
+                let backoff_ms = lasm_postgres_retry_backoff_ms(attempt_index);
+                if backoff_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
+                if tx_started {
+                    run_lasm_postgres_exec_tx_recover_on_client(client, tx_handle)
+                        .map_err(|message| to_err_tuple(message, tx_started))?;
+                }
+                match run_lasm_postgres_exec_tx_execute_once_on_client(
+                    client,
+                    query_template,
+                    params,
+                    use_prepared,
+                ) {
+                    Ok(count) => {
+                        recovered = Some(count);
+                        break;
+                    }
+                    Err(err) if is_lasm_postgres_retryable_tx_message(err.as_str()) => {}
+                    Err(err) => return Err(to_err_tuple(err, tx_started)),
+                }
+            }
+            if let Some(count) = recovered {
+                count
+            } else {
+                if tx_started {
+                    run_lasm_postgres_exec_tx_recover_on_client(client, tx_handle)
+                        .map_err(|message| to_err_tuple(message, tx_started))?;
+                }
+                run_lasm_postgres_exec_tx_execute_once_on_client(
+                    client,
+                    query_template,
+                    params,
+                    use_prepared,
+                )
+                .map_err(|err| to_err_tuple(err, tx_started))?
+            }
+        }
+        Err(err) => return Err(to_err_tuple(err, tx_started)),
+    };
+    Ok((affected_rows, tx_started))
+}
+
+pub(crate) fn run_lasm_postgres_exec_tx_one_shot_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+    retry_max: usize,
+) -> Result<u64, LasmPostgresExecTxOneShotError> {
+    let use_prepared = validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params)
+        .map_err(|message| LasmPostgresExecTxOneShotError {
+            message,
+            discard_client: false,
+        })?;
+    let mut attempt_index = 0usize;
+    loop {
+        run_lasm_postgres_plain_tx_command_on_client(
+            client,
+            "postgres transaction begin failed",
+            "BEGIN",
+        )
+        .map_err(|message| LasmPostgresExecTxOneShotError {
+            message,
+            discard_client: true,
+        })?;
+        match run_lasm_postgres_exec_tx_execute_once_on_client(
+            client,
+            query_template,
+            params,
+            use_prepared,
+        ) {
+            Ok(affected_rows) => {
+                run_lasm_postgres_plain_tx_command_on_client(
+                    client,
+                    "postgres transaction commit failed",
+                    "COMMIT",
+                )
+                .map_err(|message| LasmPostgresExecTxOneShotError {
+                    message,
+                    discard_client: true,
+                })?;
+                return Ok(affected_rows);
+            }
+            Err(message)
+                if is_lasm_postgres_retryable_tx_message(message.as_str())
+                    && attempt_index < retry_max =>
+            {
+                run_lasm_postgres_plain_tx_command_on_client(
+                    client,
+                    "postgres transaction rollback failed",
+                    "ROLLBACK",
+                )
+                .map_err(|rollback_message| LasmPostgresExecTxOneShotError {
+                    message: format!("{message}; cleanup failed: {rollback_message}"),
+                    discard_client: true,
+                })?;
+                let backoff_ms = lasm_postgres_retry_backoff_ms(attempt_index);
+                attempt_index = attempt_index.saturating_add(1);
+                if backoff_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
+            }
+            Err(message) => {
+                let rollback = run_lasm_postgres_plain_tx_command_on_client(
+                    client,
+                    "postgres transaction rollback failed",
+                    "ROLLBACK",
+                );
+                return match rollback {
+                    Ok(()) => Err(LasmPostgresExecTxOneShotError {
+                        message,
+                        discard_client: false,
+                    }),
+                    Err(rollback_message) => Err(LasmPostgresExecTxOneShotError {
+                        message: format!("{message}; cleanup failed: {rollback_message}"),
+                        discard_client: true,
+                    }),
+                };
+            }
+        }
+    }
+}
+
+pub(crate) fn run_lasm_postgres_exec_tx_commit_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    tx_handle: i64,
+) -> Result<(), String> {
+    run_lasm_postgres_tx_command_on_client(
+        client,
+        tx_handle,
+        "postgres transaction commit failed",
+        "RELEASE SAVEPOINT {tx}; COMMIT",
+    )
+}
+
+pub(crate) fn run_lasm_postgres_exec_tx_rollback_on_client(
+    client: &mut LasmPostgresThreadLocalClient,
+    tx_handle: i64,
+) -> Result<(), String> {
+    let savepoint = lasm_postgres_tx_savepoint_name(tx_handle);
+    let rollback_to = format!("ROLLBACK TO SAVEPOINT {savepoint}");
+    let release = format!("RELEASE SAVEPOINT {savepoint}");
+    match client
+        .client
+        .batch_execute(&format!("{rollback_to}; {release}; ROLLBACK"))
+    {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let message =
+                format_lasm_postgres_runtime_error("postgres transaction rollback failed", &err);
+            if is_lasm_postgres_no_such_savepoint_error(message.as_str()) {
+                Ok(())
+            } else {
+                Err(message)
+            }
+        }
+    }
 }
 
 fn run_lasm_postgres_exec_tx_recover(
@@ -1444,15 +1976,15 @@ pub(crate) fn run_lasm_postgres_exec(
 
 #[allow(dead_code)]
 fn run_lasm_postgres_exec_tx_once(
-    client: &mut PostgresClient,
+    client: &mut LasmPostgresThreadLocalClient,
     query_template: &str,
     params: &[LasmPostgresParam],
-    prepared_statement: Option<&PostgresStatement>,
+    use_prepared: bool,
 ) -> Result<u64, postgres::Error> {
-    if let Some(statement) = prepared_statement {
-        run_lasm_postgres_prepared_exec_with_count(client, statement, params)
+    if use_prepared {
+        run_lasm_postgres_thread_local_prepared_exec_with_count(client, query_template, params)
     } else {
-        run_lasm_postgres_unprepared_exec_with_count(client, query_template)
+        run_lasm_postgres_unprepared_exec_with_count(&mut client.client, query_template)
     }
 }
 
@@ -1468,6 +2000,8 @@ pub(crate) fn run_lasm_postgres_exec_tx(
     let to_err_tuple = |message: String, tx_started: bool| (message, tx_started);
 
     if !tx_active {
+        ensure_lasm_postgres_tx_client(state, tx_handle)
+            .map_err(|message| to_err_tuple(message, false))?;
         if let Err(message) = run_lasm_postgres_tx_command(
             state,
             tx_handle,
@@ -1489,81 +2023,39 @@ pub(crate) fn run_lasm_postgres_exec_tx(
             tx_started,
         ));
     }
-    let prepared_statement = if use_prepared {
-        Some(
-            prepare_lasm_postgres_statement_with_reconnect(state, query_template)
-                .map_err(|message| to_err_tuple(message, tx_started))?,
-        )
-    } else {
-        None
-    };
     if tx_started {
         if let Err(message) = run_lasm_postgres_exec_tx_recover(state, tx_handle) {
             return Err((message, tx_started));
         }
     }
-    let initial = {
-        let client = lasm_dynamic_postgres_client_mut(state)
-            .map_err(|message| to_err_tuple(message, tx_started))?;
-        run_lasm_postgres_exec_tx_once(client, query_template, params, prepared_statement.as_ref())
+    let execute_once = |state: &mut LasmDynamicResponseState| -> Result<u64, String> {
+        let client = lasm_postgres_tx_client_mut(state, tx_handle)?;
+        let mut stale_refresh_attempted = false;
+        loop {
+            let result =
+                run_lasm_postgres_exec_tx_once(client, query_template, params, use_prepared);
+            match result {
+                Ok(value) => return Ok(value),
+                Err(err)
+                    if is_lasm_postgres_stale_prepared_statement_error(&err)
+                        && !stale_refresh_attempted =>
+                {
+                    stale_refresh_attempted = true;
+                    client.invalidate_statement_cached(query_template);
+                }
+                Err(err) => {
+                    return Err(format_lasm_postgres_runtime_error(
+                        "postgres transaction execution failed",
+                        &err,
+                    ))
+                }
+            }
+        }
     };
+    let initial = execute_once(state);
     let affected_rows = match initial {
         Ok(count) => count,
-        Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
-            reconnect_lasm_dynamic_postgres_client(state)
-                .map_err(|message| to_err_tuple(message, tx_started))?;
-            if tx_started {
-                if let Err(message) = run_lasm_postgres_exec_tx_recover(state, tx_handle) {
-                    return Err((message, tx_started));
-                }
-            }
-            let retry_statement = if use_prepared {
-                Some(
-                    prepare_lasm_postgres_statement_with_reconnect(state, query_template)
-                        .map_err(|message| to_err_tuple(message, tx_started))?,
-                )
-            } else {
-                None
-            };
-            let client = lasm_dynamic_postgres_client_mut(state)
-                .map_err(|message| to_err_tuple(message, tx_started))?;
-            run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
-                .map_err(|retry_err| {
-                    to_err_tuple(
-                        format_lasm_postgres_runtime_error(
-                            "postgres transaction execution failed after reconnect",
-                            &retry_err,
-                        ),
-                        tx_started,
-                    )
-                })?
-        }
-        Err(err) if use_prepared && is_lasm_postgres_stale_prepared_statement_error(&err) => {
-            evict_lasm_postgres_prepared_statement(state, query_template);
-            if tx_started {
-                if let Err(message) = run_lasm_postgres_exec_tx_recover(state, tx_handle) {
-                    return Err((message, tx_started));
-                }
-            }
-            let retry_statement = Some(
-                prepare_lasm_postgres_statement_with_reconnect(state, query_template)
-                    .map_err(|message| to_err_tuple(message, tx_started))?,
-            );
-            let client = lasm_dynamic_postgres_client_mut(state)
-                .map_err(|message| to_err_tuple(message, tx_started))?;
-            run_lasm_postgres_exec_tx_once(client, query_template, params, retry_statement.as_ref())
-                .map_err(|retry_err| {
-                    to_err_tuple(
-                        format_lasm_postgres_runtime_error(
-                            "postgres transaction execution failed after stale prepared statement refresh",
-                            &retry_err,
-                        ),
-                        tx_started,
-                    )
-                })?
-        }
-        Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-            let _ = err;
+        Err(err) if is_lasm_postgres_retryable_tx_message(err.as_str()) => {
             if tx_started {
                 let _ = run_lasm_postgres_exec_tx_recover(state, tx_handle);
             }
@@ -1581,22 +2073,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                         return Err((message, tx_started));
                     }
                 }
-                let retry_statement = if use_prepared {
-                    Some(
-                        prepare_lasm_postgres_statement_with_reconnect(state, query_template)
-                            .map_err(|message| to_err_tuple(message, tx_started))?,
-                    )
-                } else {
-                    None
-                };
-                let client = lasm_dynamic_postgres_client_mut(state)
-                    .map_err(|message| to_err_tuple(message, tx_started))?;
-                let retry_result = run_lasm_postgres_exec_tx_once(
-                    client,
-                    query_template,
-                    params,
-                    retry_statement.as_ref(),
-                );
+                let retry_result = execute_once(state);
                 match retry_result {
                     Ok(count) => {
                         state.db_postgres_retryable_conflict_retry_success_total = state
@@ -1605,45 +2082,15 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                         recovered = Some(count);
                         break;
                     }
-                    Err(err) if is_lasm_postgres_retryable_tx_error(&err) => {
-                        let _ = err;
-                    }
-                    Err(err)
-                        if use_prepared
-                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
-                    {
-                        evict_lasm_postgres_prepared_statement(state, query_template);
-                    }
-                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
-                        reconnect_lasm_dynamic_postgres_client(state).map_err(|message| {
-                            to_err_tuple(
-                                format!(
-                                    "postgres execution failed after retryable conflict retries and reconnect: {message}"
-                                ),
-                                tx_started,
-                            )
-                        })?;
-                    }
+                    Err(err) if is_lasm_postgres_retryable_tx_message(err.as_str()) => {}
                     Err(err) => {
-                        return Err(to_err_tuple(
-                            format_lasm_postgres_runtime_error(
-                                "postgres transaction execution failed after retryable conflict retry",
-                                &err,
-                            ),
-                            tx_started,
-                        ));
+                        return Err(to_err_tuple(err, tx_started));
                     }
                 }
             }
             if let Some(count) = recovered {
                 count
             } else {
-                reconnect_lasm_dynamic_postgres_client(state).map_err(|message| {
-                    to_err_tuple(
-                        format!("postgres transaction execution failed: {message}"),
-                        tx_started,
-                    )
-                })?;
                 state.db_postgres_retryable_conflict_retry_attempts_total = state
                     .db_postgres_retryable_conflict_retry_attempts_total
                     .saturating_add(1);
@@ -1652,22 +2099,7 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                         return Err((message, tx_started));
                     }
                 }
-                let retry_statement = if use_prepared {
-                    Some(
-                        prepare_lasm_postgres_statement_with_reconnect(state, query_template)
-                            .map_err(|message| to_err_tuple(message, tx_started))?,
-                    )
-                } else {
-                    None
-                };
-                let client = lasm_dynamic_postgres_client_mut(state)
-                    .map_err(|message| to_err_tuple(message, tx_started))?;
-                let final_retry = run_lasm_postgres_exec_tx_once(
-                    client,
-                    query_template,
-                    params,
-                    retry_statement.as_ref(),
-                );
+                let final_retry = execute_once(state);
                 match final_retry {
                     Ok(count) => {
                         state.db_postgres_retryable_conflict_retry_success_total = state
@@ -1675,129 +2107,17 @@ pub(crate) fn run_lasm_postgres_exec_tx(
                             .saturating_add(1);
                         count
                     }
-                    Err(err)
-                        if use_prepared
-                            && is_lasm_postgres_stale_prepared_statement_error(&err) =>
-                    {
-                        evict_lasm_postgres_prepared_statement(state, query_template);
-                        if tx_started {
-                            if let Err(message) =
-                                run_lasm_postgres_exec_tx_recover(state, tx_handle)
-                            {
-                                return Err((message, tx_started));
-                            }
-                        }
-                        let refresh_statement = if use_prepared {
-                            Some(
-                                prepare_lasm_postgres_statement_with_reconnect(
-                                    state,
-                                    query_template,
-                                )
-                                .map_err(|message| to_err_tuple(message, tx_started))?,
-                            )
-                        } else {
-                            None
-                        };
-                        let client = lasm_dynamic_postgres_client_mut(state)
-                            .map_err(|message| to_err_tuple(message, tx_started))?;
-                        let refresh = run_lasm_postgres_exec_tx_once(
-                            client,
-                            query_template,
-                            params,
-                            refresh_statement.as_ref(),
-                        )
-                        .map_err(|refresh_err| {
-                            to_err_tuple(
-                                format_lasm_postgres_runtime_error(
-                                    "postgres transaction execution failed after retryable conflict retries reconnect stale prepared statement refresh",
-                                    &refresh_err,
-                                ),
-                                tx_started,
-                            )
-                        })?;
-                        state.db_postgres_retryable_conflict_retry_success_total = state
-                            .db_postgres_retryable_conflict_retry_success_total
-                            .saturating_add(1);
-                        refresh
-                    }
-                    Err(err) if is_lasm_postgres_reconnectable_error(&err) => {
-                        reconnect_lasm_dynamic_postgres_client(state).map_err(|message| {
-                            to_err_tuple(
-                                format!(
-                                    "postgres transaction execution failed after retryable conflict retries reconnect replay: {message}"
-                                ),
-                                tx_started,
-                            )
-                        })?;
-                        if tx_started {
-                            if let Err(message) =
-                                run_lasm_postgres_exec_tx_recover(state, tx_handle)
-                            {
-                                return Err((message, tx_started));
-                            }
-                        }
-                        let retry_statement = if use_prepared {
-                            Some(
-                                prepare_lasm_postgres_statement_with_reconnect(
-                                    state,
-                                    query_template,
-                                )
-                                .map_err(|message| to_err_tuple(message, tx_started))?,
-                            )
-                        } else {
-                            None
-                        };
-                        let client = lasm_dynamic_postgres_client_mut(state)
-                            .map_err(|message| to_err_tuple(message, tx_started))?;
-                        let reconnect_retry = run_lasm_postgres_exec_tx_once(
-                            client,
-                            query_template,
-                            params,
-                            retry_statement.as_ref(),
-                        )
-                        .map_err(|retry_err| {
-                            to_err_tuple(
-                                format_lasm_postgres_runtime_error(
-                                    "postgres transaction execution failed after retryable conflict retries reconnect replay",
-                                    &retry_err,
-                                ),
-                                tx_started,
-                            )
-                        })?;
-                        state.db_postgres_retryable_conflict_retry_success_total = state
-                            .db_postgres_retryable_conflict_retry_success_total
-                            .saturating_add(1);
-                        reconnect_retry
-                    }
-                    Err(err) => {
-                        return Err(to_err_tuple(
-                            format_lasm_postgres_runtime_error(
-                                "postgres transaction execution failed after retryable conflict retries and reconnect",
-                                &err,
-                            ),
-                            tx_started,
-                        ));
-                    }
+                    Err(err) => return Err(to_err_tuple(err, tx_started)),
                 }
             }
         }
-        Err(err)
-            if use_prepared
-                && err
-                    .to_string()
-                    .contains("cannot insert multiple commands into a prepared statement") =>
-        {
+        Err(err) if err.contains("cannot insert multiple commands into a prepared statement") => {
             return Err((
                 "postgres parameterized execution requires a single SQL statement".to_string(),
                 tx_started,
             ));
         }
-        Err(err) => {
-            return Err(to_err_tuple(
-                format_lasm_postgres_runtime_error("postgres transaction execution failed", &err),
-                tx_started,
-            ));
-        }
+        Err(err) => return Err(to_err_tuple(err, tx_started)),
     };
     Ok((affected_rows, tx_started))
 }
@@ -1821,8 +2141,15 @@ pub(crate) fn run_lasm_postgres_exec_tx_rollback(
     let savepoint = lasm_postgres_tx_savepoint_name(tx_handle);
     let rollback_to = format!("ROLLBACK TO SAVEPOINT {savepoint}");
     let release = format!("RELEASE SAVEPOINT {savepoint}");
-    let client = lasm_dynamic_postgres_client_mut(state)?;
-    match client.batch_execute(&format!("{rollback_to}; {release}; ROLLBACK")) {
+    ensure_lasm_postgres_tx_client(state, tx_handle)?;
+    let client = state
+        .db_postgres_tx_clients
+        .get_mut(&tx_handle)
+        .ok_or_else(|| "postgres transaction client missing for tx handle".to_string())?;
+    match client
+        .client
+        .batch_execute(&format!("{rollback_to}; {release}; ROLLBACK"))
+    {
         Ok(()) => Ok(()),
         Err(err) => {
             let message =
@@ -1848,6 +2175,63 @@ fn lasm_postgres_thread_local_client_key(config: &LasmPostgresThreadLocalConfig)
     )
 }
 
+fn lasm_postgres_schema_ensure_key(config: &LasmPostgresThreadLocalConfig) -> String {
+    let tls_mode = match config.tls_mode {
+        LasmDbPostgresTlsMode::Auto => "auto",
+        LasmDbPostgresTlsMode::Disable => "disable",
+        LasmDbPostgresTlsMode::Require => "require",
+    };
+    format!("{tls_mode}\u{1f}{}", config.dsn)
+}
+
+fn ensure_lasm_postgres_thread_local_schema_ready(
+    config: &LasmPostgresThreadLocalConfig,
+    client: &mut PostgresClient,
+) -> Result<(), String> {
+    let tracker = LASM_POSTGRES_SCHEMA_ENSURE_TRACKER
+        .get_or_init(|| (Mutex::new(HashMap::new()), Condvar::new()));
+    let key = lasm_postgres_schema_ensure_key(config);
+    loop {
+        let mut guard = tracker
+            .0
+            .lock()
+            .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
+        match guard.get(key.as_str()).copied() {
+            Some(LasmPostgresSchemaEnsureState::Ready) => return Ok(()),
+            Some(LasmPostgresSchemaEnsureState::InProgress) => {
+                guard = tracker
+                    .1
+                    .wait(guard)
+                    .map_err(|_| "postgres schema ensure wait failed".to_string())?;
+                drop(guard);
+            }
+            None => {
+                guard.insert(key.clone(), LasmPostgresSchemaEnsureState::InProgress);
+                drop(guard);
+                let result = ensure_lasm_dynamic_db_records_postgres_schema(client);
+                let mut finish_guard = tracker
+                    .0
+                    .lock()
+                    .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
+                match result {
+                    Ok(()) => {
+                        finish_guard.insert(key, LasmPostgresSchemaEnsureState::Ready);
+                        drop(finish_guard);
+                        tracker.1.notify_all();
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        finish_guard.remove(key.as_str());
+                        drop(finish_guard);
+                        tracker.1.notify_all();
+                        return Err(error);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn connect_lasm_postgres_thread_local_client(
     config: &LasmPostgresThreadLocalConfig,
 ) -> Result<LasmPostgresThreadLocalClient, String> {
@@ -1858,8 +2242,131 @@ fn connect_lasm_postgres_thread_local_client(
         config.lock_timeout_ms.max(1),
         config.connect_timeout_ms.max(1),
     )?;
-    ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
+    ensure_lasm_postgres_thread_local_schema_ready(config, &mut client)?;
     Ok(LasmPostgresThreadLocalClient::new(client, config))
+}
+
+fn checkout_lasm_postgres_shared_client_from_pool(
+    pool: &'static LasmPostgresSharedClientPool,
+    config: &LasmPostgresThreadLocalConfig,
+) -> Result<LasmPostgresThreadLocalClient, LasmPostgresThreadLocalRuntimeError> {
+    let max_active_per_key = resolve_lasm_postgres_shared_client_max_active_per_key();
+    let max_active_total = resolve_lasm_postgres_shared_client_max_active_total();
+    let key = lasm_postgres_thread_local_client_key(config);
+    loop {
+        let mut should_connect = false;
+        {
+            let mut guard = pool.0.lock().map_err(|_| {
+                LasmPostgresThreadLocalRuntimeError::Connect(
+                    "postgres shared client pool unavailable".to_string(),
+                )
+            })?;
+            if let Some(client) = guard
+                .idle
+                .get_mut(key.as_str())
+                .and_then(|clients| clients.pop())
+            {
+                guard.idle_total = guard.idle_total.saturating_sub(1);
+                if guard
+                    .idle
+                    .get(key.as_str())
+                    .is_some_and(|clients| clients.is_empty())
+                {
+                    guard.idle.remove(key.as_str());
+                }
+                *guard.active_by_key.entry(key.clone()).or_insert(0) += 1;
+                guard.active_total = guard.active_total.saturating_add(1);
+                return Ok(client);
+            }
+
+            let active_for_key = guard.active_by_key.get(key.as_str()).copied().unwrap_or(0);
+            if active_for_key < max_active_per_key && guard.active_total < max_active_total {
+                *guard.active_by_key.entry(key.clone()).or_insert(0) += 1;
+                guard.active_total = guard.active_total.saturating_add(1);
+                should_connect = true;
+            } else {
+                guard = pool.1.wait(guard).map_err(|_| {
+                    LasmPostgresThreadLocalRuntimeError::Connect(
+                        "postgres shared client pool wait failed".to_string(),
+                    )
+                })?;
+                drop(guard);
+            }
+        }
+        if should_connect {
+            match connect_lasm_postgres_thread_local_client(config) {
+                Ok(client) => return Ok(client),
+                Err(message) => {
+                    let mut guard = pool.0.lock().map_err(|_| {
+                        LasmPostgresThreadLocalRuntimeError::Connect(
+                            "postgres shared client pool unavailable".to_string(),
+                        )
+                    })?;
+                    release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key.as_str());
+                    drop(guard);
+                    pool.1.notify_one();
+                    return Err(LasmPostgresThreadLocalRuntimeError::Connect(message));
+                }
+            }
+        }
+    }
+}
+
+fn release_lasm_postgres_shared_pool_active_slot_locked(
+    state: &mut LasmPostgresSharedClientPoolState,
+    key: &str,
+) {
+    if let Some(active_for_key) = state.active_by_key.get_mut(key) {
+        if *active_for_key <= 1 {
+            state.active_by_key.remove(key);
+        } else {
+            *active_for_key -= 1;
+        }
+    }
+    state.active_total = state.active_total.saturating_sub(1);
+}
+
+fn release_lasm_postgres_shared_client_to_pool(
+    pool: &'static LasmPostgresSharedClientPool,
+    config: &LasmPostgresThreadLocalConfig,
+    client: LasmPostgresThreadLocalClient,
+    keep_idle: bool,
+) {
+    let max_idle = resolve_lasm_postgres_shared_client_max_idle_per_key();
+    let max_total_idle = resolve_lasm_postgres_shared_client_max_total_idle();
+    let key = lasm_postgres_thread_local_client_key(config);
+    if let Ok(mut guard) = pool.0.lock() {
+        if keep_idle {
+            if guard.idle_total < max_total_idle {
+                let entry = guard.idle.entry(key.clone()).or_default();
+                if entry.len() < max_idle {
+                    entry.push(client);
+                    guard.idle_total = guard.idle_total.saturating_add(1);
+                }
+            }
+        }
+        release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key.as_str());
+        drop(guard);
+        pool.1.notify_one();
+    }
+}
+
+fn lasm_postgres_shared_clients_pool() -> &'static LasmPostgresSharedClientPool {
+    LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    })
+}
+
+fn lasm_postgres_persist_clients_pool() -> &'static LasmPostgresSharedClientPool {
+    LASM_POSTGRES_PERSIST_CLIENTS.get_or_init(|| {
+        (
+            Mutex::new(LasmPostgresSharedClientPoolState::default()),
+            Condvar::new(),
+        )
+    })
 }
 
 enum LasmPostgresThreadLocalRuntimeError {
@@ -1868,70 +2375,77 @@ enum LasmPostgresThreadLocalRuntimeError {
     Validation(String),
 }
 
+fn run_lasm_postgres_thread_local_with_client_from_pool<R>(
+    pool: &'static LasmPostgresSharedClientPool,
+    config: &LasmPostgresThreadLocalConfig,
+    operation: impl FnOnce(
+        &mut LasmPostgresThreadLocalClient,
+    ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
+) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
+    let mut client = checkout_lasm_postgres_shared_client_from_pool(pool, config)?;
+    let result = operation(&mut client);
+    match &result {
+        Ok(_) => release_lasm_postgres_shared_client_to_pool(pool, config, client, true),
+        Err(LasmPostgresThreadLocalRuntimeError::Query(err))
+            if !is_lasm_postgres_reconnectable_error(err) =>
+        {
+            release_lasm_postgres_shared_client_to_pool(pool, config, client, true);
+        }
+        Err(_) => release_lasm_postgres_shared_client_to_pool(pool, config, client, false),
+    }
+    result
+}
+
 fn run_lasm_postgres_thread_local_with_client<R>(
     config: &LasmPostgresThreadLocalConfig,
     operation: impl FnOnce(
         &mut LasmPostgresThreadLocalClient,
     ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
 ) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
-    let max_idle = resolve_lasm_postgres_shared_client_max_idle_per_key();
-    let max_total_idle = resolve_lasm_postgres_shared_client_max_total_idle();
+    run_lasm_postgres_thread_local_with_client_from_pool(
+        lasm_postgres_shared_clients_pool(),
+        config,
+        operation,
+    )
+}
+
+fn run_lasm_postgres_persist_thread_local_with_client<R>(
+    config: &LasmPostgresThreadLocalConfig,
+    operation: impl FnOnce(
+        &mut LasmPostgresThreadLocalClient,
+    ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
+) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
+    run_lasm_postgres_thread_local_with_client_from_pool(
+        lasm_postgres_persist_clients_pool(),
+        config,
+        operation,
+    )
+}
+
+fn invalidate_lasm_postgres_thread_local_client_in_pool(
+    pool: &'static LasmPostgresSharedClientPool,
+    config: &LasmPostgresThreadLocalConfig,
+) {
     let key = lasm_postgres_thread_local_client_key(config);
-    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut client = {
-        let mut guard = pool.lock().map_err(|_| {
-            LasmPostgresThreadLocalRuntimeError::Connect(
-                "postgres shared client pool unavailable".to_string(),
-            )
-        })?;
-        guard
-            .get_mut(key.as_str())
-            .and_then(|clients| clients.pop())
-    };
-    if client.is_none() {
-        client = Some(
-            connect_lasm_postgres_thread_local_client(config)
-                .map_err(LasmPostgresThreadLocalRuntimeError::Connect)?,
-        );
-    }
-    let mut client = client.expect("postgres shared client should resolve");
-    let result = operation(&mut client);
-    match &result {
-        Ok(_) => {
-            if let Ok(mut guard) = pool.lock() {
-                let total_idle = lasm_postgres_shared_pool_idle_total_locked(&guard);
-                if total_idle < max_total_idle {
-                    let entry = guard.entry(key).or_default();
-                    if entry.len() < max_idle {
-                        entry.push(client);
-                    }
-                }
-            }
+    if let Ok(mut guard) = pool.0.lock() {
+        if let Some(clients) = guard.idle.remove(key.as_str()) {
+            guard.idle_total = guard.idle_total.saturating_sub(clients.len());
         }
-        Err(LasmPostgresThreadLocalRuntimeError::Query(err))
-            if !is_lasm_postgres_reconnectable_error(err) =>
-        {
-            if let Ok(mut guard) = pool.lock() {
-                let total_idle = lasm_postgres_shared_pool_idle_total_locked(&guard);
-                if total_idle < max_total_idle {
-                    let entry = guard.entry(key).or_default();
-                    if entry.len() < max_idle {
-                        entry.push(client);
-                    }
-                }
-            }
-        }
-        Err(_) => {}
     }
-    result
 }
 
 fn invalidate_lasm_postgres_thread_local_client(config: &LasmPostgresThreadLocalConfig) {
-    let key = lasm_postgres_thread_local_client_key(config);
-    let pool = LASM_POSTGRES_SHARED_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(mut guard) = pool.lock() {
-        guard.remove(key.as_str());
-    }
+    invalidate_lasm_postgres_thread_local_client_in_pool(
+        lasm_postgres_shared_clients_pool(),
+        config,
+    );
+}
+
+fn invalidate_lasm_postgres_persist_thread_local_client(config: &LasmPostgresThreadLocalConfig) {
+    invalidate_lasm_postgres_thread_local_client_in_pool(
+        lasm_postgres_persist_clients_pool(),
+        config,
+    );
 }
 
 fn run_lasm_postgres_thread_local_prepared_exec_with_count(
@@ -1971,6 +2485,44 @@ fn run_lasm_postgres_thread_local_operation<R>(
             {
                 reconnect_attempted = true;
                 invalidate_lasm_postgres_thread_local_client(config);
+            }
+            Err(LasmPostgresThreadLocalRuntimeError::Query(err))
+                if is_lasm_postgres_retryable_tx_error(&err)
+                    && retry_attempts < config.retryable_conflict_retry_max =>
+            {
+                let backoff_ms = lasm_postgres_retry_backoff_ms(retry_attempts);
+                retry_attempts = retry_attempts.saturating_add(1);
+                if backoff_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(backoff_ms));
+                }
+            }
+            Err(LasmPostgresThreadLocalRuntimeError::Query(err)) => {
+                return Err(format_lasm_postgres_runtime_error(context, &err));
+            }
+            Err(LasmPostgresThreadLocalRuntimeError::Validation(message)) => return Err(message),
+        }
+    }
+}
+
+fn run_lasm_postgres_persist_thread_local_operation<R>(
+    config: &LasmPostgresThreadLocalConfig,
+    context: &str,
+    mut operation: impl FnMut(
+        &mut LasmPostgresThreadLocalClient,
+    ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
+) -> Result<R, String> {
+    let mut reconnect_attempted = false;
+    let mut retry_attempts = 0usize;
+    loop {
+        match run_lasm_postgres_persist_thread_local_with_client(config, |client| operation(client))
+        {
+            Ok(value) => return Ok(value),
+            Err(LasmPostgresThreadLocalRuntimeError::Connect(message)) => return Err(message),
+            Err(LasmPostgresThreadLocalRuntimeError::Query(err))
+                if is_lasm_postgres_reconnectable_error(&err) && !reconnect_attempted =>
+            {
+                reconnect_attempted = true;
+                invalidate_lasm_postgres_persist_thread_local_client(config);
             }
             Err(LasmPostgresThreadLocalRuntimeError::Query(err))
                 if is_lasm_postgres_retryable_tx_error(&err)
@@ -2067,7 +2619,7 @@ pub(crate) fn persist_lasm_postgres_record_append_thread_local(
              created_at_ms = EXCLUDED.created_at_ms",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
-    run_lasm_postgres_thread_local_operation(
+    run_lasm_postgres_persist_thread_local_operation(
         config,
         "could not append LASM dynamic postgres record",
         |client| {
@@ -2157,7 +2709,7 @@ pub(crate) fn persist_lasm_postgres_record_append_batch_thread_local(
              created_at_ms = EXCLUDED.created_at_ms",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
-    run_lasm_postgres_thread_local_operation(
+    run_lasm_postgres_persist_thread_local_operation(
         config,
         "could not append LASM dynamic postgres record batch",
         |client| {
@@ -2187,7 +2739,7 @@ pub(crate) fn persist_lasm_postgres_records_full_sync_thread_local(
     records: &[LasmDbRecord],
 ) -> Result<(), String> {
     let mut ordered = records.to_vec();
-    ordered.sort_by_key(|record| record.id);
+    ordered.sort_by_key(|record| (record.created_at_ms, record.id));
     let mut ids = Vec::with_capacity(ordered.len());
     let mut ops = Vec::with_capacity(ordered.len());
     let mut dbs = Vec::with_capacity(ordered.len());
@@ -2239,7 +2791,7 @@ pub(crate) fn persist_lasm_postgres_records_full_sync_thread_local(
          ) AS _sec4_records(id, op, db, template, params, tx, affected_rows, created_at_ms)",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
-    run_lasm_postgres_thread_local_operation(
+    run_lasm_postgres_persist_thread_local_operation(
         config,
         "could not full sync LASM dynamic postgres records store",
         |client| {
