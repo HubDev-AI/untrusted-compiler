@@ -77,6 +77,7 @@ if [ "$runs" -lt 1 ]; then
 fi
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
+repo_root="$(cd "${suite_dir}/.." && pwd)"
 summaries_dir="${suite_dir}/results/summaries"
 runs_dir="${summaries_dir}/workbench-full-benchmark-runs"
 mkdir -p "$summaries_dir" "$runs_dir"
@@ -85,6 +86,22 @@ if [ -z "$out_path" ]; then
   out_path="${summaries_dir}/workbench-full-benchmark-repeats.json"
 fi
 
+normalize_repo_path() {
+  local path="$1"
+  if [ -z "$path" ]; then
+    printf '%s' "$path"
+    return
+  fi
+  case "$path" in
+    "$repo_root"/*)
+      printf '%s' "${path#${repo_root}/}"
+      ;;
+    *)
+      printf '%s' "$path"
+      ;;
+  esac
+}
+
 entries_file="$(mktemp)"
 compare_samples_file="$(mktemp)"
 step_samples_file="$(mktemp)"
@@ -92,6 +109,8 @@ trap 'rm -f "$entries_file" "$compare_samples_file" "$step_samples_file"' EXIT
 : >"$entries_file"
 : >"$compare_samples_file"
 : >"$step_samples_file"
+passed_runs=0
+failed_runs=0
 
 append_compare_samples() {
   local matrix_path="$1"
@@ -209,24 +228,49 @@ for run_index in $(seq 1 "$runs"); do
 
   echo "repeat-run: ${run_index}/${runs} (${run_tag})"
   echo "run: ${run_cmd[*]}"
+  run_exit_code=0
+  set +e
   "${run_cmd[@]}"
+  run_exit_code=$?
+  set -e
 
   if [ "$dry_run" != "true" ]; then
-    append_compare_samples "$run_compare" "$run_tag"
-    append_step_samples "$run_step_matrix" "$run_tag"
+    if [ -f "$run_compare" ]; then
+      append_compare_samples "$run_compare" "$run_tag"
+    fi
+    if [ -f "$run_step_matrix" ]; then
+      append_step_samples "$run_step_matrix" "$run_tag"
+    fi
   fi
+
+  if [ "$run_exit_code" -eq 0 ]; then
+    passed_runs=$((passed_runs + 1))
+  else
+    failed_runs=$((failed_runs + 1))
+  fi
+
+  run_summary_rel="$(normalize_repo_path "$run_summary_path")"
+  run_fixed_rel="$(normalize_repo_path "$run_fixed_runs")"
+  run_step_rel="$(normalize_repo_path "$run_step_runs")"
+  run_compare_rel="$(normalize_repo_path "$run_compare")"
+  run_analysis_rel="$(normalize_repo_path "$run_analysis")"
+  run_step_matrix_rel="$(normalize_repo_path "$run_step_matrix")"
+  run_report_rel="$(normalize_repo_path "$run_report")"
 
   jq -n \
     --arg run "$run_tag" \
-    --arg summary "$run_summary_path" \
-    --arg fixedRuns "$run_fixed_runs" \
-    --arg stepRuns "$run_step_runs" \
-    --arg compare "$run_compare" \
-    --arg analysis "$run_analysis" \
-    --arg stepMatrix "$run_step_matrix" \
-    --arg report "$run_report" \
+    --arg summary "$run_summary_rel" \
+    --arg fixedRuns "$run_fixed_rel" \
+    --arg stepRuns "$run_step_rel" \
+    --arg compare "$run_compare_rel" \
+    --arg analysis "$run_analysis_rel" \
+    --arg stepMatrix "$run_step_matrix_rel" \
+    --arg report "$run_report_rel" \
+    --argjson exitCode "$run_exit_code" \
     '{
       run: $run,
+      result: (if $exitCode == 0 then "passed" else "failed" end),
+      exitCode: $exitCode,
       summary: $summary,
       fixedRuns: $fixedRuns,
       stepRuns: $stepRuns,
@@ -245,15 +289,20 @@ if [ "$dry_run" != "true" ]; then
   step_stats_json="$(compute_step_stats)"
 fi
 
+wrapper_rel="$(normalize_repo_path "${suite_dir}/scripts/run_workbench_full_benchmark_suite_repeats.sh")"
+inner_rel="$(normalize_repo_path "${suite_dir}/scripts/run_workbench_full_benchmark_suite.sh")"
+
 jq -n \
   --arg mode "workbench-full-benchmark-suite-repeats" \
   --arg generatedAt "$(date -u +%FT%TZ)" \
   --arg dryRun "$dry_run" \
   --argjson runCount "$runs" \
-  --arg wrapper "${suite_dir}/scripts/run_workbench_full_benchmark_suite_repeats.sh" \
-  --arg inner "${suite_dir}/scripts/run_workbench_full_benchmark_suite.sh" \
+  --arg wrapper "$wrapper_rel" \
+  --arg inner "$inner_rel" \
   --arg passthrough "$(printf '%s\n' "${passthrough[@]}" | jq -R . | jq -s .)" \
   --argjson runs "$runs_json" \
+  --argjson passedRuns "$passed_runs" \
+  --argjson failedRuns "$failed_runs" \
   --argjson compareStats "$compare_stats_json" \
   --argjson stepStats "$step_stats_json" \
   '{
@@ -267,8 +316,16 @@ jq -n \
     },
     forwardedArgs: ($passthrough | fromjson),
     runs: $runs,
+    runTotals: {
+      passed: $passedRuns,
+      failed: $failedRuns
+    },
     compareStats: $compareStats,
     stepStats: $stepStats
   }' >"$out_path"
 
 echo "wrote ${out_path}"
+
+if [ "$failed_runs" -gt 0 ]; then
+  exit 1
+fi

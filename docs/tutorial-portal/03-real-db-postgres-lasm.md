@@ -1,17 +1,18 @@
 # 03 - Real Postgres with LASM
 
-This track is the primary alpha path for a non-trivial server with a real DB connection.
+This track is the canonical alpha path for a non-trivial LASM server with a real Postgres DB.
 
 Use this in order:
 
-1. full guided tutorial chapter:
+1. canonical app/operator README:
+   - `benchmark-suite/services/sec4-lasm-workbench/README.md`
+2. canonical smoke contracts:
+   - `benchmark-suite/services/sec4-lasm-workbench/smoke.sh`
+   - `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+3. guided build-from-scratch tutorial (supplementary):
    - `docs/book/1552-beginner-zed-plugin-postgres-lasm-tutorial.md`
-2. focused Postgres e2e sample:
-   - `examples/postgres-e2e/README.md`
-3. full alpha app with middleware + users + DB routes:
-   - `examples/lasm-alpha-full/README.md`
 
-## Quick run (postgres-e2e)
+## Quick run (canonical workbench)
 
 ```bash
 infra/local-postgres/scripts/up.sh
@@ -24,29 +25,28 @@ else
 fi
 set +a
 
-cargo run -p sec4 -- check --path examples/postgres-e2e
+cargo run -p sec4 -- check --path benchmark-suite/services/sec4-lasm-workbench
 
 cargo run -p sec4 -- run \
-  --path examples/postgres-e2e \
+  --path benchmark-suite/services/sec4-lasm-workbench \
   --backend lasm \
   --db-adapter postgres \
   --db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN" \
-  --port 18080
+  --port 18088
 ```
 
 In another terminal:
 
 ```bash
-curl -i -X POST 'http://127.0.0.1:18080/db/exec?template=CREATE%20TABLE%20IF%20NOT%20EXISTS%20demo_users%20%28id%20SERIAL%20PRIMARY%20KEY%2C%20email%20TEXT%20NOT%20NULL%20UNIQUE%29&params=0'
-curl -i -X POST 'http://127.0.0.1:18080/db/exec-tx?template=INSERT%20INTO%20demo_users%20%28email%29%20VALUES%20%28%241%29%20ON%20CONFLICT%20%28email%29%20DO%20NOTHING&params=%5B%22alice%40example.com%22%5D'
-curl -i 'http://127.0.0.1:18080/db/query-one?template=SELECT%20id%2C%20email%20FROM%20demo_users%20WHERE%20email%20%3D%20%241&params=%5B%22alice%40example.com%22%5D&row_schema=7'
-curl -i 'http://127.0.0.1:18080/db/records'
+benchmark-suite/services/sec4-lasm-workbench/smoke.sh
+benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh
 ```
 
 Direct SQL verification:
 
 ```bash
-psql "$SEC4_RT_LASM_DB_POSTGRES_DSN" -c "select id, email from demo_users order by id desc limit 10;"
+psql "$SEC4_RT_LASM_DB_POSTGRES_DSN" -c "select id, title, status, priority from wb_tasks order by created_at_ms desc limit 10;"
+psql "$SEC4_RT_LASM_DB_POSTGRES_DSN" -c "select id, task_id, body from wb_comments order by created_at_ms desc limit 10;"
 ```
 
 ## Adapter behavior summary
@@ -54,6 +54,8 @@ psql "$SEC4_RT_LASM_DB_POSTGRES_DSN" -c "select id, email from demo_users order 
 - `records`: writes runtime metadata to `<db-base>/records.log`
 - `sqlite`: writes runtime metadata to `<db-base>/records.sqlite3`
 - `postgres`: uses live Postgres tables (no local `records.log`)
+
+For the canonical workbench app, use `postgres` only.
 
 ## Common runtime flags
 

@@ -926,7 +926,7 @@ pub(crate) fn load_lasm_dynamic_db_records_from_postgres(
     let query = format!(
         "SELECT id, op, db, template, params, tx, affected_rows, created_at_ms \
          FROM {} \
-         ORDER BY id ASC",
+         ORDER BY created_at_ms ASC, id ASC",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
     let rows = client

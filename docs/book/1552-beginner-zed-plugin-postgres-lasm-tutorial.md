@@ -13,6 +13,14 @@ You will do all of this, step by step:
 
 Everything below is copy/paste runnable.
 
+Alpha-closure note:
+
+- This chapter is the build-from-scratch learning path.
+- The canonical operator/tutorial/benchmark proof app is `benchmark-suite/services/sec4-lasm-workbench`.
+- Before claiming alpha operator readiness, run:
+  - `benchmark-suite/services/sec4-lasm-workbench/smoke.sh`
+  - `benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh`
+
 ---
 
 ## 0) Prerequisites
@@ -629,7 +637,17 @@ Use this to understand exactly what each section does.
 
 ---
 
-## 13) Cleanup
+## 13) Canonical operator validation (required for alpha sign-off)
+
+Run canonical smoke contracts on the canonical app:
+
+```bash
+cargo run -p sec4 -- check --path benchmark-suite/services/sec4-lasm-workbench
+benchmark-suite/services/sec4-lasm-workbench/smoke.sh
+benchmark-suite/services/sec4-lasm-workbench/smoke-public.sh
+```
+
+## 14) Cleanup
 
 Stop server with `Ctrl+C`, then stop local Postgres:
 

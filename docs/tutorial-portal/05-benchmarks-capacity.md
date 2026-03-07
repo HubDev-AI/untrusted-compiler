@@ -7,11 +7,12 @@ This page covers reproducible benchmark workflows across:
 - `node`
 - `go`
 - `rust`
-- optional `c`
+- optional `c` (non-primary lane)
 
 Primary reference:
 
 - `benchmark-suite/README.md`
+- canonical workload app: `benchmark-suite/services/sec4-lasm-workbench`
 
 ## 1) Benchmark prerequisites
 
@@ -28,7 +29,7 @@ make -C benchmark-suite wrk2-install
 export BENCH_WRK2_BIN="$PWD/benchmark-suite/bin/wrk2"
 ```
 
-## 2) Run matrix comparison
+## 2) Run matrix comparison (legacy generic lane)
 
 Dry run:
 
@@ -48,7 +49,7 @@ Generate report:
 make -C benchmark-suite publish-report
 ```
 
-## 3) Workbench benchmark suite
+## 3) Workbench benchmark suite (canonical lane)
 
 Dry run:
 
@@ -102,4 +103,3 @@ make -C benchmark-suite db-down
 ## Next step
 
 - Continue to `06-troubleshooting.md`.
-

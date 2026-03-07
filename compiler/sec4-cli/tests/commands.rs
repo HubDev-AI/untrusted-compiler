@@ -1184,8 +1184,7 @@ fn promote_dry_run_blocks_domain_module_dependency_calls_via_alias() {
                         .get("message")
                         .and_then(serde_json::Value::as_str)
                         .is_some_and(|message| {
-                            message.contains("via alias `store`")
-                                && message.contains("`localdb.*`")
+                            message.contains("via alias `store`") && message.contains("`localdb.*`")
                         })
             })),
         "contract preconditions should include alias-aware domain dependency guidance"
@@ -26507,10 +26506,8 @@ fn main() effects { net } -> Int {
                         b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }
@@ -26660,10 +26657,8 @@ fn main() effects { net } -> Int {
                         b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Private-Network: true\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }
@@ -26807,10 +26802,8 @@ fn main() effects { net } -> Int {
                         b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: x-auth-token\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }
@@ -26962,10 +26955,8 @@ fn main() effects { net } -> Int {
                         b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: DELETE\r\nAccess-Control-Request-Headers: x-custom-token\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }
@@ -27112,10 +27103,8 @@ fn main() effects { net } -> Int {
                         b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: x-auth-token\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }
@@ -27272,10 +27261,8 @@ fn main() effects { net } -> Int {
                         b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: DELETE\r\nAccess-Control-Request-Headers: x-auth-token\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
-                let mut body = String::new();
-                stream
-                    .read_to_string(&mut body)
-                    .expect("response should be readable");
+                let mut reader = BufReader::new(&mut stream);
+                let body = read_http_response(&mut reader);
                 response = Some(body);
                 break;
             }

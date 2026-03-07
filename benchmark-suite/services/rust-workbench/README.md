@@ -8,9 +8,10 @@ Rust workbench backend with real Postgres-backed task/comment routes.
 2. `POST /wb/setup`
 3. `POST /wb/tasks`
 4. `POST /wb/tasks/with-comment`
-5. `POST /wb/tasks/:id/comments`
-6. `GET /wb/tasks/:id`
-7. `GET /wb/tasks`
+5. `POST /wb/tasks/with-comment-tx`
+6. `POST /wb/tasks/:id/comments`
+7. `GET /wb/tasks/:id`
+8. `GET /wb/tasks`
 
 ## Run
 

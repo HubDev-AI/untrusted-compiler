@@ -12,11 +12,14 @@ use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
+use crate::lasm_db_runtime_postgres::LasmPostgresThreadLocalClient;
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub(crate) enum LasmDbRecordsAdapter {
@@ -42,6 +45,7 @@ pub(crate) struct LasmDbRecord {
 pub(crate) struct LasmDbTxState {
     pub(crate) db: i64,
     pub(crate) active: bool,
+    pub(crate) in_use: bool,
 }
 
 #[derive(Default)]
@@ -59,6 +63,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_sqlite_connection: Option<rusqlite::Connection>,
     pub(crate) db_records_postgres_dsn: Option<String>,
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
+    pub(crate) db_postgres_tx_clients: HashMap<i64, LasmPostgresThreadLocalClient>,
     pub(crate) db_records_postgres_bootstrapped: bool,
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
     pub(crate) db_records_postgres_statement_cache_order: VecDeque<String>,
@@ -97,9 +102,68 @@ pub(crate) const LASM_DB_RECORDS_MAX_DEFAULT: usize = 10000;
 pub(crate) const LASM_DB_POSTGRES_RETRYABLE_CONFLICT_RETRY_MAX_DEFAULT: usize = 1;
 pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_MAX_DEFAULT: usize = 2;
 pub(crate) const LASM_DB_SQLITE_LOCK_RETRY_DELAY_MS_DEFAULT: u64 = 5;
+pub(crate) const LASM_DB_POSTGRES_RECORD_ID_LOCAL_BITS: u32 = 32;
+pub(crate) const LASM_DB_POSTGRES_RECORD_ID_LOCAL_MASK: u64 =
+    (1u64 << LASM_DB_POSTGRES_RECORD_ID_LOCAL_BITS) - 1;
+
+static LASM_DB_POSTGRES_RECORD_ID_NAMESPACE: OnceLock<u64> = OnceLock::new();
 
 pub(crate) fn lasm_db_record_signature_key(db: i64, template: &str, params: &str) -> String {
     format!("{db}\u{1f}{template}\u{1f}{params}")
+}
+
+pub(crate) fn resolve_lasm_db_postgres_record_id_namespace() -> u64 {
+    *LASM_DB_POSTGRES_RECORD_ID_NAMESPACE.get_or_init(|| {
+        let pid = std::process::id() as u64;
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos() as u64)
+            .unwrap_or(pid);
+        let mixed = now_nanos ^ now_nanos.rotate_left(17) ^ pid.rotate_left(7) ^ (pid << 32);
+        (mixed & 0x7fff_ffff).max(1)
+    })
+}
+
+pub(crate) fn next_lasm_db_record_counter(
+    adapter: LasmDbRecordsAdapter,
+    records: &[LasmDbRecord],
+) -> u64 {
+    match adapter {
+        LasmDbRecordsAdapter::Postgres => {
+            let namespace = resolve_lasm_db_postgres_record_id_namespace();
+            records
+                .iter()
+                .filter_map(|record| {
+                    let record_namespace = record.id >> LASM_DB_POSTGRES_RECORD_ID_LOCAL_BITS;
+                    if record_namespace == namespace {
+                        Some(record.id & LASM_DB_POSTGRES_RECORD_ID_LOCAL_MASK)
+                    } else {
+                        None
+                    }
+                })
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+        }
+        _ => records
+            .iter()
+            .map(|record| record.id)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1),
+    }
+}
+
+pub(crate) fn compose_lasm_db_record_id(adapter: LasmDbRecordsAdapter, counter: u64) -> u64 {
+    match adapter {
+        LasmDbRecordsAdapter::Postgres => {
+            let local_counter = counter.max(1).min(LASM_DB_POSTGRES_RECORD_ID_LOCAL_MASK);
+            (resolve_lasm_db_postgres_record_id_namespace()
+                << LASM_DB_POSTGRES_RECORD_ID_LOCAL_BITS)
+                | local_counter
+        }
+        _ => counter,
+    }
 }
 
 fn build_lasm_db_record_signature_counts(records: &[LasmDbRecord]) -> HashMap<String, usize> {
@@ -125,15 +189,18 @@ fn build_lasm_db_latest_record_by_signature(
 fn decrement_lasm_db_record_signature(
     signatures: &mut HashMap<String, usize>,
     record: &LasmDbRecord,
-) {
+) -> bool {
     let signature = lasm_db_record_signature_key(record.db, &record.template, &record.params);
     if let Some(count) = signatures.get_mut(signature.as_str()) {
         if *count <= 1 {
             signatures.remove(signature.as_str());
+            return false;
         } else {
             *count -= 1;
+            return true;
         }
     }
+    false
 }
 
 fn truncate_lasm_db_records_to_capacity(
@@ -176,19 +243,26 @@ pub(crate) fn append_lasm_dynamic_db_record(
             .saturating_add(dropped_records.len() as u64);
         let mut signatures_needing_latest_refresh = Vec::new();
         for dropped_record in dropped_records.iter() {
-            decrement_lasm_db_record_signature(&mut state.db_record_signatures, dropped_record);
             let dropped_signature = lasm_db_record_signature_key(
                 dropped_record.db,
                 &dropped_record.template,
                 &dropped_record.params,
             );
+            let signature_still_present =
+                decrement_lasm_db_record_signature(&mut state.db_record_signatures, dropped_record);
             let latest_matches_dropped = state
                 .db_latest_record_by_signature
                 .get(dropped_signature.as_str())
                 .map(|record| record.id == dropped_record.id)
                 .unwrap_or(false);
             if latest_matches_dropped {
-                signatures_needing_latest_refresh.push(dropped_signature);
+                if signature_still_present {
+                    signatures_needing_latest_refresh.push(dropped_signature);
+                } else {
+                    state
+                        .db_latest_record_by_signature
+                        .remove(dropped_signature.as_str());
+                }
             }
         }
         signatures_needing_latest_refresh.sort();
@@ -365,6 +439,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
     }
     let mut db_records_sqlite_connection = None;
     let db_records_postgres_client = None;
+    let db_postgres_tx_clients = HashMap::new();
     let users_by_id = users_store_path
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
@@ -402,12 +477,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
     let startup_dropped = truncate_lasm_db_records_to_capacity(&mut db_records, db_records_max);
     let db_record_signatures = build_lasm_db_record_signature_counts(&db_records);
     let db_latest_record_by_signature = build_lasm_db_latest_record_by_signature(&db_records);
-    let next_db_record_id = db_records
-        .iter()
-        .map(|record| record.id)
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
+    let next_db_record_id = next_lasm_db_record_counter(db_records_adapter, &db_records);
     let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles(explicit_db_tx_max_handles)?;
     let db_tx_handles = HashMap::new();
     let db_records_postgres_statement_cache = HashMap::new();
@@ -429,6 +499,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_sqlite_connection,
         db_records_postgres_dsn,
         db_records_postgres_client,
+        db_postgres_tx_clients,
         db_records_postgres_bootstrapped: false,
         db_records_postgres_statement_cache,
         db_records_postgres_statement_cache_order,

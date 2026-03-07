@@ -1,0 +1,4 @@
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
