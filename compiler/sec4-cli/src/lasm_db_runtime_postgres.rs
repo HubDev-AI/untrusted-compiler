@@ -2,6 +2,7 @@ use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
     LasmDbPostgresTlsMode,
 };
+use crate::lasm_db_client::lasm_db_records_persist_enabled;
 use crate::lasm_db_runtime_common::{
     insert_lasm_bounded_cache_entry, lasm_dynamic_postgres_client_mut,
     lasm_dynamic_postgres_prepared_statement, reconnect_lasm_dynamic_postgres_client,
@@ -131,12 +132,12 @@ const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_MAX: usize = 4096;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY";
-const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT: usize = 32;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT: usize = 4;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MAX: usize = 1024;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL";
-const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT: usize = 64;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT: usize = 4;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MAX: usize = 4096;
 
@@ -162,7 +163,6 @@ enum LasmPostgresSchemaEnsureState {
 
 static LASM_POSTGRES_SHARED_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
-static LASM_POSTGRES_SHARED_TX_CLIENTS: OnceLock<LasmPostgresSharedClientPool> = OnceLock::new();
 static LASM_POSTGRES_SCHEMA_ENSURE_TRACKER: OnceLock<LasmPostgresSchemaEnsureTracker> =
     OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
@@ -1325,22 +1325,17 @@ pub(crate) fn ensure_lasm_postgres_tx_client(
 pub(crate) fn connect_lasm_postgres_tx_client(
     config: &LasmPostgresThreadLocalConfig,
 ) -> Result<LasmPostgresThreadLocalClient, String> {
-    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
-        (
-            Mutex::new(LasmPostgresSharedClientPoolState::default()),
-            Condvar::new(),
-        )
-    });
-    checkout_lasm_postgres_shared_client_from_pool(pool, config).map_err(|err| match err {
-        LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-        LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-            format_lasm_postgres_runtime_error(
-                "postgres transaction client connect failed",
-                &query_err,
-            )
-        }
-        LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-    })
+    checkout_lasm_postgres_shared_client_from_pool(lasm_postgres_shared_clients_pool(), config)
+        .map_err(|err| match err {
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres transaction client connect failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })
 }
 
 pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
@@ -1357,22 +1352,24 @@ pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
                 )
             }
             LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-        })?;
+    })?;
     release_lasm_postgres_shared_client_to_pool(shared_pool, config, shared_client, true);
 
-    let persist_pool = lasm_postgres_persist_clients_pool();
-    let persist_client = checkout_lasm_postgres_shared_client_from_pool(persist_pool, config)
-        .map_err(|err| match err {
-            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-                format_lasm_postgres_runtime_error(
-                    "postgres persist client prewarm failed",
-                    &query_err,
-                )
-            }
-            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-        })?;
-    release_lasm_postgres_shared_client_to_pool(persist_pool, config, persist_client, true);
+    if lasm_db_records_persist_enabled() {
+        let persist_pool = lasm_postgres_persist_clients_pool();
+        let persist_client = checkout_lasm_postgres_shared_client_from_pool(persist_pool, config)
+            .map_err(|err| match err {
+                LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+                LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                    format_lasm_postgres_runtime_error(
+                        "postgres persist client prewarm failed",
+                        &query_err,
+                    )
+                }
+                LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+            })?;
+        release_lasm_postgres_shared_client_to_pool(persist_pool, config, persist_client, true);
+    }
 
     let tx_client = connect_lasm_postgres_tx_client(config)?;
     return_lasm_postgres_tx_client_to_pool(config, tx_client);
@@ -1383,26 +1380,24 @@ pub(crate) fn return_lasm_postgres_tx_client_to_pool(
     config: &LasmPostgresThreadLocalConfig,
     client: LasmPostgresThreadLocalClient,
 ) {
-    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
-        (
-            Mutex::new(LasmPostgresSharedClientPoolState::default()),
-            Condvar::new(),
-        )
-    });
-    release_lasm_postgres_shared_client_to_pool(pool, config, client, true);
+    release_lasm_postgres_shared_client_to_pool(
+        lasm_postgres_shared_clients_pool(),
+        config,
+        client,
+        true,
+    );
 }
 
 pub(crate) fn discard_lasm_postgres_tx_client(
     config: &LasmPostgresThreadLocalConfig,
     client: LasmPostgresThreadLocalClient,
 ) {
-    let pool = LASM_POSTGRES_SHARED_TX_CLIENTS.get_or_init(|| {
-        (
-            Mutex::new(LasmPostgresSharedClientPoolState::default()),
-            Condvar::new(),
-        )
-    });
-    release_lasm_postgres_shared_client_to_pool(pool, config, client, false);
+    release_lasm_postgres_shared_client_to_pool(
+        lasm_postgres_shared_clients_pool(),
+        config,
+        client,
+        false,
+    );
 }
 
 pub(crate) fn take_lasm_postgres_tx_client_if_present(

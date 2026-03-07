@@ -82,8 +82,13 @@ Status notes:
   - `rust`
     - `wb-tasks-with-comment`: about `42.20 req/s`
     - `wb-tasks-with-comment-tx`: about `42.57 req/s`
-  - `node`
+- `node`
     - later tuned reruns still showed socket instability on the same workload; treat that as competitor-lane evidence, not a sec4 blocker
+- Fresh canonical publication rerun is now complete on the full six-endpoint DB-backed workload:
+  - `BENCH_WORKBENCH_REQUIRE_WRK2=1 BENCH_DURATION=20s BENCH_WORKBENCH_PG_DSN=... benchmark-suite/scripts/run_workbench_benchmark_matrix.sh --impls sec4-lasm,node,go,rust --endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list --lasm-db-adapter postgres --lasm-mode single`
+  - totals: `passed=4 failed=0 skipped=0`
+  - `sec4-lasm` leads all six endpoints in the published report family.
+  - For this mixed-workload publication run, the chosen LASM topology is `single` mode; earlier proxy/fixed results remain route-specific tuning evidence only.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 
@@ -135,9 +140,9 @@ Final closeout state:
 
 Residual follow-up, not alpha blockers:
 
-- benchmark-runner/runtime cleanup for the `sec4-lasm` `wb-tasks-list` saturation path
 - broader same-workload runtime/scaling tuning after alpha merge
-- competitor benchmark instability cleanup (`node` write-heavy lanes)
+- repeated full-suite/mode-compare tuning passes on the canonical workload
+- competitor benchmark cleanup remains optional and informational
 
 ## 5) DB Status (Explicit)
 

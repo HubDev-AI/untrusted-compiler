@@ -12474,6 +12474,19 @@ fn lasm_workbench_list_data(
         .max(0);
 
     if let Some(items) = object
+        .get("items")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+    {
+        return serde_json::json!({
+            "items": items,
+            "count": count,
+            "limit": limit,
+            "offset": offset,
+        });
+    }
+
+    if let Some(items) = object
         .get("items_blob")
         .and_then(serde_json::Value::as_str)
         .and_then(parse_lasm_workbench_items_blob)

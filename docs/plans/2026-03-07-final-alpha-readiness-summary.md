@@ -63,11 +63,16 @@ Additional checksums:
 Canonical command used for the final publication set:
 
 ```bash
-./benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh \
-  --keep-up \
+BENCH_WORKBENCH_REQUIRE_WRK2=1 \
+BENCH_WRK2_BIN=/Users/vladimirtrifonov/src/ai/AILang/benchmark-suite/bin/wrk2 \
+BENCH_DURATION=20s \
+BENCH_WORKBENCH_PG_DSN='postgres://vladimirtrifonov@127.0.0.1:5432/postgres?sslmode=disable' \
+./benchmark-suite/scripts/run_workbench_benchmark_matrix.sh \
+  --port 18180 \
   --impls sec4-lasm,node,go,rust \
   --endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list \
-  --lasm-mode auto
+  --lasm-db-adapter postgres \
+  --lasm-mode single
 ```
 
 Artifacts:
@@ -85,34 +90,34 @@ Canonical-family note:
 
 Freshness:
 
-- report markdown/html mtime: `2026-03-07 17:47:54 +0200`
-- runs/analysis/compare-matrix mtime: `2026-03-07 17:47:54 +0200`
+- report markdown/html mtime: `2026-03-07 20:38:37 +0200`
+- runs/analysis/compare-matrix mtime: `2026-03-07 20:38:37 +0200`
 
 Completeness values:
 
-- `workbench-benchmark-runs.json.startedAt`: `2026-03-07T15:22:07Z`
-- `workbench-benchmark-runs.json.finishedAt`: `2026-03-07T15:47:54Z`
+- `workbench-benchmark-runs.json.startedAt`: `2026-03-07T18:29:46Z`
+- `workbench-benchmark-runs.json.finishedAt`: `2026-03-07T18:38:37Z`
 - impl set: `sec4-lasm`, `node`, `go`, `rust`
 - endpoint set: `wb-tasks-post`, `wb-tasks-with-comment`, `wb-tasks-with-comment-tx`, `wb-task-comment-post`, `wb-task-get`, `wb-tasks-list`
 - `workbench-benchmark-analysis.json.summary.endpointCount`: `6`
 - `workbench-benchmark-analysis.json.summary.highestSeverity`: `HIGH`
-- `workbench-benchmark-runs.json.totals`: `{"passed": 2, "failed": 2, "skipped": 0}`
+- `workbench-benchmark-runs.json.totals`: `{"passed": 4, "failed": 0, "skipped": 0}`
 
 Implementation outcomes from the canonical run:
 
-- `sec4-lasm`: `failed` (`profile failed endpoint=wb-tasks-list`)
-- `node`: `failed` (`profile failed endpoint=wb-tasks-post; profile failed endpoint=wb-tasks-with-comment; profile failed endpoint=wb-tasks-with-comment-tx; profile failed endpoint=wb-task-comment-post`)
+- `sec4-lasm`: `passed`
+- `node`: `passed`
 - `go`: `passed`
 - `rust`: `passed`
 
 Key published numbers:
 
-- `wb-tasks-post`: `sec4-lasm 496.85 req/s`, `p99 141.06ms`
-- `wb-tasks-with-comment`: `sec4-lasm 199.21 req/s`, `p99 148.86ms`
-- `wb-tasks-with-comment-tx`: `sec4-lasm 198.33 req/s`, `p99 495.87ms`
-- `wb-task-comment-post`: `sec4-lasm 496.84 req/s`, `p99 14.57ms`
-- `wb-task-get`: `sec4-lasm 1611.85 req/s`, `p99 20.41s`
-- `wb-tasks-list`: `sec4-lasm 924.47 req/s`, `p99 24.36s`
+- `wb-tasks-post`: `sec4-lasm 491.81 req/s`, `go 391.34 req/s`, `rust 41.78 req/s`, `node 35.90 req/s`
+- `wb-tasks-with-comment`: `sec4-lasm 198.00 req/s`, `go 95.82 req/s`, `rust 40.74 req/s`, `node 39.88 req/s`
+- `wb-tasks-with-comment-tx`: `sec4-lasm 198.13 req/s`, `go 90.00 req/s`, `rust 40.51 req/s`, `node 38.44 req/s`
+- `wb-task-comment-post`: `sec4-lasm 491.79 req/s`, `go 297.55 req/s`, `rust 43.31 req/s`, `node 42.57 req/s`
+- `wb-task-get`: `sec4-lasm 2465.50 req/s`, `go 212.20 req/s`, `rust 42.24 req/s`, `node 28.81 req/s`
+- `wb-tasks-list`: `sec4-lasm 1458.07 req/s`, `go 139.46 req/s`, `rust 21.66 req/s`, `node 9.53 req/s`
 
 ## Contract Gates
 
@@ -123,11 +128,9 @@ Key published numbers:
 
 These do not block the alpha readiness decision, but they are real post-alpha follow-up items:
 
-1. The comparative benchmark publication is fresh and complete, but the canonical run records impl-level failures on:
-   - `sec4-lasm` at `wb-tasks-list` under the current target load,
-   - `node` on multiple write-heavy endpoints.
-2. `workbench-benchmark-analysis.json` still reports `highestSeverity = HIGH`, driven by tail-latency spread and low target coverage on read-heavy endpoints.
-3. The next queue after alpha closeout should stay focused on runtime/scaling tuning, starting with the `wb-tasks-list` saturation path.
+1. `workbench-benchmark-analysis.json` still reports `highestSeverity = HIGH`, driven by large cross-runtime tail-latency spread, not by sec4 functional failures.
+2. The mixed-workload publication run is stable in LASM `single` mode; cluster/fixed/proxy remain post-alpha tuning space, not alpha-proof defaults.
+3. The next queue after alpha closeout should stay focused on runtime/scaling tuning from this clean publication baseline.
 
 ## Merge Batch Note
 

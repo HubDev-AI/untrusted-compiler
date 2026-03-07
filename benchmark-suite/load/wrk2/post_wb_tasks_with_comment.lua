@@ -2,7 +2,6 @@ local seq = 0
 local default_run_tag = "__BENCH_WB_RUN_TAG_DEFAULT__"
 local run_tag = "__BENCH_WB_RUN_TAG__"
 local thread_tag = "t0"
-local next_thread_id = 0
 
 if run_tag == default_run_tag or run_tag == "" then
   run_tag = os.getenv("BENCH_WB_RUN_TAG") or tostring(os.time())
@@ -27,27 +26,25 @@ end
 
 local function resolve_thread_tag()
   local parts = {}
-  local thread_index = sanitize_thread_component(thread_id)
   local thread_identity = sanitize_thread_component(wrk.thread)
+  local table_identity = sanitize_thread_component(tostring({}))
 
-  if thread_index ~= nil then
-    parts[#parts + 1] = "i" .. thread_index
-  end
   if thread_identity ~= nil then
     parts[#parts + 1] = thread_identity
   end
+  if table_identity ~= nil then
+    parts[#parts + 1] = table_identity
+  end
   if #parts == 0 then
-    return "t0"
+    return "t" .. tostring(math.random(100000, 999999))
   end
   return "t" .. table.concat(parts, "-")
 end
 
-setup = function(thread)
-  thread:set("thread_id", next_thread_id)
-  next_thread_id = next_thread_id + 1
-end
-
 init = function(args)
+  local table_seed = tostring({}):gsub("%D", "")
+  local seed_suffix = tonumber(table_seed:sub(-6)) or 0
+  math.randomseed(os.time() + seed_suffix)
   thread_tag = resolve_thread_tag()
 end
 
