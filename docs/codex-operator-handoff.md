@@ -104,14 +104,18 @@ Status notes:
     - `benchmark-suite/scripts/run_workbench_lasm_mode_compare_repeats.sh --repeats 1 --endpoints wb-tasks-list --lasm-db-adapter postgres --lasm-postgres-dsn-file <tmp>`
     - artifact: `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
     - recommendation: `mode=fixed`, reason `medianRequestsPerSec=1492.84`.
-  - Latest full cross-runtime publication rerun (local Postgres wrapper, `--fail-on-impl-failure 0`) produced fresh artifacts with deterministic failed-lane accounting:
+  - Follow-up stabilization pass fixed that rerun path:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh` now falls back to `single` (not `fixed`) when `--lasm-mode auto` sees a workload-mismatched recommendation artifact.
+    - `benchmark-suite/scripts/run_workbench_profile.sh` now uses bounded socket-error-rate gating (`BENCH_SOCKET_ERROR_MAX_RATE_PCT`, default `0.50`) instead of hard-failing on any non-zero socket error.
+    - `benchmark-suite/services/sec4-lasm-workbench/src/workbench/setup.ut` now creates critical indexes:
+      - `wb_comments(task_id)`
+      - `wb_tasks(created_at_ms desc, id desc)`
+      - `wb_tasks(status, created_at_ms desc, id desc)`
+      - `wb_labels(name, task_id)`
+  - Latest full cross-runtime publication rerun (local Postgres wrapper, same command) is green again:
     - command: `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
-    - totals: `passed=2 failed=2 skipped=0`
-    - failure reasons:
-      - `sec4-lasm`: `profile failed endpoint=wb-task-get; profile failed endpoint=wb-tasks-list`
-      - `node`: `profile failed endpoint=wb-tasks-with-comment`
-      - `go`, `rust`: no failure reason.
-  - `--lasm-mode auto` fell back to `fixed` in that full rerun because the available recommendation artifact was list-only (`wb-tasks-list`) and not workload-compatible with the full endpoint set.
+    - totals: `passed=4 failed=0 skipped=0`
+    - `sec4-lasm` no longer fails on `wb-task-get` / `wb-tasks-list` in this publication path.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 

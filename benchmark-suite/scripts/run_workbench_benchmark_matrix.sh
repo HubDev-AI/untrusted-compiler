@@ -609,8 +609,8 @@ if [ -n "$lasm_mode" ]; then
     if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
       [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
     }; then
-      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to fixed mode" >&2
-      lasm_mode="fixed"
+      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
+      lasm_mode="single"
     else
       lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
       if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then

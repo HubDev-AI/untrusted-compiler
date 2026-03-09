@@ -28,6 +28,34 @@ fn wbSetup() effects { net, db.write } -> Int {
       "[]"
     )
   );
+  db.exec(
+    db,
+    sql.q(
+      "create index if not exists wb_comments_task_id_idx on wb_comments(task_id)",
+      "[]"
+    )
+  );
+  db.exec(
+    db,
+    sql.q(
+      "create index if not exists wb_tasks_created_id_idx on wb_tasks(created_at_ms desc, id desc)",
+      "[]"
+    )
+  );
+  db.exec(
+    db,
+    sql.q(
+      "create index if not exists wb_tasks_status_created_id_idx on wb_tasks(status, created_at_ms desc, id desc)",
+      "[]"
+    )
+  );
+  db.exec(
+    db,
+    sql.q(
+      "create index if not exists wb_labels_name_task_id_idx on wb_labels(name, task_id)",
+      "[]"
+    )
+  );
 
   res.json(200, "DbExecResponse", 0);
   0

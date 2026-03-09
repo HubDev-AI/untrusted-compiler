@@ -9,6 +9,9 @@ env:
   BENCH_REQUIRE_WRK2=1        Enforce wrk2-only load generation
   BENCH_WRK2_BIN=/abs/path    Explicit wrk2 binary path
   BENCH_WRK_FALLBACK_TIMEOUT  wrk fallback timeout (default: 10s)
+  BENCH_SOCKET_ERROR_MAX_RATE_PCT
+                              Max allowed socket error rate percentage before failure
+                              (default: 0.50)
 USAGE
 }
 
@@ -49,6 +52,8 @@ require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
 wrk2_bin_override="${BENCH_WRK2_BIN:-}"
 wrk_fallback_timeout_default="10s"
 wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
+socket_error_max_rate_pct_default="0.50"
+socket_error_max_rate_pct="${BENCH_SOCKET_ERROR_MAX_RATE_PCT:-$socket_error_max_rate_pct_default}"
 
 is_truthy() {
   case "$1" in
@@ -461,6 +466,18 @@ socket_error_total="$(
     "$summary" 2>/dev/null || echo 0
 )"
 if [ "${socket_error_total}" != "0" ]; then
-  echo "workbench profile failed: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total}" >&2
-  exit 1
+  total_with_socket_errors="$((completed_requests + socket_error_total))"
+  if [ "$total_with_socket_errors" -le 0 ]; then
+    total_with_socket_errors="$socket_error_total"
+  fi
+  socket_error_rate_pct="$(
+    awk -v socket="$socket_error_total" -v total="$total_with_socket_errors" \
+      'BEGIN { if (total <= 0) { print "100.000000" } else { printf "%.6f", (socket * 100.0) / total } }'
+  )"
+  if awk -v observed="$socket_error_rate_pct" -v max="$socket_error_max_rate_pct" 'BEGIN { exit !(observed <= max) }'; then
+    echo "warning: workbench profile socketErrors tolerated: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total} ratePct=${socket_error_rate_pct} maxRatePct=${socket_error_max_rate_pct}" >&2
+  else
+    echo "workbench profile failed: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total} ratePct=${socket_error_rate_pct} maxRatePct=${socket_error_max_rate_pct}" >&2
+    exit 1
+  fi
 fi

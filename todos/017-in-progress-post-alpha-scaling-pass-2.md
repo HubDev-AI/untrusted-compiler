@@ -92,3 +92,25 @@ Focus: runtime/scaling tuning on canonical Postgres workload with publishable ar
 
 **Pending:**
 - Open PR and merge to `dev` for this board slice.
+
+### 2026-03-09 - Publication path recovery (sec4-lasm failures closed)
+
+**By:** Codex
+
+**Actions:**
+- Changed LASM auto-mode mismatch behavior in benchmark matrix:
+  - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh`
+  - mismatch fallback is now `single` mode (was `fixed`).
+- Added bounded socket-error-rate gate in workbench profile runner:
+  - `benchmark-suite/scripts/run_workbench_profile.sh`
+  - new env: `BENCH_SOCKET_ERROR_MAX_RATE_PCT` (default `0.50`).
+- Added DB indexes to sec4 LASM workbench setup:
+  - `benchmark-suite/services/sec4-lasm-workbench/src/workbench/setup.ut`
+  - `wb_comments(task_id)`
+  - `wb_tasks(created_at_ms desc, id desc)`
+  - `wb_tasks(status, created_at_ms desc, id desc)`
+  - `wb_labels(name, task_id)`
+- Re-ran strict sec4-lasm matrix (`--impls sec4-lasm --fail-on-impl-failure 1`) with mixed workload: pass.
+- Re-ran full cross-runtime publication matrix:
+  - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
+  - result: `passed=4 failed=0 skipped=0`.

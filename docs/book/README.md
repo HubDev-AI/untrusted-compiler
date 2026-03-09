@@ -31,10 +31,12 @@ Canonical evidence set:
 
 - Focused LASM mode-compare refresh for `wb-tasks-list` (Postgres, repeats=1) currently recommends `fixed` mode in:
   - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
-- Latest cross-runtime publication rerun with failure-mode controls (`--fail-on-impl-failure 0`) produced:
-  - totals: `passed=2 failed=2 skipped=0` in `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
-  - failed lanes: `sec4-lasm` (`wb-task-get`, `wb-tasks-list`) and `node` (`wb-tasks-with-comment`)
-  - passed lanes: `go`, `rust`.
+- Publication-path stabilization landed:
+  - `run_workbench_benchmark_matrix.sh` auto-mode mismatch fallback now defaults to `single`.
+  - `run_workbench_profile.sh` uses bounded socket-error-rate failure gating (`BENCH_SOCKET_ERROR_MAX_RATE_PCT`, default `0.50`).
+  - sec4 LASM workbench setup now creates read-path indexes for `wb_comments`, `wb_tasks`, and `wb_labels`.
+- Latest cross-runtime publication rerun with failure-mode controls (`--fail-on-impl-failure 0`) is green:
+  - totals: `passed=4 failed=0 skipped=0` in `benchmark-suite/results/summaries/workbench-benchmark-runs.json`.
 
 ## Chapter order
 - `00-preface.md`

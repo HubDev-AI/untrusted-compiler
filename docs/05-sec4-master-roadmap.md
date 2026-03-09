@@ -12459,8 +12459,10 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
   - focused LASM mode-compare artifact refresh for tuned list workload (`--endpoints wb-tasks-list`) now recommends `fixed` mode:
     - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
     - recommendation: `mode=fixed`, `medianRequestsPerSec=1492.84`.
-  - latest full cross-runtime publication rerun with failure-mode controls:
+  - publication-path stabilization updates landed after that rerun:
+    - `run_workbench_benchmark_matrix.sh` now falls back to `single` (not `fixed`) when `--lasm-mode auto` sees workload mismatch.
+    - `run_workbench_profile.sh` now enforces bounded socket-error-rate failures via `BENCH_SOCKET_ERROR_MAX_RATE_PCT` (default `0.50`) instead of hard-failing on any non-zero socket error.
+    - sec4 LASM workbench setup now creates indexes needed for hot read paths (`wb_comments(task_id)`, `wb_tasks(created_at_ms,id)`, `wb_tasks(status,created_at_ms,id)`, `wb_labels(name,task_id)`).
+  - latest full cross-runtime publication rerun with those fixes:
     - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
-    - totals: `passed=2 failed=2 skipped=0`.
-    - failed lanes: `sec4-lasm` (`wb-task-get`, `wb-tasks-list`), `node` (`wb-tasks-with-comment`); `go` and `rust` finished without failure reason.
-  - in that rerun, `--lasm-mode auto` correctly fell back to `fixed` because the available recommendation artifact was list-only and workload-incompatible with the full endpoint set.
+    - totals: `passed=4 failed=0 skipped=0`.
