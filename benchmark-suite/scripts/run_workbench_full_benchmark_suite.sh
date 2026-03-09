@@ -534,10 +534,26 @@ if [ -n "$lasm_mode" ]; then
       echo "LASM auto mode requires mode-compare artifact: $lasm_mode_compare_repeats_file" >&2
       exit 2
     fi
-    lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
-    if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
-      echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
-      exit 2
+    requested_endpoints_norm="$(
+      printf '%s\n' "$endpoints_csv" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd, -
+    )"
+    artifact_endpoints_norm="$(
+      jq -r '(.config.endpoints // []) | sort | join(",")' "$lasm_mode_compare_repeats_file"
+    )"
+    artifact_lasm_db_adapter="$(
+      jq -r '.config.lasmDbAdapter // empty' "$lasm_mode_compare_repeats_file"
+    )"
+    if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
+      [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
+    }; then
+      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
+      lasm_mode="single"
+    else
+      lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
+      if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
+        echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
+        exit 2
+      fi
     fi
   fi
   case "$lasm_mode" in
