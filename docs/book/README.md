@@ -27,6 +27,15 @@ Canonical evidence set:
 
 `workbench-full-benchmark-*` outputs are tuning artifacts and are not the canonical alpha publication family.
 
+## Post-Alpha Tuning Snapshot (2026-03-09)
+
+- Focused LASM mode-compare refresh for `wb-tasks-list` (Postgres, repeats=1) currently recommends `fixed` mode in:
+  - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+- Latest cross-runtime publication rerun with failure-mode controls (`--fail-on-impl-failure 0`) produced:
+  - totals: `passed=2 failed=2 skipped=0` in `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+  - failed lanes: `sec4-lasm` (`wb-task-get`, `wb-tasks-list`) and `node` (`wb-tasks-with-comment`)
+  - passed lanes: `go`, `rust`.
+
 ## Chapter order
 - `00-preface.md`
 - `10-project-setup-and-architecture.md`

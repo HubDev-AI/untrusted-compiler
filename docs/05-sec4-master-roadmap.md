@@ -12456,6 +12456,11 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
 - Post-alpha seam/tuning update (2026-03-09):
   - workbench benchmark and step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) so publication/tuning flows can keep deterministic failed-lane accounting without aborting all artifact generation.
   - benchmark matrix now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient endpoint profile failures once before marking a lane failed.
-  - refreshed LASM mode-compare artifact on canonical Postgres workload currently recommends `proxy` mode:
+  - focused LASM mode-compare artifact refresh for tuned list workload (`--endpoints wb-tasks-list`) now recommends `fixed` mode:
     - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
-    - recommendation: `mode=proxy`, `medianRequestsPerSec=5362.34`.
+    - recommendation: `mode=fixed`, `medianRequestsPerSec=1492.84`.
+  - latest full cross-runtime publication rerun with failure-mode controls:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
+    - totals: `passed=2 failed=2 skipped=0`.
+    - failed lanes: `sec4-lasm` (`wb-task-get`, `wb-tasks-list`), `node` (`wb-tasks-with-comment`); `go` and `rust` finished without failure reason.
+  - in that rerun, `--lasm-mode auto` correctly fell back to `fixed` because the available recommendation artifact was list-only and workload-incompatible with the full endpoint set.

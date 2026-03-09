@@ -100,10 +100,18 @@ Status notes:
   - `run_workbench_profile.sh` now retries once on the known intermittent wrk2 assertion crash (`response_complete: Assertion`) before marking profile failure.
   - Workbench benchmark + step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) and full-suite forwards the same control to both phases.
   - Workbench benchmark matrix runner now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient profile failures before marking endpoint failure.
-  - Fresh LASM mode-compare artifact refresh on canonical Postgres workload now recommends `proxy` mode (`medianRequestsPerSec=5362.34`):
-    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
-  - Latest full cross-runtime canonical rerun (same Postgres workload, single mode): `passed=3 failed=1 skipped=0` (sec4-lasm/go/rust passed; node failed on socket-error gates).
-  - In that rerun, `sec4-lasm` leads all six endpoints; `wb-task-get` measured about `2496.54 req/s` at `p99 11.24ms`.
+  - Focused LASM mode-compare rerun for the tuned list workload now recommends `fixed` mode:
+    - `benchmark-suite/scripts/run_workbench_lasm_mode_compare_repeats.sh --repeats 1 --endpoints wb-tasks-list --lasm-db-adapter postgres --lasm-postgres-dsn-file <tmp>`
+    - artifact: `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+    - recommendation: `mode=fixed`, reason `medianRequestsPerSec=1492.84`.
+  - Latest full cross-runtime publication rerun (local Postgres wrapper, `--fail-on-impl-failure 0`) produced fresh artifacts with deterministic failed-lane accounting:
+    - command: `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
+    - totals: `passed=2 failed=2 skipped=0`
+    - failure reasons:
+      - `sec4-lasm`: `profile failed endpoint=wb-task-get; profile failed endpoint=wb-tasks-list`
+      - `node`: `profile failed endpoint=wb-tasks-with-comment`
+      - `go`, `rust`: no failure reason.
+  - `--lasm-mode auto` fell back to `fixed` in that full rerun because the available recommendation artifact was list-only (`wb-tasks-list`) and not workload-compatible with the full endpoint set.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 
