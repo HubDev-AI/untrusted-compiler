@@ -12,6 +12,11 @@ env:
   BENCH_SOCKET_ERROR_MAX_RATE_PCT
                               Max allowed socket error rate percentage before failure
                               (default: 0.50)
+  BENCH_SOCKET_ERROR_MAX_RATE_PCT_<ENDPOINT>
+                              Optional per-endpoint override where ENDPOINT is:
+                              WB_TASKS_POST, WB_TASKS_WITH_COMMENT,
+                              WB_TASKS_WITH_COMMENT_TX, WB_TASK_COMMENT_POST,
+                              WB_TASK_GET, WB_TASKS_LIST
 USAGE
 }
 
@@ -53,7 +58,37 @@ wrk2_bin_override="${BENCH_WRK2_BIN:-}"
 wrk_fallback_timeout_default="10s"
 wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
 socket_error_max_rate_pct_default="0.50"
-socket_error_max_rate_pct="${BENCH_SOCKET_ERROR_MAX_RATE_PCT:-$socket_error_max_rate_pct_default}"
+socket_error_max_rate_pct_global="${BENCH_SOCKET_ERROR_MAX_RATE_PCT:-$socket_error_max_rate_pct_default}"
+socket_error_max_rate_pct="$socket_error_max_rate_pct_global"
+
+resolve_socket_error_threshold_endpoint_key() {
+  case "$1" in
+    wb-tasks-post) printf '%s\n' "WB_TASKS_POST" ;;
+    wb-tasks-with-comment) printf '%s\n' "WB_TASKS_WITH_COMMENT" ;;
+    wb-tasks-with-comment-tx) printf '%s\n' "WB_TASKS_WITH_COMMENT_TX" ;;
+    wb-task-comment-post) printf '%s\n' "WB_TASK_COMMENT_POST" ;;
+    wb-task-get) printf '%s\n' "WB_TASK_GET" ;;
+    wb-tasks-list) printf '%s\n' "WB_TASKS_LIST" ;;
+    *) printf '%s\n' "" ;;
+  esac
+}
+
+resolve_socket_error_max_rate_pct() {
+  local endpoint_key="$1"
+  local endpoint_var=""
+  local endpoint_override=""
+  if [ -z "$endpoint_key" ]; then
+    printf '%s\n' "$socket_error_max_rate_pct_global"
+    return
+  fi
+  endpoint_var="BENCH_SOCKET_ERROR_MAX_RATE_PCT_${endpoint_key}"
+  endpoint_override="${!endpoint_var:-}"
+  if [ -n "$endpoint_override" ]; then
+    printf '%s\n' "$endpoint_override"
+  else
+    printf '%s\n' "$socket_error_max_rate_pct_global"
+  fi
+}
 
 is_truthy() {
   case "$1" in
@@ -369,7 +404,11 @@ case "$endpoint" in
     ;;
 esac
 
+socket_error_threshold_endpoint_key="$(resolve_socket_error_threshold_endpoint_key "$endpoint")"
+socket_error_max_rate_pct="$(resolve_socket_error_max_rate_pct "$socket_error_threshold_endpoint_key")"
+
 echo "workbench profile impl=${impl} endpoint=${endpoint} targetRps=${target}"
+echo "socketErrorMaxRatePct: ${socket_error_max_rate_pct}"
 echo "command: ${cmd[*]}"
 echo "raw: $raw"
 echo "summary: $summary"
