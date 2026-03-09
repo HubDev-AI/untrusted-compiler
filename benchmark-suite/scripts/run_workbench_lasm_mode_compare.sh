@@ -283,26 +283,58 @@ done
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
+normalize_workbench_endpoints_csv() {
+  local input_endpoints_csv="$1"
+  printf '%s\n' "$input_endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+workbench_mode_artifact_suffix() {
+  local input_endpoints_csv="$1"
+  local input_lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$input_endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s-%s' "$input_lasm_db_adapter" "$endpoints_key"
+}
+
+mode_artifact_suffix="$(workbench_mode_artifact_suffix "$endpoints_csv" "$lasm_db_adapter")"
+
 if [ -z "$single_runs_out" ]; then
-  single_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-runs.json"
+  single_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$fixed_runs_out" ]; then
-  fixed_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-runs.json"
+  fixed_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$proxy_runs_out" ]; then
-  proxy_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-runs.json"
+  proxy_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$single_report_out" ]; then
-  single_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-report.json"
+  single_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$fixed_report_out" ]; then
-  fixed_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-report.json"
+  fixed_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$proxy_report_out" ]; then
-  proxy_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-report.json"
+  proxy_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$out_path" ]; then
-  out_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare.json"
+  out_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare-${mode_artifact_suffix}.json"
 fi
 
 mkdir -p "$(dirname "$single_runs_out")" "$(dirname "$fixed_runs_out")" "$(dirname "$proxy_runs_out")" \
