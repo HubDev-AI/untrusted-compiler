@@ -138,13 +138,15 @@ compute_workbench_lasm_mode_compare_repeats_default_path() {
   printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
 }
 
+mode_compare_endpoints="$(
+  resolve_passthrough_option_value \
+    "--endpoints" \
+    "wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+)"
+mode_compare_lasm_db_adapter="$(resolve_passthrough_option_value "--lasm-db-adapter" "sqlite")"
+mode_compare_endpoints_norm="$(normalize_workbench_endpoints_csv "$mode_compare_endpoints")"
+
 if [ -z "$out_path" ]; then
-  mode_compare_endpoints="$(
-    resolve_passthrough_option_value \
-      "--endpoints" \
-      "wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
-  )"
-  mode_compare_lasm_db_adapter="$(resolve_passthrough_option_value "--lasm-db-adapter" "sqlite")"
   out_path="$(compute_workbench_lasm_mode_compare_repeats_default_path "$mode_compare_endpoints" "$mode_compare_lasm_db_adapter")"
 fi
 
@@ -264,3 +266,12 @@ jq -s \
   ' "${repeat_outputs[@]}" >"$out_path"
 
 echo "wrote ${out_path}"
+
+canonical_endpoints_norm="$(
+  normalize_workbench_endpoints_csv "wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+)"
+legacy_alias_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
+if [ "$mode_compare_lasm_db_adapter" = "postgres" ] && [ "$mode_compare_endpoints_norm" = "$canonical_endpoints_norm" ] && [ "$out_path" != "$legacy_alias_path" ]; then
+  cp "$out_path" "$legacy_alias_path"
+  echo "wrote ${legacy_alias_path}"
+fi
