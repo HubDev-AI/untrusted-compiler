@@ -123,7 +123,9 @@ pub(crate) fn compute_lasm_cluster_base_port(
             "cannot allocate worker ports: choose a lower --port for cluster mode".to_string(),
         );
     }
-    Ok(u16::try_from(base_port).expect("base port range prevalidated"))
+    u16::try_from(base_port).map_err(|_| {
+        "cannot allocate worker ports: choose a lower --port for cluster mode".to_string()
+    })
 }
 
 fn push_optional_u64_run_arg(cmd: &mut Command, flag: &str, value: Option<u64>) {

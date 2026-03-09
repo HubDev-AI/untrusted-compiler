@@ -187,7 +187,15 @@ fn lasm_postgres_persist_config_key(config: &LasmPostgresThreadLocalConfig) -> S
 
 fn lasm_postgres_persist_config_lock(key: &str) -> Arc<Mutex<()>> {
     let locks = LASM_POSTGRES_PERSIST_CONFIG_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = locks.lock().expect("persist config locks poisoned");
+    let mut guard = match locks.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!(
+                "warning: LASM dynamic postgres persist config lock registry poisoned; continuing with recovered state"
+            );
+            poisoned.into_inner()
+        }
+    };
     guard
         .entry(key.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))
@@ -224,7 +232,15 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
     for (_, (config, records, compaction_snapshot)) in grouped {
         let config_key = lasm_postgres_persist_config_key(&config);
         let config_lock = lasm_postgres_persist_config_lock(config_key.as_str());
-        let _config_guard = config_lock.lock().expect("persist config lock poisoned");
+        let _config_guard = match config_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!(
+                    "warning: LASM dynamic postgres persist per-config lock poisoned; continuing with recovered state"
+                );
+                poisoned.into_inner()
+            }
+        };
         let mut append_records = records;
         let mut full_sync_failed = false;
         if let Some(snapshot) = compaction_snapshot.as_deref() {
