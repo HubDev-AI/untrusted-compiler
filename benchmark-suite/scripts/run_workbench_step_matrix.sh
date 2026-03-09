@@ -5,6 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--fail-on-impl-failure 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-capture-enabled 0|1]
@@ -27,6 +28,7 @@ dry_run="false"
 matrix_path=""
 impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+fail_on_impl_failure="${BENCH_WORKBENCH_FAIL_ON_IMPL_FAILURE:-1}"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
@@ -89,6 +91,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --endpoints=*)
       endpoints_csv="${1#--endpoints=}"
+      shift
+      ;;
+    --fail-on-impl-failure)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      fail_on_impl_failure="$2"
+      shift 2
+      ;;
+    --fail-on-impl-failure=*)
+      fail_on_impl_failure="${1#--fail-on-impl-failure=}"
       shift
       ;;
     --port)
@@ -444,6 +458,10 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
 fi
 if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_enabled" != "1" ]; then
   echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
+  exit 2
+fi
+if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; then
+  echo "invalid --fail-on-impl-failure (expected 0 or 1): $fail_on_impl_failure" >&2
   exit 2
 fi
 
@@ -1058,6 +1076,7 @@ jq -n \
   --arg matrixPath "$matrix_path_rel" \
   --arg endpoints "$endpoints_csv" \
   --arg stepMatrixPath "$out_step_matrix_rel" \
+  --argjson failOnImplFailure "$fail_on_impl_failure" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{
@@ -1067,6 +1086,7 @@ jq -n \
     matrixPath: $matrixPath,
     endpoints: ($endpoints | split(",")),
     stepMatrixPath: $stepMatrixPath,
+    failOnImplFailure: $failOnImplFailure,
     totals: $totals,
     runs: $runs
   }' >"$out_runs"
@@ -1081,6 +1101,6 @@ if [ -n "$passed_impls_csv" ]; then
 fi
 echo "totals: passed=${total_passed} failed=${total_failed} skipped=${total_skipped}"
 
-if [ "$total_failed" -gt 0 ]; then
+if [ "$total_failed" -gt 0 ] && [ "$fail_on_impl_failure" = "1" ]; then
   exit 1
 fi

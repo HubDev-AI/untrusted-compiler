@@ -1571,5 +1571,6 @@ Canonical evidence set:
 - `1575-m39-postgres-persist-serialization-and-workload-aware-auto-mode.md`
 - `1576-m39-final-alpha-closeout-proof-bundle-and-readiness.md`
 - `1577-m39-workbench-cross-runtime-rerun-and-list-slice-closeout.md`
+- `1578-m39-workbench-post-alpha-failure-mode-controls-and-mode-refresh.md`
 
 As milestones progress, chapters will be added and linked from this index.

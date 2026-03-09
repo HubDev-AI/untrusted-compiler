@@ -384,13 +384,57 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
-{
-  echo "# sec4-bench-load-bin=${load_bin}"
-  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
-  echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
-} >"$raw"
+write_raw_header() {
+  {
+    echo "# sec4-bench-load-bin=${load_bin}"
+    echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+    echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
+  } >"$raw"
+}
 
-"${cmd[@]}" | tee -a "$raw"
+run_profile_command_with_retry() {
+  local max_attempts=1
+  local attempt=1
+  local exit_code=0
+  local wrk2_assertion_pattern='response_complete: Assertion'
+
+  if [ "${load_supports_rate}" = "true" ]; then
+    max_attempts=2
+  fi
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    if [ "$attempt" -gt 1 ]; then
+      write_raw_header
+      echo "# sec4-bench-retry-attempt=${attempt}" >>"$raw"
+      echo "warning: wrk2 assertion failure detected; retrying once (impl=${impl}, endpoint=${endpoint})" >&2
+    fi
+
+    if "${cmd[@]}" 2>&1 | tee -a "$raw"; then
+      return 0
+    fi
+    exit_code=$?
+
+    if [ "${load_supports_rate}" != "true" ]; then
+      return "$exit_code"
+    fi
+    if ! grep -q "$wrk2_assertion_pattern" "$raw"; then
+      return "$exit_code"
+    fi
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      return "$exit_code"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  return "$exit_code"
+}
+
+write_raw_header
+
+if ! run_profile_command_with_retry; then
+  exit 1
+fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"
 rss_source="unavailable"
