@@ -7,6 +7,7 @@ usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
+          [--lasm-db-records-capture-enabled 0|1]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
           [--lasm-db-postgres-shared-client-max-active-total <n>]
           [--lasm-instances <n>] [--lasm-autoscale-max-instances <n>]
@@ -30,6 +31,7 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-0}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
@@ -135,6 +137,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-postgres-dsn-file=*)
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_records_capture_enabled="$2"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-mode)
@@ -428,6 +442,10 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
   exit 2
 fi
+if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_enabled" != "1" ]; then
+  echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
+  exit 2
+fi
 
 if [ -z "$lasm_mode_compare_repeats_file" ]; then
   lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
@@ -658,6 +676,7 @@ start_impl_service() {
         fi
         (
           cd "$repo_root"
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
           cargo run -q -p sec4 -- run \
             --path "$service_abs" \
             --backend lasm \
@@ -671,6 +690,7 @@ start_impl_service() {
         (
           cd "$repo_root"
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \
               --backend lasm \
@@ -850,9 +870,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${lasm_cluster_mode} lasmInstances=${lasm_instances} lasmAutoscaleMaxInstances=${lasm_autoscale_max_instances} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
