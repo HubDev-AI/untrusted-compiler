@@ -5,6 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--fail-on-impl-failure 0|1]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-capture-enabled 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
@@ -29,6 +30,7 @@ dry_run="false"
 matrix_path=""
 impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+fail_on_impl_failure="${BENCH_WORKBENCH_FAIL_ON_IMPL_FAILURE:-1}"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
@@ -98,6 +100,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --endpoints=*)
       endpoints_csv="${1#--endpoints=}"
+      shift
+      ;;
+    --fail-on-impl-failure)
+      fail_on_impl_failure="${2:-}"
+      shift 2
+      ;;
+    --fail-on-impl-failure=*)
+      fail_on_impl_failure="${1#--fail-on-impl-failure=}"
       shift
       ;;
     --port)
@@ -483,6 +493,10 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM DB adapter: $lasm_db_adapter" >&2
   exit 2
 fi
+if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; then
+  echo "--fail-on-impl-failure must be 0 or 1" >&2
+  exit 2
+fi
 
 if [ -n "$lasm_mode" ]; then
   if [ "$lasm_mode" = "auto" ]; then
@@ -551,6 +565,8 @@ if [ -n "$lasm_db_adapter" ]; then
   bench_cmd+=(--lasm-db-adapter "$lasm_db_adapter")
   step_cmd+=(--lasm-db-adapter "$lasm_db_adapter")
 fi
+bench_cmd+=(--fail-on-impl-failure "$fail_on_impl_failure")
+step_cmd+=(--fail-on-impl-failure "$fail_on_impl_failure")
 if [ -n "$lasm_db_base" ]; then
   bench_cmd+=(--lasm-db-base "$lasm_db_base")
   step_cmd+=(--lasm-db-base "$lasm_db_base")
@@ -657,6 +673,9 @@ if [ -n "$lasm_mode_compare_repeats" ]; then
   fi
   if [ -n "$lasm_postgres_dsn_file" ]; then
     mode_compare_cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
+  fi
+  if [ -n "$lasm_db_records_capture_enabled" ]; then
+    mode_compare_cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
   fi
   if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
     mode_compare_cmd+=(--lasm-db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
@@ -782,6 +801,7 @@ jq -n \
   --arg modeCompareRepeatsPath "$out_mode_compare_repeats_rel" \
   --arg reportPath "$out_report_rel" \
   --arg reportHtmlPath "$out_report_html_rel" \
+  --argjson failOnImplFailure "$fail_on_impl_failure" \
   --arg suiteResult "$suite_result" \
   --argjson benchExitCode "$bench_exit_code" \
   --argjson stepExitCode "$step_exit_code" \
@@ -805,6 +825,7 @@ jq -n \
       report: $reportPath,
       reportHtml: $reportHtmlPath
     },
+    failOnImplFailure: $failOnImplFailure,
     suiteResult: $suiteResult,
     phaseExitCodes: {
       benchmarkMatrix: $benchExitCode,

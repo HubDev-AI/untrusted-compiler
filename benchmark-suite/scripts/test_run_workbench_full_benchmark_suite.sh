@@ -35,9 +35,13 @@ if ! grep -q "lasmPostgresDsn=${tmp_dsn}" <<<"$db_out"; then
   exit 1
 fi
 
-repeat_out="$($root_dir/scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints wb-task-get --lasm-mode-compare-repeats 2 --port 18112)"
+repeat_out="$($root_dir/scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints wb-task-get --lasm-mode-compare-repeats 2 --lasm-db-records-capture-enabled 1 --port 18112)"
 if ! grep -q '^repeat 1: .*run_workbench_lasm_mode_compare.sh --endpoints wb-task-get --port 18112' <<<"$repeat_out"; then
   echo "missing repeated LASM mode compare inner dry-run command" >&2
+  exit 1
+fi
+if ! grep -q '^repeat 1: .*run_workbench_lasm_mode_compare.sh .*--lasm-db-records-capture-enabled 1' <<<"$repeat_out"; then
+  echo "missing repeated LASM mode compare records-capture passthrough" >&2
   exit 1
 fi
 if ! grep -q '^aggregate artifact: .*/workbench-lasm-mode-compare-repeats.json$' <<<"$repeat_out"; then

@@ -170,4 +170,36 @@ if ! jq -e '.totals.failed == 1 and .totals.passed == 0' "$out_runs" >/dev/null;
   exit 1
 fi
 
+relaxed_runs="${tmp_root}/runs-relaxed.json"
+set +e
+relaxed_out="$(
+  PATH="${bin_dir}:$PATH" \
+    BENCH_REQUIRE_WRK2=1 \
+    FAKE_WRK2_MARKER="$wrk_marker" \
+    "${suite_dir}/scripts/run_workbench_benchmark_matrix.sh" \
+      --matrix "$matrix_path" \
+      --impls node \
+      --endpoints wb-task-get \
+      --port 18132 \
+      --fail-on-impl-failure 0 \
+      --out-runs "$relaxed_runs" \
+      --out-compare "$out_compare" \
+      --out-analysis "$out_analysis" \
+      --out-report "$out_report" \
+      --out-report-html "$out_report_html" \
+      2>&1
+)"
+relaxed_status=$?
+set -e
+
+if [ "$relaxed_status" -ne 0 ]; then
+  echo "expected relaxed benchmark matrix mode to return success despite impl failure" >&2
+  echo "$relaxed_out" >&2
+  exit 1
+fi
+if ! jq -e '.failOnImplFailure == 0 and .totals.failed == 1' "$relaxed_runs" >/dev/null; then
+  echo "expected relaxed benchmark summary to keep failed totals with failOnImplFailure=0" >&2
+  exit 1
+fi
+
 echo "run_workbench_benchmark_matrix test passed"

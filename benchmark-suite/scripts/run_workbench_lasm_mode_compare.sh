@@ -19,6 +19,7 @@ Options:
   --lasm-db-adapter <sqlite|postgres>             LASM DB adapter (default: sqlite)
   --lasm-db-base <path>                           Optional LASM sqlite DB base
   --lasm-postgres-dsn-file <path>                 Optional LASM Postgres DSN file
+  --lasm-db-records-capture-enabled <0|1>         Optional LASM runtime DB-record capture switch
   --lasm-db-postgres-shared-client-max-active-per-key <n>
                                                   Optional LASM Postgres active-pool per-key limit
   --lasm-db-postgres-shared-client-max-active-total <n>
@@ -49,6 +50,7 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-}"
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
 lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
 instances="${BENCH_WORKBENCH_LASM_INSTANCES:-2}"
@@ -109,6 +111,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-postgres-dsn-file=*)
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      lasm_db_records_capture_enabled="${2:-}"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-db-postgres-shared-client-max-active-per-key)
@@ -307,6 +317,15 @@ if [ "$autoscale_max_instances" -le "$instances" ] 2>/dev/null; then
   echo "--autoscale-max-instances must be > --instances for proxy mode comparison" >&2
   exit 2
 fi
+if [ -n "$lasm_db_records_capture_enabled" ]; then
+  case "$lasm_db_records_capture_enabled" in
+    0|1) ;;
+    *)
+      echo "--lasm-db-records-capture-enabled must be 0 or 1" >&2
+      exit 2
+      ;;
+  esac
+fi
 
 benchmark_matrix_script="${suite_dir}/scripts/run_workbench_benchmark_matrix.sh"
 current_report_path="${suite_dir}/results/summaries/sec4-lasm-report.json"
@@ -339,6 +358,9 @@ run_mode() {
   fi
   if [ -n "$lasm_postgres_dsn_file" ]; then
     cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
+  fi
+  if [ -n "$lasm_db_records_capture_enabled" ]; then
+    cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
   fi
   if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
     cmd+=(--lasm-db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
@@ -408,6 +430,7 @@ jq -n \
   --arg generatedAt "$generated_at" \
   --arg endpoints "$endpoints_csv" \
   --arg lasmDbAdapter "$lasm_db_adapter" \
+  --arg lasmDbRecordsCaptureEnabled "$lasm_db_records_capture_enabled" \
   --argjson instances "$instances" \
   --argjson autoscaleMaxInstances "$autoscale_max_instances" \
   --argjson autoscaleTargetConnections "$autoscale_target_connections" \
@@ -515,6 +538,7 @@ jq -n \
       config: {
         endpoints: ($endpoints | split(",") | map(gsub(" "; "")) | map(select(length > 0))),
         lasmDbAdapter: $lasmDbAdapter,
+        lasmDbRecordsCaptureEnabled: $lasmDbRecordsCaptureEnabled,
         instances: $instances,
         autoscaleMaxInstances: $autoscaleMaxInstances,
         autoscaleTargetConnections: $autoscaleTargetConnections,

@@ -169,4 +169,34 @@ if ! jq -e '(.matrixPath | startswith("/") | not) and (.stepMatrixPath | startsw
   exit 1
 fi
 
+relaxed_runs="${tmp_root}/runs-relaxed.json"
+set +e
+relaxed_out="$(
+  PATH="${bin_dir}:$PATH" \
+    BENCH_REQUIRE_WRK2=1 \
+    BENCH_STEP_RATES=100 \
+    FAKE_WRK2_MARKER="$wrk_marker" \
+    "${suite_dir}/scripts/run_workbench_step_matrix.sh" \
+      --matrix "$matrix_path" \
+      --impls node \
+      --endpoints wb-task-get \
+      --port 18133 \
+      --fail-on-impl-failure 0 \
+      --out-runs "$relaxed_runs" \
+      --out-step-matrix "$out_step_matrix" \
+      2>&1
+)"
+relaxed_status=$?
+set -e
+
+if [ "$relaxed_status" -ne 0 ]; then
+  echo "expected relaxed step matrix mode to return success despite impl failure" >&2
+  echo "$relaxed_out" >&2
+  exit 1
+fi
+if ! jq -e '.failOnImplFailure == 0 and .totals.failed == 1' "$relaxed_runs" >/dev/null; then
+  echo "expected relaxed step summary to keep failed totals with failOnImplFailure=0" >&2
+  exit 1
+fi
+
 echo "run_workbench_step_matrix test passed"

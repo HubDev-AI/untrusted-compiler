@@ -3,6 +3,7 @@
 Updated: 2026-03-09
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
+Live execution board: `todos/016-in-progress-post-alpha-execution-board.md`
 
 ## 1) Purpose
 
@@ -96,13 +97,20 @@ Status notes:
   - Added optional runtime switch for benchmark-focused runs: `SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED` (and alias `SEC4_DB_ALPHA_DB_RECORDS_CAPTURE_ENABLED`), default `true`.
   - Workbench benchmark matrix runner now supports `--lasm-db-records-capture-enabled 0|1` and forwards to LASM runtime env.
   - Local benchmark wrapper dry-run checks updated for the expanded LASM start marker line.
+  - `run_workbench_profile.sh` now retries once on the known intermittent wrk2 assertion crash (`response_complete: Assertion`) before marking profile failure.
+  - Workbench benchmark + step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) and full-suite forwards the same control to both phases.
+  - Workbench benchmark matrix runner now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient profile failures before marking endpoint failure.
+  - Fresh LASM mode-compare artifact refresh on canonical Postgres workload now recommends `proxy` mode (`medianRequestsPerSec=5362.34`):
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+  - Latest full cross-runtime canonical rerun (same Postgres workload, single mode): `passed=3 failed=1 skipped=0` (sec4-lasm/go/rust passed; node failed on socket-error gates).
+  - In that rerun, `sec4-lasm` leads all six endpoints; `wb-task-get` measured about `2496.54 req/s` at `p99 11.24ms`.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 
 1. Close the remaining non-contract DB/runtime seams that the workbench app surfaces in real usage.
 2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
 3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
-4. Next concrete code task: rerun the canonical DB-backed benchmark baseline on the cleaner helper-driven runtime surface, then continue the next scaling/runtime tuning pass from that evidence.
+4. Next concrete code task: run the next scaling/runtime tuning pass from the canonical rerun evidence and publish refreshed LASM mode-compare recommendation artifacts.
 
 ### P3: Scaling/runtime tuning after P2
 

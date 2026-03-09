@@ -12453,3 +12453,9 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
   1. continue deeper scaling/runtime tuning from the now-clean canonical publication baseline,
   2. use repeated mode-compare/full-suite artifacts only for post-alpha tuning, not alpha proof,
   3. keep the mixed-workload publication default conservative unless a workload-matching recommendation artifact proves another topology is better.
+- Post-alpha seam/tuning update (2026-03-09):
+  - workbench benchmark and step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) so publication/tuning flows can keep deterministic failed-lane accounting without aborting all artifact generation.
+  - benchmark matrix now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient endpoint profile failures once before marking a lane failed.
+  - refreshed LASM mode-compare artifact on canonical Postgres workload currently recommends `proxy` mode:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+    - recommendation: `mode=proxy`, `medianRequestsPerSec=5362.34`.

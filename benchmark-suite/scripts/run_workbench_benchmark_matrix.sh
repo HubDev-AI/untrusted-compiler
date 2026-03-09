@@ -5,6 +5,8 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--fail-on-impl-failure 0|1]
+          [--profile-retry-on-failure <n>]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-persist-enabled 0|1]
           [--lasm-db-records-capture-enabled 0|1]
@@ -31,6 +33,8 @@ dry_run="false"
 matrix_path=""
 impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+fail_on_impl_failure="${BENCH_WORKBENCH_FAIL_ON_IMPL_FAILURE:-1}"
+profile_retry_on_failure="${BENCH_WORKBENCH_PROFILE_RETRY_ON_FAILURE:-1}"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
@@ -98,6 +102,30 @@ while [ "$#" -gt 0 ]; do
       ;;
     --endpoints=*)
       endpoints_csv="${1#--endpoints=}"
+      shift
+      ;;
+    --fail-on-impl-failure)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      fail_on_impl_failure="$2"
+      shift 2
+      ;;
+    --fail-on-impl-failure=*)
+      fail_on_impl_failure="${1#--fail-on-impl-failure=}"
+      shift
+      ;;
+    --profile-retry-on-failure)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      profile_retry_on_failure="$2"
+      shift 2
+      ;;
+    --profile-retry-on-failure=*)
+      profile_retry_on_failure="${1#--profile-retry-on-failure=}"
       shift
       ;;
     --port)
@@ -552,6 +580,16 @@ if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_
   echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
   exit 2
 fi
+if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; then
+  echo "invalid --fail-on-impl-failure (expected 0 or 1): $fail_on_impl_failure" >&2
+  exit 2
+fi
+case "$profile_retry_on_failure" in
+  ''|*[!0-9]*)
+    echo "invalid --profile-retry-on-failure (expected integer >= 0): $profile_retry_on_failure" >&2
+    exit 2
+    ;;
+esac
 
 if [ -n "$lasm_mode" ]; then
   if [ "$lasm_mode" = "auto" ]; then
@@ -1125,8 +1163,21 @@ while IFS= read -r impl_row; do
         exit_code=1
         continue
       fi
-      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$profile_service_pid" BENCH_SERVER_PORT="$current_bench_port" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
-        "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$current_base_url"; then
+      profile_attempt=1
+      profile_max_attempts=$((profile_retry_on_failure + 1))
+      profile_ok="false"
+      while [ "$profile_attempt" -le "$profile_max_attempts" ]; do
+        if BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$profile_service_pid" BENCH_SERVER_PORT="$current_bench_port" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
+          "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$current_base_url"; then
+          profile_ok="true"
+          break
+        fi
+        if [ "$profile_attempt" -lt "$profile_max_attempts" ]; then
+          echo "workbench profile retry: impl=${impl} endpoint=${endpoint} attempt=$((profile_attempt + 1))/$profile_max_attempts" >&2
+        fi
+        profile_attempt=$((profile_attempt + 1))
+      done
+      if [ "$profile_ok" != "true" ]; then
         result="failed"
         reason="${reason:+${reason}; }profile failed endpoint=${endpoint}"
         exit_code=1
@@ -1258,6 +1309,8 @@ jq -n \
   --arg analysisPath "$out_analysis_rel" \
   --arg reportPath "$out_report_rel" \
   --arg reportHtmlPath "$out_report_html_rel" \
+  --argjson failOnImplFailure "$fail_on_impl_failure" \
+  --argjson profileRetryOnFailure "$profile_retry_on_failure" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{
@@ -1270,6 +1323,8 @@ jq -n \
     analysisPath: $analysisPath,
     reportPath: $reportPath,
     reportHtmlPath: $reportHtmlPath,
+    failOnImplFailure: $failOnImplFailure,
+    profileRetryOnFailure: $profileRetryOnFailure,
     totals: $totals,
     runs: $runs
   }' >"$out_runs"
@@ -1290,6 +1345,6 @@ if [ -n "$reported_impls_csv" ]; then
 fi
 echo "totals: passed=${total_passed} failed=${total_failed} skipped=${total_skipped}"
 
-if [ "$total_failed" -gt 0 ]; then
+if [ "$total_failed" -gt 0 ] && [ "$fail_on_impl_failure" = "1" ]; then
   exit 1
 fi
