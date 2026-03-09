@@ -1,6 +1,6 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-03-07
+Updated: 2026-03-09
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
 
@@ -89,6 +89,13 @@ Status notes:
   - totals: `passed=4 failed=0 skipped=0`
   - `sec4-lasm` leads all six endpoints in the published report family.
   - For this mixed-workload publication run, the chosen LASM topology is `single` mode; earlier proxy/fixed results remain route-specific tuning evidence only.
+- Latest post-alpha scaling slice (2026-03-09):
+  - Workbench response normalization now skips JSON parse for successful POST `/wb/*` routes and uses moved `rowObject` extraction for GET `/wb/tasks` and `/wb/tasks/:id`.
+  - Workbench list normalization now uses moved map/array values (lower clone pressure on `items` payloads).
+  - `/wb/*` internal DB success payloads now use compact envelopes on LASM dispatch (keep `data`/`rowObject`, drop heavy metadata fields on that route family only).
+  - Added optional runtime switch for benchmark-focused runs: `SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED` (and alias `SEC4_DB_ALPHA_DB_RECORDS_CAPTURE_ENABLED`), default `true`.
+  - Workbench benchmark matrix runner now supports `--lasm-db-records-capture-enabled 0|1` and forwards to LASM runtime env.
+  - Local benchmark wrapper dry-run checks updated for the expanded LASM start marker line.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 

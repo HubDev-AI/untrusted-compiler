@@ -1,23 +1,23 @@
 use super::config::build_lasm_postgres_thread_local_config;
 use super::drop_lasm_db_tx_handle;
-use super::{run_lasm_db_tx_commit, run_lasm_db_tx_rollback};
+use super::lasm_db_records_capture_enabled;
+use super::persist_lasm_db_record_after_unlock;
 use super::records::{
-    allocate_lasm_db_runtime_record, append_lasm_db_record_in_memory_with_compaction_snapshot,
+    allocate_lasm_db_ephemeral_record, allocate_lasm_db_runtime_record,
+    append_lasm_db_record_in_memory_with_compaction_snapshot,
     persist_lasm_db_record_with_capacity_guard,
 };
+use super::{run_lasm_db_tx_commit, run_lasm_db_tx_rollback};
 use crate::lasm_db_runtime_common::allocate_lasm_db_tx_handle;
-use super::persist_lasm_db_record_after_unlock;
 use crate::lasm_db_runtime_postgres::{
     connect_lasm_postgres_tx_client, discard_lasm_postgres_tx_client,
     parse_lasm_postgres_query_template_and_params,
-    parse_lasm_postgres_query_template_and_params_value, return_lasm_postgres_tx_client_to_pool,
-    put_lasm_postgres_tx_client,
+    parse_lasm_postgres_query_template_and_params_value, put_lasm_postgres_tx_client,
+    return_lasm_postgres_tx_client_to_pool, run_lasm_postgres_exec_thread_local,
     run_lasm_postgres_exec_tx_commit_on_client, run_lasm_postgres_exec_tx_on_client,
-    run_lasm_postgres_exec_tx_one_shot_on_client,
-    run_lasm_postgres_exec_tx_rollback_on_client, run_lasm_postgres_exec_thread_local,
+    run_lasm_postgres_exec_tx_one_shot_on_client, run_lasm_postgres_exec_tx_rollback_on_client,
     run_lasm_postgres_query_one_thread_local, take_lasm_postgres_tx_client_if_present,
-    LasmPostgresParam,
-    LasmPostgresThreadLocalClient, LasmPostgresThreadLocalConfig,
+    LasmPostgresParam, LasmPostgresThreadLocalClient, LasmPostgresThreadLocalConfig,
 };
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
@@ -410,6 +410,18 @@ pub(crate) fn run_lasm_postgres_exec_unlocked_operation(
         postgres_params.as_slice(),
     )
     .map_err(LasmUnlockedPostgresOperationError::Runtime)?;
+    if !lasm_db_records_capture_enabled() {
+        return Ok(LasmUnlockedPostgresExecSuccess {
+            record: allocate_lasm_db_ephemeral_record(
+                "exec",
+                db,
+                template,
+                params,
+                0,
+                affected_rows,
+            ),
+        });
+    }
     let (record, compaction_snapshot) = {
         let mut state = dynamic_state
             .lock()
@@ -417,8 +429,15 @@ pub(crate) fn run_lasm_postgres_exec_unlocked_operation(
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
         }
-        let record =
-            allocate_lasm_db_runtime_record(&mut state, "exec", db, template, params, 0, affected_rows);
+        let record = allocate_lasm_db_runtime_record(
+            &mut state,
+            "exec",
+            db,
+            template,
+            params,
+            0,
+            affected_rows,
+        );
         append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
     };
     persist_lasm_db_record_after_unlock(
@@ -446,13 +465,9 @@ pub(crate) fn run_lasm_non_postgres_exec_locked_operation(
     {
         return Err(LasmLockedOperationError::AdapterMismatch);
     }
-    let operation_result = run_lasm_db_exec_operation(
-        &mut state,
-        db_records_adapter,
-        template,
-        prepared_params,
-    )
-    .map_err(LasmLockedOperationError::Runtime)?;
+    let operation_result =
+        run_lasm_db_exec_operation(&mut state, db_records_adapter, template, prepared_params)
+            .map_err(LasmLockedOperationError::Runtime)?;
     let affected_rows = match operation_result {
         LasmDbExecOperationResult::Sqlite { affected_rows }
         | LasmDbExecOperationResult::RecordsLog { affected_rows } => affected_rows,
@@ -561,6 +576,12 @@ pub(crate) fn run_lasm_postgres_query_one_unlocked_operation(
         Ok(None) => return Err(LasmUnlockedPostgresOperationError::NotFound),
         Err(message) => return Err(LasmUnlockedPostgresOperationError::Runtime(message)),
     };
+    if !lasm_db_records_capture_enabled() {
+        return Ok(LasmUnlockedPostgresQueryOneSuccess {
+            record: allocate_lasm_db_ephemeral_record("queryOne", db, template, params, 0, 1),
+            row_object,
+        });
+    }
     let (record, compaction_snapshot) = {
         let mut state = dynamic_state
             .lock()
@@ -568,7 +589,8 @@ pub(crate) fn run_lasm_postgres_query_one_unlocked_operation(
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
         }
-        let record = allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
+        let record =
+            allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
         append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
     };
     persist_lasm_db_record_after_unlock(
@@ -618,7 +640,8 @@ pub(crate) fn run_lasm_non_postgres_query_one_locked_operation(
             return Err(LasmLockedQueryOneOperationError::Runtime(message));
         }
     };
-    let record = allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
+    let record =
+        allocate_lasm_db_runtime_record(&mut state, "queryOne", db, template, params, 0, 1);
     persist_lasm_db_record_with_capacity_guard(&mut state, &record);
     Ok(LasmLockedQueryOneSuccess { record, row_object })
 }
@@ -705,15 +728,13 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
     };
     let mut retained_client = retained_client;
     let should_finalize_postgres_tx = retained_client.is_none();
-    let (record, compaction_snapshot) = {
-        let mut state = dynamic_state
-            .lock()
-            .map_err(|_| {
-                if let Some(client) = retained_client.take() {
-                    discard_lasm_postgres_tx_client(&config, client);
-                }
-                LasmUnlockedPostgresExecTxOperationError::StateUnavailable
-            })?;
+    if !lasm_db_records_capture_enabled() {
+        let mut state = dynamic_state.lock().map_err(|_| {
+            if let Some(client) = retained_client.take() {
+                discard_lasm_postgres_tx_client(&config, client);
+            }
+            LasmUnlockedPostgresExecTxOperationError::StateUnavailable
+        })?;
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             if let Some(client) = retained_client.take() {
                 discard_lasm_postgres_tx_client(&config, client);
@@ -731,8 +752,50 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
                 put_lasm_postgres_tx_client(&mut state, tx, client);
             }
         }
-        let record =
-            allocate_lasm_db_runtime_record(&mut state, "execTx", db, template, params, tx, affected_rows);
+        return Ok(LasmUnlockedPostgresExecTxSuccess {
+            record: allocate_lasm_db_ephemeral_record(
+                "execTx",
+                db,
+                template,
+                params,
+                tx,
+                affected_rows,
+            ),
+        });
+    }
+    let (record, compaction_snapshot) = {
+        let mut state = dynamic_state.lock().map_err(|_| {
+            if let Some(client) = retained_client.take() {
+                discard_lasm_postgres_tx_client(&config, client);
+            }
+            LasmUnlockedPostgresExecTxOperationError::StateUnavailable
+        })?;
+        if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
+            if let Some(client) = retained_client.take() {
+                discard_lasm_postgres_tx_client(&config, client);
+            }
+            return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
+        }
+        if should_finalize_postgres_tx {
+            drop_lasm_db_tx_handle(&mut state, tx);
+        } else {
+            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                tx_state.active = retained_tx_active;
+                tx_state.in_use = false;
+            }
+            if let Some(client) = retained_client.take() {
+                put_lasm_postgres_tx_client(&mut state, tx, client);
+            }
+        }
+        let record = allocate_lasm_db_runtime_record(
+            &mut state,
+            "execTx",
+            db,
+            template,
+            params,
+            tx,
+            affected_rows,
+        );
         append_lasm_db_record_in_memory_with_compaction_snapshot(&mut state, record)
     };
     persist_lasm_db_record_after_unlock(
@@ -765,42 +828,41 @@ pub(crate) fn run_lasm_non_postgres_exec_tx_locked_operation(
     {
         return Err(LasmLockedExecTxOperationError::AdapterMismatch);
     }
-    let operation_result =
-        match run_lasm_db_exec_tx_operation(
-            &mut state,
-            db_records_adapter,
-            tx,
-            tx_active,
-            template,
-            prepared_params,
-        ) {
-            Ok(value) => value,
-            Err(error) => {
-                if error.tx_started {
-                    let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
-                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+    let operation_result = match run_lasm_db_exec_tx_operation(
+        &mut state,
+        db_records_adapter,
+        tx,
+        tx_active,
+        template,
+        prepared_params,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            if error.tx_started {
+                let _ = run_lasm_db_tx_rollback(&mut state, db_records_adapter, tx);
+                if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                    tx_state.active = false;
+                    tx_state.in_use = false;
+                }
+                if !keep_allocated_tx_handle {
+                    drop_lasm_db_tx_handle(&mut state, tx);
+                }
+            } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+                tx_state.in_use = false;
+            }
+            if let Some(tx_handle) = allocated_tx_handle {
+                if keep_allocated_tx_handle {
+                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
                         tx_state.active = false;
                         tx_state.in_use = false;
                     }
-                    if !keep_allocated_tx_handle {
-                        drop_lasm_db_tx_handle(&mut state, tx);
-                    }
-                } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                    tx_state.in_use = false;
+                } else {
+                    drop_lasm_db_tx_handle(&mut state, tx_handle);
                 }
-                if let Some(tx_handle) = allocated_tx_handle {
-                    if keep_allocated_tx_handle {
-                        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx_handle) {
-                            tx_state.active = false;
-                            tx_state.in_use = false;
-                        }
-                    } else {
-                        drop_lasm_db_tx_handle(&mut state, tx_handle);
-                    }
-                }
-                return Err(LasmLockedExecTxOperationError::Runtime(error.message));
             }
-        };
+            return Err(LasmLockedExecTxOperationError::Runtime(error.message));
+        }
+    };
 
     let (affected_rows, tx_started, should_commit_tx) = match operation_result {
         LasmDbExecTxOperationResult::Sqlite {
@@ -830,8 +892,15 @@ pub(crate) fn run_lasm_non_postgres_exec_tx_locked_operation(
         }
         tx_state.in_use = false;
     }
-    let record =
-        allocate_lasm_db_runtime_record(&mut state, "execTx", db, template, params, tx, affected_rows);
+    let record = allocate_lasm_db_runtime_record(
+        &mut state,
+        "execTx",
+        db,
+        template,
+        params,
+        tx,
+        affected_rows,
+    );
     persist_lasm_db_record_with_capacity_guard(&mut state, &record);
     Ok(LasmLockedExecTxSuccess { record })
 }

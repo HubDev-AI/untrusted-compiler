@@ -2,9 +2,11 @@ use super::adapter::{persist_lasm_db_record_append, persist_lasm_db_records_full
 use crate::append_lasm_dynamic_db_record;
 use crate::lasm_dynamic_state::compose_lasm_db_record_id;
 use crate::{LasmDbRecord, LasmDynamicResponseState};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const LASM_DB_RECORDS_COMPACTION_SYNC_DROPS_INTERVAL: u64 = 1024;
+static LASM_DB_EPHEMERAL_RECORD_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn lasm_now_ms() -> u64 {
     SystemTime::now()
@@ -58,6 +60,26 @@ pub(crate) fn allocate_lasm_db_runtime_record(
     };
     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
     record
+}
+
+pub(crate) fn allocate_lasm_db_ephemeral_record(
+    op: &str,
+    db: i64,
+    template: &str,
+    params: &str,
+    tx: i64,
+    affected_rows: u64,
+) -> LasmDbRecord {
+    LasmDbRecord {
+        id: LASM_DB_EPHEMERAL_RECORD_COUNTER.fetch_add(1, Ordering::Relaxed),
+        op: op.to_string(),
+        db,
+        template: template.to_string(),
+        params: params.to_string(),
+        tx,
+        affected_rows,
+        created_at_ms: lasm_now_ms(),
+    }
 }
 
 pub(crate) fn append_lasm_db_record_in_memory_with_compaction_snapshot(

@@ -22,12 +22,33 @@ const LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS: [&str; 2] = [
     "SEC4_DB_ALPHA_DB_RECORDS_PERSIST_ENABLED",
     "SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED",
 ];
+const LASM_DB_RECORDS_CAPTURE_ENABLED_ENV_KEYS: [&str; 2] = [
+    "SEC4_DB_ALPHA_DB_RECORDS_CAPTURE_ENABLED",
+    "SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED",
+];
 
 static LASM_DB_RECORDS_PERSIST_ENABLED: OnceLock<bool> = OnceLock::new();
+static LASM_DB_RECORDS_CAPTURE_ENABLED: OnceLock<bool> = OnceLock::new();
 
 pub(crate) fn lasm_db_records_persist_enabled() -> bool {
     *LASM_DB_RECORDS_PERSIST_ENABLED.get_or_init(|| {
         for key in LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS {
+            let Ok(raw) = env::var(key) else {
+                continue;
+            };
+            let normalized = raw.trim().to_ascii_lowercase();
+            if normalized.is_empty() {
+                continue;
+            }
+            return !matches!(normalized.as_str(), "0" | "false" | "no" | "off");
+        }
+        true
+    })
+}
+
+pub(crate) fn lasm_db_records_capture_enabled() -> bool {
+    *LASM_DB_RECORDS_CAPTURE_ENABLED.get_or_init(|| {
+        for key in LASM_DB_RECORDS_CAPTURE_ENABLED_ENV_KEYS {
             let Ok(raw) = env::var(key) else {
                 continue;
             };
