@@ -9728,11 +9728,13 @@ fn cmd_run_lasm_backend(
         }
 
         if oneshot {
+            let Some(runtime) = oneshot_runtime.as_mut() else {
+                eprintln!("run failed: LASM backend oneshot runtime unavailable");
+                return Err(2);
+            };
             if let Err(message) = process_lasm_connection_with_runtime(
                 &mut stream,
-                oneshot_runtime
-                    .as_mut()
-                    .expect("oneshot runtime should be initialized"),
+                runtime,
                 effective_max_header_bytes,
                 effective_max_body_bytes,
                 max_requests_per_connection,
@@ -9750,9 +9752,10 @@ fn cmd_run_lasm_backend(
             break;
         }
 
-        let sender = worker_sender
-            .as_ref()
-            .expect("worker sender should exist for non-oneshot LASM backend");
+        let Some(sender) = worker_sender.as_ref() else {
+            eprintln!("run failed: LASM backend worker channel unavailable");
+            return Err(2);
+        };
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
