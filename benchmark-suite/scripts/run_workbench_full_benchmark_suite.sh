@@ -6,6 +6,7 @@ usage() {
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
+          [--lasm-db-records-capture-enabled 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-mode-compare-repeats <n>] [--out-mode-compare-repeats path]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
@@ -32,6 +33,7 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_mode_compare_repeats="${BENCH_WORKBENCH_LASM_MODE_COMPARE_REPEATS:-}"
@@ -144,6 +146,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-postgres-dsn-file=*)
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      lasm_db_records_capture_enabled="${2:-}"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-mode)
@@ -548,6 +558,17 @@ fi
 if [ -n "$lasm_postgres_dsn_file" ]; then
   bench_cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
   step_cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
+fi
+if [ -n "$lasm_db_records_capture_enabled" ]; then
+  case "$lasm_db_records_capture_enabled" in
+    0|1) ;;
+    *)
+      echo "--lasm-db-records-capture-enabled must be 0 or 1" >&2
+      exit 2
+      ;;
+  esac
+  bench_cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
+  step_cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
 fi
 if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
   bench_cmd+=(--lasm-db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
