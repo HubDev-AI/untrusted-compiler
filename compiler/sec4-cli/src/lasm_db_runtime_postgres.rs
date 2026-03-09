@@ -1768,9 +1768,9 @@ pub(crate) fn run_lasm_postgres_exec(
     };
     let initial = if use_prepared {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        let statement = prepared_statement
-            .as_ref()
-            .expect("prepared statement should be available for prepared execution");
+        let Some(statement) = prepared_statement.as_ref() else {
+            return Err("internal postgres prepared statement unavailable".to_string());
+        };
         run_lasm_postgres_prepared_exec_with_count(client, statement, params)
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
