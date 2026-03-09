@@ -7,6 +7,7 @@ usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-persist-enabled 0|1]
+          [--lasm-db-records-capture-enabled 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-endpoint-modes default=fixed,wb-tasks-list=proxy]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
@@ -35,6 +36,7 @@ lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
 lasm_db_records_persist_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_PERSIST_ENABLED:-0}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-0}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_endpoint_modes="${BENCH_WORKBENCH_LASM_ENDPOINT_MODES:-}"
@@ -156,6 +158,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-db-records-persist-enabled=*)
       lasm_db_records_persist_enabled="${1#--lasm-db-records-persist-enabled=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_records_capture_enabled="$2"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-mode)
@@ -530,6 +544,14 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
   exit 2
 fi
+if [ "$lasm_db_records_persist_enabled" != "0" ] && [ "$lasm_db_records_persist_enabled" != "1" ]; then
+  echo "invalid --lasm-db-records-persist-enabled (expected 0 or 1): $lasm_db_records_persist_enabled" >&2
+  exit 2
+fi
+if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_enabled" != "1" ]; then
+  echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
+  exit 2
+fi
 
 if [ -n "$lasm_mode" ]; then
   if [ "$lasm_mode" = "auto" ]; then
@@ -839,6 +861,7 @@ start_impl_service() {
         (
           cd "$repo_root"
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
           cargo run -q -p sec4 -- run \
             --path "$service_abs" \
             --backend lasm \
@@ -853,6 +876,7 @@ start_impl_service() {
           cd "$repo_root"
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
             cargo run -q -p sec4 -- run \
               --path "$service_abs" \
               --backend lasm \
@@ -1029,9 +1053,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
@@ -1157,6 +1181,8 @@ while IFS= read -r impl_row; do
       --argjson clusterRelayPumpBatchMax "$(if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then printf '%s' "$lasm_cluster_relay_pump_batch_max"; else printf 'null'; fi)" \
       --argjson dbPostgresSharedClientMaxActivePerKey "$(if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_per_key"; else printf 'null'; fi)" \
       --argjson dbPostgresSharedClientMaxActiveTotal "$(if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_total"; else printf 'null'; fi)" \
+      --argjson dbRecordsPersistEnabled "$lasm_db_records_persist_enabled" \
+      --argjson dbRecordsCaptureEnabled "$lasm_db_records_capture_enabled" \
       '{
         dbAdapter: $dbAdapter,
         mode: $mode,
@@ -1171,7 +1197,9 @@ while IFS= read -r impl_row; do
         clusterRelayAcceptBatchMax: $clusterRelayAcceptBatchMax,
         clusterRelayPumpBatchMax: $clusterRelayPumpBatchMax,
         dbPostgresSharedClientMaxActivePerKey: $dbPostgresSharedClientMaxActivePerKey,
-        dbPostgresSharedClientMaxActiveTotal: $dbPostgresSharedClientMaxActiveTotal
+        dbPostgresSharedClientMaxActiveTotal: $dbPostgresSharedClientMaxActiveTotal,
+        dbRecordsPersistEnabled: $dbRecordsPersistEnabled,
+        dbRecordsCaptureEnabled: $dbRecordsCaptureEnabled
       }')"
   fi
 

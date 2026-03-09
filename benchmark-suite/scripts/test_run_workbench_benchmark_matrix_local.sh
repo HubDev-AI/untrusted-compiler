@@ -24,7 +24,7 @@ if ! grep -q 'delegating: .*run_workbench_benchmark_matrix.sh --lasm-db-adapter 
   echo "missing delegated local workbench bench command marker" >&2
   exit 1
 fi
-if ! grep -q 'start: impl=sec4-lasm servicePath=benchmark-suite/services/sec4-lasm-workbench port=18118 lasmDbAdapter=postgres lasmPostgresDsn=' <<<"$out"; then
+if ! grep -q 'start: impl=sec4-lasm servicePath=benchmark-suite/services/sec4-lasm-workbench port=18118 lasmDbAdapter=postgres .* lasmPostgresDsn=' <<<"$out"; then
   echo "missing sec4-lasm postgres adapter start marker in local workbench bench dry-run output" >&2
   exit 1
 fi

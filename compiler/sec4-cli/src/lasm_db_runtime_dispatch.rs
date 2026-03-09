@@ -3,25 +3,25 @@ use crate::lasm_db_client::{
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_non_postgres_exec_locked_operation, run_lasm_non_postgres_exec_tx_locked_operation,
-    run_lasm_non_postgres_query_one_locked_operation,
-    run_lasm_postgres_exec_unlocked_operation, run_lasm_postgres_query_one_unlocked_operation,
-    LasmExecTxSource, LasmLockedExecTxOperationError, LasmLockedOperationError,
-    LasmLockedQueryOneOperationError, LasmPreparedDbOperationParams,
-    LasmUnlockedPostgresExecTxOperationError, LasmUnlockedPostgresOperationError,
+    run_lasm_non_postgres_query_one_locked_operation, run_lasm_postgres_exec_unlocked_operation,
+    run_lasm_postgres_query_one_unlocked_operation, LasmExecTxSource,
+    LasmLockedExecTxOperationError, LasmLockedOperationError, LasmLockedQueryOneOperationError,
+    LasmPreparedDbOperationParams, LasmUnlockedPostgresExecTxOperationError,
+    LasmUnlockedPostgresOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
-    classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle, normalize_lasm_db_params_and_value,
-    parse_lasm_positive_i64,
+    classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
+    normalize_lasm_db_params_and_value, parse_lasm_positive_i64,
 };
 use crate::{
-    lasm_db_record_to_json, lasm_error_envelope, lasm_internal_db_indexed_header,
-    lasm_now_ms, set_lasm_json_response, LasmDbRecord,
-    LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX,
-    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
-    LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+    lasm_db_record_to_json, lasm_error_envelope, lasm_internal_db_indexed_header, lasm_now_ms,
+    set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
+    LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
+    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX, LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_RESULT_HEADER,
+    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -837,6 +837,7 @@ fn set_lasm_db_exec_like_success_response(
     response: &mut sec4_core::HttpResponse,
     record: &LasmDbRecord,
     affected_rows: u64,
+    request: &LasmRunRequest,
     trace_id: &str,
 ) {
     let status = if (200..300).contains(&response.status) {
@@ -845,6 +846,22 @@ fn set_lasm_db_exec_like_success_response(
         200
     };
     let data = derive_lasm_exec_like_success_data(record, affected_rows);
+    if request.path.starts_with("/wb/") {
+        set_lasm_json_response(
+            response,
+            status,
+            &serde_json::json!({
+                "ok": true,
+                "status": status,
+                "traceId": trace_id,
+                "timeMs": lasm_now_ms(),
+                "data": data,
+                "tx": record.tx,
+                "affectedRows": affected_rows,
+            }),
+        );
+        return;
+    }
     set_lasm_json_response(
         response,
         status,
@@ -884,6 +901,7 @@ fn set_lasm_db_query_one_success_response(
     row_schema: i64,
     row: &str,
     row_object: &serde_json::Value,
+    request: &LasmRunRequest,
     trace_id: &str,
 ) {
     let status = if (200..300).contains(&response.status) {
@@ -892,6 +910,22 @@ fn set_lasm_db_query_one_success_response(
         200
     };
     let data = derive_lasm_query_one_success_data(record, row_object);
+    if request.path.starts_with("/wb/") {
+        set_lasm_json_response(
+            response,
+            status,
+            &serde_json::json!({
+                "ok": true,
+                "status": status,
+                "traceId": trace_id,
+                "timeMs": lasm_now_ms(),
+                "data": data,
+                "rowSchema": row_schema,
+                "rowObject": row_object,
+            }),
+        );
+        return;
+    }
     set_lasm_json_response(
         response,
         status,
@@ -953,10 +987,7 @@ fn set_lasm_db_tx_capacity_response(
     );
 }
 
-fn set_lasm_db_adapter_mismatch_response(
-    response: &mut sec4_core::HttpResponse,
-    trace_id: &str,
-) {
+fn set_lasm_db_adapter_mismatch_response(response: &mut sec4_core::HttpResponse, trace_id: &str) {
     set_lasm_json_response(
         response,
         500,
@@ -1693,8 +1724,7 @@ fn handle_lasm_internal_db_tx_operation(
     ) else {
         return true;
     };
-    let tx = match run_lasm_db_tx_allocate_locked_operation(dynamic_state, db_records_adapter, db)
-    {
+    let tx = match run_lasm_db_tx_allocate_locked_operation(dynamic_state, db_records_adapter, db) {
         Ok(value) => value,
         Err(LasmLockedOperationError::StateUnavailable) => {
             set_lasm_dynamic_state_unavailable_response(response, trace_id);
@@ -1809,6 +1839,7 @@ fn handle_lasm_internal_db_exec_operation(
             response,
             &success.record,
             success.record.affected_rows,
+            request,
             trace_id,
         );
         return true;
@@ -1846,7 +1877,13 @@ fn handle_lasm_internal_db_exec_operation(
             return true;
         }
     };
-    set_lasm_db_exec_like_success_response(response, &record, record.affected_rows, trace_id);
+    set_lasm_db_exec_like_success_response(
+        response,
+        &record,
+        record.affected_rows,
+        request,
+        trace_id,
+    );
     true
 }
 
@@ -1990,6 +2027,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
             response,
             &success.record,
             success.record.affected_rows,
+            request,
             trace_id,
         );
         response.headers.insert(
@@ -2028,6 +2066,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
         response,
         &success.record,
         success.record.affected_rows,
+        request,
         trace_id,
     );
     response.headers.insert(
@@ -2147,6 +2186,7 @@ fn handle_lasm_internal_db_query_one_operation(
             row_schema,
             row.as_str(),
             &success.row_object,
+            request,
             trace_id,
         );
         return true;
@@ -2206,6 +2246,7 @@ fn handle_lasm_internal_db_query_one_operation(
         row_schema,
         row.as_str(),
         &row_object,
+        request,
         trace_id,
     );
     true

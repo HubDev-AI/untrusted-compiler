@@ -1352,22 +1352,22 @@ pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
                 )
             }
             LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-    })?;
+        })?;
     release_lasm_postgres_shared_client_to_pool(shared_pool, config, shared_client, true);
 
     if lasm_db_records_persist_enabled() {
         let persist_pool = lasm_postgres_persist_clients_pool();
         let persist_client = checkout_lasm_postgres_shared_client_from_pool(persist_pool, config)
             .map_err(|err| match err {
-                LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-                LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-                    format_lasm_postgres_runtime_error(
-                        "postgres persist client prewarm failed",
-                        &query_err,
-                    )
-                }
-                LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-            })?;
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres persist client prewarm failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })?;
         release_lasm_postgres_shared_client_to_pool(persist_pool, config, persist_client, true);
     }
 
@@ -1493,8 +1493,11 @@ fn run_lasm_postgres_exec_tx_execute_once_on_client(
     if use_prepared {
         let mut stale_refresh_attempted = false;
         loop {
-            let result =
-                run_lasm_postgres_thread_local_prepared_exec_with_count(client, query_template, params);
+            let result = run_lasm_postgres_thread_local_prepared_exec_with_count(
+                client,
+                query_template,
+                params,
+            );
             match result {
                 Ok(value) => return Ok(value),
                 Err(err)
@@ -1534,8 +1537,9 @@ pub(crate) fn run_lasm_postgres_exec_tx_on_client(
 ) -> Result<(u64, bool), (String, bool)> {
     let mut tx_started = false;
     let to_err_tuple = |message: String, tx_started: bool| (message, tx_started);
-    let use_prepared = validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params)
-        .map_err(|message| to_err_tuple(message, false))?;
+    let use_prepared =
+        validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params)
+            .map_err(|message| to_err_tuple(message, false))?;
 
     if !tx_active {
         run_lasm_postgres_tx_command_on_client(
@@ -1548,8 +1552,12 @@ pub(crate) fn run_lasm_postgres_exec_tx_on_client(
         tx_started = true;
     }
 
-    let initial =
-        run_lasm_postgres_exec_tx_execute_once_on_client(client, query_template, params, use_prepared);
+    let initial = run_lasm_postgres_exec_tx_execute_once_on_client(
+        client,
+        query_template,
+        params,
+        use_prepared,
+    );
     let affected_rows = match initial {
         Ok(count) => count,
         Err(err) if is_lasm_postgres_retryable_tx_message(err.as_str()) => {
@@ -1607,11 +1615,13 @@ pub(crate) fn run_lasm_postgres_exec_tx_one_shot_on_client(
     params: &[LasmPostgresParam],
     retry_max: usize,
 ) -> Result<u64, LasmPostgresExecTxOneShotError> {
-    let use_prepared = validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params)
-        .map_err(|message| LasmPostgresExecTxOneShotError {
-            message,
-            discard_client: false,
-        })?;
+    let use_prepared =
+        validate_lasm_postgres_exec_tx_query_on_client(client, query_template, params).map_err(
+            |message| LasmPostgresExecTxOneShotError {
+                message,
+                discard_client: false,
+            },
+        )?;
     let mut attempt_index = 0usize;
     loop {
         run_lasm_postgres_plain_tx_command_on_client(
