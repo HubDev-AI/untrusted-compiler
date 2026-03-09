@@ -294,11 +294,12 @@ cleanup_tmp_wrk_scripts() {
 }
 trap cleanup_tmp_wrk_scripts EXIT
 
+prepared_wrk_script=""
 prepare_wrk_script() {
   local template_path="$1"
   shift
   if [ "$#" -eq 0 ]; then
-    printf '%s\n' "$template_path"
+    prepared_wrk_script="$template_path"
     return 0
   fi
 
@@ -316,7 +317,7 @@ prepare_wrk_script() {
     PLACEHOLDER="$placeholder" REPLACEMENT="$value" perl -0pi -e 's/\Q$ENV{PLACEHOLDER}\E/$ENV{REPLACEMENT}/g' "$rendered_path"
   done
   tmp_wrk_scripts+=("$rendered_path")
-  printf '%s\n' "$rendered_path"
+  prepared_wrk_script="$rendered_path"
 }
 
 build_wrk_cmd() {
@@ -347,25 +348,22 @@ case "$endpoint" in
     target=500
     target="${BENCH_TARGET_WB_TASKS_POST:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-with-comment)
     target=200
     target="${BENCH_TARGET_WB_TASKS_WITH_COMMENT:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-with-comment-tx)
     target=200
     target="${BENCH_TARGET_WB_TASKS_WITH_COMMENT_TX:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment_tx.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment_tx.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-task-comment-post)
     target=500
@@ -375,9 +373,8 @@ case "$endpoint" in
       echo "BENCH_WB_TASK_ID is required for endpoint ${endpoint}" >&2
       exit 2
     fi
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_task_comment.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_task_comment.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-task-get)
     target=2500
@@ -387,9 +384,8 @@ case "$endpoint" in
       echo "BENCH_WB_TASK_ID is required for endpoint ${endpoint}" >&2
       exit 2
     fi
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/get_wb_task.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/get_wb_task.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-list)
     target=1500
