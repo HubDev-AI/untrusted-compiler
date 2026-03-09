@@ -44,11 +44,11 @@ if ! grep -q '^repeat 1: .*run_workbench_lasm_mode_compare.sh .*--lasm-db-record
   echo "missing repeated LASM mode compare records-capture passthrough" >&2
   exit 1
 fi
-if ! grep -q '^aggregate artifact: .*/workbench-lasm-mode-compare-repeats.json$' <<<"$repeat_out"; then
+if ! grep -q '^aggregate artifact: .*/workbench-lasm-mode-compare-repeats-sqlite-wb-task-get.json$' <<<"$repeat_out"; then
   echo "missing repeated LASM mode compare aggregate artifact marker" >&2
   exit 1
 fi
-if ! grep -q 'publish_report.sh .*workbench-benchmark-compare-matrix.json .*workbench-full-benchmark-report.md .*workbench-benchmark-analysis.json .*workbench-step-matrix.json .*workbench-lasm-mode-compare-repeats.json' <<<"$repeat_out"; then
+if ! grep -q 'publish_report.sh .*workbench-benchmark-compare-matrix.json .*workbench-full-benchmark-report.md .*workbench-benchmark-analysis.json .*workbench-step-matrix.json .*workbench-lasm-mode-compare-repeats-sqlite-wb-task-get.json' <<<"$repeat_out"; then
   echo "missing publish command with repeated LASM mode compare artifact" >&2
   exit 1
 fi

@@ -438,12 +438,6 @@ fi
 if [ -z "$out_step_matrix" ]; then
   out_step_matrix="${suite_dir}/results/summaries/workbench-step-matrix.json"
 fi
-if [ -z "$out_mode_compare_repeats" ] && [ -n "$lasm_mode_compare_repeats" ]; then
-  out_mode_compare_repeats="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
-fi
-if [ -z "$lasm_mode_compare_repeats_file" ]; then
-  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
-fi
 if [ -z "$out_report" ]; then
   out_report="${suite_dir}/results/workbench-full-benchmark-report.md"
 fi
@@ -475,6 +469,36 @@ supported_lasm_db_adapter() {
   esac
 }
 
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+default_workbench_lasm_mode_compare_repeats_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -492,6 +516,12 @@ done
 if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM DB adapter: $lasm_db_adapter" >&2
   exit 2
+fi
+if [ -z "$lasm_mode_compare_repeats_file" ]; then
+  lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
+fi
+if [ -z "$out_mode_compare_repeats" ] && [ -n "$lasm_mode_compare_repeats" ]; then
+  out_mode_compare_repeats="$lasm_mode_compare_repeats_file"
 fi
 if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; then
   echo "--fail-on-impl-failure must be 0 or 1" >&2

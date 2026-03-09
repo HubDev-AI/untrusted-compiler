@@ -479,9 +479,6 @@ fi
 if [ -z "$out_report_html" ]; then
   out_report_html="${suite_dir}/results/workbench-benchmark-report.html"
 fi
-if [ -z "$lasm_mode_compare_repeats_file" ]; then
-  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
-fi
 
 if [ ! -f "$matrix_path" ]; then
   echo "workbench matrix missing: $matrix_path" >&2
@@ -535,6 +532,36 @@ supported_lasm_db_adapter() {
   esac
 }
 
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+default_workbench_lasm_mode_compare_repeats_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -571,6 +598,9 @@ fi
 if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
   exit 2
+fi
+if [ -z "$lasm_mode_compare_repeats_file" ]; then
+  lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
 fi
 if [ "$lasm_db_records_persist_enabled" != "0" ] && [ "$lasm_db_records_persist_enabled" != "1" ]; then
   echo "invalid --lasm-db-records-persist-enabled (expected 0 or 1): $lasm_db_records_persist_enabled" >&2
