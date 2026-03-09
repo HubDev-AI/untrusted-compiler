@@ -438,6 +438,36 @@ supported_lasm_db_adapter() {
   esac
 }
 
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+default_workbench_lasm_mode_compare_repeats_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -466,7 +496,7 @@ if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; the
 fi
 
 if [ -z "$lasm_mode_compare_repeats_file" ]; then
-  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
+  lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
 fi
 
 if [ -n "$lasm_mode" ]; then
@@ -475,10 +505,26 @@ if [ -n "$lasm_mode" ]; then
       echo "LASM auto mode requires mode-compare artifact: $lasm_mode_compare_repeats_file" >&2
       exit 2
     fi
-    lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
-    if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
-      echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
-      exit 2
+    requested_endpoints_norm="$(
+      printf '%s\n' "$endpoints_csv" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd, -
+    )"
+    artifact_endpoints_norm="$(
+      jq -r '(.config.endpoints // []) | sort | join(",")' "$lasm_mode_compare_repeats_file"
+    )"
+    artifact_lasm_db_adapter="$(
+      jq -r '.config.lasmDbAdapter // empty' "$lasm_mode_compare_repeats_file"
+    )"
+    if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
+      [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
+    }; then
+      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
+      lasm_mode="single"
+    else
+      lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
+      if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
+        echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
+        exit 2
+      fi
     fi
   fi
   case "$lasm_mode" in

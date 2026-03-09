@@ -5,7 +5,8 @@ suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
 
 tmp_root="$(mktemp -d "${repo_root}/.tmp-workbench-step-matrix-test.XXXXXX")"
-trap 'rm -rf "$tmp_root"' EXIT
+tmp_mode_compare="$(mktemp)"
+trap 'rm -rf "$tmp_root"; rm -f "$tmp_mode_compare"' EXIT
 
 service_dir="${tmp_root}/service"
 bin_dir="${tmp_root}/bin"
@@ -112,6 +113,18 @@ cat >"$matrix_path" <<EOF
 }
 EOF
 
+cat >"$tmp_mode_compare" <<'EOF'
+{
+  "config": {
+    "endpoints": ["wb-tasks-list"],
+    "lasmDbAdapter": "sqlite"
+  },
+  "recommendation": {
+    "mode": "proxy"
+  }
+}
+EOF
+
 out_runs="${tmp_root}/runs.json"
 out_step_matrix="${tmp_root}/step-matrix.json"
 wrk_marker="${tmp_root}/wrk2-called.log"
@@ -196,6 +209,25 @@ if [ "$relaxed_status" -ne 0 ]; then
 fi
 if ! jq -e '.failOnImplFailure == 0 and .totals.failed == 1' "$relaxed_runs" >/dev/null; then
   echo "expected relaxed step summary to keep failed totals with failOnImplFailure=0" >&2
+  exit 1
+fi
+
+auto_mismatch_out="$(
+  "${suite_dir}/scripts/run_workbench_step_matrix.sh" \
+    --dry-run \
+    --impls sec4-lasm \
+    --endpoints wb-task-get \
+    --lasm-mode auto \
+    --lasm-mode-compare-repeats-file "$tmp_mode_compare" \
+    --port 18135 \
+    2>&1
+)"
+if ! grep -q 'warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode' <<<"$auto_mismatch_out"; then
+  echo "missing LASM auto mode workload mismatch fallback warning in step matrix output" >&2
+  exit 1
+fi
+if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_mismatch_out"; then
+  echo "expected LASM auto mode fallback to single mode in step matrix output" >&2
   exit 1
 fi
 
