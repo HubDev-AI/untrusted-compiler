@@ -1,4 +1,5 @@
 use crate::lasm_db_client::{
+    apply_lasm_db_runtime_limit_overrides as apply_lasm_db_runtime_limit_overrides_config,
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
     resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
     resolve_lasm_db_params_max_bytes as resolve_lasm_db_params_max_bytes_config,
@@ -8,17 +9,10 @@ use crate::lasm_db_client::{
     resolve_lasm_db_sql_template_max_bytes as resolve_lasm_db_sql_template_max_bytes_config,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
-    run_lasm_query_one_operation_with_adapter,
-    set_lasm_db_op_sequence_max_override as set_lasm_db_op_sequence_max_override_config,
-    set_lasm_db_params_max_bytes_override as set_lasm_db_params_max_bytes_override_config,
-    set_lasm_db_params_max_entries_override as set_lasm_db_params_max_entries_override_config,
-    set_lasm_db_query_one_row_max_bytes_override as set_lasm_db_query_one_row_max_bytes_override_config,
-    set_lasm_db_query_one_row_max_columns_override as set_lasm_db_query_one_row_max_columns_override_config,
-    set_lasm_db_sql_template_max_bytes_override as set_lasm_db_sql_template_max_bytes_override_config,
-    validate_lasm_internal_db_operation_sequence_count, LasmExecTxSource,
-    LasmInternalDbOperationSequenceValidationError, LasmInternalDbSequenceFailure,
-    LasmInternalDbSequenceState, LasmLockedOperationError, LasmPreparedDbOperationParams,
-    LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
+    run_lasm_query_one_operation_with_adapter, validate_lasm_internal_db_operation_sequence_count,
+    LasmExecTxSource, LasmInternalDbOperationSequenceValidationError,
+    LasmInternalDbSequenceFailure, LasmInternalDbSequenceState, LasmLockedOperationError,
+    LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
     LasmUnifiedQueryOneOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
@@ -37,22 +31,10 @@ use crate::{
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct LasmDbRuntimeLimitOverrides {
-    pub(crate) query_one_row_max_bytes: Option<usize>,
-    pub(crate) query_one_row_max_columns: Option<usize>,
-    pub(crate) sql_template_max_bytes: Option<usize>,
-    pub(crate) params_max_bytes: Option<usize>,
-    pub(crate) params_max_entries: Option<usize>,
-    pub(crate) op_sequence_max: Option<usize>,
-}
+pub(crate) use crate::lasm_db_client::LasmDbRuntimeLimitOverrides;
 
 pub(crate) fn lasm_db_sql_template_max_bytes_limit() -> usize {
     resolve_lasm_db_sql_template_max_bytes_config()
-}
-
-pub(crate) fn set_lasm_db_sql_template_max_bytes_override(value: Option<usize>) {
-    set_lasm_db_sql_template_max_bytes_override_config(value);
 }
 
 #[inline(always)]
@@ -84,10 +66,6 @@ fn enforce_lasm_db_sql_template_max_bytes(
 
 pub(crate) fn lasm_db_params_max_bytes_limit() -> usize {
     resolve_lasm_db_params_max_bytes_config()
-}
-
-pub(crate) fn set_lasm_db_params_max_bytes_override(value: Option<usize>) {
-    set_lasm_db_params_max_bytes_override_config(value);
 }
 
 #[inline(always)]
@@ -151,10 +129,6 @@ pub(crate) fn lasm_db_params_max_entries_limit() -> usize {
     resolve_lasm_db_params_max_entries_config()
 }
 
-pub(crate) fn set_lasm_db_params_max_entries_override(value: Option<usize>) {
-    set_lasm_db_params_max_entries_override_config(value);
-}
-
 #[inline(always)]
 fn lasm_db_params_entry_count(
     parsed: Option<&serde_json::Value>,
@@ -178,11 +152,6 @@ fn lasm_db_params_entry_count(
 #[inline(always)]
 pub(crate) fn lasm_db_op_sequence_max_limit() -> usize {
     resolve_lasm_db_op_sequence_max_config()
-}
-
-#[inline(always)]
-pub(crate) fn set_lasm_db_op_sequence_max_override(value: Option<usize>) {
-    set_lasm_db_op_sequence_max_override_config(value);
 }
 
 #[inline(always)]
@@ -218,10 +187,6 @@ pub(crate) fn lasm_db_query_one_row_max_bytes_limit() -> usize {
     resolve_lasm_db_query_one_row_max_bytes_config()
 }
 
-pub(crate) fn set_lasm_db_query_one_row_max_bytes_override(value: Option<usize>) {
-    set_lasm_db_query_one_row_max_bytes_override_config(value);
-}
-
 #[inline(always)]
 fn enforce_lasm_db_query_one_row_max_bytes(
     response: &mut sec4_core::HttpResponse,
@@ -251,17 +216,8 @@ pub(crate) fn lasm_db_query_one_row_max_columns_limit() -> usize {
     resolve_lasm_db_query_one_row_max_columns_config()
 }
 
-pub(crate) fn set_lasm_db_query_one_row_max_columns_override(value: Option<usize>) {
-    set_lasm_db_query_one_row_max_columns_override_config(value);
-}
-
 pub(crate) fn apply_lasm_db_runtime_limit_overrides(overrides: LasmDbRuntimeLimitOverrides) {
-    set_lasm_db_query_one_row_max_bytes_override(overrides.query_one_row_max_bytes);
-    set_lasm_db_query_one_row_max_columns_override(overrides.query_one_row_max_columns);
-    set_lasm_db_sql_template_max_bytes_override(overrides.sql_template_max_bytes);
-    set_lasm_db_params_max_bytes_override(overrides.params_max_bytes);
-    set_lasm_db_params_max_entries_override(overrides.params_max_entries);
-    set_lasm_db_op_sequence_max_override(overrides.op_sequence_max);
+    apply_lasm_db_runtime_limit_overrides_config(overrides);
 }
 
 #[inline(always)]
