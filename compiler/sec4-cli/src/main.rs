@@ -13955,7 +13955,7 @@ fn write_lasm_http_response(
     omit_body: bool,
     close_connection: bool,
 ) -> Result<(), String> {
-    let mut headers = normalize_lasm_response_headers_case_insensitive(response.headers.clone());
+    let mut headers = normalize_lasm_response_headers_case_insensitive(&response.headers);
     if !include_cors_defaults {
         headers.retain(|name, _| !is_lasm_cors_default_header_name(name.as_str()));
     }
@@ -14029,16 +14029,16 @@ fn insert_lasm_header_if_missing_case_insensitive(
 }
 
 fn normalize_lasm_response_headers_case_insensitive(
-    headers: BTreeMap<String, String>,
+    headers: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     let mut normalized = BTreeMap::new();
     for (name, value) in headers {
         if let Some(existing_key) =
             find_lasm_header_key_case_insensitive(&normalized, name.as_str())
         {
-            normalized.insert(existing_key, value);
+            normalized.insert(existing_key, value.clone());
         } else {
-            normalized.insert(name, value);
+            normalized.insert(name.clone(), value.clone());
         }
     }
     normalized

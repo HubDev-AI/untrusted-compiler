@@ -1,6 +1,6 @@
 use crate::lasm_db_client::{
-    cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
+    LasmInternalDbSequenceState,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
     run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmLockedOperationError,
@@ -21,7 +21,7 @@ use crate::{
     LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_RESULT_HEADER,
     LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -1212,32 +1212,10 @@ fn stage_lasm_internal_db_sequence_operation_headers(
     }
 }
 
-fn cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
-    sequence_tx_handles: &BTreeSet<i64>,
-    db_records_adapter: LasmDbRecordsAdapter,
-    operation_succeeded: bool,
-) {
-    cleanup_lasm_internal_db_sequence_tx_handles(
-        dynamic_state,
-        db_records_adapter,
-        sequence_tx_handles_by_source.values().copied(),
-        operation_succeeded,
-    );
-    cleanup_lasm_internal_db_sequence_tx_handles(
-        dynamic_state,
-        db_records_adapter,
-        sequence_tx_handles.iter().copied(),
-        operation_succeeded,
-    );
-}
-
 fn fail_lasm_internal_db_sequence_with_envelope(
     response: &mut sec4_core::HttpResponse,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
-    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
-    sequence_tx_handles: &BTreeSet<i64>,
+    sequence_state: &LasmInternalDbSequenceState,
     db_records_adapter: LasmDbRecordsAdapter,
     code: &str,
     kind: &str,
@@ -1250,13 +1228,7 @@ fn fail_lasm_internal_db_sequence_with_envelope(
         status,
         &lasm_error_envelope(code, kind, message, status, trace_id),
     );
-    cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-        dynamic_state,
-        sequence_tx_handles_by_source,
-        sequence_tx_handles,
-        db_records_adapter,
-        false,
-    );
+    sequence_state.cleanup(dynamic_state, db_records_adapter, false);
     true
 }
 
@@ -1337,8 +1309,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
         return true;
     }
     if operation_count > 1 {
-        let mut sequence_tx_handles_by_source = BTreeMap::<i64, i64>::new();
-        let mut sequence_tx_handles = BTreeSet::<i64>::new();
+        let mut sequence_state = LasmInternalDbSequenceState::new();
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(
                 response,
@@ -1385,8 +1356,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.EXEC_TX_INVALID",
                         "validation",
@@ -1407,8 +1377,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         return fail_lasm_internal_db_sequence_with_envelope(
                             response,
                             dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
+                            &sequence_state,
                             db_records_adapter,
                             "DB.EXEC_TX_INVALID",
                             "validation",
@@ -1421,8 +1390,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         return fail_lasm_internal_db_sequence_with_envelope(
                             response,
                             dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
+                            &sequence_state,
                             db_records_adapter,
                             "DB.EXEC_TX_INVALID",
                             "validation",
@@ -1432,7 +1400,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         );
                     }
                     if let Some(existing_tx_handle) =
-                        sequence_tx_handles_by_source.get(&tx_db_source).copied()
+                        sequence_state.tracked_tx_for_source(tx_db_source)
                     {
                         response.headers.insert(
                             LASM_INTERNAL_DB_TX_HEADER.to_string(),
@@ -1442,7 +1410,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
                             "1".to_string(),
                         );
-                        sequence_tx_handles.insert(existing_tx_handle);
+                        sequence_state.track_tx_handle(existing_tx_handle);
                     } else {
                         response
                             .headers
@@ -1472,8 +1440,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         return fail_lasm_internal_db_sequence_with_envelope(
                             response,
                             dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
+                            &sequence_state,
                             db_records_adapter,
                             "DB.EXEC_TX_INVALID",
                             "validation",
@@ -1482,7 +1449,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                             trace_id,
                         );
                     };
-                    sequence_tx_handles.insert(tx_handle);
+                    sequence_state.track_tx_handle(tx_handle);
                 }
             } else {
                 if let Some(value) = take_lasm_internal_header_value_indexed(
@@ -1516,8 +1483,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 return fail_lasm_internal_db_sequence_with_envelope(
                     response,
                     dynamic_state,
-                    &sequence_tx_handles_by_source,
-                    &sequence_tx_handles,
+                    &sequence_state,
                     db_records_adapter,
                     "DB.OPERATION_INVALID",
                     "validation",
@@ -1527,13 +1493,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
             }
             if response.status >= 400 {
-                cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-                    dynamic_state,
-                    &sequence_tx_handles_by_source,
-                    &sequence_tx_handles,
-                    db_records_adapter,
-                    false,
-                );
+                sequence_state.cleanup(dynamic_state, db_records_adapter, false);
                 return true;
             }
             if operation == "tx" {
@@ -1541,8 +1501,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1561,8 +1520,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1577,8 +1535,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1591,8 +1548,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1601,7 +1557,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         trace_id,
                     );
                 };
-                sequence_tx_handles_by_source.insert(db_source, tx_handle);
+                sequence_state.track_source_tx_handle(db_source, tx_handle);
             }
             if let Some(tx_db_source) = sequence_allocated_tx_source {
                 let Some(tx_handle_raw) =
@@ -1610,8 +1566,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1624,8 +1579,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     return fail_lasm_internal_db_sequence_with_envelope(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
                         "DB.TX_INTERNAL",
                         "internal",
@@ -1634,16 +1588,10 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         trace_id,
                     );
                 };
-                sequence_tx_handles_by_source.insert(tx_db_source, tx_handle);
+                sequence_state.track_source_tx_handle(tx_db_source, tx_handle);
             }
         }
-        cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-            dynamic_state,
-            &sequence_tx_handles_by_source,
-            &sequence_tx_handles,
-            db_records_adapter,
-            true,
-        );
+        sequence_state.cleanup(dynamic_state, db_records_adapter, true);
         return true;
     }
 
@@ -2134,20 +2082,6 @@ fn handle_lasm_internal_db_query_one_operation(
         trace_id,
     );
     true
-}
-
-fn cleanup_lasm_internal_db_sequence_tx_handles(
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    db_records_adapter: LasmDbRecordsAdapter,
-    handles: impl IntoIterator<Item = i64>,
-    operation_succeeded: bool,
-) {
-    cleanup_lasm_internal_db_sequence_tx_handles_from_adapter(
-        dynamic_state,
-        db_records_adapter,
-        handles,
-        operation_succeeded,
-    );
 }
 
 fn take_lasm_internal_header_value(
