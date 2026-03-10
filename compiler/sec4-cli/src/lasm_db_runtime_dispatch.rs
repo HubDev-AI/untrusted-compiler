@@ -1,9 +1,17 @@
 use crate::lasm_db_client::{
-    cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
+    apply_lasm_db_runtime_limit_overrides as apply_lasm_db_runtime_limit_overrides_config,
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
+    resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
+    resolve_lasm_db_params_max_bytes as resolve_lasm_db_params_max_bytes_config,
+    resolve_lasm_db_params_max_entries as resolve_lasm_db_params_max_entries_config,
+    resolve_lasm_db_query_one_row_max_bytes as resolve_lasm_db_query_one_row_max_bytes_config,
+    resolve_lasm_db_query_one_row_max_columns as resolve_lasm_db_query_one_row_max_columns_config,
+    resolve_lasm_db_sql_template_max_bytes as resolve_lasm_db_sql_template_max_bytes_config,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
-    run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmLockedOperationError,
+    run_lasm_query_one_operation_with_adapter, validate_lasm_internal_db_operation_sequence_count,
+    LasmExecTxSource, LasmInternalDbOperationSequenceValidationError,
+    LasmInternalDbSequenceFailure, LasmInternalDbSequenceState, LasmLockedOperationError,
     LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
     LasmUnifiedQueryOneOperationError,
 };
@@ -16,96 +24,17 @@ use crate::{
     lasm_db_record_to_json, lasm_error_envelope, lasm_internal_db_indexed_header, lasm_now_ms,
     set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
     LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX, LASM_INTERNAL_DB_PARAMS_HEADER,
-    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_RESULT_HEADER,
-    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
-use std::collections::{BTreeMap, BTreeSet};
-use std::env;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::collections::BTreeMap;
+use std::sync::{Mutex, MutexGuard};
 
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_MAX_BYTES";
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX: usize = 4 * 1024 * 1024;
-const LASM_DB_PARAMS_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_BYTES";
-const LASM_DB_PARAMS_MAX_BYTES_DEFAULT: usize = 128 * 1024;
-const LASM_DB_PARAMS_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_PARAMS_MAX_BYTES_MAX: usize = 8 * 1024 * 1024;
-const LASM_DB_PARAMS_MAX_ENTRIES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_ENTRIES";
-const LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT: usize = 2048;
-const LASM_DB_PARAMS_MAX_ENTRIES_MIN: usize = 1;
-const LASM_DB_PARAMS_MAX_ENTRIES_MAX: usize = 65_536;
-const LASM_DB_OP_SEQUENCE_MAX_ENV: &str = "SEC4_RT_LASM_DB_OP_SEQUENCE_MAX";
-const LASM_DB_OP_SEQUENCE_MAX_DEFAULT: usize = LASM_INTERNAL_DB_OP_SEQUENCE_MAX;
-const LASM_DB_OP_SEQUENCE_MAX_MIN: usize = 2;
-const LASM_DB_OP_SEQUENCE_MAX_MAX: usize = 4096;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_BYTES";
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX: usize = 16 * 1024 * 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS";
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT: usize = 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN: usize = 1;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX: usize = 16_384;
-static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_OP_SEQUENCE_MAX_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_PARAMS_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_OP_SEQUENCE_MAX_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct LasmDbRuntimeLimitOverrides {
-    pub(crate) query_one_row_max_bytes: Option<usize>,
-    pub(crate) query_one_row_max_columns: Option<usize>,
-    pub(crate) sql_template_max_bytes: Option<usize>,
-    pub(crate) params_max_bytes: Option<usize>,
-    pub(crate) params_max_entries: Option<usize>,
-    pub(crate) op_sequence_max: Option<usize>,
-}
-
-#[inline(always)]
-fn resolve_lasm_db_sql_template_max_bytes() -> usize {
-    let override_value = LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
-        );
-    }
-    *LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
-        )
-    })
-}
+pub(crate) use crate::lasm_db_client::LasmDbRuntimeLimitOverrides;
 
 pub(crate) fn lasm_db_sql_template_max_bytes_limit() -> usize {
-    resolve_lasm_db_sql_template_max_bytes()
-}
-
-pub(crate) fn set_lasm_db_sql_template_max_bytes_override(value: Option<usize>) {
-    LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_sql_template_max_bytes_config()
 }
 
 #[inline(always)]
@@ -115,7 +44,7 @@ fn enforce_lasm_db_sql_template_max_bytes(
     template: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_sql_template_max_bytes();
+    let max_bytes = lasm_db_sql_template_max_bytes_limit();
     let template_bytes = template.as_bytes().len();
     if template_bytes <= max_bytes {
         return true;
@@ -135,33 +64,8 @@ fn enforce_lasm_db_sql_template_max_bytes(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_params_max_bytes() -> usize {
-    let override_value = LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX);
-    }
-    *LASM_DB_PARAMS_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
-    })
-}
-
 pub(crate) fn lasm_db_params_max_bytes_limit() -> usize {
-    resolve_lasm_db_params_max_bytes()
-}
-
-pub(crate) fn set_lasm_db_params_max_bytes_override(value: Option<usize>) {
-    LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_params_max_bytes_config()
 }
 
 #[inline(always)]
@@ -171,7 +75,7 @@ fn enforce_lasm_db_params_max_bytes(
     params: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_params_max_bytes();
+    let max_bytes = lasm_db_params_max_bytes_limit();
     let params_bytes = params.as_bytes().len();
     if params_bytes <= max_bytes {
         return true;
@@ -221,39 +125,8 @@ fn enforce_lasm_db_params_required(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_params_max_entries() -> usize {
-    let override_value = LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
-            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
-        );
-    }
-    *LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_ENTRIES_ENV) else {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
-            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_params_max_entries_limit() -> usize {
-    resolve_lasm_db_params_max_entries()
-}
-
-pub(crate) fn set_lasm_db_params_max_entries_override(value: Option<usize>) {
-    LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_params_max_entries_config()
 }
 
 #[inline(always)]
@@ -277,28 +150,8 @@ fn lasm_db_params_entry_count(
 }
 
 #[inline(always)]
-fn resolve_lasm_db_op_sequence_max() -> usize {
-    let override_value = LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX);
-    }
-    *LASM_DB_OP_SEQUENCE_MAX_RESOLVED.get_or_init(|| {
-        std::env::var(LASM_DB_OP_SEQUENCE_MAX_ENV)
-            .ok()
-            .and_then(|raw| raw.trim().parse::<usize>().ok())
-            .map(|value| value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX))
-            .unwrap_or(LASM_DB_OP_SEQUENCE_MAX_DEFAULT)
-    })
-}
-
-#[inline(always)]
 pub(crate) fn lasm_db_op_sequence_max_limit() -> usize {
-    resolve_lasm_db_op_sequence_max()
-}
-
-#[inline(always)]
-pub(crate) fn set_lasm_db_op_sequence_max_override(value: Option<usize>) {
-    LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_op_sequence_max_config()
 }
 
 #[inline(always)]
@@ -309,7 +162,7 @@ fn enforce_lasm_db_params_max_entries(
     normalized_params: &str,
     trace_id: &str,
 ) -> bool {
-    let max_entries = resolve_lasm_db_params_max_entries();
+    let max_entries = lasm_db_params_max_entries_limit();
     let entries = lasm_db_params_entry_count(parsed, normalized_params);
     if entries <= max_entries {
         return true;
@@ -330,39 +183,8 @@ fn enforce_lasm_db_params_max_entries(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_query_one_row_max_bytes() -> usize {
-    let override_value = LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX,
-        );
-    }
-    *LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV) else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_query_one_row_max_bytes_limit() -> usize {
-    resolve_lasm_db_query_one_row_max_bytes()
-}
-
-pub(crate) fn set_lasm_db_query_one_row_max_bytes_override(value: Option<usize>) {
-    LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_query_one_row_max_bytes_config()
 }
 
 #[inline(always)]
@@ -371,7 +193,7 @@ fn enforce_lasm_db_query_one_row_max_bytes(
     row: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_query_one_row_max_bytes();
+    let max_bytes = lasm_db_query_one_row_max_bytes_limit();
     if row.as_bytes().len() <= max_bytes {
         return true;
     }
@@ -390,48 +212,12 @@ fn enforce_lasm_db_query_one_row_max_bytes(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_query_one_row_max_columns() -> usize {
-    let override_value = LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
-        );
-    }
-    *LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV) else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_query_one_row_max_columns_limit() -> usize {
-    resolve_lasm_db_query_one_row_max_columns()
-}
-
-pub(crate) fn set_lasm_db_query_one_row_max_columns_override(value: Option<usize>) {
-    LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    resolve_lasm_db_query_one_row_max_columns_config()
 }
 
 pub(crate) fn apply_lasm_db_runtime_limit_overrides(overrides: LasmDbRuntimeLimitOverrides) {
-    set_lasm_db_query_one_row_max_bytes_override(overrides.query_one_row_max_bytes);
-    set_lasm_db_query_one_row_max_columns_override(overrides.query_one_row_max_columns);
-    set_lasm_db_sql_template_max_bytes_override(overrides.sql_template_max_bytes);
-    set_lasm_db_params_max_bytes_override(overrides.params_max_bytes);
-    set_lasm_db_params_max_entries_override(overrides.params_max_entries);
-    set_lasm_db_op_sequence_max_override(overrides.op_sequence_max);
+    apply_lasm_db_runtime_limit_overrides_config(overrides);
 }
 
 #[inline(always)]
@@ -449,7 +235,7 @@ fn enforce_lasm_db_query_one_row_max_columns(
     row_object: &serde_json::Value,
     trace_id: &str,
 ) -> bool {
-    let max_columns = resolve_lasm_db_query_one_row_max_columns();
+    let max_columns = lasm_db_query_one_row_max_columns_limit();
     let columns = lasm_db_query_one_row_column_count(row_object);
     if columns <= max_columns {
         return true;
@@ -757,47 +543,83 @@ fn set_lasm_db_runtime_error_response(
 }
 
 fn parse_lasm_record_params_array(record: &LasmDbRecord) -> Option<Vec<serde_json::Value>> {
-    let parsed = serde_json::from_str::<serde_json::Value>(record.params.as_str()).ok()?;
-    let values = parsed.as_array()?;
-    Some(values.clone())
+    serde_json::from_str::<Vec<serde_json::Value>>(record.params.as_str()).ok()
 }
 
-fn lasm_param_string(values: &[serde_json::Value], index: usize) -> Option<String> {
-    values
+fn parse_lasm_record_flat_param_values(record: &LasmDbRecord) -> Option<Vec<&str>> {
+    crate::lasm_request_template::parse_lasm_flat_json_array_elements(record.params.as_str())
+}
+
+fn lasm_record_param_string(
+    index: usize,
+    flat_values: Option<&[&str]>,
+    fallback_values: Option<&[serde_json::Value]>,
+) -> Option<String> {
+    if let Some(raw) = flat_values.and_then(|values| values.get(index)) {
+        let raw = raw.trim();
+        if raw.len() >= 2 && raw.starts_with('"') && raw.ends_with('"') {
+            let decoded = serde_json::from_str::<String>(raw).ok()?;
+            let trimmed = decoded.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    let fallback_values = fallback_values?;
+    fallback_values
         .get(index)
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned)
 }
 
-fn lasm_param_i64(values: &[serde_json::Value], index: usize) -> Option<i64> {
-    let value = values.get(index)?;
-    if let Some(number) = value.as_i64() {
-        return Some(number);
+fn lasm_record_param_i64(
+    index: usize,
+    flat_values: Option<&[&str]>,
+    fallback_values: Option<&[serde_json::Value]>,
+) -> Option<i64> {
+    if let Some(values) = flat_values {
+        let raw = values.get(index)?.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+            let decoded = serde_json::from_str::<String>(raw).ok()?;
+            return decoded.trim().parse::<i64>().ok();
+        }
+        if let Ok(number) = raw.parse::<i64>() {
+            return Some(number);
+        }
     }
-    value
-        .as_str()
-        .and_then(|raw| raw.trim().parse::<i64>().ok())
+    let fallback_values = fallback_values?;
+    let value = fallback_values.get(index)?;
+    value.as_i64().or_else(|| {
+        value
+            .as_str()
+            .and_then(|raw| raw.trim().parse::<i64>().ok())
+    })
 }
 
 fn derive_lasm_exec_like_success_data(
     record: &LasmDbRecord,
     affected_rows: u64,
 ) -> serde_json::Value {
-    let Some(values) = parse_lasm_record_params_array(record) else {
-        return serde_json::json!({ "affectedRows": affected_rows });
-    };
+    let parsed_flat_values = parse_lasm_record_flat_param_values(record);
+    let flat_values = parsed_flat_values.as_deref();
+    let parsed_fallback_values = parse_lasm_record_params_array(record);
+    let fallback_values = parsed_fallback_values.as_deref();
     if record.op == "execTx" {
-        if let (Some(comment_id), Some(task_id)) =
-            (lasm_param_string(&values, 0), lasm_param_string(&values, 1))
-        {
+        if let (Some(comment_id), Some(task_id)) = (
+            lasm_record_param_string(0, flat_values, fallback_values),
+            lasm_record_param_string(1, flat_values, fallback_values),
+        ) {
             return serde_json::json!({
                 "taskId": task_id,
                 "commentId": comment_id
             });
         }
     }
-    if let Some(id) = lasm_param_string(&values, 0) {
+    if let Some(id) = lasm_record_param_string(0, flat_values, fallback_values) {
         return serde_json::json!({ "id": id });
     }
     serde_json::json!({ "affectedRows": affected_rows })
@@ -807,19 +629,21 @@ fn derive_lasm_query_one_success_data(
     record: &LasmDbRecord,
     row_object: &serde_json::Value,
 ) -> serde_json::Value {
+    let parsed_flat_values = parse_lasm_record_flat_param_values(record);
+    let flat_values = parsed_flat_values.as_deref();
+    let parsed_fallback_values = parse_lasm_record_params_array(record);
+    let fallback_values = parsed_fallback_values.as_deref();
     if record
         .template
         .contains("order by created_at_ms desc, id desc limit $2 offset $3")
     {
         let mut limit = 20_i64;
         let mut offset = 0_i64;
-        if let Some(values) = parse_lasm_record_params_array(record) {
-            if let Some(value) = lasm_param_i64(&values, 1) {
-                limit = value;
-            }
-            if let Some(value) = lasm_param_i64(&values, 2) {
-                offset = value;
-            }
+        if let Some(value) = lasm_record_param_i64(1, flat_values, fallback_values) {
+            limit = value;
+        }
+        if let Some(value) = lasm_record_param_i64(2, flat_values, fallback_values) {
+            offset = value;
         }
         return serde_json::json!({
             "items": [row_object.clone()],
@@ -1172,32 +996,10 @@ fn stage_lasm_internal_db_sequence_operation_headers(
     }
 }
 
-fn cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
-    sequence_tx_handles: &BTreeSet<i64>,
-    db_records_adapter: LasmDbRecordsAdapter,
-    operation_succeeded: bool,
-) {
-    cleanup_lasm_internal_db_sequence_tx_handles(
-        dynamic_state,
-        db_records_adapter,
-        sequence_tx_handles_by_source.values().copied(),
-        operation_succeeded,
-    );
-    cleanup_lasm_internal_db_sequence_tx_handles(
-        dynamic_state,
-        db_records_adapter,
-        sequence_tx_handles.iter().copied(),
-        operation_succeeded,
-    );
-}
-
 fn fail_lasm_internal_db_sequence_with_envelope(
     response: &mut sec4_core::HttpResponse,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
-    sequence_tx_handles_by_source: &BTreeMap<i64, i64>,
-    sequence_tx_handles: &BTreeSet<i64>,
+    sequence_state: &LasmInternalDbSequenceState,
     db_records_adapter: LasmDbRecordsAdapter,
     code: &str,
     kind: &str,
@@ -1210,13 +1012,91 @@ fn fail_lasm_internal_db_sequence_with_envelope(
         status,
         &lasm_error_envelope(code, kind, message, status, trace_id),
     );
-    cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
+    sequence_state.cleanup(dynamic_state, db_records_adapter, false);
+    true
+}
+
+fn fail_lasm_internal_db_sequence_failure(
+    response: &mut sec4_core::HttpResponse,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    sequence_state: &LasmInternalDbSequenceState,
+    db_records_adapter: LasmDbRecordsAdapter,
+    failure: LasmInternalDbSequenceFailure,
+    trace_id: &str,
+) -> bool {
+    fail_lasm_internal_db_sequence_with_envelope(
+        response,
         dynamic_state,
-        sequence_tx_handles_by_source,
-        sequence_tx_handles,
+        sequence_state,
         db_records_adapter,
-        false,
-    );
+        failure.code,
+        failure.kind,
+        failure.message,
+        failure.status,
+        trace_id,
+    )
+}
+
+fn respond_lasm_internal_db_sequence_validation_error(
+    response: &mut sec4_core::HttpResponse,
+    error: LasmInternalDbOperationSequenceValidationError,
+    trace_id: &str,
+) -> bool {
+    match error {
+        LasmInternalDbOperationSequenceValidationError::InvalidMarker => set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.OPERATION_INVALID",
+                "validation",
+                "invalid internal db operation sequence marker",
+                400,
+                trace_id,
+            ),
+        ),
+        LasmInternalDbOperationSequenceValidationError::MarkerValueTooSmall => {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    "internal db operation sequence marker value must be >= 2",
+                    400,
+                    trace_id,
+                ),
+            )
+        }
+        LasmInternalDbOperationSequenceValidationError::IndexedMarkersRequireCount => {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    "indexed internal db operation markers require operation count marker",
+                    400,
+                    trace_id,
+                ),
+            )
+        }
+        LasmInternalDbOperationSequenceValidationError::ExceedsMaximum { maximum } => {
+            let message = format!(
+                "db operation sequence exceeds maximum supported operations per handler ({maximum})"
+            );
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    message.as_str(),
+                    400,
+                    trace_id,
+                ),
+            )
+        }
+    }
     true
 }
 
@@ -1228,77 +1108,18 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     db_records_adapter: LasmDbRecordsAdapter,
     trace_id: &str,
 ) -> bool {
-    let operation_count = if let Some(raw_operation_count) =
-        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER)
-    {
-        let trimmed = raw_operation_count.trim();
-        let Some(parsed) = trimmed.parse::<usize>().ok() else {
-            set_lasm_json_response(
-                response,
-                400,
-                &lasm_error_envelope(
-                    "DB.OPERATION_INVALID",
-                    "validation",
-                    "invalid internal db operation sequence marker",
-                    400,
-                    trace_id,
-                ),
-            );
-            return true;
-        };
-        if parsed < 2 {
-            set_lasm_json_response(
-                response,
-                400,
-                &lasm_error_envelope(
-                    "DB.OPERATION_INVALID",
-                    "validation",
-                    "internal db operation sequence marker value must be >= 2",
-                    400,
-                    trace_id,
-                ),
-            );
-            return true;
+    let operation_count = match validate_lasm_internal_db_operation_sequence_count(
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER),
+        response_has_lasm_internal_db_indexed_headers(response),
+        lasm_db_op_sequence_max_limit(),
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            return respond_lasm_internal_db_sequence_validation_error(response, error, trace_id);
         }
-        parsed
-    } else {
-        0
     };
-    if operation_count == 0 && response_has_lasm_internal_db_indexed_headers(response) {
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                "DB.OPERATION_INVALID",
-                "validation",
-                "indexed internal db operation markers require operation count marker",
-                400,
-                trace_id,
-            ),
-        );
-        return true;
-    }
-    let operation_sequence_max = resolve_lasm_db_op_sequence_max();
-    if operation_count > operation_sequence_max {
-        let message = format!(
-            "db operation sequence exceeds maximum supported operations per handler ({operation_sequence_max})"
-        );
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                "DB.OPERATION_INVALID",
-                "validation",
-                message.as_str(),
-                400,
-                trace_id,
-            ),
-        );
-        return true;
-    }
     if operation_count > 1 {
-        let mut sequence_tx_handles_by_source = BTreeMap::<i64, i64>::new();
-        let mut sequence_tx_handles = BTreeSet::<i64>::new();
+        let mut sequence_state = LasmInternalDbSequenceState::new();
         for index in 0..operation_count {
             let Some(raw_operation) = take_lasm_internal_header_value_indexed(
                 response,
@@ -1331,119 +1152,52 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let mut sequence_allocated_tx_source: Option<i64> = None;
             if operation == "execTx" {
-                let raw_tx_db = take_lasm_internal_header_value_indexed(
-                    response,
-                    LASM_INTERNAL_DB_TX_DB_HEADER,
-                    index,
-                );
-                let raw_tx_handle = take_lasm_internal_header_value_indexed(
-                    response,
-                    LASM_INTERNAL_DB_TX_HEADER,
-                    index,
-                );
-                if raw_tx_db.is_some() && raw_tx_handle.is_some() {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                let sequence_preparation = match sequence_state.prepare_exec_tx_sequence_operation(
+                    take_lasm_internal_header_value_indexed(
                         response,
-                        dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
-                        db_records_adapter,
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
-                        400,
-                        trace_id,
-                    );
+                        LASM_INTERNAL_DB_TX_DB_HEADER,
+                        index,
+                    ),
+                    take_lasm_internal_header_value_indexed(
+                        response,
+                        LASM_INTERNAL_DB_TX_HEADER,
+                        index,
+                    ),
+                    |raw| {
+                        materialize_lasm_internal_header_value(raw, request, path_params, trace_id)
+                    },
+                    parse_lasm_positive_i64,
+                    is_lasm_valid_db_cap_handle,
+                ) {
+                    Ok(value) => value,
+                    Err(failure) => {
+                        return fail_lasm_internal_db_sequence_failure(
+                            response,
+                            dynamic_state,
+                            &sequence_state,
+                            db_records_adapter,
+                            failure,
+                            trace_id,
+                        );
+                    }
+                };
+                if let Some(value) = sequence_preparation.tx_header {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), value);
                 }
-                if let Some(raw_tx_db) = raw_tx_db {
-                    let tx_db_source_raw = materialize_lasm_internal_header_value(
-                        raw_tx_db.clone(),
-                        request,
-                        path_params,
-                        trace_id,
-                    );
-                    let Some(tx_db_source) = parse_lasm_positive_i64(tx_db_source_raw.trim())
-                    else {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires transaction and query handles",
-                            400,
-                            trace_id,
-                        );
-                    };
-                    if !is_lasm_valid_db_cap_handle(tx_db_source) {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires db.tx(dbCap) with valid db capability handle",
-                            400,
-                            trace_id,
-                        );
-                    }
-                    if let Some(existing_tx_handle) =
-                        sequence_tx_handles_by_source.get(&tx_db_source).copied()
-                    {
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_HEADER.to_string(),
-                            existing_tx_handle.to_string(),
-                        );
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
-                            "1".to_string(),
-                        );
-                        sequence_tx_handles.insert(existing_tx_handle);
-                    } else {
-                        response
-                            .headers
-                            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), raw_tx_db);
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
-                            "1".to_string(),
-                        );
-                        sequence_allocated_tx_source = Some(tx_db_source);
-                    }
-                } else if let Some(raw_tx_handle) = raw_tx_handle {
+                if let Some(value) = sequence_preparation.tx_db_header {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
+                }
+                if sequence_preparation.retain_tx_for_sequence {
                     response.headers.insert(
                         LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
                         "1".to_string(),
                     );
-                    response.headers.insert(
-                        LASM_INTERNAL_DB_TX_HEADER.to_string(),
-                        raw_tx_handle.clone(),
-                    );
-                    let tx_handle_raw = materialize_lasm_internal_header_value(
-                        raw_tx_handle,
-                        request,
-                        path_params,
-                        trace_id,
-                    );
-                    let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.trim()) else {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_tx_handles_by_source,
-                            &sequence_tx_handles,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires valid tx handle",
-                            400,
-                            trace_id,
-                        );
-                    };
-                    sequence_tx_handles.insert(tx_handle);
                 }
+                sequence_allocated_tx_source = sequence_preparation.allocated_tx_source;
             } else {
                 if let Some(value) = take_lasm_internal_header_value_indexed(
                     response,
@@ -1476,8 +1230,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 return fail_lasm_internal_db_sequence_with_envelope(
                     response,
                     dynamic_state,
-                    &sequence_tx_handles_by_source,
-                    &sequence_tx_handles,
+                    &sequence_state,
                     db_records_adapter,
                     "DB.OPERATION_INVALID",
                     "validation",
@@ -1487,123 +1240,51 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 );
             }
             if response.status >= 400 {
-                cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-                    dynamic_state,
-                    &sequence_tx_handles_by_source,
-                    &sequence_tx_handles,
-                    db_records_adapter,
-                    false,
-                );
+                sequence_state.cleanup(dynamic_state, db_records_adapter, false);
                 return true;
             }
             if operation == "tx" {
-                let Some(raw_db_source) = sequence_tx_db_source_raw else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                if let Err(failure) = sequence_state.track_sequence_tx_runtime_result(
+                    sequence_tx_db_source_raw,
+                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER),
+                    |raw| {
+                        materialize_lasm_internal_header_value(raw, request, path_params, trace_id)
+                    },
+                    parse_lasm_positive_i64,
+                ) {
+                    return fail_lasm_internal_db_sequence_failure(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime did not preserve db handle marker",
-                        500,
+                        failure,
                         trace_id,
                     );
-                };
-                let db_source_raw = materialize_lasm_internal_header_value(
-                    raw_db_source,
-                    request,
-                    path_params,
-                    trace_id,
-                );
-                let Some(db_source) = parse_lasm_positive_i64(db_source_raw.trim()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                let Some(tx_handle_raw) =
-                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
-                else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime did not publish transaction handle marker",
-                        500,
-                        trace_id,
-                    );
-                };
-                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                sequence_tx_handles_by_source.insert(db_source, tx_handle);
+                }
             }
             if let Some(tx_db_source) = sequence_allocated_tx_source {
-                let Some(tx_handle_raw) =
-                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
-                else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                if let Err(failure) = sequence_state
+                    .track_sequence_allocated_exec_tx_runtime_result(
+                        tx_db_source,
+                        take_lasm_internal_header_value(
+                            response,
+                            LASM_INTERNAL_DB_TX_RESULT_HEADER,
+                        ),
+                        parse_lasm_positive_i64,
+                    )
+                {
+                    return fail_lasm_internal_db_sequence_failure(
                         response,
                         dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
+                        &sequence_state,
                         db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.execTx runtime did not publish transaction handle marker",
-                        500,
+                        failure,
                         trace_id,
                     );
-                };
-                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_tx_handles_by_source,
-                        &sequence_tx_handles,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                sequence_tx_handles_by_source.insert(tx_db_source, tx_handle);
+                }
             }
         }
-        cleanup_lasm_internal_db_sequence_tx_handles_for_sources(
-            dynamic_state,
-            &sequence_tx_handles_by_source,
-            &sequence_tx_handles,
-            db_records_adapter,
-            true,
-        );
+        sequence_state.cleanup(dynamic_state, db_records_adapter, true);
         return true;
     }
 
@@ -2096,25 +1777,12 @@ fn handle_lasm_internal_db_query_one_operation(
     true
 }
 
-fn cleanup_lasm_internal_db_sequence_tx_handles(
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    db_records_adapter: LasmDbRecordsAdapter,
-    handles: impl IntoIterator<Item = i64>,
-    operation_succeeded: bool,
-) {
-    cleanup_lasm_internal_db_sequence_tx_handles_from_adapter(
-        dynamic_state,
-        db_records_adapter,
-        handles,
-        operation_succeeded,
-    );
-}
-
 fn take_lasm_internal_header_value(
     response: &mut sec4_core::HttpResponse,
     header_name: &str,
 ) -> Option<String> {
-    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)
+        .map(str::to_owned)?;
     response.headers.remove(&key)
 }
 
@@ -2124,7 +1792,8 @@ fn take_lasm_internal_header_value_indexed(
     index: usize,
 ) -> Option<String> {
     let indexed = lasm_internal_db_indexed_header(header_name, index);
-    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, indexed.as_str())?;
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, indexed.as_str())
+        .map(str::to_owned)?;
     response.headers.remove(&key)
 }
 
@@ -2143,7 +1812,10 @@ fn materialize_lasm_internal_header_value(
 
 #[cfg(test)]
 mod tests {
-    use super::apply_lasm_internal_db_operation_materialization;
+    use super::{
+        apply_lasm_internal_db_operation_materialization, derive_lasm_exec_like_success_data,
+        derive_lasm_query_one_success_data,
+    };
     use crate::{
         lasm_internal_db_indexed_header, LasmDbRecord, LasmDbRecordsAdapter,
         LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -3292,5 +2964,111 @@ mod tests {
             state.db_tx_handles.is_empty(),
             "sequence cleanup should release tx handles"
         );
+    }
+
+    #[test]
+    fn derive_exec_like_success_data_extracts_ids_from_flat_params() {
+        let tx_record = LasmDbRecord {
+            id: 1,
+            op: "execTx".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_comments VALUES ($1,$2)".to_string(),
+            params: "[\"comment-1\",\"task-1\"]".to_string(),
+            tx: 1,
+            affected_rows: 1,
+            created_at_ms: 1,
+        };
+        let tx_data = derive_lasm_exec_like_success_data(&tx_record, 1);
+        assert_eq!(
+            tx_data.get("commentId").and_then(|value| value.as_str()),
+            Some("comment-1")
+        );
+        assert_eq!(
+            tx_data.get("taskId").and_then(|value| value.as_str()),
+            Some("task-1")
+        );
+
+        let exec_record = LasmDbRecord {
+            id: 2,
+            op: "exec".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_tasks VALUES ($1)".to_string(),
+            params: "[\"task-9\"]".to_string(),
+            tx: 0,
+            affected_rows: 1,
+            created_at_ms: 2,
+        };
+        let exec_data = derive_lasm_exec_like_success_data(&exec_record, 1);
+        assert_eq!(
+            exec_data.get("id").and_then(|value| value.as_str()),
+            Some("task-9")
+        );
+    }
+
+    #[test]
+    fn derive_exec_like_success_data_handles_nested_params_payload() {
+        let record = LasmDbRecord {
+            id: 12,
+            op: "exec".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_tasks VALUES ($1)".to_string(),
+            params: "[\"task-fallback\",{\"x\":1}]".to_string(),
+            tx: 0,
+            affected_rows: 1,
+            created_at_ms: 12,
+        };
+
+        let data = derive_lasm_exec_like_success_data(&record, 1);
+        assert_eq!(
+            data.get("id").and_then(|value| value.as_str()),
+            Some("task-fallback")
+        );
+    }
+
+    #[test]
+    fn derive_query_one_success_data_extracts_limit_offset_from_flat_params() {
+        let record = LasmDbRecord {
+            id: 3,
+            op: "queryOne".to_string(),
+            db: 1,
+            template: "select id from wb_tasks where status = $1 order by created_at_ms desc, id desc limit $2 offset $3".to_string(),
+            params: "[\"open\",20,5]".to_string(),
+            tx: 0,
+            affected_rows: 0,
+            created_at_ms: 3,
+        };
+        let row_object = serde_json::json!({ "id": "task-1" });
+        let data = derive_lasm_query_one_success_data(&record, &row_object);
+
+        assert_eq!(data.get("limit").and_then(|value| value.as_i64()), Some(20));
+        assert_eq!(data.get("offset").and_then(|value| value.as_i64()), Some(5));
+        let items = data
+            .get("items")
+            .and_then(|value| value.as_array())
+            .expect("query-one list payload should include items array");
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].get("id").and_then(|value| value.as_str()),
+            Some("task-1")
+        );
+    }
+
+    #[test]
+    fn derive_query_one_success_data_handles_nested_params_payload() {
+        let record = LasmDbRecord {
+            id: 13,
+            op: "queryOne".to_string(),
+            db: 1,
+            template: "select id from wb_tasks where status = $1 order by created_at_ms desc, id desc limit $2 offset $3".to_string(),
+            params: "[{\"skip\":1},\"25\",\"7\"]".to_string(),
+            tx: 0,
+            affected_rows: 0,
+            created_at_ms: 13,
+        };
+
+        let row_object = serde_json::json!({ "id": "task-fallback" });
+        let data = derive_lasm_query_one_success_data(&record, &row_object);
+        assert_eq!(data.get("limit").and_then(|value| value.as_i64()), Some(25));
+        assert_eq!(data.get("offset").and_then(|value| value.as_i64()), Some(7));
     }
 }
