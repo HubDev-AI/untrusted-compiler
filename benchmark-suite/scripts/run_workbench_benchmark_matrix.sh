@@ -444,6 +444,9 @@ bench_port_base="$bench_port"
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
+sec4_default_bench_bin="${repo_root}/target/debug/sec4"
+sec4_bench_bin="${BENCH_WORKBENCH_SEC4_BIN:-$sec4_default_bench_bin}"
+sec4_runner_bin=""
 
 normalize_repo_path() {
   local path="$1"
@@ -823,6 +826,38 @@ else
   BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
+ensure_sec4_bench_runner_ready() {
+  if [[ ",$runnable_impls_csv," != *",sec4,"* ]] && [[ ",$runnable_impls_csv," != *",sec4-lasm,"* ]]; then
+    return 0
+  fi
+  if [ "$dry_run" = "true" ]; then
+    return 0
+  fi
+  if [ -x "$sec4_bench_bin" ]; then
+    sec4_runner_bin="$sec4_bench_bin"
+    return 0
+  fi
+  if [ "$sec4_bench_bin" != "$sec4_default_bench_bin" ]; then
+    echo "configured sec4 benchmark binary is not executable: $sec4_bench_bin" >&2
+    return 1
+  fi
+  echo "building sec4 benchmark runner binary once: $sec4_default_bench_bin" >&2
+  (
+    cd "$repo_root"
+    cargo build -q -p sec4 --bin sec4
+  ) || return 1
+  if [ ! -x "$sec4_default_bench_bin" ]; then
+    echo "sec4 benchmark binary missing after build: $sec4_default_bench_bin" >&2
+    return 1
+  fi
+  sec4_runner_bin="$sec4_default_bench_bin"
+  return 0
+}
+
+if ! ensure_sec4_bench_runner_ready; then
+  exit 2
+fi
+
 current_bench_port="$bench_port_base"
 current_base_url="http://127.0.0.1:${current_bench_port}"
 base_url="$current_base_url"
@@ -918,11 +953,15 @@ start_impl_service() {
 
   case "$impl" in
     sec4)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       service_temp_dir="$(mktemp -d "/tmp/sec4-workbench-bench-db.XXXXXX")"
       cleanup_temp_dir="true"
       (
         cd "$repo_root"
-        SEC4_RT_DB_BASE="$service_temp_dir" cargo run -q -p sec4 -- run \
+        SEC4_RT_DB_BASE="$service_temp_dir" "$sec4_runner_bin" run \
           --path "$service_abs" \
           --backend c \
           --port "$current_bench_port" \
@@ -930,6 +969,10 @@ start_impl_service() {
       ) >"$log_file" 2>&1 &
       ;;
     sec4-lasm)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       if [ "$lasm_db_adapter" = "sqlite" ]; then
         if [ -n "$lasm_db_base" ]; then
           service_temp_dir="$lasm_db_base"
@@ -943,7 +986,7 @@ start_impl_service() {
           cd "$repo_root"
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
-          cargo run -q -p sec4 -- run \
+          "$sec4_runner_bin" run \
             --path "$service_abs" \
             --backend lasm \
             --db-adapter sqlite \
@@ -958,7 +1001,7 @@ start_impl_service() {
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
-            cargo run -q -p sec4 -- run \
+            "$sec4_runner_bin" run \
               --path "$service_abs" \
               --backend lasm \
               --db-adapter postgres \
