@@ -1,10 +1,20 @@
 use crate::lasm_db_client::{
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
     resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
+    resolve_lasm_db_params_max_bytes as resolve_lasm_db_params_max_bytes_config,
+    resolve_lasm_db_params_max_entries as resolve_lasm_db_params_max_entries_config,
+    resolve_lasm_db_query_one_row_max_bytes as resolve_lasm_db_query_one_row_max_bytes_config,
+    resolve_lasm_db_query_one_row_max_columns as resolve_lasm_db_query_one_row_max_columns_config,
+    resolve_lasm_db_sql_template_max_bytes as resolve_lasm_db_sql_template_max_bytes_config,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
     run_lasm_query_one_operation_with_adapter,
     set_lasm_db_op_sequence_max_override as set_lasm_db_op_sequence_max_override_config,
+    set_lasm_db_params_max_bytes_override as set_lasm_db_params_max_bytes_override_config,
+    set_lasm_db_params_max_entries_override as set_lasm_db_params_max_entries_override_config,
+    set_lasm_db_query_one_row_max_bytes_override as set_lasm_db_query_one_row_max_bytes_override_config,
+    set_lasm_db_query_one_row_max_columns_override as set_lasm_db_query_one_row_max_columns_override_config,
+    set_lasm_db_sql_template_max_bytes_override as set_lasm_db_sql_template_max_bytes_override_config,
     validate_lasm_internal_db_operation_sequence_count, LasmExecTxSource,
     LasmInternalDbOperationSequenceValidationError, LasmInternalDbSequenceFailure,
     LasmInternalDbSequenceState, LasmLockedOperationError, LasmPreparedDbOperationParams,
@@ -25,40 +35,7 @@ use crate::{
     LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 use std::collections::BTreeMap;
-use std::env;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard, OnceLock};
-
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_SQL_TEMPLATE_MAX_BYTES";
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT: usize = 64 * 1024;
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX: usize = 4 * 1024 * 1024;
-const LASM_DB_PARAMS_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_BYTES";
-const LASM_DB_PARAMS_MAX_BYTES_DEFAULT: usize = 128 * 1024;
-const LASM_DB_PARAMS_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_PARAMS_MAX_BYTES_MAX: usize = 8 * 1024 * 1024;
-const LASM_DB_PARAMS_MAX_ENTRIES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_ENTRIES";
-const LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT: usize = 2048;
-const LASM_DB_PARAMS_MAX_ENTRIES_MIN: usize = 1;
-const LASM_DB_PARAMS_MAX_ENTRIES_MAX: usize = 65_536;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_BYTES";
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
-const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX: usize = 16 * 1024 * 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS";
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT: usize = 1024;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN: usize = 1;
-const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX: usize = 16_384;
-static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_PARAMS_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
+use std::sync::{Mutex, MutexGuard};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct LasmDbRuntimeLimitOverrides {
@@ -70,39 +47,12 @@ pub(crate) struct LasmDbRuntimeLimitOverrides {
     pub(crate) op_sequence_max: Option<usize>,
 }
 
-#[inline(always)]
-fn resolve_lasm_db_sql_template_max_bytes() -> usize {
-    let override_value = LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
-        );
-    }
-    *LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_SQL_TEMPLATE_MAX_BYTES_ENV) else {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_SQL_TEMPLATE_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MIN,
-            LASM_DB_SQL_TEMPLATE_MAX_BYTES_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_sql_template_max_bytes_limit() -> usize {
-    resolve_lasm_db_sql_template_max_bytes()
+    resolve_lasm_db_sql_template_max_bytes_config()
 }
 
 pub(crate) fn set_lasm_db_sql_template_max_bytes_override(value: Option<usize>) {
-    LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_sql_template_max_bytes_override_config(value);
 }
 
 #[inline(always)]
@@ -112,7 +62,7 @@ fn enforce_lasm_db_sql_template_max_bytes(
     template: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_sql_template_max_bytes();
+    let max_bytes = lasm_db_sql_template_max_bytes_limit();
     let template_bytes = template.as_bytes().len();
     if template_bytes <= max_bytes {
         return true;
@@ -132,33 +82,12 @@ fn enforce_lasm_db_sql_template_max_bytes(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_params_max_bytes() -> usize {
-    let override_value = LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX);
-    }
-    *LASM_DB_PARAMS_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_BYTES_ENV) else {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_PARAMS_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(LASM_DB_PARAMS_MAX_BYTES_MIN, LASM_DB_PARAMS_MAX_BYTES_MAX)
-    })
-}
-
 pub(crate) fn lasm_db_params_max_bytes_limit() -> usize {
-    resolve_lasm_db_params_max_bytes()
+    resolve_lasm_db_params_max_bytes_config()
 }
 
 pub(crate) fn set_lasm_db_params_max_bytes_override(value: Option<usize>) {
-    LASM_DB_PARAMS_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_params_max_bytes_override_config(value);
 }
 
 #[inline(always)]
@@ -168,7 +97,7 @@ fn enforce_lasm_db_params_max_bytes(
     params: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_params_max_bytes();
+    let max_bytes = lasm_db_params_max_bytes_limit();
     let params_bytes = params.as_bytes().len();
     if params_bytes <= max_bytes {
         return true;
@@ -218,39 +147,12 @@ fn enforce_lasm_db_params_required(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_params_max_entries() -> usize {
-    let override_value = LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
-            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
-        );
-    }
-    *LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_PARAMS_MAX_ENTRIES_ENV) else {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_PARAMS_MAX_ENTRIES_MIN,
-            LASM_DB_PARAMS_MAX_ENTRIES_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_params_max_entries_limit() -> usize {
-    resolve_lasm_db_params_max_entries()
+    resolve_lasm_db_params_max_entries_config()
 }
 
 pub(crate) fn set_lasm_db_params_max_entries_override(value: Option<usize>) {
-    LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_params_max_entries_override_config(value);
 }
 
 #[inline(always)]
@@ -291,7 +193,7 @@ fn enforce_lasm_db_params_max_entries(
     normalized_params: &str,
     trace_id: &str,
 ) -> bool {
-    let max_entries = resolve_lasm_db_params_max_entries();
+    let max_entries = lasm_db_params_max_entries_limit();
     let entries = lasm_db_params_entry_count(parsed, normalized_params);
     if entries <= max_entries {
         return true;
@@ -312,39 +214,12 @@ fn enforce_lasm_db_params_max_entries(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_query_one_row_max_bytes() -> usize {
-    let override_value = LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX,
-        );
-    }
-    *LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV) else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_query_one_row_max_bytes_limit() -> usize {
-    resolve_lasm_db_query_one_row_max_bytes()
+    resolve_lasm_db_query_one_row_max_bytes_config()
 }
 
 pub(crate) fn set_lasm_db_query_one_row_max_bytes_override(value: Option<usize>) {
-    LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_query_one_row_max_bytes_override_config(value);
 }
 
 #[inline(always)]
@@ -353,7 +228,7 @@ fn enforce_lasm_db_query_one_row_max_bytes(
     row: &str,
     trace_id: &str,
 ) -> bool {
-    let max_bytes = resolve_lasm_db_query_one_row_max_bytes();
+    let max_bytes = lasm_db_query_one_row_max_bytes_limit();
     if row.as_bytes().len() <= max_bytes {
         return true;
     }
@@ -372,39 +247,12 @@ fn enforce_lasm_db_query_one_row_max_bytes(
     false
 }
 
-#[inline(always)]
-fn resolve_lasm_db_query_one_row_max_columns() -> usize {
-    let override_value = LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
-        );
-    }
-    *LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED.get_or_init(|| {
-        let Ok(raw) = env::var(LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_ENV) else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        }
-        let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_DEFAULT;
-        };
-        parsed.clamp(
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MIN,
-            LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX,
-        )
-    })
-}
-
 pub(crate) fn lasm_db_query_one_row_max_columns_limit() -> usize {
-    resolve_lasm_db_query_one_row_max_columns()
+    resolve_lasm_db_query_one_row_max_columns_config()
 }
 
 pub(crate) fn set_lasm_db_query_one_row_max_columns_override(value: Option<usize>) {
-    LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_query_one_row_max_columns_override_config(value);
 }
 
 pub(crate) fn apply_lasm_db_runtime_limit_overrides(overrides: LasmDbRuntimeLimitOverrides) {
@@ -431,7 +279,7 @@ fn enforce_lasm_db_query_one_row_max_columns(
     row_object: &serde_json::Value,
     trace_id: &str,
 ) -> bool {
-    let max_columns = resolve_lasm_db_query_one_row_max_columns();
+    let max_columns = lasm_db_query_one_row_max_columns_limit();
     let columns = lasm_db_query_one_row_column_count(row_object);
     if columns <= max_columns {
         return true;
