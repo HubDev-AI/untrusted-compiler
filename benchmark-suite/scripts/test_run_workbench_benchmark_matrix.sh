@@ -104,6 +104,11 @@ cat >"$matrix_path" <<EOF
 {
   "implementations": [
     {
+      "impl": "sec4-lasm",
+      "status": "implemented",
+      "servicePath": "${service_rel}"
+    },
+    {
       "impl": "node",
       "status": "implemented",
       "servicePath": "${service_rel}"
@@ -199,6 +204,43 @@ if [ "$relaxed_status" -ne 0 ]; then
 fi
 if ! jq -e '.failOnImplFailure == 0 and .totals.failed == 1' "$relaxed_runs" >/dev/null; then
   echo "expected relaxed benchmark summary to keep failed totals with failOnImplFailure=0" >&2
+  exit 1
+fi
+
+auto_mode_compare_missing="${tmp_root}/workbench-lasm-mode-compare-repeats-missing.json"
+auto_out="$(
+  PATH="${bin_dir}:$PATH" \
+    BENCH_REQUIRE_WRK2=1 \
+    FAKE_WRK2_MARKER="$wrk_marker" \
+    "${suite_dir}/scripts/run_workbench_benchmark_matrix.sh" \
+      --dry-run \
+      --matrix "$matrix_path" \
+      --impls sec4-lasm \
+      --endpoints wb-task-get \
+      --lasm-mode auto \
+      --lasm-mode-compare-repeats-file "$auto_mode_compare_missing" \
+      --port 18134 \
+      --out-runs "$out_runs" \
+      --out-compare "$out_compare" \
+      --out-analysis "$out_analysis" \
+      --out-report "$out_report" \
+      --out-report-html "$out_report_html" \
+      2>&1
+)"
+if ! grep -q 'warning: LASM auto mode recommendation unavailable (missing mode-compare artifact); generating fresh mode-compare artifact' <<<"$auto_out"; then
+  echo "expected auto mode missing-artifact generation warning in dry-run output" >&2
+  exit 1
+fi
+if ! grep -q 'run: .*run_workbench_lasm_mode_compare.sh .*--out .*workbench-lasm-mode-compare-repeats-missing.json .*--dry-run' <<<"$auto_out"; then
+  echo "expected auto mode dry-run to show delegated mode-compare generation command" >&2
+  exit 1
+fi
+if ! grep -q 'warning: LASM auto mode recommendation unavailable (missing mode-compare artifact); falling back to single mode' <<<"$auto_out"; then
+  echo "expected auto mode fallback warning in dry-run output" >&2
+  exit 1
+fi
+if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_out"; then
+  echo "expected auto mode fallback to single mode start marker in dry-run output" >&2
   exit 1
 fi
 
