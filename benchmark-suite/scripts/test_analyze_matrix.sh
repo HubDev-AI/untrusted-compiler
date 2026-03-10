@@ -50,7 +50,7 @@ if ! jq -e '.endpoints[] | select(.endpoint == "users-post") | .findings[] | sel
   exit 1
 fi
 
-# verify p99 unit normalization to milliseconds (us/ms/s)
+# verify p99 unit normalization to milliseconds (us/ms/s/m)
 units_matrix="$tmp/units-matrix.json"
 cat >"$units_matrix" <<'JSON'
 {
@@ -70,7 +70,7 @@ cat >"$units_matrix" <<'JSON'
         {"impl":"sec4","endpoint":"mixed-units","targetRps":100,"requestsPerSec":100,"p99":"500us","loadGenerator":"wrk2","constantRate":true},
         {"impl":"go","endpoint":"mixed-units","targetRps":100,"requestsPerSec":95,"p99":"2ms","loadGenerator":"wrk2","constantRate":true},
         {"impl":"node","endpoint":"mixed-units","targetRps":100,"requestsPerSec":90,"p99":"2500us","loadGenerator":"wrk2","constantRate":true},
-        {"impl":"rust","endpoint":"mixed-units","targetRps":100,"requestsPerSec":80,"p99":"0.5s","loadGenerator":"wrk2","constantRate":true}
+        {"impl":"rust","endpoint":"mixed-units","targetRps":100,"requestsPerSec":80,"p99":"1m","loadGenerator":"wrk2","constantRate":true}
       ]
     }
   ]
@@ -85,12 +85,12 @@ if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99MinM
   exit 1
 fi
 
-if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99MaxMs == 500' "$units_analysis" >/dev/null; then
-  echo "expected p99MaxMs to normalize 0.5s -> 500ms" >&2
+if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99MaxMs == 60000' "$units_analysis" >/dev/null; then
+  echo "expected p99MaxMs to normalize 1m -> 60000ms" >&2
   exit 1
 fi
 
-if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99SpreadX == 1000' "$units_analysis" >/dev/null; then
+if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99SpreadX == 120000' "$units_analysis" >/dev/null; then
   echo "expected p99SpreadX to use normalized millisecond units" >&2
   exit 1
 fi
