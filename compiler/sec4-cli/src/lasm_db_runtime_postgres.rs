@@ -137,9 +137,11 @@ const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MAX: usize = 1024;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL";
-const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT: usize = 4;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MAX: usize = 4096;
+const LASM_RUNTIME_MAX_CONCURRENCY_ENV: &str = "SEC4_RT_LASM_MAX_CONCURRENCY";
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP: usize = 16;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP: usize = 32;
 
 #[derive(Default)]
 struct LasmPostgresSharedClientPoolState {
@@ -169,6 +171,25 @@ static LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED: OnceLock<usize> = 
 static LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED: OnceLock<usize> = OnceLock::new();
+
+fn resolve_lasm_runtime_max_concurrency_hint() -> Option<usize> {
+    let raw = std::env::var(LASM_RUNTIME_MAX_CONCURRENCY_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<usize>().ok().filter(|value| *value > 0)
+}
+
+fn resolve_lasm_postgres_shared_client_auto_default(max_cap: usize) -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => hint.clamp(
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT,
+            max_cap.max(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT),
+        ),
+        None => LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT,
+    }
+}
 
 fn resolve_lasm_postgres_shared_client_max_idle_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED.get_or_init(|| {
@@ -211,14 +232,20 @@ fn resolve_lasm_postgres_shared_client_max_total_idle() -> usize {
 fn resolve_lasm_postgres_shared_client_max_active_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED.get_or_init(|| {
         let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_ENV) else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         };
         parsed.clamp(
             LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN,
@@ -230,14 +257,20 @@ fn resolve_lasm_postgres_shared_client_max_active_per_key() -> usize {
 fn resolve_lasm_postgres_shared_client_max_active_total() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED.get_or_init(|| {
         let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV) else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         };
         parsed.clamp(
             LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN,
