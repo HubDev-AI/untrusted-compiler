@@ -7,16 +7,12 @@ use super::{
     run_lasm_postgres_query_one_unlocked_operation, LasmUnlockedPostgresExecTxOperationError,
     LasmUnlockedPostgresOperationError,
 };
-use crate::lasm_db_runtime_postgres::{
-    parse_lasm_postgres_query_template_and_params,
-    parse_lasm_postgres_query_template_and_params_value, LasmPostgresParam,
-};
+use crate::lasm_db_runtime_postgres::LasmPostgresParam;
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
 };
 use crate::lasm_db_runtime_sqlite::{
-    parse_lasm_sqlite_query_params, parse_lasm_sqlite_query_params_value, run_lasm_sqlite_exec,
-    run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
+    run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
 use crate::{LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState};
 use std::sync::Mutex;
@@ -125,39 +121,6 @@ pub(crate) enum LasmLockedExecTxOperationError {
     StateUnavailable,
     AdapterMismatch,
     Runtime(String),
-}
-
-pub(crate) fn parse_lasm_db_template_and_params(
-    adapter: LasmDbRecordsAdapter,
-    template: &str,
-    params: &str,
-    parsed_params: Option<&serde_json::Value>,
-) -> Result<LasmPreparedDbOperationParams, String> {
-    match adapter {
-        LasmDbRecordsAdapter::Postgres => {
-            let result = if let Some(parsed) = parsed_params {
-                parse_lasm_postgres_query_template_and_params_value(template, parsed)
-            } else {
-                parse_lasm_postgres_query_template_and_params(template, params)
-            };
-            let (template, query_params) = result?;
-            Ok(LasmPreparedDbOperationParams::Postgres {
-                template,
-                params: query_params,
-            })
-        }
-        LasmDbRecordsAdapter::Sqlite => {
-            let query_params = if let Some(parsed) = parsed_params {
-                parse_lasm_sqlite_query_params_value(parsed)
-            } else {
-                parse_lasm_sqlite_query_params(params)
-            }?;
-            Ok(LasmPreparedDbOperationParams::Sqlite {
-                params: query_params,
-            })
-        }
-        LasmDbRecordsAdapter::RecordsLog => Ok(LasmPreparedDbOperationParams::None),
-    }
 }
 
 pub(crate) fn run_lasm_db_exec_operation(

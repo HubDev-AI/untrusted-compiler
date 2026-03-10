@@ -1,12 +1,12 @@
 use super::config::build_lasm_postgres_thread_local_config;
 use super::drop_lasm_db_tx_handle;
 use super::lasm_db_records_capture_enabled;
-use super::operations::LasmPreparedDbOperationParams;
 use super::persist_lasm_db_record_after_unlock;
 use super::records::{
     allocate_lasm_db_ephemeral_record, allocate_lasm_db_runtime_record,
     append_lasm_db_record_in_memory_with_compaction_snapshot,
 };
+use super::LasmPreparedDbOperationParams;
 use crate::lasm_db_runtime_postgres::{
     connect_lasm_postgres_tx_client, discard_lasm_postgres_tx_client, put_lasm_postgres_tx_client,
     return_lasm_postgres_tx_client_to_pool, run_lasm_postgres_exec_thread_local,
