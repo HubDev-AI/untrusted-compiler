@@ -56,6 +56,59 @@ pub(crate) enum LasmUnlockedPostgresExecTxOperationError {
     Runtime(String),
 }
 
+fn release_lasm_postgres_tx_handle_after_config_error(
+    state: &mut LasmDynamicResponseState,
+    tx: i64,
+    keep_allocated_tx_handle: bool,
+    allocated_tx_handle: Option<i64>,
+) {
+    if keep_allocated_tx_handle {
+        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+            tx_state.active = false;
+            tx_state.in_use = false;
+        }
+    } else if allocated_tx_handle.is_some() {
+        drop_lasm_db_tx_handle(state, tx);
+    } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+        tx_state.in_use = false;
+    }
+}
+
+fn release_lasm_postgres_tx_handle_after_client_error(
+    state: &mut LasmDynamicResponseState,
+    tx: i64,
+    keep_allocated_tx_handle: bool,
+) {
+    if keep_allocated_tx_handle {
+        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+            tx_state.active = false;
+            tx_state.in_use = false;
+        }
+    } else {
+        drop_lasm_db_tx_handle(state, tx);
+    }
+}
+
+fn finalize_lasm_postgres_tx_handle_after_success(
+    state: &mut LasmDynamicResponseState,
+    tx: i64,
+    retained_tx_active: bool,
+    should_finalize_postgres_tx: bool,
+    retained_client: &mut Option<LasmPostgresThreadLocalClient>,
+) {
+    if should_finalize_postgres_tx {
+        drop_lasm_db_tx_handle(state, tx);
+    } else {
+        if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
+            tx_state.active = retained_tx_active;
+            tx_state.in_use = false;
+        }
+        if let Some(client) = retained_client.take() {
+            put_lasm_postgres_tx_client(state, tx, client);
+        }
+    }
+}
+
 pub(crate) fn run_lasm_postgres_exec_tx_client_operation(
     config: &LasmPostgresThreadLocalConfig,
     tx: i64,
@@ -333,16 +386,12 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
         let config = match build_lasm_postgres_thread_local_config(&mut state) {
             Ok(config) => config,
             Err(message) => {
-                if keep_allocated_tx_handle {
-                    if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                        tx_state.active = false;
-                        tx_state.in_use = false;
-                    }
-                } else if allocated_tx_handle.is_some() {
-                    drop_lasm_db_tx_handle(&mut state, tx);
-                } else if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                    tx_state.in_use = false;
-                }
+                release_lasm_postgres_tx_handle_after_config_error(
+                    &mut state,
+                    tx,
+                    keep_allocated_tx_handle,
+                    allocated_tx_handle,
+                );
                 return Err(LasmUnlockedPostgresExecTxOperationError::Runtime(message));
             }
         };
@@ -368,17 +417,11 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
             let mut state = dynamic_state
                 .lock()
                 .map_err(|_| LasmUnlockedPostgresExecTxOperationError::StateUnavailable)?;
-            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                tx_state.active = false;
-                tx_state.in_use = false;
-            }
-            if keep_allocated_tx_handle {
-                if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                    tx_state.active = false;
-                }
-            } else {
-                drop_lasm_db_tx_handle(&mut state, tx);
-            }
+            release_lasm_postgres_tx_handle_after_client_error(
+                &mut state,
+                tx,
+                keep_allocated_tx_handle,
+            );
             return Err(LasmUnlockedPostgresExecTxOperationError::Runtime(
                 error.message,
             ));
@@ -399,17 +442,13 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
             }
             return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
         }
-        if should_finalize_postgres_tx {
-            drop_lasm_db_tx_handle(&mut state, tx);
-        } else {
-            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                tx_state.active = retained_tx_active;
-                tx_state.in_use = false;
-            }
-            if let Some(client) = retained_client.take() {
-                put_lasm_postgres_tx_client(&mut state, tx, client);
-            }
-        }
+        finalize_lasm_postgres_tx_handle_after_success(
+            &mut state,
+            tx,
+            retained_tx_active,
+            should_finalize_postgres_tx,
+            &mut retained_client,
+        );
         return Ok(LasmUnlockedPostgresExecTxSuccess {
             record: allocate_lasm_db_ephemeral_record(
                 "execTx",
@@ -434,17 +473,13 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
             }
             return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
         }
-        if should_finalize_postgres_tx {
-            drop_lasm_db_tx_handle(&mut state, tx);
-        } else {
-            if let Some(tx_state) = state.db_tx_handles.get_mut(&tx) {
-                tx_state.active = retained_tx_active;
-                tx_state.in_use = false;
-            }
-            if let Some(client) = retained_client.take() {
-                put_lasm_postgres_tx_client(&mut state, tx, client);
-            }
-        }
+        finalize_lasm_postgres_tx_handle_after_success(
+            &mut state,
+            tx,
+            retained_tx_active,
+            should_finalize_postgres_tx,
+            &mut retained_client,
+        );
         let record = allocate_lasm_db_runtime_record(
             &mut state,
             "execTx",
