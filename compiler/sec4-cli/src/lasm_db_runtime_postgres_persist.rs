@@ -277,7 +277,7 @@ fn lasm_postgres_persist_config_lock(key: &str) -> Arc<Mutex<()>> {
         .clone()
 }
 
-fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
+fn run_lasm_postgres_persist_task_batch(tasks: &mut Vec<LasmPostgresPersistTask>) {
     if tasks.is_empty() {
         return;
     }
@@ -289,7 +289,7 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
             Option<Vec<LasmDbRecord>>,
         ),
     > = HashMap::new();
-    for task in tasks {
+    for task in tasks.drain(..) {
         let LasmPostgresPersistTask {
             config_key,
             config,
@@ -382,8 +382,9 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
             match thread::Builder::new()
                 .name(format!("sec4-lasm-postgres-persist-{worker_index}"))
                 .spawn(move || {
+                    let mut batch = Vec::with_capacity(batch_max);
                     while let Ok(task) = worker_receiver.recv() {
-                        let mut batch = Vec::with_capacity(batch_max);
+                        batch.clear();
                         batch.push(task);
                         for _ in 1..batch_max {
                             match worker_receiver.try_recv() {
@@ -393,7 +394,7 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
                                 }
                             }
                         }
-                        run_lasm_postgres_persist_task_batch(batch);
+                        run_lasm_postgres_persist_task_batch(&mut batch);
                     }
                 }) {
                 Ok(_) => {
@@ -431,7 +432,8 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
     let task = LasmPostgresPersistTask::new(config.clone(), record.clone(), compaction_snapshot);
     if !LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.load(Ordering::Relaxed) {
         LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-        run_lasm_postgres_persist_task_batch(vec![task]);
+        let mut tasks = vec![task];
+        run_lasm_postgres_persist_task_batch(&mut tasks);
         return;
     }
     match sender.try_send(task) {
@@ -456,19 +458,22 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
                     Err(SendError(disconnected_task)) => {
                         LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
                         LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-                        run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+                        let mut tasks = vec![disconnected_task];
+                        run_lasm_postgres_persist_task_batch(&mut tasks);
                     }
                 },
                 LasmPostgresPersistQueueFullMode::SyncFallback => {
                     LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-                    run_lasm_postgres_persist_task_batch(vec![full_task]);
+                    let mut tasks = vec![full_task];
+                    run_lasm_postgres_persist_task_batch(&mut tasks);
                 }
             }
         }
         Err(TrySendError::Disconnected(disconnected_task)) => {
             LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
             LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-            run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+            let mut tasks = vec![disconnected_task];
+            run_lasm_postgres_persist_task_batch(&mut tasks);
         }
     }
 }
