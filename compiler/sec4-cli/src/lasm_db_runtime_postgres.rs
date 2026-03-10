@@ -376,21 +376,15 @@ fn parse_lasm_postgres_query_param_value(value: &serde_json::Value) -> LasmPostg
 fn parse_lasm_postgres_positional_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<Vec<LasmPostgresParam>, String> {
-    let mut indexed = Vec::with_capacity(entries.len());
-    let mut max_index = 0usize;
+    let mut params = Vec::with_capacity(entries.len());
     for (key, value) in entries {
         let index = parse_lasm_postgres_positional_param_index(key.as_str()).ok_or_else(|| {
             format!("postgres params object key `{key}` is not a valid positional index")
         })?;
-        max_index = max_index.max(index);
-        indexed.push((index, parse_lasm_postgres_query_param_value(value)));
-    }
-    let mut params = Vec::with_capacity(max_index);
-    for _ in 0..max_index {
-        params.push(LasmPostgresParam::Null(None));
-    }
-    for (index, value) in indexed {
-        params[index - 1] = value;
+        if params.len() < index {
+            params.resize(index, LasmPostgresParam::Null(None));
+        }
+        params[index - 1] = parse_lasm_postgres_query_param_value(value);
     }
     Ok(params)
 }
@@ -452,12 +446,17 @@ fn parse_lasm_postgres_named_object_params(
             normalize_lasm_postgres_named_param_key(key.as_str()).ok_or_else(|| {
                 format!("postgres params object key `{key}` is not a valid named parameter key")
             })?;
-        let normalized = normalized.to_string();
         let value = parse_lasm_postgres_query_param_value(value);
-        if named.insert(normalized.clone(), value).is_some() {
-            return Err(format!(
-                "postgres params object contains duplicate normalized key `{normalized}`"
-            ));
+        match named.entry(normalized.to_string()) {
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                return Err(format!(
+                    "postgres params object contains duplicate normalized key `{}`",
+                    occupied.key()
+                ));
+            }
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(value);
+            }
         }
     }
     Ok(named)
