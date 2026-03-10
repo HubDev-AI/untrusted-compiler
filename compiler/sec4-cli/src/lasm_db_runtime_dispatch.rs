@@ -762,34 +762,60 @@ fn parse_lasm_record_params_array(record: &LasmDbRecord) -> Option<Vec<serde_jso
     Some(values.clone())
 }
 
-fn lasm_param_string(values: &[serde_json::Value], index: usize) -> Option<String> {
-    values
+fn parse_lasm_record_flat_param_values(record: &LasmDbRecord) -> Option<Vec<&str>> {
+    crate::lasm_request_template::parse_lasm_flat_json_array_elements(record.params.as_str())
+}
+
+fn lasm_record_param_string(record: &LasmDbRecord, index: usize) -> Option<String> {
+    if let Some(value) =
+        crate::lasm_request_template::parse_lasm_flat_json_array_string_element(
+            record.params.as_str(),
+            index,
+        )
+    {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    let fallback_values = parse_lasm_record_params_array(record)?;
+    fallback_values
         .get(index)
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned)
 }
 
-fn lasm_param_i64(values: &[serde_json::Value], index: usize) -> Option<i64> {
-    let value = values.get(index)?;
-    if let Some(number) = value.as_i64() {
-        return Some(number);
+fn lasm_record_param_i64(record: &LasmDbRecord, index: usize) -> Option<i64> {
+    if let Some(values) = parse_lasm_record_flat_param_values(record) {
+        let raw = values.get(index)?.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+            let decoded = serde_json::from_str::<String>(raw).ok()?;
+            return decoded.trim().parse::<i64>().ok();
+        }
+        if let Ok(number) = raw.parse::<i64>() {
+            return Some(number);
+        }
     }
-    value
-        .as_str()
-        .and_then(|raw| raw.trim().parse::<i64>().ok())
+    let fallback_values = parse_lasm_record_params_array(record)?;
+    let value = fallback_values.get(index)?;
+    value.as_i64().or_else(|| {
+        value
+            .as_str()
+            .and_then(|raw| raw.trim().parse::<i64>().ok())
+    })
 }
 
 fn derive_lasm_exec_like_success_data(
     record: &LasmDbRecord,
     affected_rows: u64,
 ) -> serde_json::Value {
-    let Some(values) = parse_lasm_record_params_array(record) else {
-        return serde_json::json!({ "affectedRows": affected_rows });
-    };
     if record.op == "execTx" {
         if let (Some(comment_id), Some(task_id)) =
-            (lasm_param_string(&values, 0), lasm_param_string(&values, 1))
+            (lasm_record_param_string(record, 0), lasm_record_param_string(record, 1))
         {
             return serde_json::json!({
                 "taskId": task_id,
@@ -797,7 +823,7 @@ fn derive_lasm_exec_like_success_data(
             });
         }
     }
-    if let Some(id) = lasm_param_string(&values, 0) {
+    if let Some(id) = lasm_record_param_string(record, 0) {
         return serde_json::json!({ "id": id });
     }
     serde_json::json!({ "affectedRows": affected_rows })
@@ -813,13 +839,11 @@ fn derive_lasm_query_one_success_data(
     {
         let mut limit = 20_i64;
         let mut offset = 0_i64;
-        if let Some(values) = parse_lasm_record_params_array(record) {
-            if let Some(value) = lasm_param_i64(&values, 1) {
-                limit = value;
-            }
-            if let Some(value) = lasm_param_i64(&values, 2) {
-                offset = value;
-            }
+        if let Some(value) = lasm_record_param_i64(record, 1) {
+            limit = value;
+        }
+        if let Some(value) = lasm_record_param_i64(record, 2) {
+            offset = value;
         }
         return serde_json::json!({
             "items": [row_object.clone()],
@@ -2143,7 +2167,10 @@ fn materialize_lasm_internal_header_value(
 
 #[cfg(test)]
 mod tests {
-    use super::apply_lasm_internal_db_operation_materialization;
+    use super::{
+        apply_lasm_internal_db_operation_materialization, derive_lasm_exec_like_success_data,
+        derive_lasm_query_one_success_data,
+    };
     use crate::{
         lasm_internal_db_indexed_header, LasmDbRecord, LasmDbRecordsAdapter,
         LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -3292,5 +3319,60 @@ mod tests {
             state.db_tx_handles.is_empty(),
             "sequence cleanup should release tx handles"
         );
+    }
+
+    #[test]
+    fn derive_exec_like_success_data_extracts_ids_from_flat_params() {
+        let tx_record = LasmDbRecord {
+            id: 1,
+            op: "execTx".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_comments VALUES ($1,$2)".to_string(),
+            params: "[\"comment-1\",\"task-1\"]".to_string(),
+            tx: 1,
+            affected_rows: 1,
+            created_at_ms: 1,
+        };
+        let tx_data = derive_lasm_exec_like_success_data(&tx_record, 1);
+        assert_eq!(tx_data.get("commentId").and_then(|value| value.as_str()), Some("comment-1"));
+        assert_eq!(tx_data.get("taskId").and_then(|value| value.as_str()), Some("task-1"));
+
+        let exec_record = LasmDbRecord {
+            id: 2,
+            op: "exec".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_tasks VALUES ($1)".to_string(),
+            params: "[\"task-9\"]".to_string(),
+            tx: 0,
+            affected_rows: 1,
+            created_at_ms: 2,
+        };
+        let exec_data = derive_lasm_exec_like_success_data(&exec_record, 1);
+        assert_eq!(exec_data.get("id").and_then(|value| value.as_str()), Some("task-9"));
+    }
+
+    #[test]
+    fn derive_query_one_success_data_extracts_limit_offset_from_flat_params() {
+        let record = LasmDbRecord {
+            id: 3,
+            op: "queryOne".to_string(),
+            db: 1,
+            template: "select id from wb_tasks where status = $1 order by created_at_ms desc, id desc limit $2 offset $3".to_string(),
+            params: "[\"open\",20,5]".to_string(),
+            tx: 0,
+            affected_rows: 0,
+            created_at_ms: 3,
+        };
+        let row_object = serde_json::json!({ "id": "task-1" });
+        let data = derive_lasm_query_one_success_data(&record, &row_object);
+
+        assert_eq!(data.get("limit").and_then(|value| value.as_i64()), Some(20));
+        assert_eq!(data.get("offset").and_then(|value| value.as_i64()), Some(5));
+        let items = data
+            .get("items")
+            .and_then(|value| value.as_array())
+            .expect("query-one list payload should include items array");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].get("id").and_then(|value| value.as_str()), Some("task-1"));
     }
 }
