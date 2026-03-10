@@ -45,6 +45,7 @@ lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABL
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_auto_mode_compare_generate="${BENCH_WORKBENCH_LASM_AUTO_MODE_COMPARE_GENERATE:-1}"
+lasm_mode_resolution_source="manual"
 lasm_endpoint_modes="${BENCH_WORKBENCH_LASM_ENDPOINT_MODES:-}"
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
 lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
@@ -770,7 +771,9 @@ if [ -n "$lasm_mode" ]; then
     if ! is_selected_impl "sec4-lasm"; then
       echo "warning: LASM auto mode requested without sec4-lasm selected; using single mode defaults" >&2
       lasm_mode="single"
+      lasm_mode_resolution_source="auto-no-lasm-fallback-single"
     else
+      auto_generated_attempted="false"
       resolved_auto_mode=""
       if resolve_lasm_auto_mode_recommendation \
         "$lasm_mode_compare_repeats_file" \
@@ -782,6 +785,7 @@ if [ -n "$lasm_mode" ]; then
         if [ "$lasm_auto_mode_compare_generate" = "1" ]; then
           echo "warning: LASM auto mode recommendation unavailable (${lasm_auto_mode_resolution_error}); generating fresh mode-compare artifact" >&2
           if generate_lasm_auto_mode_compare_artifact "$lasm_mode_compare_repeats_file"; then
+            auto_generated_attempted="true"
             if resolve_lasm_auto_mode_recommendation \
               "$lasm_mode_compare_repeats_file" \
               "$requested_endpoints_norm" \
@@ -793,13 +797,22 @@ if [ -n "$lasm_mode" ]; then
         if [ -z "$resolved_auto_mode" ]; then
           echo "warning: LASM auto mode recommendation unavailable (${lasm_auto_mode_resolution_error}); falling back to single mode" >&2
           lasm_mode="single"
+          lasm_mode_resolution_source="auto-fallback-single"
         else
           lasm_mode="$resolved_auto_mode"
+          if [ "$auto_generated_attempted" = "true" ]; then
+            lasm_mode_resolution_source="auto-generated-artifact"
+          else
+            lasm_mode_resolution_source="auto-artifact"
+          fi
         fi
       else
         lasm_mode="$resolved_auto_mode"
+        lasm_mode_resolution_source="auto-artifact"
       fi
     fi
+  else
+    lasm_mode_resolution_source="explicit"
   fi
   case "$lasm_mode" in
     single)
@@ -1326,9 +1339,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
@@ -1456,6 +1469,7 @@ while IFS= read -r impl_row; do
     lasm_row_json="$(jq -nc \
       --arg dbAdapter "$lasm_db_adapter" \
       --arg mode "$(if [ -n "$lasm_endpoint_modes" ]; then printf '%s' mixed; else printf '%s' "$current_lasm_cluster_mode"; fi)" \
+      --arg modeSource "$lasm_mode_resolution_source" \
       --arg endpointModes "$lasm_endpoint_modes" \
       --argjson instances "$current_lasm_instances" \
       --argjson autoscaleMaxInstances "$current_lasm_autoscale_max_instances" \
@@ -1473,6 +1487,7 @@ while IFS= read -r impl_row; do
       '{
         dbAdapter: $dbAdapter,
         mode: $mode,
+        modeSource: $modeSource,
         endpointModes: (if $endpointModes == "" then null else $endpointModes end),
         instances: $instances,
         autoscaleMaxInstances: $autoscaleMaxInstances,
