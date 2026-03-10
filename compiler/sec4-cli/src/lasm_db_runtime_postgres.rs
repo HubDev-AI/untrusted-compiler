@@ -1360,21 +1360,17 @@ pub(crate) fn connect_lasm_postgres_tx_client(
     config: &LasmPostgresThreadLocalConfig,
 ) -> Result<LasmPostgresThreadLocalClient, String> {
     let key = lasm_postgres_thread_local_client_key(config);
-    checkout_lasm_postgres_shared_client_from_pool(
-        lasm_postgres_shared_clients_pool(),
-        config,
-        key.as_str(),
-    )
-    .map_err(|err| match err {
-        LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-        LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-            format_lasm_postgres_runtime_error(
-                "postgres transaction client connect failed",
-                &query_err,
-            )
-        }
-        LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-    })
+    checkout_lasm_postgres_shared_client_from_pool(lasm_postgres_shared_clients_pool(), config, key)
+        .map_err(|err| match err {
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres transaction client connect failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })
 }
 
 pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
@@ -1382,25 +1378,24 @@ pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
 ) -> Result<(), String> {
     let key = lasm_postgres_thread_local_client_key(config);
     let shared_pool = lasm_postgres_shared_clients_pool();
-    let shared_client = checkout_lasm_postgres_shared_client_from_pool(
-        shared_pool,
-        config,
-        key.as_str(),
-    )
-    .map_err(|err| match err {
-        LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-        LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-            format_lasm_postgres_runtime_error("postgres shared client prewarm failed", &query_err)
-        }
-        LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-    })?;
-    release_lasm_postgres_shared_client_to_pool(shared_pool, key.as_str(), shared_client, true);
+    let shared_client = checkout_lasm_postgres_shared_client_from_pool(shared_pool, config, key)
+        .map_err(|err| match err {
+            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                format_lasm_postgres_runtime_error(
+                    "postgres shared client prewarm failed",
+                    &query_err,
+                )
+            }
+            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+        })?;
+    release_lasm_postgres_shared_client_to_pool(shared_pool, key, shared_client, true);
 
     if lasm_db_records_persist_enabled() {
         let persist_pool = lasm_postgres_persist_clients_pool();
         let persist_client =
-            checkout_lasm_postgres_shared_client_from_pool(persist_pool, config, key.as_str())
-                .map_err(|err| match err {
+            checkout_lasm_postgres_shared_client_from_pool(persist_pool, config, key).map_err(
+                |err| match err {
                     LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
                     LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
                         format_lasm_postgres_runtime_error(
@@ -1409,13 +1404,9 @@ pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
                         )
                     }
                     LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-                })?;
-        release_lasm_postgres_shared_client_to_pool(
-            persist_pool,
-            key.as_str(),
-            persist_client,
-            true,
-        );
+                },
+            )?;
+        release_lasm_postgres_shared_client_to_pool(persist_pool, key, persist_client, true);
     }
 
     let tx_client = connect_lasm_postgres_tx_client(config)?;
@@ -1430,7 +1421,7 @@ pub(crate) fn return_lasm_postgres_tx_client_to_pool(
     let key = lasm_postgres_thread_local_client_key(config);
     release_lasm_postgres_shared_client_to_pool(
         lasm_postgres_shared_clients_pool(),
-        key.as_str(),
+        key,
         client,
         true,
     );
@@ -1443,7 +1434,7 @@ pub(crate) fn discard_lasm_postgres_tx_client(
     let key = lasm_postgres_thread_local_client_key(config);
     release_lasm_postgres_shared_client_to_pool(
         lasm_postgres_shared_clients_pool(),
-        key.as_str(),
+        key,
         client,
         false,
     );
