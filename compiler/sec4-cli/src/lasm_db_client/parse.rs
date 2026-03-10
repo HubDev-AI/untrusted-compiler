@@ -1,4 +1,4 @@
-use super::operations::LasmPreparedDbOperationParams;
+use super::types::LasmPreparedDbOperationParams;
 use crate::lasm_db_runtime_postgres::{
     parse_lasm_postgres_query_template_and_params,
     parse_lasm_postgres_query_template_and_params_value,
