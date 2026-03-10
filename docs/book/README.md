@@ -42,6 +42,14 @@ Canonical evidence set:
   - Postgres/adapter param parsing clone reduction on borrowed JSON values.
   - Persist queue batch-buffer reuse and bounded stale lock pruning.
   - Details: `docs/book/1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`.
+- 2026-03-10 post-alpha scaling pass 4 landed:
+  - repeated mode compare on full canonical endpoint set now published in:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats-postgres-full-pass4.json`
+  - latest mode recommendation synced to default:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+  - cross-runtime canonical rerun refreshed publication artifacts with totals:
+    - `passed=4 failed=0 skipped=0`
+  - details: `docs/book/1580-m39-post-alpha-scaling-pass-4-mode-compare-runtime-tuning-and-cross-runtime-rerun.md`.
 
 ## Chapter order
 - `00-preface.md`
@@ -1589,5 +1597,6 @@ Canonical evidence set:
 - `1577-m39-workbench-cross-runtime-rerun-and-list-slice-closeout.md`
 - `1578-m39-workbench-post-alpha-failure-mode-controls-and-mode-refresh.md`
 - `1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`
+- `1580-m39-post-alpha-scaling-pass-4-mode-compare-runtime-tuning-and-cross-runtime-rerun.md`
 
 As milestones progress, chapters will be added and linked from this index.
