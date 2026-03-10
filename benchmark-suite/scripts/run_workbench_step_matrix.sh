@@ -7,6 +7,7 @@ usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
           [--fail-on-impl-failure 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
+          [--lasm-auto-mode-compare-generate 0|1]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-capture-enabled 0|1]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
@@ -36,6 +37,7 @@ lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
 lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-0}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
+lasm_auto_mode_compare_generate="${BENCH_WORKBENCH_LASM_AUTO_MODE_COMPARE_GENERATE:-1}"
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
 lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
 lasm_instances="${BENCH_WORKBENCH_LASM_INSTANCES:-1}"
@@ -187,6 +189,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-mode-compare-repeats-file=*)
       lasm_mode_compare_repeats_file="${1#--lasm-mode-compare-repeats-file=}"
+      shift
+      ;;
+    --lasm-auto-mode-compare-generate)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_auto_mode_compare_generate="$2"
+      shift 2
+      ;;
+    --lasm-auto-mode-compare-generate=*)
+      lasm_auto_mode_compare_generate="${1#--lasm-auto-mode-compare-generate=}"
       shift
       ;;
     --lasm-db-postgres-shared-client-max-active-per-key)
@@ -468,6 +482,106 @@ default_workbench_lasm_mode_compare_repeats_path() {
   printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
 }
 
+resolve_lasm_mode_compare_recommendation() {
+  local artifact_path="$1"
+  local requested_endpoints_norm="$2"
+  local requested_adapter="$3"
+  local artifact_endpoints_norm=""
+  local artifact_lasm_db_adapter=""
+  local recommended_mode=""
+
+  [ -f "$artifact_path" ] || return 1
+  artifact_endpoints_norm="$(
+    jq -r '(.config.endpoints // []) | sort | join(",")' "$artifact_path" 2>/dev/null || true
+  )"
+  artifact_lasm_db_adapter="$(
+    jq -r '.config.lasmDbAdapter // empty' "$artifact_path" 2>/dev/null || true
+  )"
+  recommended_mode="$(
+    jq -r '.recommendation.mode // empty' "$artifact_path" 2>/dev/null || true
+  )"
+  if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
+    [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$requested_adapter" ];
+  }; then
+    return 1
+  fi
+  case "$recommended_mode" in
+    single|fixed|proxy)
+      printf '%s\n' "$recommended_mode"
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+generate_lasm_mode_compare_recommendation_artifact() {
+  local out_path="$1"
+  local compare_instances="$lasm_instances"
+  local compare_autoscale_max_instances="$lasm_autoscale_max_instances"
+  local -a cmd=(
+    "${suite_dir}/scripts/run_workbench_lasm_mode_compare.sh"
+    --endpoints "$endpoints_csv"
+    --port "$bench_port"
+    --lasm-db-adapter "$lasm_db_adapter"
+    --out "$out_path"
+  )
+
+  if [ -z "$compare_instances" ] || ! [[ "$compare_instances" =~ ^[0-9]+$ ]] || [ "$compare_instances" -lt 2 ]; then
+    compare_instances="2"
+  fi
+  if [ -z "$compare_autoscale_max_instances" ] || ! [[ "$compare_autoscale_max_instances" =~ ^[0-9]+$ ]] || [ "$compare_autoscale_max_instances" -le "$compare_instances" ]; then
+    compare_autoscale_max_instances="$((compare_instances + 2))"
+  fi
+  cmd+=(--instances "$compare_instances")
+  cmd+=(--autoscale-max-instances "$compare_autoscale_max_instances")
+  if [ -n "$lasm_db_base" ]; then
+    cmd+=(--lasm-db-base "$lasm_db_base")
+  fi
+  if [ -n "$lasm_postgres_dsn_file" ]; then
+    cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
+  fi
+  if [ -n "$lasm_db_records_capture_enabled" ]; then
+    cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
+  fi
+  if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
+    cmd+=(--lasm-db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
+  fi
+  if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then
+    cmd+=(--lasm-db-postgres-shared-client-max-active-total "$lasm_db_postgres_shared_client_max_active_total")
+  fi
+  if [ -n "$lasm_autoscale_target_connections" ]; then
+    cmd+=(--autoscale-target-connections "$lasm_autoscale_target_connections")
+  fi
+  if [ -n "$lasm_autoscale_check_ms" ]; then
+    cmd+=(--autoscale-check-ms "$lasm_autoscale_check_ms")
+  fi
+  if [ -n "$lasm_cluster_relay_workers" ]; then
+    cmd+=(--cluster-relay-workers "$lasm_cluster_relay_workers")
+  fi
+  if [ -n "$lasm_cluster_relay_queue" ]; then
+    cmd+=(--cluster-relay-queue "$lasm_cluster_relay_queue")
+  fi
+  if [ -n "$lasm_cluster_accept_workers" ]; then
+    cmd+=(--cluster-accept-workers "$lasm_cluster_accept_workers")
+  fi
+  if [ -n "$lasm_cluster_relay_accept_batch_max" ]; then
+    cmd+=(--cluster-relay-accept-batch-max "$lasm_cluster_relay_accept_batch_max")
+  fi
+  if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then
+    cmd+=(--cluster-relay-pump-batch-max "$lasm_cluster_relay_pump_batch_max")
+  fi
+  if [ "$dry_run" = "true" ]; then
+    cmd+=(--dry-run)
+    printf 'run:'
+    printf ' %q' "${cmd[@]}"
+    printf '\n'
+    return 0
+  fi
+  "${cmd[@]}"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -494,6 +608,10 @@ if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; the
   echo "invalid --fail-on-impl-failure (expected 0 or 1): $fail_on_impl_failure" >&2
   exit 2
 fi
+if [ "$lasm_auto_mode_compare_generate" != "0" ] && [ "$lasm_auto_mode_compare_generate" != "1" ]; then
+  echo "invalid --lasm-auto-mode-compare-generate (expected 0 or 1): $lasm_auto_mode_compare_generate" >&2
+  exit 2
+fi
 
 if [ -z "$lasm_mode_compare_repeats_file" ]; then
   lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
@@ -501,30 +619,35 @@ fi
 
 if [ -n "$lasm_mode" ]; then
   if [ "$lasm_mode" = "auto" ]; then
-    if [ ! -f "$lasm_mode_compare_repeats_file" ]; then
-      echo "LASM auto mode requires mode-compare artifact: $lasm_mode_compare_repeats_file" >&2
-      exit 2
-    fi
     requested_endpoints_norm="$(
       printf '%s\n' "$endpoints_csv" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd, -
     )"
-    artifact_endpoints_norm="$(
-      jq -r '(.config.endpoints // []) | sort | join(",")' "$lasm_mode_compare_repeats_file"
-    )"
-    artifact_lasm_db_adapter="$(
-      jq -r '.config.lasmDbAdapter // empty' "$lasm_mode_compare_repeats_file"
-    )"
-    if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
-      [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
-    }; then
-      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
-      lasm_mode="single"
-    else
-      lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
-      if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
-        echo "LASM auto mode could not resolve recommendation from: $lasm_mode_compare_repeats_file" >&2
-        exit 2
+    resolved_auto_mode="$(
+      resolve_lasm_mode_compare_recommendation \
+        "$lasm_mode_compare_repeats_file" \
+        "$requested_endpoints_norm" \
+        "$lasm_db_adapter"
+    )" || true
+    if [ -z "$resolved_auto_mode" ]; then
+      if [ "$lasm_auto_mode_compare_generate" = "1" ]; then
+        echo "warning: LASM auto mode recommendation unavailable; generating fresh mode-compare artifact" >&2
+        if generate_lasm_mode_compare_recommendation_artifact "$lasm_mode_compare_repeats_file"; then
+          resolved_auto_mode="$(
+            resolve_lasm_mode_compare_recommendation \
+              "$lasm_mode_compare_repeats_file" \
+              "$requested_endpoints_norm" \
+              "$lasm_db_adapter"
+          )" || true
+        fi
       fi
+      if [ -z "$resolved_auto_mode" ]; then
+        echo "warning: LASM auto mode recommendation unavailable; falling back to single mode" >&2
+        lasm_mode="single"
+      else
+        lasm_mode="$resolved_auto_mode"
+      fi
+    else
+      lasm_mode="$resolved_auto_mode"
     fi
   fi
   case "$lasm_mode" in
