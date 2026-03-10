@@ -757,28 +757,29 @@ fn set_lasm_db_runtime_error_response(
 }
 
 fn parse_lasm_record_params_array(record: &LasmDbRecord) -> Option<Vec<serde_json::Value>> {
-    let parsed = serde_json::from_str::<serde_json::Value>(record.params.as_str()).ok()?;
-    let values = parsed.as_array()?;
-    Some(values.clone())
+    serde_json::from_str::<Vec<serde_json::Value>>(record.params.as_str()).ok()
 }
 
 fn parse_lasm_record_flat_param_values(record: &LasmDbRecord) -> Option<Vec<&str>> {
     crate::lasm_request_template::parse_lasm_flat_json_array_elements(record.params.as_str())
 }
 
-fn lasm_record_param_string(record: &LasmDbRecord, index: usize) -> Option<String> {
-    if let Some(value) =
-        crate::lasm_request_template::parse_lasm_flat_json_array_string_element(
-            record.params.as_str(),
-            index,
-        )
-    {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
+fn lasm_record_param_string(
+    index: usize,
+    flat_values: Option<&[&str]>,
+    fallback_values: Option<&[serde_json::Value]>,
+) -> Option<String> {
+    if let Some(raw) = flat_values.and_then(|values| values.get(index)) {
+        let raw = raw.trim();
+        if raw.len() >= 2 && raw.starts_with('"') && raw.ends_with('"') {
+            let decoded = serde_json::from_str::<String>(raw).ok()?;
+            let trimmed = decoded.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
         }
     }
-    let fallback_values = parse_lasm_record_params_array(record)?;
+    let fallback_values = fallback_values?;
     fallback_values
         .get(index)
         .and_then(serde_json::Value::as_str)
@@ -786,8 +787,12 @@ fn lasm_record_param_string(record: &LasmDbRecord, index: usize) -> Option<Strin
         .map(ToOwned::to_owned)
 }
 
-fn lasm_record_param_i64(record: &LasmDbRecord, index: usize) -> Option<i64> {
-    if let Some(values) = parse_lasm_record_flat_param_values(record) {
+fn lasm_record_param_i64(
+    index: usize,
+    flat_values: Option<&[&str]>,
+    fallback_values: Option<&[serde_json::Value]>,
+) -> Option<i64> {
+    if let Some(values) = flat_values {
         let raw = values.get(index)?.trim();
         if raw.is_empty() {
             return None;
@@ -800,7 +805,7 @@ fn lasm_record_param_i64(record: &LasmDbRecord, index: usize) -> Option<i64> {
             return Some(number);
         }
     }
-    let fallback_values = parse_lasm_record_params_array(record)?;
+    let fallback_values = fallback_values?;
     let value = fallback_values.get(index)?;
     value.as_i64().or_else(|| {
         value
@@ -813,9 +818,16 @@ fn derive_lasm_exec_like_success_data(
     record: &LasmDbRecord,
     affected_rows: u64,
 ) -> serde_json::Value {
+    let parsed_flat_values = parse_lasm_record_flat_param_values(record);
+    let flat_values = parsed_flat_values.as_deref();
+    let parsed_fallback_values = parse_lasm_record_params_array(record);
+    let fallback_values = parsed_fallback_values.as_deref();
     if record.op == "execTx" {
         if let (Some(comment_id), Some(task_id)) =
-            (lasm_record_param_string(record, 0), lasm_record_param_string(record, 1))
+            (
+                lasm_record_param_string(0, flat_values, fallback_values),
+                lasm_record_param_string(1, flat_values, fallback_values),
+            )
         {
             return serde_json::json!({
                 "taskId": task_id,
@@ -823,7 +835,7 @@ fn derive_lasm_exec_like_success_data(
             });
         }
     }
-    if let Some(id) = lasm_record_param_string(record, 0) {
+    if let Some(id) = lasm_record_param_string(0, flat_values, fallback_values) {
         return serde_json::json!({ "id": id });
     }
     serde_json::json!({ "affectedRows": affected_rows })
@@ -833,16 +845,20 @@ fn derive_lasm_query_one_success_data(
     record: &LasmDbRecord,
     row_object: &serde_json::Value,
 ) -> serde_json::Value {
+    let parsed_flat_values = parse_lasm_record_flat_param_values(record);
+    let flat_values = parsed_flat_values.as_deref();
+    let parsed_fallback_values = parse_lasm_record_params_array(record);
+    let fallback_values = parsed_fallback_values.as_deref();
     if record
         .template
         .contains("order by created_at_ms desc, id desc limit $2 offset $3")
     {
         let mut limit = 20_i64;
         let mut offset = 0_i64;
-        if let Some(value) = lasm_record_param_i64(record, 1) {
+        if let Some(value) = lasm_record_param_i64(1, flat_values, fallback_values) {
             limit = value;
         }
-        if let Some(value) = lasm_record_param_i64(record, 2) {
+        if let Some(value) = lasm_record_param_i64(2, flat_values, fallback_values) {
             offset = value;
         }
         return serde_json::json!({
@@ -2169,7 +2185,7 @@ fn materialize_lasm_internal_header_value(
 mod tests {
     use super::{
         apply_lasm_internal_db_operation_materialization, derive_lasm_exec_like_success_data,
-        derive_lasm_query_one_success_data,
+        derive_lasm_query_one_success_data, parse_lasm_record_flat_param_values,
     };
     use crate::{
         lasm_internal_db_indexed_header, LasmDbRecord, LasmDbRecordsAdapter,
@@ -3352,6 +3368,30 @@ mod tests {
     }
 
     #[test]
+    fn derive_exec_like_success_data_uses_json_fallback_when_flat_params_fail() {
+        let record = LasmDbRecord {
+            id: 12,
+            op: "exec".to_string(),
+            db: 1,
+            template: "INSERT INTO wb_tasks VALUES ($1)".to_string(),
+            params: "[\"task-fallback\",{\"x\":1}]".to_string(),
+            tx: 0,
+            affected_rows: 1,
+            created_at_ms: 12,
+        };
+
+        assert!(
+            parse_lasm_record_flat_param_values(&record).is_none(),
+            "flat param parser should fail on nested object payload and trigger json fallback"
+        );
+        let data = derive_lasm_exec_like_success_data(&record, 1);
+        assert_eq!(
+            data.get("id").and_then(|value| value.as_str()),
+            Some("task-fallback")
+        );
+    }
+
+    #[test]
     fn derive_query_one_success_data_extracts_limit_offset_from_flat_params() {
         let record = LasmDbRecord {
             id: 3,
@@ -3374,5 +3414,28 @@ mod tests {
             .expect("query-one list payload should include items array");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].get("id").and_then(|value| value.as_str()), Some("task-1"));
+    }
+
+    #[test]
+    fn derive_query_one_success_data_uses_json_fallback_when_flat_params_fail() {
+        let record = LasmDbRecord {
+            id: 13,
+            op: "queryOne".to_string(),
+            db: 1,
+            template: "select id from wb_tasks where status = $1 order by created_at_ms desc, id desc limit $2 offset $3".to_string(),
+            params: "[{\"skip\":1},\"25\",\"7\"]".to_string(),
+            tx: 0,
+            affected_rows: 0,
+            created_at_ms: 13,
+        };
+
+        assert!(
+            parse_lasm_record_flat_param_values(&record).is_none(),
+            "flat param parser should fail on nested object payload and trigger json fallback"
+        );
+        let row_object = serde_json::json!({ "id": "task-fallback" });
+        let data = derive_lasm_query_one_success_data(&record, &row_object);
+        assert_eq!(data.get("limit").and_then(|value| value.as_i64()), Some(25));
+        assert_eq!(data.get("offset").and_then(|value| value.as_i64()), Some(7));
     }
 }

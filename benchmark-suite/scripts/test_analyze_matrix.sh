@@ -50,4 +50,49 @@ if ! jq -e '.endpoints[] | select(.endpoint == "users-post") | .findings[] | sel
   exit 1
 fi
 
+# verify p99 unit normalization to milliseconds (us/ms/s)
+units_matrix="$tmp/units-matrix.json"
+cat >"$units_matrix" <<'JSON'
+{
+  "endpoints": [
+    {
+      "endpoint": "mixed-units",
+      "leader": {
+        "impl": "sec4",
+        "endpoint": "mixed-units",
+        "targetRps": 100,
+        "requestsPerSec": 100,
+        "p99": "500us",
+        "loadGenerator": "wrk2",
+        "constantRate": true
+      },
+      "compared": [
+        {"impl":"sec4","endpoint":"mixed-units","targetRps":100,"requestsPerSec":100,"p99":"500us","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"go","endpoint":"mixed-units","targetRps":100,"requestsPerSec":95,"p99":"2ms","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"node","endpoint":"mixed-units","targetRps":100,"requestsPerSec":90,"p99":"2500us","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"rust","endpoint":"mixed-units","targetRps":100,"requestsPerSec":80,"p99":"0.5s","loadGenerator":"wrk2","constantRate":true}
+      ]
+    }
+  ]
+}
+JSON
+
+units_analysis="$tmp/units-analysis.json"
+"$root_dir/scripts/analyze_matrix.sh" "$units_matrix" "$units_analysis" >/dev/null
+
+if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99MinMs == 0.5' "$units_analysis" >/dev/null; then
+  echo "expected p99MinMs to normalize 500us -> 0.5ms" >&2
+  exit 1
+fi
+
+if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99MaxMs == 500' "$units_analysis" >/dev/null; then
+  echo "expected p99MaxMs to normalize 0.5s -> 500ms" >&2
+  exit 1
+fi
+
+if ! jq -e '.endpoints[] | select(.endpoint == "mixed-units") | .metrics.p99SpreadX == 1000' "$units_analysis" >/dev/null; then
+  echo "expected p99SpreadX to use normalized millisecond units" >&2
+  exit 1
+fi
+
 echo "analyze_matrix test passed"
