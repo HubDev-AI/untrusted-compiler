@@ -12453,3 +12453,25 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
   1. continue deeper scaling/runtime tuning from the now-clean canonical publication baseline,
   2. use repeated mode-compare/full-suite artifacts only for post-alpha tuning, not alpha proof,
   3. keep the mixed-workload publication default conservative unless a workload-matching recommendation artifact proves another topology is better.
+- Post-alpha seam/tuning update (2026-03-09):
+  - workbench benchmark and step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) so publication/tuning flows can keep deterministic failed-lane accounting without aborting all artifact generation.
+  - benchmark matrix now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient endpoint profile failures once before marking a lane failed.
+  - focused LASM mode-compare artifact refresh for tuned list workload (`--endpoints wb-tasks-list`) now recommends `fixed` mode:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+    - recommendation: `mode=fixed`, `medianRequestsPerSec=1492.84`.
+  - publication-path stabilization updates landed after that rerun:
+    - `run_workbench_benchmark_matrix.sh` now falls back to `single` (not `fixed`) when `--lasm-mode auto` sees workload mismatch.
+    - `run_workbench_profile.sh` now enforces bounded socket-error-rate failures via `BENCH_SOCKET_ERROR_MAX_RATE_PCT` (default `0.50`) instead of hard-failing on any non-zero socket error.
+    - sec4 LASM workbench setup now creates indexes needed for hot read paths (`wb_comments(task_id)`, `wb_tasks(created_at_ms,id)`, `wb_tasks(status,created_at_ms,id)`, `wb_labels(name,task_id)`).
+  - latest full cross-runtime publication rerun with those fixes:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
+    - totals: `passed=4 failed=0 skipped=0`.
+- Post-alpha runtime hotpath update (2026-03-10):
+  - Postgres thread-local config now precomputes/stores shared pool and schema ensure keys, and runtime paths reuse those keys instead of rebuilding key strings per operation.
+  - Postgres params parsing now consumes borrowed JSON values across array/object/scalar paths (no full-value clone pass in parse loop).
+  - DB operation prepare path now parses using borrowed `parsed_params` for both Postgres/sqlite adapters (clone-elided dispatch).
+  - Postgres persist queue path now:
+    - carries precomputed config keys on queued tasks,
+    - reuses worker batch buffers via drain processing,
+    - prunes stale per-config locks on bounded cadence for long-running dynamic DSN workloads.
+  - benchmark matrix runner now reuses a prebuilt sec4 binary for endpoint profiles (instead of per-endpoint `cargo run`) to reduce profiling startup overhead.

@@ -1,8 +1,9 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-03-07
+Updated: 2026-03-09
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
+Live execution board: `todos/016-in-progress-post-alpha-execution-board.md`
 
 ## 1) Purpose
 
@@ -89,13 +90,51 @@ Status notes:
   - totals: `passed=4 failed=0 skipped=0`
   - `sec4-lasm` leads all six endpoints in the published report family.
   - For this mixed-workload publication run, the chosen LASM topology is `single` mode; earlier proxy/fixed results remain route-specific tuning evidence only.
+- Latest post-alpha scaling slice (2026-03-09):
+  - Workbench response normalization now skips JSON parse for successful POST `/wb/*` routes and uses moved `rowObject` extraction for GET `/wb/tasks` and `/wb/tasks/:id`.
+  - Workbench list normalization now uses moved map/array values (lower clone pressure on `items` payloads).
+  - `/wb/*` internal DB success payloads now use compact envelopes on LASM dispatch (keep `data`/`rowObject`, drop heavy metadata fields on that route family only).
+  - Added optional runtime switch for benchmark-focused runs: `SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED` (and alias `SEC4_DB_ALPHA_DB_RECORDS_CAPTURE_ENABLED`), default `true`.
+  - Workbench benchmark matrix runner now supports `--lasm-db-records-capture-enabled 0|1` and forwards to LASM runtime env.
+  - Local benchmark wrapper dry-run checks updated for the expanded LASM start marker line.
+  - `run_workbench_profile.sh` now retries once on the known intermittent wrk2 assertion crash (`response_complete: Assertion`) before marking profile failure.
+  - Workbench benchmark + step matrix runners now support `--fail-on-impl-failure 0|1` (default strict `1`) and full-suite forwards the same control to both phases.
+  - Workbench benchmark matrix runner now supports `--profile-retry-on-failure <n>` (default `1`) to retry transient profile failures before marking endpoint failure.
+  - Focused LASM mode-compare rerun for the tuned list workload now recommends `fixed` mode:
+    - `benchmark-suite/scripts/run_workbench_lasm_mode_compare_repeats.sh --repeats 1 --endpoints wb-tasks-list --lasm-db-adapter postgres --lasm-postgres-dsn-file <tmp>`
+    - artifact: `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
+    - recommendation: `mode=fixed`, reason `medianRequestsPerSec=1492.84`.
+  - Follow-up stabilization pass fixed that rerun path:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix.sh` now falls back to `single` (not `fixed`) when `--lasm-mode auto` sees a workload-mismatched recommendation artifact.
+    - `benchmark-suite/scripts/run_workbench_profile.sh` now uses bounded socket-error-rate gating (`BENCH_SOCKET_ERROR_MAX_RATE_PCT`, default `0.50`) instead of hard-failing on any non-zero socket error.
+    - `benchmark-suite/services/sec4-lasm-workbench/src/workbench/setup.ut` now creates critical indexes:
+      - `wb_comments(task_id)`
+      - `wb_tasks(created_at_ms desc, id desc)`
+      - `wb_tasks(status, created_at_ms desc, id desc)`
+      - `wb_labels(name, task_id)`
+  - Latest full cross-runtime publication rerun (local Postgres wrapper, same command) is green again:
+    - command: `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
+    - totals: `passed=4 failed=0 skipped=0`
+    - `sec4-lasm` no longer fails on `wb-task-get` / `wb-tasks-list` in this publication path.
+- Latest post-alpha runtime hotpath slice (2026-03-10):
+  - Postgres config/build path now precomputes and stores:
+    - shared client-pool key
+    - schema-ensure key
+    - runtime now reuses these keys on tx-connect/prewarm/invalidation paths.
+  - Postgres query-parameter materialization now parses from borrowed JSON values across array/object/scalar parse paths (reduced full-value cloning).
+  - DB client operation prepare path now avoids cloning parsed params for adapter parse dispatch.
+  - Postgres persist pipeline now includes:
+    - precomputed config key per persist task,
+    - reusable worker batch buffers (`drain` path),
+    - bounded stale per-config lock pruning to prevent unbounded lock-map growth on dynamic DSN churn.
+  - Benchmark matrix runner now reuses a prebuilt sec4 runner binary (`target/debug/sec4`) instead of per-endpoint `cargo run` startup for each profiled endpoint.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 
 1. Close the remaining non-contract DB/runtime seams that the workbench app surfaces in real usage.
 2. Keep adapter parity (`records.log`, `sqlite`, `postgres`) under one intrinsic surface with deterministic behavior.
 3. Preserve deterministic diagnostics/envelopes and policy behavior while completing intrinsic-path execution.
-4. Next concrete code task: rerun the canonical DB-backed benchmark baseline on the cleaner helper-driven runtime surface, then continue the next scaling/runtime tuning pass from that evidence.
+4. Next concrete code task: run the next scaling/runtime tuning pass from the canonical rerun evidence and publish refreshed LASM mode-compare recommendation artifacts.
 
 ### P3: Scaling/runtime tuning after P2
 

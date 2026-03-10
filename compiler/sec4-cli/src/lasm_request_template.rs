@@ -269,7 +269,9 @@ fn augment_lasm_workbench_public_query_defaults(
             .or_insert_with(|| "1".to_string());
         if let Some(existing) = query_params.get("params").cloned() {
             if let Some(expanded) = expand_lasm_workbench_list_params(existing.as_str()) {
-                query_params.insert("params".to_string(), expanded);
+                if expanded != existing {
+                    query_params.insert("params".to_string(), expanded);
+                }
             }
         } else if let Some(params) = build_lasm_workbench_list_params_from_query(query_params) {
             query_params.insert("params".to_string(), params);
@@ -397,9 +399,7 @@ fn build_lasm_workbench_create_task_label_params(
 ) -> Option<String> {
     let task_id = query_params
         .get("params")
-        .and_then(|raw| parse_lasm_json_array(raw.as_str()))
-        .and_then(|values| values.first().cloned())
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))?;
+        .and_then(|raw| parse_lasm_flat_json_array_string_element(raw.as_str(), 0))?;
     let labels = payload
         .and_then(|object| object.get("labels"))
         .and_then(normalize_lasm_workbench_labels_value)
@@ -588,19 +588,13 @@ fn build_lasm_workbench_list_params_from_query(
 }
 
 fn expand_lasm_workbench_list_params(raw: &str) -> Option<String> {
-    let values = parse_lasm_json_array(raw)?;
+    let trimmed = raw.trim();
+    let values = parse_lasm_flat_json_array_elements(trimmed)?;
     match values.as_slice() {
-        [status, limit, offset] => {
-            serde_json::to_string(&serde_json::json!([status, "", "", "", limit, offset,])).ok()
-        }
-        [_, _, _, _, _, _] => serde_json::to_string(&values).ok(),
+        [status, limit, offset] => Some(format!("[{status},\"\",\"\",\"\",{limit},{offset}]")),
+        [_, _, _, _, _, _] => Some(trimmed.to_string()),
         _ => None,
     }
-}
-
-fn parse_lasm_json_array(raw: &str) -> Option<Vec<Value>> {
-    let parsed = serde_json::from_str::<Value>(raw).ok()?;
-    parsed.as_array().cloned()
 }
 
 pub(crate) fn parse_lasm_flat_json_array_elements(raw: &str) -> Option<Vec<&str>> {

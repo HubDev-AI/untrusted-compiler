@@ -19,6 +19,7 @@ Options:
   --lasm-db-adapter <sqlite|postgres>             LASM DB adapter (default: sqlite)
   --lasm-db-base <path>                           Optional LASM sqlite DB base
   --lasm-postgres-dsn-file <path>                 Optional LASM Postgres DSN file
+  --lasm-db-records-capture-enabled <0|1>         Optional LASM runtime DB-record capture switch
   --lasm-db-postgres-shared-client-max-active-per-key <n>
                                                   Optional LASM Postgres active-pool per-key limit
   --lasm-db-postgres-shared-client-max-active-total <n>
@@ -49,6 +50,7 @@ bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-}"
 lasm_db_postgres_shared_client_max_active_per_key="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY:-}"
 lasm_db_postgres_shared_client_max_active_total="${BENCH_WORKBENCH_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL:-}"
 instances="${BENCH_WORKBENCH_LASM_INSTANCES:-2}"
@@ -109,6 +111,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-postgres-dsn-file=*)
       lasm_postgres_dsn_file="${1#--lasm-postgres-dsn-file=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      lasm_db_records_capture_enabled="${2:-}"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-db-postgres-shared-client-max-active-per-key)
@@ -273,26 +283,58 @@ done
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
+normalize_workbench_endpoints_csv() {
+  local input_endpoints_csv="$1"
+  printf '%s\n' "$input_endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+workbench_mode_artifact_suffix() {
+  local input_endpoints_csv="$1"
+  local input_lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$input_endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s-%s' "$input_lasm_db_adapter" "$endpoints_key"
+}
+
+mode_artifact_suffix="$(workbench_mode_artifact_suffix "$endpoints_csv" "$lasm_db_adapter")"
+
 if [ -z "$single_runs_out" ]; then
-  single_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-runs.json"
+  single_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$fixed_runs_out" ]; then
-  fixed_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-runs.json"
+  fixed_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$proxy_runs_out" ]; then
-  proxy_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-runs.json"
+  proxy_runs_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-runs-${mode_artifact_suffix}.json"
 fi
 if [ -z "$single_report_out" ]; then
-  single_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-report.json"
+  single_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-single-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$fixed_report_out" ]; then
-  fixed_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-report.json"
+  fixed_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-fixed-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$proxy_report_out" ]; then
-  proxy_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-report.json"
+  proxy_report_out="${suite_dir}/results/summaries/workbench-lasm-mode-proxy-report-${mode_artifact_suffix}.json"
 fi
 if [ -z "$out_path" ]; then
-  out_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare.json"
+  out_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare-${mode_artifact_suffix}.json"
 fi
 
 mkdir -p "$(dirname "$single_runs_out")" "$(dirname "$fixed_runs_out")" "$(dirname "$proxy_runs_out")" \
@@ -306,6 +348,15 @@ fi
 if [ "$autoscale_max_instances" -le "$instances" ] 2>/dev/null; then
   echo "--autoscale-max-instances must be > --instances for proxy mode comparison" >&2
   exit 2
+fi
+if [ -n "$lasm_db_records_capture_enabled" ]; then
+  case "$lasm_db_records_capture_enabled" in
+    0|1) ;;
+    *)
+      echo "--lasm-db-records-capture-enabled must be 0 or 1" >&2
+      exit 2
+      ;;
+  esac
 fi
 
 benchmark_matrix_script="${suite_dir}/scripts/run_workbench_benchmark_matrix.sh"
@@ -339,6 +390,9 @@ run_mode() {
   fi
   if [ -n "$lasm_postgres_dsn_file" ]; then
     cmd+=(--lasm-postgres-dsn-file "$lasm_postgres_dsn_file")
+  fi
+  if [ -n "$lasm_db_records_capture_enabled" ]; then
+    cmd+=(--lasm-db-records-capture-enabled "$lasm_db_records_capture_enabled")
   fi
   if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then
     cmd+=(--lasm-db-postgres-shared-client-max-active-per-key "$lasm_db_postgres_shared_client_max_active_per_key")
@@ -408,6 +462,7 @@ jq -n \
   --arg generatedAt "$generated_at" \
   --arg endpoints "$endpoints_csv" \
   --arg lasmDbAdapter "$lasm_db_adapter" \
+  --arg lasmDbRecordsCaptureEnabled "$lasm_db_records_capture_enabled" \
   --argjson instances "$instances" \
   --argjson autoscaleMaxInstances "$autoscale_max_instances" \
   --argjson autoscaleTargetConnections "$autoscale_target_connections" \
@@ -515,6 +570,7 @@ jq -n \
       config: {
         endpoints: ($endpoints | split(",") | map(gsub(" "; "")) | map(select(length > 0))),
         lasmDbAdapter: $lasmDbAdapter,
+        lasmDbRecordsCaptureEnabled: $lasmDbRecordsCaptureEnabled,
         instances: $instances,
         autoscaleMaxInstances: $autoscaleMaxInstances,
         autoscaleTargetConnections: $autoscaleTargetConnections,

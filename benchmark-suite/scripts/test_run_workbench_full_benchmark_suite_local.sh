@@ -28,7 +28,7 @@ if ! grep -q '^preflight passed$' <<<"$out"; then
   echo "missing preflight pass output from delegated full suite" >&2
   exit 1
 fi
-if ! grep -q 'start: impl=sec4-lasm servicePath=benchmark-suite/services/sec4-lasm-workbench port=18115 lasmDbAdapter=postgres lasmPostgresDsn=' <<<"$out"; then
+if ! grep -q 'start: impl=sec4-lasm servicePath=benchmark-suite/services/sec4-lasm-workbench port=18115 lasmDbAdapter=postgres .* lasmPostgresDsn=' <<<"$out"; then
   echo "missing sec4-lasm postgres adapter start marker in local full dry-run output" >&2
   exit 1
 fi

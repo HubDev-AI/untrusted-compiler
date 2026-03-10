@@ -82,8 +82,8 @@ use lasm_cluster_runtime_config::{
 use lasm_cluster_shutdown::{finalize_lasm_cluster_runtime, LasmClusterShutdownSummary};
 use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{
-    apply_lasm_postgres_runtime_env_overrides,
-    push_optional_db_adapter_run_arg, push_optional_db_postgres_persist_queue_full_mode_run_arg,
+    apply_lasm_postgres_runtime_env_overrides, push_optional_db_adapter_run_arg,
+    push_optional_db_postgres_persist_queue_full_mode_run_arg,
     push_optional_db_postgres_tls_mode_run_arg, resolve_lasm_db_usize_options,
     run_db_adapter_to_lasm_db_records_adapter,
     run_db_postgres_tls_mode_to_lasm_db_postgres_tls_mode, validate_and_resolve_run_db_cli_options,
@@ -9728,11 +9728,13 @@ fn cmd_run_lasm_backend(
         }
 
         if oneshot {
+            let Some(runtime) = oneshot_runtime.as_mut() else {
+                eprintln!("run failed: LASM backend oneshot runtime unavailable");
+                return Err(2);
+            };
             if let Err(message) = process_lasm_connection_with_runtime(
                 &mut stream,
-                oneshot_runtime
-                    .as_mut()
-                    .expect("oneshot runtime should be initialized"),
+                runtime,
                 effective_max_header_bytes,
                 effective_max_body_bytes,
                 max_requests_per_connection,
@@ -9750,9 +9752,10 @@ fn cmd_run_lasm_backend(
             break;
         }
 
-        let sender = worker_sender
-            .as_ref()
-            .expect("worker sender should exist for non-oneshot LASM backend");
+        let Some(sender) = worker_sender.as_ref() else {
+            eprintln!("run failed: LASM backend worker channel unavailable");
+            return Err(2);
+        };
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
@@ -11744,21 +11747,11 @@ fn apply_lasm_workbench_response_normalization(
     if !is_lasm_workbench_route(request) {
         return false;
     }
-    let Some(payload) = parse_lasm_json_payload(&response.body) else {
-        return false;
-    };
-
-    if payload.get("error").is_some() {
-        let normalized_status = lasm_workbench_error_status(request, response.status, &payload);
-        let normalized =
-            lasm_workbench_error_envelope(request, normalized_status, &payload, trace_id);
-        set_lasm_json_response(response, normalized_status, &normalized);
-        return true;
-    }
 
     let path = request.path.as_str();
     let method = request.method.as_str();
-    if method.eq_ignore_ascii_case("POST") && path == "/wb/setup" {
+    let success = (200..400).contains(&response.status);
+    if success && method.eq_ignore_ascii_case("POST") && path == "/wb/setup" {
         set_lasm_json_response(
             response,
             200,
@@ -11766,7 +11759,7 @@ fn apply_lasm_workbench_response_normalization(
         );
         return true;
     }
-    if method.eq_ignore_ascii_case("POST") && path == "/wb/tasks" {
+    if success && method.eq_ignore_ascii_case("POST") && path == "/wb/tasks" {
         if let Some(task_id) =
             lasm_workbench_task_id_from_create_request(request, path_params, trace_id)
         {
@@ -11782,7 +11775,8 @@ fn apply_lasm_workbench_response_normalization(
             return true;
         }
     }
-    if method.eq_ignore_ascii_case("POST")
+    if success
+        && method.eq_ignore_ascii_case("POST")
         && (path == "/wb/tasks/with-comment" || path == "/wb/tasks/with-comment-tx")
     {
         let task_id =
@@ -11811,7 +11805,8 @@ fn apply_lasm_workbench_response_normalization(
             return true;
         }
     }
-    if method.eq_ignore_ascii_case("POST")
+    if success
+        && method.eq_ignore_ascii_case("POST")
         && path.starts_with("/wb/tasks/")
         && path.ends_with("/comments")
     {
@@ -11833,21 +11828,40 @@ fn apply_lasm_workbench_response_normalization(
             return true;
         }
     }
+
+    let Some(mut payload) = parse_lasm_json_payload(&response.body) else {
+        return false;
+    };
+
+    if payload.get("error").is_some() {
+        let normalized_status = lasm_workbench_error_status(request, response.status, &payload);
+        let normalized =
+            lasm_workbench_error_envelope(request, normalized_status, &payload, trace_id);
+        set_lasm_json_response(response, normalized_status, &normalized);
+        return true;
+    }
+
     if method.eq_ignore_ascii_case("GET")
         && path.starts_with("/wb/tasks/")
         && !path.ends_with("/comments")
     {
-        if let Some(row_object) = payload.get("rowObject") {
+        if let Some(row_object) = payload
+            .as_object_mut()
+            .and_then(|object| object.remove("rowObject"))
+        {
             set_lasm_json_response(
                 response,
                 200,
-                &lasm_workbench_success_envelope(200, trace_id, row_object.clone()),
+                &lasm_workbench_success_envelope(200, trace_id, row_object),
             );
             return true;
         }
     }
     if method.eq_ignore_ascii_case("GET") && path == "/wb/tasks" {
-        if let Some(row_object) = payload.get("rowObject") {
+        if let Some(row_object) = payload
+            .as_object_mut()
+            .and_then(|object| object.remove("rowObject"))
+        {
             let data = lasm_workbench_list_data(row_object, request, path_params, trace_id);
             set_lasm_json_response(
                 response,
@@ -12430,54 +12444,48 @@ fn parse_lasm_workbench_items_blob(items_blob: &str) -> Option<Vec<serde_json::V
 }
 
 fn lasm_workbench_list_data(
-    row_object: &serde_json::Value,
+    row_object: serde_json::Value,
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
     trace_id: &str,
 ) -> serde_json::Value {
     let (limit_default, offset_default) =
         lasm_workbench_list_limit_offset_with_context(request, path_params, trace_id);
-    let Some(object) = row_object.as_object() else {
-        return serde_json::json!({
-            "items": [],
-            "count": 0,
-            "limit": limit_default,
-            "offset": offset_default,
-        });
+    let mut object = match row_object {
+        serde_json::Value::Object(map) => map,
+        _ => {
+            return serde_json::json!({
+                "items": [],
+                "count": 0,
+                "limit": limit_default,
+                "offset": offset_default,
+            });
+        }
     };
 
+    let has_id = object
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some();
     let count = object
-        .get("count")
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or_else(|| {
-            if object
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .filter(|value| !value.trim().is_empty())
-                .is_some()
-            {
-                1
-            } else {
-                0
-            }
-        })
+        .remove("count")
+        .and_then(|value| value.as_i64())
+        .unwrap_or_else(|| if has_id { 1 } else { 0 })
         .max(0);
     let limit = object
-        .get("limit_value")
-        .and_then(serde_json::Value::as_i64)
+        .remove("limit_value")
+        .and_then(|value| value.as_i64())
         .unwrap_or(limit_default)
         .clamp(1, 100);
     let offset = object
-        .get("offset_value")
-        .and_then(serde_json::Value::as_i64)
+        .remove("offset_value")
+        .and_then(|value| value.as_i64())
         .unwrap_or(offset_default)
         .max(0);
 
-    if let Some(items) = object
-        .get("items")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-    {
+    if let Some(serde_json::Value::Array(items)) = object.remove("items") {
         return serde_json::json!({
             "items": items,
             "count": count,
@@ -12486,38 +12494,34 @@ fn lasm_workbench_list_data(
         });
     }
 
-    if let Some(items) = object
-        .get("items_blob")
-        .and_then(serde_json::Value::as_str)
-        .and_then(parse_lasm_workbench_items_blob)
-    {
-        return serde_json::json!({
-            "items": items,
-            "count": count,
-            "limit": limit,
-            "offset": offset,
-        });
+    if let Some(serde_json::Value::String(items_blob)) = object.remove("items_blob") {
+        if let Some(items) = parse_lasm_workbench_items_blob(items_blob.as_str()) {
+            return serde_json::json!({
+                "items": items,
+                "count": count,
+                "limit": limit,
+                "offset": offset,
+            });
+        }
     }
 
-    let first_id = object
-        .get("first_id")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .unwrap_or("");
-    if !first_id.is_empty() {
-        return serde_json::json!({
-            "items": [{
-                "id": first_id,
-                "title": object.get("first_title").cloned().unwrap_or(serde_json::Value::Null),
-                "description": object.get("first_description").cloned().unwrap_or(serde_json::Value::Null),
-                "status": object.get("first_status").cloned().unwrap_or(serde_json::Value::Null),
-                "priority": object.get("first_priority").cloned().unwrap_or(serde_json::Value::Null),
-                "created_at_ms": object.get("first_created_at_ms").cloned().unwrap_or(serde_json::Value::Null),
-            }],
-            "count": count,
-            "limit": limit,
-            "offset": offset,
-        });
+    if let Some(serde_json::Value::String(first_id_raw)) = object.remove("first_id") {
+        let first_id = first_id_raw.trim();
+        if !first_id.is_empty() {
+            return serde_json::json!({
+                "items": [{
+                    "id": first_id,
+                    "title": object.remove("first_title").unwrap_or(serde_json::Value::Null),
+                    "description": object.remove("first_description").unwrap_or(serde_json::Value::Null),
+                    "status": object.remove("first_status").unwrap_or(serde_json::Value::Null),
+                    "priority": object.remove("first_priority").unwrap_or(serde_json::Value::Null),
+                    "created_at_ms": object.remove("first_created_at_ms").unwrap_or(serde_json::Value::Null),
+                }],
+                "count": count,
+                "limit": limit,
+                "offset": offset,
+            });
+        }
     }
 
     if object
@@ -12527,7 +12531,7 @@ fn lasm_workbench_list_data(
         .is_some()
     {
         return serde_json::json!({
-            "items": [row_object.clone()],
+            "items": [serde_json::Value::Object(object)],
             "count": count.max(1),
             "limit": limit,
             "offset": offset,

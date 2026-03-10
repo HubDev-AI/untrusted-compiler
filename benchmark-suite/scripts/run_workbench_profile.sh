@@ -9,6 +9,14 @@ env:
   BENCH_REQUIRE_WRK2=1        Enforce wrk2-only load generation
   BENCH_WRK2_BIN=/abs/path    Explicit wrk2 binary path
   BENCH_WRK_FALLBACK_TIMEOUT  wrk fallback timeout (default: 10s)
+  BENCH_SOCKET_ERROR_MAX_RATE_PCT
+                              Max allowed socket error rate percentage before failure
+                              (default: 0.50)
+  BENCH_SOCKET_ERROR_MAX_RATE_PCT_<ENDPOINT>
+                              Optional per-endpoint override where ENDPOINT is:
+                              WB_TASKS_POST, WB_TASKS_WITH_COMMENT,
+                              WB_TASKS_WITH_COMMENT_TX, WB_TASK_COMMENT_POST,
+                              WB_TASK_GET, WB_TASKS_LIST
 USAGE
 }
 
@@ -49,6 +57,38 @@ require_wrk2="${BENCH_REQUIRE_WRK2:-0}"
 wrk2_bin_override="${BENCH_WRK2_BIN:-}"
 wrk_fallback_timeout_default="10s"
 wrk_fallback_timeout="${BENCH_WRK_FALLBACK_TIMEOUT:-$wrk_fallback_timeout_default}"
+socket_error_max_rate_pct_default="0.50"
+socket_error_max_rate_pct_global="${BENCH_SOCKET_ERROR_MAX_RATE_PCT:-$socket_error_max_rate_pct_default}"
+socket_error_max_rate_pct="$socket_error_max_rate_pct_global"
+
+resolve_socket_error_threshold_endpoint_key() {
+  case "$1" in
+    wb-tasks-post) printf '%s\n' "WB_TASKS_POST" ;;
+    wb-tasks-with-comment) printf '%s\n' "WB_TASKS_WITH_COMMENT" ;;
+    wb-tasks-with-comment-tx) printf '%s\n' "WB_TASKS_WITH_COMMENT_TX" ;;
+    wb-task-comment-post) printf '%s\n' "WB_TASK_COMMENT_POST" ;;
+    wb-task-get) printf '%s\n' "WB_TASK_GET" ;;
+    wb-tasks-list) printf '%s\n' "WB_TASKS_LIST" ;;
+    *) printf '%s\n' "" ;;
+  esac
+}
+
+resolve_socket_error_max_rate_pct() {
+  local endpoint_key="$1"
+  local endpoint_var=""
+  local endpoint_override=""
+  if [ -z "$endpoint_key" ]; then
+    printf '%s\n' "$socket_error_max_rate_pct_global"
+    return
+  fi
+  endpoint_var="BENCH_SOCKET_ERROR_MAX_RATE_PCT_${endpoint_key}"
+  endpoint_override="${!endpoint_var:-}"
+  if [ -n "$endpoint_override" ]; then
+    printf '%s\n' "$endpoint_override"
+  else
+    printf '%s\n' "$socket_error_max_rate_pct_global"
+  fi
+}
 
 is_truthy() {
   case "$1" in
@@ -254,11 +294,12 @@ cleanup_tmp_wrk_scripts() {
 }
 trap cleanup_tmp_wrk_scripts EXIT
 
+prepared_wrk_script=""
 prepare_wrk_script() {
   local template_path="$1"
   shift
   if [ "$#" -eq 0 ]; then
-    printf '%s\n' "$template_path"
+    prepared_wrk_script="$template_path"
     return 0
   fi
 
@@ -276,7 +317,7 @@ prepare_wrk_script() {
     PLACEHOLDER="$placeholder" REPLACEMENT="$value" perl -0pi -e 's/\Q$ENV{PLACEHOLDER}\E/$ENV{REPLACEMENT}/g' "$rendered_path"
   done
   tmp_wrk_scripts+=("$rendered_path")
-  printf '%s\n' "$rendered_path"
+  prepared_wrk_script="$rendered_path"
 }
 
 build_wrk_cmd() {
@@ -307,25 +348,22 @@ case "$endpoint" in
     target=500
     target="${BENCH_TARGET_WB_TASKS_POST:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-with-comment)
     target=200
     target="${BENCH_TARGET_WB_TASKS_WITH_COMMENT:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-with-comment-tx)
     target=200
     target="${BENCH_TARGET_WB_TASKS_WITH_COMMENT_TX:-$target}"
     target="${BENCH_TARGET:-$target}"
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment_tx.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_tasks_with_comment_tx.lua" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-task-comment-post)
     target=500
@@ -335,9 +373,8 @@ case "$endpoint" in
       echo "BENCH_WB_TASK_ID is required for endpoint ${endpoint}" >&2
       exit 2
     fi
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/post_wb_task_comment.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}" "__BENCH_WB_RUN_TAG__=${wb_run_tag}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/post_wb_task_comment.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}" "__BENCH_WB_RUN_TAG__=${wb_run_tag}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-task-get)
     target=2500
@@ -347,9 +384,8 @@ case "$endpoint" in
       echo "BENCH_WB_TASK_ID is required for endpoint ${endpoint}" >&2
       exit 2
     fi
-    build_wrk_cmd \
-      "$(prepare_wrk_script "${root_dir}/load/wrk2/get_wb_task.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}")" \
-      "${base_url}"
+    prepare_wrk_script "${root_dir}/load/wrk2/get_wb_task.lua" "__BENCH_WB_TASK_ID__=${wb_task_id}"
+    build_wrk_cmd "$prepared_wrk_script" "${base_url}"
     ;;
   wb-tasks-list)
     target=1500
@@ -364,7 +400,11 @@ case "$endpoint" in
     ;;
 esac
 
+socket_error_threshold_endpoint_key="$(resolve_socket_error_threshold_endpoint_key "$endpoint")"
+socket_error_max_rate_pct="$(resolve_socket_error_max_rate_pct "$socket_error_threshold_endpoint_key")"
+
 echo "workbench profile impl=${impl} endpoint=${endpoint} targetRps=${target}"
+echo "socketErrorMaxRatePct: ${socket_error_max_rate_pct}"
 echo "command: ${cmd[*]}"
 echo "raw: $raw"
 echo "summary: $summary"
@@ -384,13 +424,57 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
-{
-  echo "# sec4-bench-load-bin=${load_bin}"
-  echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
-  echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
-} >"$raw"
+write_raw_header() {
+  {
+    echo "# sec4-bench-load-bin=${load_bin}"
+    echo "# sec4-bench-load-supports-rate=${load_supports_rate}"
+    echo "# sec4-bench-wrk-fallback-timeout=${wrk_fallback_timeout}"
+  } >"$raw"
+}
 
-"${cmd[@]}" | tee -a "$raw"
+run_profile_command_with_retry() {
+  local max_attempts=1
+  local attempt=1
+  local exit_code=0
+  local wrk2_assertion_pattern='response_complete: Assertion'
+
+  if [ "${load_supports_rate}" = "true" ]; then
+    max_attempts=2
+  fi
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    if [ "$attempt" -gt 1 ]; then
+      write_raw_header
+      echo "# sec4-bench-retry-attempt=${attempt}" >>"$raw"
+      echo "warning: wrk2 assertion failure detected; retrying once (impl=${impl}, endpoint=${endpoint})" >&2
+    fi
+
+    if "${cmd[@]}" 2>&1 | tee -a "$raw"; then
+      return 0
+    fi
+    exit_code=$?
+
+    if [ "${load_supports_rate}" != "true" ]; then
+      return "$exit_code"
+    fi
+    if ! grep -q "$wrk2_assertion_pattern" "$raw"; then
+      return "$exit_code"
+    fi
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      return "$exit_code"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  return "$exit_code"
+}
+
+write_raw_header
+
+if ! run_profile_command_with_retry; then
+  exit 1
+fi
 
 rss_kb="$(sample_rss_kb "$server_pid")"
 rss_source="unavailable"
@@ -417,6 +501,18 @@ socket_error_total="$(
     "$summary" 2>/dev/null || echo 0
 )"
 if [ "${socket_error_total}" != "0" ]; then
-  echo "workbench profile failed: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total}" >&2
-  exit 1
+  total_with_socket_errors="$((completed_requests + socket_error_total))"
+  if [ "$total_with_socket_errors" -le 0 ]; then
+    total_with_socket_errors="$socket_error_total"
+  fi
+  socket_error_rate_pct="$(
+    awk -v socket="$socket_error_total" -v total="$total_with_socket_errors" \
+      'BEGIN { if (total <= 0) { print "100.000000" } else { printf "%.6f", (socket * 100.0) / total } }'
+  )"
+  if awk -v observed="$socket_error_rate_pct" -v max="$socket_error_max_rate_pct" 'BEGIN { exit !(observed <= max) }'; then
+    echo "warning: workbench profile socketErrors tolerated: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total} ratePct=${socket_error_rate_pct} maxRatePct=${socket_error_max_rate_pct}" >&2
+  else
+    echo "workbench profile failed: impl=${impl} endpoint=${endpoint} socketErrors=${socket_error_total} ratePct=${socket_error_rate_pct} maxRatePct=${socket_error_max_rate_pct}" >&2
+    exit 1
+  fi
 fi

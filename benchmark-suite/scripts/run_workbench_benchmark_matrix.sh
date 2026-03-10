@@ -5,8 +5,11 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--endpoints wb-tasks-post,wb-tasks-with-comment,wb-tasks-with-comment-tx,wb-task-comment-post,wb-task-get,wb-tasks-list]
+          [--fail-on-impl-failure 0|1]
+          [--profile-retry-on-failure <n>]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-persist-enabled 0|1]
+          [--lasm-db-records-capture-enabled 0|1]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-endpoint-modes default=fixed,wb-tasks-list=proxy]
           [--lasm-db-postgres-shared-client-max-active-per-key <n>]
@@ -30,11 +33,14 @@ dry_run="false"
 matrix_path=""
 impls_csv="sec4-lasm,node,go,rust"
 endpoints_csv="wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+fail_on_impl_failure="${BENCH_WORKBENCH_FAIL_ON_IMPL_FAILURE:-1}"
+profile_retry_on_failure="${BENCH_WORKBENCH_PROFILE_RETRY_ON_FAILURE:-1}"
 bench_port="${BENCH_WORKBENCH_PORT:-18093}"
 lasm_db_adapter="${BENCH_WORKBENCH_LASM_DB_ADAPTER:-sqlite}"
 lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
 lasm_db_records_persist_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_PERSIST_ENABLED:-0}"
+lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-0}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_endpoint_modes="${BENCH_WORKBENCH_LASM_ENDPOINT_MODES:-}"
@@ -98,6 +104,30 @@ while [ "$#" -gt 0 ]; do
       endpoints_csv="${1#--endpoints=}"
       shift
       ;;
+    --fail-on-impl-failure)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      fail_on_impl_failure="$2"
+      shift 2
+      ;;
+    --fail-on-impl-failure=*)
+      fail_on_impl_failure="${1#--fail-on-impl-failure=}"
+      shift
+      ;;
+    --profile-retry-on-failure)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      profile_retry_on_failure="$2"
+      shift 2
+      ;;
+    --profile-retry-on-failure=*)
+      profile_retry_on_failure="${1#--profile-retry-on-failure=}"
+      shift
+      ;;
     --port)
       if [ "$#" -lt 2 ]; then
         usage
@@ -156,6 +186,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-db-records-persist-enabled=*)
       lasm_db_records_persist_enabled="${1#--lasm-db-records-persist-enabled=}"
+      shift
+      ;;
+    --lasm-db-records-capture-enabled)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_db_records_capture_enabled="$2"
+      shift 2
+      ;;
+    --lasm-db-records-capture-enabled=*)
+      lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
       shift
       ;;
     --lasm-mode)
@@ -402,6 +444,9 @@ bench_port_base="$bench_port"
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
+sec4_default_bench_bin="${repo_root}/target/debug/sec4"
+sec4_bench_bin="${BENCH_WORKBENCH_SEC4_BIN:-$sec4_default_bench_bin}"
+sec4_runner_bin=""
 
 normalize_repo_path() {
   local path="$1"
@@ -436,9 +481,6 @@ if [ -z "$out_report" ]; then
 fi
 if [ -z "$out_report_html" ]; then
   out_report_html="${suite_dir}/results/workbench-benchmark-report.html"
-fi
-if [ -z "$lasm_mode_compare_repeats_file" ]; then
-  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
 fi
 
 if [ ! -f "$matrix_path" ]; then
@@ -493,6 +535,36 @@ supported_lasm_db_adapter() {
   esac
 }
 
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+default_workbench_lasm_mode_compare_repeats_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -530,6 +602,27 @@ if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
   exit 2
 fi
+if [ -z "$lasm_mode_compare_repeats_file" ]; then
+  lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
+fi
+if [ "$lasm_db_records_persist_enabled" != "0" ] && [ "$lasm_db_records_persist_enabled" != "1" ]; then
+  echo "invalid --lasm-db-records-persist-enabled (expected 0 or 1): $lasm_db_records_persist_enabled" >&2
+  exit 2
+fi
+if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_enabled" != "1" ]; then
+  echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
+  exit 2
+fi
+if [ "$fail_on_impl_failure" != "0" ] && [ "$fail_on_impl_failure" != "1" ]; then
+  echo "invalid --fail-on-impl-failure (expected 0 or 1): $fail_on_impl_failure" >&2
+  exit 2
+fi
+case "$profile_retry_on_failure" in
+  ''|*[!0-9]*)
+    echo "invalid --profile-retry-on-failure (expected integer >= 0): $profile_retry_on_failure" >&2
+    exit 2
+    ;;
+esac
 
 if [ -n "$lasm_mode" ]; then
   if [ "$lasm_mode" = "auto" ]; then
@@ -549,8 +642,8 @@ if [ -n "$lasm_mode" ]; then
     if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
       [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
     }; then
-      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to fixed mode" >&2
-      lasm_mode="fixed"
+      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
+      lasm_mode="single"
     else
       lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
       if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
@@ -733,6 +826,38 @@ else
   BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
+ensure_sec4_bench_runner_ready() {
+  if [[ ",$runnable_impls_csv," != *",sec4,"* ]] && [[ ",$runnable_impls_csv," != *",sec4-lasm,"* ]]; then
+    return 0
+  fi
+  if [ "$dry_run" = "true" ]; then
+    return 0
+  fi
+  if [ -x "$sec4_bench_bin" ]; then
+    sec4_runner_bin="$sec4_bench_bin"
+    return 0
+  fi
+  if [ "$sec4_bench_bin" != "$sec4_default_bench_bin" ]; then
+    echo "configured sec4 benchmark binary is not executable: $sec4_bench_bin" >&2
+    return 1
+  fi
+  echo "building sec4 benchmark runner binary once: $sec4_default_bench_bin" >&2
+  (
+    cd "$repo_root"
+    cargo build -q -p sec4 --bin sec4
+  ) || return 1
+  if [ ! -x "$sec4_default_bench_bin" ]; then
+    echo "sec4 benchmark binary missing after build: $sec4_default_bench_bin" >&2
+    return 1
+  fi
+  sec4_runner_bin="$sec4_default_bench_bin"
+  return 0
+}
+
+if ! ensure_sec4_bench_runner_ready; then
+  exit 2
+fi
+
 current_bench_port="$bench_port_base"
 current_base_url="http://127.0.0.1:${current_bench_port}"
 base_url="$current_base_url"
@@ -804,6 +929,19 @@ cleanup_impl() {
   cleanup_temp_dir="false"
 }
 
+clear_impl_endpoint_artifacts() {
+  local clear_impl_name="$1"
+  local raw_endpoint=""
+  local endpoint=""
+  for raw_endpoint in "${endpoints[@]}"; do
+    endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
+    [ -z "$endpoint" ] && continue
+    rm -f "${suite_dir}/results/raw/${clear_impl_name}-${endpoint}.txt"
+    rm -f "${suite_dir}/results/summaries/${clear_impl_name}-${endpoint}.json"
+  done
+  rm -f "${suite_dir}/results/summaries/${clear_impl_name}-report.json"
+}
+
 start_impl_service() {
   local impl="$1"
   local service_abs="$2"
@@ -815,11 +953,15 @@ start_impl_service() {
 
   case "$impl" in
     sec4)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       service_temp_dir="$(mktemp -d "/tmp/sec4-workbench-bench-db.XXXXXX")"
       cleanup_temp_dir="true"
       (
         cd "$repo_root"
-        SEC4_RT_DB_BASE="$service_temp_dir" cargo run -q -p sec4 -- run \
+        SEC4_RT_DB_BASE="$service_temp_dir" "$sec4_runner_bin" run \
           --path "$service_abs" \
           --backend c \
           --port "$current_bench_port" \
@@ -827,6 +969,10 @@ start_impl_service() {
       ) >"$log_file" 2>&1 &
       ;;
     sec4-lasm)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       if [ "$lasm_db_adapter" = "sqlite" ]; then
         if [ -n "$lasm_db_base" ]; then
           service_temp_dir="$lasm_db_base"
@@ -839,7 +985,8 @@ start_impl_service() {
         (
           cd "$repo_root"
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
-          cargo run -q -p sec4 -- run \
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
+          "$sec4_runner_bin" run \
             --path "$service_abs" \
             --backend lasm \
             --db-adapter sqlite \
@@ -853,7 +1000,8 @@ start_impl_service() {
           cd "$repo_root"
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
-            cargo run -q -p sec4 -- run \
+          SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
+            "$sec4_runner_bin" run \
               --path "$service_abs" \
               --backend lasm \
               --db-adapter postgres \
@@ -1029,9 +1177,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
@@ -1051,6 +1199,7 @@ while IFS= read -r impl_row; do
   exit_code=0
   seed_task_id=""
   profile_service_pid=""
+  clear_impl_endpoint_artifacts "$impl"
 
   if [ "$result" = "passed" ]; then
     for raw_endpoint in "${endpoints[@]}"; do
@@ -1101,8 +1250,21 @@ while IFS= read -r impl_row; do
         exit_code=1
         continue
       fi
-      if ! BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$profile_service_pid" BENCH_SERVER_PORT="$current_bench_port" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
-        "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$current_base_url"; then
+      profile_attempt=1
+      profile_max_attempts=$((profile_retry_on_failure + 1))
+      profile_ok="false"
+      while [ "$profile_attempt" -le "$profile_max_attempts" ]; do
+        if BENCH_REQUIRE_WRK2="$require_wrk2" BENCH_SERVER_PID="$profile_service_pid" BENCH_SERVER_PORT="$current_bench_port" BENCH_WB_TASK_ID="$seed_task_id" BENCH_WB_RUN_TAG="$run_tag" \
+          "${suite_dir}/scripts/run_workbench_profile.sh" "$impl" "$endpoint" "$current_base_url"; then
+          profile_ok="true"
+          break
+        fi
+        if [ "$profile_attempt" -lt "$profile_max_attempts" ]; then
+          echo "workbench profile retry: impl=${impl} endpoint=${endpoint} attempt=$((profile_attempt + 1))/$profile_max_attempts" >&2
+        fi
+        profile_attempt=$((profile_attempt + 1))
+      done
+      if [ "$profile_ok" != "true" ]; then
         result="failed"
         reason="${reason:+${reason}; }profile failed endpoint=${endpoint}"
         exit_code=1
@@ -1157,6 +1319,8 @@ while IFS= read -r impl_row; do
       --argjson clusterRelayPumpBatchMax "$(if [ -n "$lasm_cluster_relay_pump_batch_max" ]; then printf '%s' "$lasm_cluster_relay_pump_batch_max"; else printf 'null'; fi)" \
       --argjson dbPostgresSharedClientMaxActivePerKey "$(if [ -n "$lasm_db_postgres_shared_client_max_active_per_key" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_per_key"; else printf 'null'; fi)" \
       --argjson dbPostgresSharedClientMaxActiveTotal "$(if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_total"; else printf 'null'; fi)" \
+      --argjson dbRecordsPersistEnabled "$lasm_db_records_persist_enabled" \
+      --argjson dbRecordsCaptureEnabled "$lasm_db_records_capture_enabled" \
       '{
         dbAdapter: $dbAdapter,
         mode: $mode,
@@ -1171,7 +1335,9 @@ while IFS= read -r impl_row; do
         clusterRelayAcceptBatchMax: $clusterRelayAcceptBatchMax,
         clusterRelayPumpBatchMax: $clusterRelayPumpBatchMax,
         dbPostgresSharedClientMaxActivePerKey: $dbPostgresSharedClientMaxActivePerKey,
-        dbPostgresSharedClientMaxActiveTotal: $dbPostgresSharedClientMaxActiveTotal
+        dbPostgresSharedClientMaxActiveTotal: $dbPostgresSharedClientMaxActiveTotal,
+        dbRecordsPersistEnabled: $dbRecordsPersistEnabled,
+        dbRecordsCaptureEnabled: $dbRecordsCaptureEnabled
       }')"
   fi
 
@@ -1230,6 +1396,8 @@ jq -n \
   --arg analysisPath "$out_analysis_rel" \
   --arg reportPath "$out_report_rel" \
   --arg reportHtmlPath "$out_report_html_rel" \
+  --argjson failOnImplFailure "$fail_on_impl_failure" \
+  --argjson profileRetryOnFailure "$profile_retry_on_failure" \
   --argjson totals "$(jq -nc --argjson passed "$total_passed" --argjson failed "$total_failed" --argjson skipped "$total_skipped" '{passed:$passed,failed:$failed,skipped:$skipped}')" \
   --argjson runs "$runs_json" \
   '{
@@ -1242,6 +1410,8 @@ jq -n \
     analysisPath: $analysisPath,
     reportPath: $reportPath,
     reportHtmlPath: $reportHtmlPath,
+    failOnImplFailure: $failOnImplFailure,
+    profileRetryOnFailure: $profileRetryOnFailure,
     totals: $totals,
     runs: $runs
   }' >"$out_runs"
@@ -1262,6 +1432,6 @@ if [ -n "$reported_impls_csv" ]; then
 fi
 echo "totals: passed=${total_passed} failed=${total_failed} skipped=${total_skipped}"
 
-if [ "$total_failed" -gt 0 ]; then
+if [ "$total_failed" -gt 0 ] && [ "$fail_on_impl_failure" = "1" ]; then
   exit 1
 fi
