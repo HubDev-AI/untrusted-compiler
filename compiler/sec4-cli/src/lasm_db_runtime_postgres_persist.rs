@@ -5,6 +5,7 @@ use crate::lasm_db_runtime_postgres::{
 };
 use crate::LasmDbRecord;
 use crossbeam_channel::{bounded, SendError, Sender, TryRecvError, TrySendError};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::env;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -266,16 +267,22 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
             compaction_snapshot,
         } = task;
         let key = lasm_postgres_persist_config_key(&config);
-        let entry = grouped
-            .entry(key)
-            .or_insert_with(|| (config.clone(), Vec::new(), None));
-        entry.1.push(record);
-        if compaction_snapshot.is_some() {
-            entry.2 = compaction_snapshot;
+        match grouped.entry(key) {
+            Entry::Occupied(mut occupied) => {
+                let entry = occupied.get_mut();
+                entry.1.push(record);
+                if compaction_snapshot.is_some() {
+                    entry.2 = compaction_snapshot;
+                }
+            }
+            Entry::Vacant(vacant) => {
+                let mut records = Vec::with_capacity(1);
+                records.push(record);
+                vacant.insert((config, records, compaction_snapshot));
+            }
         }
     }
-    for (_, (config, records, compaction_snapshot)) in grouped {
-        let config_key = lasm_postgres_persist_config_key(&config);
+    for (config_key, (config, records, compaction_snapshot)) in grouped {
         let config_lock = lasm_postgres_persist_config_lock(config_key.as_str());
         let _config_guard = match config_lock.lock() {
             Ok(guard) => guard,
