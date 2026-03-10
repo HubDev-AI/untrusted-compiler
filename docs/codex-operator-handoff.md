@@ -116,6 +116,18 @@ Status notes:
     - command: `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
     - totals: `passed=4 failed=0 skipped=0`
     - `sec4-lasm` no longer fails on `wb-task-get` / `wb-tasks-list` in this publication path.
+- Latest post-alpha runtime hotpath slice (2026-03-10):
+  - Postgres config/build path now precomputes and stores:
+    - shared client-pool key
+    - schema-ensure key
+    - runtime now reuses these keys on tx-connect/prewarm/invalidation paths.
+  - Postgres query-parameter materialization now parses from borrowed JSON values across array/object/scalar parse paths (reduced full-value cloning).
+  - DB client operation prepare path now avoids cloning parsed params for adapter parse dispatch.
+  - Postgres persist pipeline now includes:
+    - precomputed config key per persist task,
+    - reusable worker batch buffers (`drain` path),
+    - bounded stale per-config lock pruning to prevent unbounded lock-map growth on dynamic DSN churn.
+  - Benchmark matrix runner now reuses a prebuilt sec4 runner binary (`target/debug/sec4`) instead of per-endpoint `cargo run` startup for each profiled endpoint.
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 

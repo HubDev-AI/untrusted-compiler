@@ -37,6 +37,11 @@ Canonical evidence set:
   - sec4 LASM workbench setup now creates read-path indexes for `wb_comments`, `wb_tasks`, and `wb_labels`.
 - Latest cross-runtime publication rerun with failure-mode controls (`--fail-on-impl-failure 0`) is green:
   - totals: `passed=4 failed=0 skipped=0` in `benchmark-suite/results/summaries/workbench-benchmark-runs.json`.
+- 2026-03-10 runtime hotpath follow-up landed:
+  - Postgres thread-local config key caching (shared pool + schema ensure).
+  - Postgres/adapter param parsing clone reduction on borrowed JSON values.
+  - Persist queue batch-buffer reuse and bounded stale lock pruning.
+  - Details: `docs/book/1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`.
 
 ## Chapter order
 - `00-preface.md`
@@ -1583,5 +1588,6 @@ Canonical evidence set:
 - `1576-m39-final-alpha-closeout-proof-bundle-and-readiness.md`
 - `1577-m39-workbench-cross-runtime-rerun-and-list-slice-closeout.md`
 - `1578-m39-workbench-post-alpha-failure-mode-controls-and-mode-refresh.md`
+- `1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`
 
 As milestones progress, chapters will be added and linked from this index.

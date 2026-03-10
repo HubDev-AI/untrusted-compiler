@@ -12466,3 +12466,12 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
   - latest full cross-runtime publication rerun with those fixes:
     - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
     - totals: `passed=4 failed=0 skipped=0`.
+- Post-alpha runtime hotpath update (2026-03-10):
+  - Postgres thread-local config now precomputes/stores shared pool and schema ensure keys, and runtime paths reuse those keys instead of rebuilding key strings per operation.
+  - Postgres params parsing now consumes borrowed JSON values across array/object/scalar paths (no full-value clone pass in parse loop).
+  - DB operation prepare path now parses using borrowed `parsed_params` for both Postgres/sqlite adapters (clone-elided dispatch).
+  - Postgres persist queue path now:
+    - carries precomputed config keys on queued tasks,
+    - reuses worker batch buffers via drain processing,
+    - prunes stale per-config locks on bounded cadence for long-running dynamic DSN workloads.
+  - benchmark matrix runner now reuses a prebuilt sec4 binary for endpoint profiles (instead of per-endpoint `cargo run`) to reduce profiling startup overhead.

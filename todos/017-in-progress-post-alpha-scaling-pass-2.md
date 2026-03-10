@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 priority: p2
 issue_id: "017"
 tags: [post-alpha, lasm, scaling, benchmark, postgres]
@@ -25,7 +25,7 @@ Focus: runtime/scaling tuning on canonical Postgres workload with publishable ar
 - [x] T4: Re-run cross-runtime canonical matrix in publication mode
   - Goal: produce latest sec4-lasm/node/go/rust comparison artifacts using failure-mode controls.
   - Monitor: `benchmark-suite/results/workbench-benchmark-report.md`
-- [ ] T5: Status sync + PR
+- [x] T5: Status sync + PR
   - Goal: sync handoff/roadmap/book for this slice and merge to `dev`.
   - Monitor: `docs/codex-operator-handoff.md`, `docs/05-sec4-master-roadmap.md`, `docs/book/README.md`
 
@@ -114,3 +114,16 @@ Focus: runtime/scaling tuning on canonical Postgres workload with publishable ar
 - Re-ran full cross-runtime publication matrix:
   - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --profile-retry-on-failure 0`
   - result: `passed=4 failed=0 skipped=0`.
+
+### 2026-03-10 - T5 finalized with post-alpha runtime hotpath sync
+
+**By:** Codex
+
+**Actions:**
+- Synced latest runtime hotpath updates into:
+  - `docs/codex-operator-handoff.md`
+  - `docs/05-sec4-master-roadmap.md`
+  - `docs/book/README.md`
+- Added chapter for this batch:
+  - `docs/book/1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`
+- Closed `T5` and marked board `017` complete.
