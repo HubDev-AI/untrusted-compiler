@@ -214,9 +214,27 @@ pub(crate) fn lasm_postgres_persist_queue_depth() -> usize {
 
 #[derive(Clone)]
 struct LasmPostgresPersistTask {
+    config_key: String,
     config: LasmPostgresThreadLocalConfig,
     record: LasmDbRecord,
     compaction_snapshot: Option<Vec<LasmDbRecord>>,
+}
+
+impl LasmPostgresPersistTask {
+    #[inline(always)]
+    fn new(
+        config: LasmPostgresThreadLocalConfig,
+        record: LasmDbRecord,
+        compaction_snapshot: Option<Vec<LasmDbRecord>>,
+    ) -> Self {
+        let config_key = lasm_postgres_persist_config_key(&config);
+        Self {
+            config_key,
+            config,
+            record,
+            compaction_snapshot,
+        }
+    }
 }
 
 fn lasm_postgres_persist_config_key(config: &LasmPostgresThreadLocalConfig) -> String {
@@ -262,12 +280,12 @@ fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
     > = HashMap::new();
     for task in tasks {
         let LasmPostgresPersistTask {
+            config_key,
             config,
             record,
             compaction_snapshot,
         } = task;
-        let key = lasm_postgres_persist_config_key(&config);
-        match grouped.entry(key) {
+        match grouped.entry(config_key) {
             Entry::Occupied(mut occupied) => {
                 let entry = occupied.get_mut();
                 entry.1.push(record);
@@ -399,20 +417,12 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
     compaction_snapshot: Option<Vec<LasmDbRecord>>,
 ) {
     let sender = lasm_postgres_persist_queue_sender();
+    let task = LasmPostgresPersistTask::new(config.clone(), record.clone(), compaction_snapshot);
     if !LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.load(Ordering::Relaxed) {
         LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-        run_lasm_postgres_persist_task_batch(vec![LasmPostgresPersistTask {
-            config: config.clone(),
-            record: record.clone(),
-            compaction_snapshot,
-        }]);
+        run_lasm_postgres_persist_task_batch(vec![task]);
         return;
     }
-    let task = LasmPostgresPersistTask {
-        config: config.clone(),
-        record: record.clone(),
-        compaction_snapshot,
-    };
     match sender.try_send(task) {
         Ok(()) => {}
         Err(TrySendError::Full(full_task)) => {
