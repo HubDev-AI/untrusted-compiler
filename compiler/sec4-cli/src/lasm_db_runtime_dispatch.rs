@@ -1,11 +1,14 @@
 use crate::lasm_db_client::{
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
+    resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
-    run_lasm_query_one_operation_with_adapter, validate_lasm_internal_db_operation_sequence_count,
-    LasmExecTxSource, LasmInternalDbOperationSequenceValidationError,
-    LasmInternalDbSequenceFailure, LasmInternalDbSequenceState, LasmLockedOperationError,
-    LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
+    run_lasm_query_one_operation_with_adapter,
+    set_lasm_db_op_sequence_max_override as set_lasm_db_op_sequence_max_override_config,
+    validate_lasm_internal_db_operation_sequence_count, LasmExecTxSource,
+    LasmInternalDbOperationSequenceValidationError, LasmInternalDbSequenceFailure,
+    LasmInternalDbSequenceState, LasmLockedOperationError, LasmPreparedDbOperationParams,
+    LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
     LasmUnifiedQueryOneOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
@@ -17,10 +20,9 @@ use crate::{
     lasm_db_record_to_json, lasm_error_envelope, lasm_internal_db_indexed_header, lasm_now_ms,
     set_lasm_json_response, LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
     LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_OP_SEQUENCE_MAX, LASM_INTERNAL_DB_PARAMS_HEADER,
-    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_RESULT_HEADER,
-    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -39,10 +41,6 @@ const LASM_DB_PARAMS_MAX_ENTRIES_ENV: &str = "SEC4_RT_LASM_DB_PARAMS_MAX_ENTRIES
 const LASM_DB_PARAMS_MAX_ENTRIES_DEFAULT: usize = 2048;
 const LASM_DB_PARAMS_MAX_ENTRIES_MIN: usize = 1;
 const LASM_DB_PARAMS_MAX_ENTRIES_MAX: usize = 65_536;
-const LASM_DB_OP_SEQUENCE_MAX_ENV: &str = "SEC4_RT_LASM_DB_OP_SEQUENCE_MAX";
-const LASM_DB_OP_SEQUENCE_MAX_DEFAULT: usize = LASM_INTERNAL_DB_OP_SEQUENCE_MAX;
-const LASM_DB_OP_SEQUENCE_MAX_MIN: usize = 2;
-const LASM_DB_OP_SEQUENCE_MAX_MAX: usize = 4096;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_ENV: &str = "SEC4_RT_LASM_DB_QUERY_ONE_ROW_MAX_BYTES";
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_DEFAULT: usize = 1024 * 1024;
 const LASM_DB_QUERY_ONE_ROW_MAX_BYTES_MIN: usize = 256;
@@ -54,13 +52,11 @@ const LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_MAX: usize = 16_384;
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_PARAMS_MAX_ENTRIES_RESOLVED: OnceLock<usize> = OnceLock::new();
-static LASM_DB_OP_SEQUENCE_MAX_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_DB_SQL_TEMPLATE_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_PARAMS_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_PARAMS_MAX_ENTRIES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
-static LASM_DB_OP_SEQUENCE_MAX_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_BYTES_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 static LASM_DB_QUERY_ONE_ROW_MAX_COLUMNS_OVERRIDE: AtomicUsize = AtomicUsize::new(0);
 
@@ -278,28 +274,13 @@ fn lasm_db_params_entry_count(
 }
 
 #[inline(always)]
-fn resolve_lasm_db_op_sequence_max() -> usize {
-    let override_value = LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.load(Ordering::Relaxed);
-    if override_value != 0 {
-        return override_value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX);
-    }
-    *LASM_DB_OP_SEQUENCE_MAX_RESOLVED.get_or_init(|| {
-        std::env::var(LASM_DB_OP_SEQUENCE_MAX_ENV)
-            .ok()
-            .and_then(|raw| raw.trim().parse::<usize>().ok())
-            .map(|value| value.clamp(LASM_DB_OP_SEQUENCE_MAX_MIN, LASM_DB_OP_SEQUENCE_MAX_MAX))
-            .unwrap_or(LASM_DB_OP_SEQUENCE_MAX_DEFAULT)
-    })
-}
-
-#[inline(always)]
 pub(crate) fn lasm_db_op_sequence_max_limit() -> usize {
-    resolve_lasm_db_op_sequence_max()
+    resolve_lasm_db_op_sequence_max_config()
 }
 
 #[inline(always)]
 pub(crate) fn set_lasm_db_op_sequence_max_override(value: Option<usize>) {
-    LASM_DB_OP_SEQUENCE_MAX_OVERRIDE.store(value.unwrap_or(0), Ordering::Relaxed);
+    set_lasm_db_op_sequence_max_override_config(value);
 }
 
 #[inline(always)]
@@ -1326,7 +1307,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
     let operation_count = match validate_lasm_internal_db_operation_sequence_count(
         take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER),
         response_has_lasm_internal_db_indexed_headers(response),
-        resolve_lasm_db_op_sequence_max(),
+        lasm_db_op_sequence_max_limit(),
     ) {
         Ok(value) => value,
         Err(error) => {
