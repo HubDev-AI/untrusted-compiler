@@ -347,9 +347,9 @@ pub(crate) fn lasm_postgres_shared_client_pool_active_total() -> usize {
     }
 }
 
-fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgresParam {
+fn parse_lasm_postgres_query_param_value(value: &serde_json::Value) -> LasmPostgresParam {
     match value {
-        serde_json::Value::String(inner) => LasmPostgresParam::Text(inner),
+        serde_json::Value::String(inner) => LasmPostgresParam::Text(inner.clone()),
         serde_json::Value::Number(inner) => {
             if let Some(value) = inner.as_i64() {
                 return LasmPostgresParam::Int(value);
@@ -365,7 +365,7 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
             }
             LasmPostgresParam::Text(inner.to_string())
         }
-        serde_json::Value::Bool(inner) => LasmPostgresParam::Bool(inner),
+        serde_json::Value::Bool(inner) => LasmPostgresParam::Bool(*inner),
         serde_json::Value::Null => LasmPostgresParam::Null(None),
         other => LasmPostgresParam::Text(serde_json::to_string(&other).unwrap_or_default()),
     }
@@ -381,7 +381,7 @@ fn parse_lasm_postgres_positional_object_params(
             format!("postgres params object key `{key}` is not a valid positional index")
         })?;
         max_index = max_index.max(index);
-        indexed.push((index, parse_lasm_postgres_query_param_value(value.clone())));
+        indexed.push((index, parse_lasm_postgres_query_param_value(value)));
     }
     let mut params = Vec::with_capacity(max_index);
     for _ in 0..max_index {
@@ -451,7 +451,7 @@ fn parse_lasm_postgres_named_object_params(
                 format!("postgres params object key `{key}` is not a valid named parameter key")
             })?;
         let normalized = normalized.to_string();
-        let value = parse_lasm_postgres_query_param_value(value.clone());
+        let value = parse_lasm_postgres_query_param_value(value);
         if named.insert(normalized.clone(), value).is_some() {
             return Err(format!(
                 "postgres params object contains duplicate normalized key `{normalized}`"
@@ -700,7 +700,6 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params_value(
             query_template.to_string(),
             entries
                 .iter()
-                .cloned()
                 .map(parse_lasm_postgres_query_param_value)
                 .collect(),
         )),
@@ -728,7 +727,7 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params_value(
         serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
         other => Ok((
             query_template.to_string(),
-            vec![parse_lasm_postgres_query_param_value(other.clone())],
+            vec![parse_lasm_postgres_query_param_value(other)],
         )),
     }
 }
@@ -744,7 +743,7 @@ pub(crate) fn parse_lasm_postgres_query_params(
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
         return match parsed {
             serde_json::Value::Array(entries) => Ok(entries
-                .into_iter()
+                .iter()
                 .map(parse_lasm_postgres_query_param_value)
                 .collect()),
             serde_json::Value::Object(entries) => match classify_lasm_postgres_params_object_keys(
@@ -759,7 +758,7 @@ pub(crate) fn parse_lasm_postgres_query_params(
                 ),
             },
             serde_json::Value::Null => Ok(Vec::new()),
-            other => Ok(vec![parse_lasm_postgres_query_param_value(other)]),
+            other => Ok(vec![parse_lasm_postgres_query_param_value(&other)]),
         };
     }
     Ok(vec![LasmPostgresParam::Text(trimmed.to_string())])
