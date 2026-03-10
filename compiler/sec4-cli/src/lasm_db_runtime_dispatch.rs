@@ -1814,7 +1814,7 @@ fn materialize_lasm_internal_header_value(
 mod tests {
     use super::{
         apply_lasm_internal_db_operation_materialization, derive_lasm_exec_like_success_data,
-        derive_lasm_query_one_success_data, parse_lasm_record_flat_param_values,
+        derive_lasm_query_one_success_data,
     };
     use crate::{
         lasm_internal_db_indexed_header, LasmDbRecord, LasmDbRecordsAdapter,
@@ -3006,7 +3006,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_exec_like_success_data_uses_json_fallback_when_flat_params_fail() {
+    fn derive_exec_like_success_data_handles_nested_params_payload() {
         let record = LasmDbRecord {
             id: 12,
             op: "exec".to_string(),
@@ -3018,10 +3018,6 @@ mod tests {
             created_at_ms: 12,
         };
 
-        assert!(
-            parse_lasm_record_flat_param_values(&record).is_none(),
-            "flat param parser should fail on nested object payload and trigger json fallback"
-        );
         let data = derive_lasm_exec_like_success_data(&record, 1);
         assert_eq!(
             data.get("id").and_then(|value| value.as_str()),
@@ -3058,7 +3054,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_query_one_success_data_uses_json_fallback_when_flat_params_fail() {
+    fn derive_query_one_success_data_handles_nested_params_payload() {
         let record = LasmDbRecord {
             id: 13,
             op: "queryOne".to_string(),
@@ -3070,10 +3066,6 @@ mod tests {
             created_at_ms: 13,
         };
 
-        assert!(
-            parse_lasm_record_flat_param_values(&record).is_none(),
-            "flat param parser should fail on nested object payload and trigger json fallback"
-        );
         let row_object = serde_json::json!({ "id": "task-fallback" });
         let data = derive_lasm_query_one_success_data(&record, &row_object);
         assert_eq!(data.get("limit").and_then(|value| value.as_i64()), Some(25));

@@ -64,7 +64,7 @@ Canonical command used for the final publication set:
 
 ```bash
 BENCH_WORKBENCH_REQUIRE_WRK2=1 \
-BENCH_WRK2_BIN=/Users/vladimirtrifonov/src/ai/AILang/benchmark-suite/bin/wrk2 \
+BENCH_WRK2_BIN=./benchmark-suite/bin/wrk2 \
 BENCH_DURATION=20s \
 BENCH_WORKBENCH_PG_DSN='postgres://vladimirtrifonov@127.0.0.1:5432/postgres?sslmode=disable' \
 ./benchmark-suite/scripts/run_workbench_benchmark_matrix.sh \
