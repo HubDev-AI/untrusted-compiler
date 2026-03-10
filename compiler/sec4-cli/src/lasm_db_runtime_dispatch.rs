@@ -2088,7 +2088,8 @@ fn take_lasm_internal_header_value(
     response: &mut sec4_core::HttpResponse,
     header_name: &str,
 ) -> Option<String> {
-    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)
+        .map(str::to_owned)?;
     response.headers.remove(&key)
 }
 
@@ -2098,7 +2099,8 @@ fn take_lasm_internal_header_value_indexed(
     index: usize,
 ) -> Option<String> {
     let indexed = lasm_internal_db_indexed_header(header_name, index);
-    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, indexed.as_str())?;
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, indexed.as_str())
+        .map(str::to_owned)?;
     response.headers.remove(&key)
 }
 
