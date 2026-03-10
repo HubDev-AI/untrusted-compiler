@@ -894,6 +894,19 @@ cleanup_impl() {
   cleanup_temp_dir="false"
 }
 
+clear_impl_endpoint_artifacts() {
+  local clear_impl_name="$1"
+  local raw_endpoint=""
+  local endpoint=""
+  for raw_endpoint in "${endpoints[@]}"; do
+    endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
+    [ -z "$endpoint" ] && continue
+    rm -f "${suite_dir}/results/raw/${clear_impl_name}-${endpoint}.txt"
+    rm -f "${suite_dir}/results/summaries/${clear_impl_name}-${endpoint}.json"
+  done
+  rm -f "${suite_dir}/results/summaries/${clear_impl_name}-report.json"
+}
+
 start_impl_service() {
   local impl="$1"
   local service_abs="$2"
@@ -1143,6 +1156,7 @@ while IFS= read -r impl_row; do
   exit_code=0
   seed_task_id=""
   profile_service_pid=""
+  clear_impl_endpoint_artifacts "$impl"
 
   if [ "$result" = "passed" ]; then
     for raw_endpoint in "${endpoints[@]}"; do
