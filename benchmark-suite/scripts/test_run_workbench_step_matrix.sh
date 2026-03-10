@@ -223,7 +223,13 @@ auto_mismatch_out="$(
     2>&1
 )"
 if ! grep -q 'warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode' <<<"$auto_mismatch_out"; then
-  echo "missing LASM auto mode workload mismatch fallback warning in step matrix output" >&2
+  if ! grep -q 'warning: LASM auto mode recommendation unavailable; falling back to single mode' <<<"$auto_mismatch_out"; then
+    echo "missing LASM auto mode fallback warning in step matrix output" >&2
+    exit 1
+  fi
+fi
+if ! grep -q 'run: .*run_workbench_lasm_mode_compare.sh .*--out .* --dry-run' <<<"$auto_mismatch_out"; then
+  echo "missing delegated LASM mode compare dry-run generation marker in step matrix output" >&2
   exit 1
 fi
 if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_mismatch_out"; then
