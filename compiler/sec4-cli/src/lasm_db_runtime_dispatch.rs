@@ -1,10 +1,10 @@
 use crate::lasm_db_client::{
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
-    LasmInternalDbSequenceState,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
-    run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmLockedOperationError,
-    LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
+    run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmInternalDbSequenceFailure,
+    LasmInternalDbSequenceState, LasmLockedOperationError, LasmPreparedDbOperationParams,
+    LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
     LasmUnifiedQueryOneOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
@@ -823,12 +823,10 @@ fn derive_lasm_exec_like_success_data(
     let parsed_fallback_values = parse_lasm_record_params_array(record);
     let fallback_values = parsed_fallback_values.as_deref();
     if record.op == "execTx" {
-        if let (Some(comment_id), Some(task_id)) =
-            (
-                lasm_record_param_string(0, flat_values, fallback_values),
-                lasm_record_param_string(1, flat_values, fallback_values),
-            )
-        {
+        if let (Some(comment_id), Some(task_id)) = (
+            lasm_record_param_string(0, flat_values, fallback_values),
+            lasm_record_param_string(1, flat_values, fallback_values),
+        ) {
             return serde_json::json!({
                 "taskId": task_id,
                 "commentId": comment_id
@@ -1232,6 +1230,27 @@ fn fail_lasm_internal_db_sequence_with_envelope(
     true
 }
 
+fn fail_lasm_internal_db_sequence_failure(
+    response: &mut sec4_core::HttpResponse,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    sequence_state: &LasmInternalDbSequenceState,
+    db_records_adapter: LasmDbRecordsAdapter,
+    failure: LasmInternalDbSequenceFailure,
+    trace_id: &str,
+) -> bool {
+    fail_lasm_internal_db_sequence_with_envelope(
+        response,
+        dynamic_state,
+        sequence_state,
+        db_records_adapter,
+        failure.code,
+        failure.kind,
+        failure.message,
+        failure.status,
+        trace_id,
+    )
+}
+
 pub(crate) fn apply_lasm_internal_db_operation_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
@@ -1342,115 +1361,52 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             };
             let mut sequence_allocated_tx_source: Option<i64> = None;
             if operation == "execTx" {
-                let raw_tx_db = take_lasm_internal_header_value_indexed(
-                    response,
-                    LASM_INTERNAL_DB_TX_DB_HEADER,
-                    index,
-                );
-                let raw_tx_handle = take_lasm_internal_header_value_indexed(
-                    response,
-                    LASM_INTERNAL_DB_TX_HEADER,
-                    index,
-                );
-                if raw_tx_db.is_some() && raw_tx_handle.is_some() {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                let sequence_preparation = match sequence_state.prepare_exec_tx_sequence_operation(
+                    take_lasm_internal_header_value_indexed(
                         response,
-                        dynamic_state,
-                        &sequence_state,
-                        db_records_adapter,
-                        "DB.EXEC_TX_INVALID",
-                        "validation",
-                        "db.execTx must include either tx handle or db.tx(dbCap) source, not both",
-                        400,
-                        trace_id,
-                    );
+                        LASM_INTERNAL_DB_TX_DB_HEADER,
+                        index,
+                    ),
+                    take_lasm_internal_header_value_indexed(
+                        response,
+                        LASM_INTERNAL_DB_TX_HEADER,
+                        index,
+                    ),
+                    |raw| {
+                        materialize_lasm_internal_header_value(raw, request, path_params, trace_id)
+                    },
+                    parse_lasm_positive_i64,
+                    is_lasm_valid_db_cap_handle,
+                ) {
+                    Ok(value) => value,
+                    Err(failure) => {
+                        return fail_lasm_internal_db_sequence_failure(
+                            response,
+                            dynamic_state,
+                            &sequence_state,
+                            db_records_adapter,
+                            failure,
+                            trace_id,
+                        );
+                    }
+                };
+                if let Some(value) = sequence_preparation.tx_header {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), value);
                 }
-                if let Some(raw_tx_db) = raw_tx_db {
-                    let tx_db_source_raw = materialize_lasm_internal_header_value(
-                        raw_tx_db.clone(),
-                        request,
-                        path_params,
-                        trace_id,
-                    );
-                    let Some(tx_db_source) = parse_lasm_positive_i64(tx_db_source_raw.trim())
-                    else {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_state,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires transaction and query handles",
-                            400,
-                            trace_id,
-                        );
-                    };
-                    if !is_lasm_valid_db_cap_handle(tx_db_source) {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_state,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires db.tx(dbCap) with valid db capability handle",
-                            400,
-                            trace_id,
-                        );
-                    }
-                    if let Some(existing_tx_handle) =
-                        sequence_state.tracked_tx_for_source(tx_db_source)
-                    {
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_HEADER.to_string(),
-                            existing_tx_handle.to_string(),
-                        );
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
-                            "1".to_string(),
-                        );
-                        sequence_state.track_tx_handle(existing_tx_handle);
-                    } else {
-                        response
-                            .headers
-                            .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), raw_tx_db);
-                        response.headers.insert(
-                            LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
-                            "1".to_string(),
-                        );
-                        sequence_allocated_tx_source = Some(tx_db_source);
-                    }
-                } else if let Some(raw_tx_handle) = raw_tx_handle {
+                if let Some(value) = sequence_preparation.tx_db_header {
+                    response
+                        .headers
+                        .insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), value);
+                }
+                if sequence_preparation.retain_tx_for_sequence {
                     response.headers.insert(
                         LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER.to_string(),
                         "1".to_string(),
                     );
-                    response.headers.insert(
-                        LASM_INTERNAL_DB_TX_HEADER.to_string(),
-                        raw_tx_handle.clone(),
-                    );
-                    let tx_handle_raw = materialize_lasm_internal_header_value(
-                        raw_tx_handle,
-                        request,
-                        path_params,
-                        trace_id,
-                    );
-                    let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.trim()) else {
-                        return fail_lasm_internal_db_sequence_with_envelope(
-                            response,
-                            dynamic_state,
-                            &sequence_state,
-                            db_records_adapter,
-                            "DB.EXEC_TX_INVALID",
-                            "validation",
-                            "db.execTx requires valid tx handle",
-                            400,
-                            trace_id,
-                        );
-                    };
-                    sequence_state.track_tx_handle(tx_handle);
                 }
+                sequence_allocated_tx_source = sequence_preparation.allocated_tx_source;
             } else {
                 if let Some(value) = take_lasm_internal_header_value_indexed(
                     response,
@@ -1497,98 +1453,44 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                 return true;
             }
             if operation == "tx" {
-                let Some(raw_db_source) = sequence_tx_db_source_raw else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                if let Err(failure) = sequence_state.track_sequence_tx_runtime_result(
+                    sequence_tx_db_source_raw,
+                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER),
+                    |raw| {
+                        materialize_lasm_internal_header_value(raw, request, path_params, trace_id)
+                    },
+                    parse_lasm_positive_i64,
+                ) {
+                    return fail_lasm_internal_db_sequence_failure(
                         response,
                         dynamic_state,
                         &sequence_state,
                         db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime did not preserve db handle marker",
-                        500,
+                        failure,
                         trace_id,
                     );
-                };
-                let db_source_raw = materialize_lasm_internal_header_value(
-                    raw_db_source,
-                    request,
-                    path_params,
-                    trace_id,
-                );
-                let Some(db_source) = parse_lasm_positive_i64(db_source_raw.trim()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_state,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                let Some(tx_handle_raw) =
-                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
-                else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_state,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime did not publish transaction handle marker",
-                        500,
-                        trace_id,
-                    );
-                };
-                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_state,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                sequence_state.track_source_tx_handle(db_source, tx_handle);
+                }
             }
             if let Some(tx_db_source) = sequence_allocated_tx_source {
-                let Some(tx_handle_raw) =
-                    take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_RESULT_HEADER)
-                else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
+                if let Err(failure) = sequence_state
+                    .track_sequence_allocated_exec_tx_runtime_result(
+                        tx_db_source,
+                        take_lasm_internal_header_value(
+                            response,
+                            LASM_INTERNAL_DB_TX_RESULT_HEADER,
+                        ),
+                        parse_lasm_positive_i64,
+                    )
+                {
+                    return fail_lasm_internal_db_sequence_failure(
                         response,
                         dynamic_state,
                         &sequence_state,
                         db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.execTx runtime did not publish transaction handle marker",
-                        500,
+                        failure,
                         trace_id,
                     );
-                };
-                let Some(tx_handle) = parse_lasm_positive_i64(tx_handle_raw.as_str()) else {
-                    return fail_lasm_internal_db_sequence_with_envelope(
-                        response,
-                        dynamic_state,
-                        &sequence_state,
-                        db_records_adapter,
-                        "DB.TX_INTERNAL",
-                        "internal",
-                        "db.tx runtime failure",
-                        500,
-                        trace_id,
-                    );
-                };
-                sequence_state.track_source_tx_handle(tx_db_source, tx_handle);
+                }
             }
         }
         sequence_state.cleanup(dynamic_state, db_records_adapter, true);
@@ -3286,8 +3188,14 @@ mod tests {
             created_at_ms: 1,
         };
         let tx_data = derive_lasm_exec_like_success_data(&tx_record, 1);
-        assert_eq!(tx_data.get("commentId").and_then(|value| value.as_str()), Some("comment-1"));
-        assert_eq!(tx_data.get("taskId").and_then(|value| value.as_str()), Some("task-1"));
+        assert_eq!(
+            tx_data.get("commentId").and_then(|value| value.as_str()),
+            Some("comment-1")
+        );
+        assert_eq!(
+            tx_data.get("taskId").and_then(|value| value.as_str()),
+            Some("task-1")
+        );
 
         let exec_record = LasmDbRecord {
             id: 2,
@@ -3300,7 +3208,10 @@ mod tests {
             created_at_ms: 2,
         };
         let exec_data = derive_lasm_exec_like_success_data(&exec_record, 1);
-        assert_eq!(exec_data.get("id").and_then(|value| value.as_str()), Some("task-9"));
+        assert_eq!(
+            exec_data.get("id").and_then(|value| value.as_str()),
+            Some("task-9")
+        );
     }
 
     #[test]
@@ -3349,7 +3260,10 @@ mod tests {
             .and_then(|value| value.as_array())
             .expect("query-one list payload should include items array");
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].get("id").and_then(|value| value.as_str()), Some("task-1"));
+        assert_eq!(
+            items[0].get("id").and_then(|value| value.as_str()),
+            Some("task-1")
+        );
     }
 
     #[test]
