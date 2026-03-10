@@ -85,14 +85,9 @@ pub(crate) fn cleanup_lasm_internal_db_sequence_tx_handles(
     operation_succeeded: bool,
 ) {
     let mut pending_postgres = Vec::new();
-    let mut postgres_config = None;
     let Ok(mut state) = dynamic_state.lock() else {
         return;
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        postgres_config =
-            crate::lasm_db_client::build_lasm_postgres_thread_local_config(&state).ok();
-    }
     let mut consumed_handles = BTreeSet::new();
     for handle in handles {
         if !consumed_handles.insert(handle) {
@@ -133,6 +128,17 @@ pub(crate) fn cleanup_lasm_internal_db_sequence_tx_handles(
         drop_lasm_db_tx_handle(&mut state, handle);
     }
     drop(state);
+    let postgres_config =
+        if db_records_adapter == LasmDbRecordsAdapter::Postgres && !pending_postgres.is_empty() {
+            match dynamic_state.lock() {
+                Ok(mut state) => {
+                    crate::lasm_db_client::build_lasm_postgres_thread_local_config(&mut state).ok()
+                }
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
 
     for pending in pending_postgres {
         let mut client = pending.client;
