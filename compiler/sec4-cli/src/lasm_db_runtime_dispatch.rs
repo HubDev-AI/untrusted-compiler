@@ -2,9 +2,10 @@ use crate::lasm_db_client::{
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
-    run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmInternalDbSequenceFailure,
-    LasmInternalDbSequenceState, LasmLockedOperationError, LasmPreparedDbOperationParams,
-    LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
+    run_lasm_query_one_operation_with_adapter, validate_lasm_internal_db_operation_sequence_count,
+    LasmExecTxSource, LasmInternalDbOperationSequenceValidationError,
+    LasmInternalDbSequenceFailure, LasmInternalDbSequenceState, LasmLockedOperationError,
+    LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
     LasmUnifiedQueryOneOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
@@ -1251,33 +1252,24 @@ fn fail_lasm_internal_db_sequence_failure(
     )
 }
 
-pub(crate) fn apply_lasm_internal_db_operation_materialization(
+fn respond_lasm_internal_db_sequence_validation_error(
     response: &mut sec4_core::HttpResponse,
-    request: &LasmRunRequest,
-    path_params: &BTreeMap<String, String>,
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    db_records_adapter: LasmDbRecordsAdapter,
+    error: LasmInternalDbOperationSequenceValidationError,
     trace_id: &str,
 ) -> bool {
-    let operation_count = if let Some(raw_operation_count) =
-        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER)
-    {
-        let trimmed = raw_operation_count.trim();
-        let Some(parsed) = trimmed.parse::<usize>().ok() else {
-            set_lasm_json_response(
-                response,
+    match error {
+        LasmInternalDbOperationSequenceValidationError::InvalidMarker => set_lasm_json_response(
+            response,
+            400,
+            &lasm_error_envelope(
+                "DB.OPERATION_INVALID",
+                "validation",
+                "invalid internal db operation sequence marker",
                 400,
-                &lasm_error_envelope(
-                    "DB.OPERATION_INVALID",
-                    "validation",
-                    "invalid internal db operation sequence marker",
-                    400,
-                    trace_id,
-                ),
-            );
-            return true;
-        };
-        if parsed < 2 {
+                trace_id,
+            ),
+        ),
+        LasmInternalDbOperationSequenceValidationError::MarkerValueTooSmall => {
             set_lasm_json_response(
                 response,
                 400,
@@ -1288,45 +1280,59 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     400,
                     trace_id,
                 ),
-            );
-            return true;
+            )
         }
-        parsed
-    } else {
-        0
+        LasmInternalDbOperationSequenceValidationError::IndexedMarkersRequireCount => {
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    "indexed internal db operation markers require operation count marker",
+                    400,
+                    trace_id,
+                ),
+            )
+        }
+        LasmInternalDbOperationSequenceValidationError::ExceedsMaximum { maximum } => {
+            let message = format!(
+                "db operation sequence exceeds maximum supported operations per handler ({maximum})"
+            );
+            set_lasm_json_response(
+                response,
+                400,
+                &lasm_error_envelope(
+                    "DB.OPERATION_INVALID",
+                    "validation",
+                    message.as_str(),
+                    400,
+                    trace_id,
+                ),
+            )
+        }
+    }
+    true
+}
+
+pub(crate) fn apply_lasm_internal_db_operation_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_records_adapter: LasmDbRecordsAdapter,
+    trace_id: &str,
+) -> bool {
+    let operation_count = match validate_lasm_internal_db_operation_sequence_count(
+        take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_COUNT_HEADER),
+        response_has_lasm_internal_db_indexed_headers(response),
+        resolve_lasm_db_op_sequence_max(),
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            return respond_lasm_internal_db_sequence_validation_error(response, error, trace_id);
+        }
     };
-    if operation_count == 0 && response_has_lasm_internal_db_indexed_headers(response) {
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                "DB.OPERATION_INVALID",
-                "validation",
-                "indexed internal db operation markers require operation count marker",
-                400,
-                trace_id,
-            ),
-        );
-        return true;
-    }
-    let operation_sequence_max = resolve_lasm_db_op_sequence_max();
-    if operation_count > operation_sequence_max {
-        let message = format!(
-            "db operation sequence exceeds maximum supported operations per handler ({operation_sequence_max})"
-        );
-        set_lasm_json_response(
-            response,
-            400,
-            &lasm_error_envelope(
-                "DB.OPERATION_INVALID",
-                "validation",
-                message.as_str(),
-                400,
-                trace_id,
-            ),
-        );
-        return true;
-    }
     if operation_count > 1 {
         let mut sequence_state = LasmInternalDbSequenceState::new();
         for index in 0..operation_count {
