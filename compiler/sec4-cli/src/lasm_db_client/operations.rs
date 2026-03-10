@@ -105,6 +105,14 @@ pub(crate) enum LasmExecTxSource {
     ExistingTx(i64),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LasmInternalDbOperationSequenceValidationError {
+    InvalidMarker,
+    MarkerValueTooSmall,
+    IndexedMarkersRequireCount,
+    ExceedsMaximum { maximum: usize },
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct LasmInternalDbSequenceState {
     tx_handles_by_source: BTreeMap<i64, i64>,
@@ -145,6 +153,38 @@ impl LasmInternalDbSequenceFailure {
             status: 500,
         }
     }
+}
+
+pub(crate) fn validate_lasm_internal_db_operation_sequence_count(
+    raw_operation_count: Option<String>,
+    has_indexed_headers: bool,
+    operation_sequence_max: usize,
+) -> Result<usize, LasmInternalDbOperationSequenceValidationError> {
+    let operation_count = if let Some(raw_operation_count) = raw_operation_count {
+        let trimmed = raw_operation_count.trim();
+        let Some(parsed) = trimmed.parse::<usize>().ok() else {
+            return Err(LasmInternalDbOperationSequenceValidationError::InvalidMarker);
+        };
+        if parsed < 2 {
+            return Err(LasmInternalDbOperationSequenceValidationError::MarkerValueTooSmall);
+        }
+        parsed
+    } else {
+        0
+    };
+
+    if operation_count == 0 && has_indexed_headers {
+        return Err(LasmInternalDbOperationSequenceValidationError::IndexedMarkersRequireCount);
+    }
+    if operation_count > operation_sequence_max {
+        return Err(
+            LasmInternalDbOperationSequenceValidationError::ExceedsMaximum {
+                maximum: operation_sequence_max,
+            },
+        );
+    }
+
+    Ok(operation_count)
 }
 
 impl LasmInternalDbSequenceState {
