@@ -31,6 +31,8 @@ pub(crate) enum LasmPostgresParam {
 pub(crate) struct LasmPostgresThreadLocalConfig {
     pub(crate) dsn: String,
     pub(crate) tls_mode: LasmDbPostgresTlsMode,
+    pub(crate) shared_client_pool_key: String,
+    pub(crate) schema_ensure_key: String,
     pub(crate) statement_timeout_ms: u64,
     pub(crate) lock_timeout_ms: u64,
     pub(crate) connect_timeout_ms: u64,
@@ -2215,25 +2217,12 @@ pub(crate) fn run_lasm_postgres_exec_tx_rollback(
     }
 }
 
-fn lasm_postgres_thread_local_client_key(config: &LasmPostgresThreadLocalConfig) -> String {
-    let tls_mode = match config.tls_mode {
-        LasmDbPostgresTlsMode::Auto => "auto",
-        LasmDbPostgresTlsMode::Disable => "disable",
-        LasmDbPostgresTlsMode::Require => "require",
-    };
-    format!(
-        "{tls_mode}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
-        config.dsn, config.statement_timeout_ms, config.lock_timeout_ms, config.connect_timeout_ms
-    )
+fn lasm_postgres_thread_local_client_key(config: &LasmPostgresThreadLocalConfig) -> &str {
+    config.shared_client_pool_key.as_str()
 }
 
-fn lasm_postgres_schema_ensure_key(config: &LasmPostgresThreadLocalConfig) -> String {
-    let tls_mode = match config.tls_mode {
-        LasmDbPostgresTlsMode::Auto => "auto",
-        LasmDbPostgresTlsMode::Disable => "disable",
-        LasmDbPostgresTlsMode::Require => "require",
-    };
-    format!("{tls_mode}\u{1f}{}", config.dsn)
+fn lasm_postgres_schema_ensure_key(config: &LasmPostgresThreadLocalConfig) -> &str {
+    config.schema_ensure_key.as_str()
 }
 
 fn ensure_lasm_postgres_thread_local_schema_ready(
@@ -2248,7 +2237,7 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
             .0
             .lock()
             .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
-        match guard.get(key.as_str()).copied() {
+        match guard.get(key).copied() {
             Some(LasmPostgresSchemaEnsureState::Ready) => return Ok(()),
             Some(LasmPostgresSchemaEnsureState::InProgress) => {
                 guard = tracker
@@ -2258,7 +2247,7 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
                 drop(guard);
             }
             None => {
-                guard.insert(key.clone(), LasmPostgresSchemaEnsureState::InProgress);
+                guard.insert(key.to_string(), LasmPostgresSchemaEnsureState::InProgress);
                 drop(guard);
                 let result = ensure_lasm_dynamic_db_records_postgres_schema(client);
                 let mut finish_guard = tracker
@@ -2267,13 +2256,13 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
                     .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
                 match result {
                     Ok(()) => {
-                        finish_guard.insert(key, LasmPostgresSchemaEnsureState::Ready);
+                        finish_guard.insert(key.to_string(), LasmPostgresSchemaEnsureState::Ready);
                         drop(finish_guard);
                         tracker.1.notify_all();
                         return Ok(());
                     }
                     Err(error) => {
-                        finish_guard.remove(key.as_str());
+                        finish_guard.remove(key);
                         drop(finish_guard);
                         tracker.1.notify_all();
                         return Err(error);
@@ -2430,16 +2419,16 @@ fn run_lasm_postgres_thread_local_with_client_from_pool<R>(
     ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
 ) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
     let key = lasm_postgres_thread_local_client_key(config);
-    let mut client = checkout_lasm_postgres_shared_client_from_pool(pool, config, key.as_str())?;
+    let mut client = checkout_lasm_postgres_shared_client_from_pool(pool, config, key)?;
     let result = operation(&mut client);
     match &result {
-        Ok(_) => release_lasm_postgres_shared_client_to_pool(pool, key.as_str(), client, true),
+        Ok(_) => release_lasm_postgres_shared_client_to_pool(pool, key, client, true),
         Err(LasmPostgresThreadLocalRuntimeError::Query(err))
             if !is_lasm_postgres_reconnectable_error(err) =>
         {
-            release_lasm_postgres_shared_client_to_pool(pool, key.as_str(), client, true);
+            release_lasm_postgres_shared_client_to_pool(pool, key, client, true);
         }
-        Err(_) => release_lasm_postgres_shared_client_to_pool(pool, key.as_str(), client, false),
+        Err(_) => release_lasm_postgres_shared_client_to_pool(pool, key, client, false),
     }
     result
 }
@@ -2476,7 +2465,7 @@ fn invalidate_lasm_postgres_thread_local_client_in_pool(
 ) {
     let key = lasm_postgres_thread_local_client_key(config);
     if let Ok(mut guard) = pool.0.lock() {
-        if let Some(clients) = guard.idle.remove(key.as_str()) {
+        if let Some(clients) = guard.idle.remove(key) {
             guard.idle_total = guard.idle_total.saturating_sub(clients.len());
         }
     }
