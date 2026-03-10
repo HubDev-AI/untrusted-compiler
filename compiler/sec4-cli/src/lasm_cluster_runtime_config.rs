@@ -215,7 +215,15 @@ pub(crate) fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usi
         // Keep auto relay sizing conservative in multi-instance mode:
         // short capacity probes show lower relay-thread counts reduce contention
         // versus ceil(sqrt(...)) defaults under current cluster topology.
-        ((instance_hint as f64).sqrt() as usize).max(2)
+        //
+        // For 4+ instance proxy topology we keep a floor of 3 relay workers to
+        // reduce transient relay saturation on mixed write-heavy workloads.
+        let base_hint = ((instance_hint as f64).sqrt() as usize).max(2);
+        if instance_hint >= 4 {
+            base_hint.max(3)
+        } else {
+            base_hint
+        }
     };
     relay_hint = relay_hint.min(host_parallelism);
     relay_hint.clamp(1, 16)

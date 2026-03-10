@@ -1,9 +1,9 @@
 # Codex Operator Handoff (Multi-Agent Fast Track)
 
-Updated: 2026-03-09
+Updated: 2026-03-10
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
-Live execution board: `todos/016-in-progress-post-alpha-execution-board.md`
+Live execution board: `todos/019-complete-p1-post-alpha-scaling-pass-4.md`
 
 ## 1) Purpose
 
@@ -128,6 +128,24 @@ Status notes:
     - reusable worker batch buffers (`drain` path),
     - bounded stale per-config lock pruning to prevent unbounded lock-map growth on dynamic DSN churn.
   - Benchmark matrix runner now reuses a prebuilt sec4 runner binary (`target/debug/sec4`) instead of per-endpoint `cargo run` startup for each profiled endpoint.
+- Latest post-alpha scaling pass 4 (2026-03-10):
+  - Completed repeated LASM mode compare on the full canonical endpoint set (Postgres, repeats=2):
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats-postgres-full-pass4.json`
+    - recommendation: `mode=proxy` (`medianRequestsPerSec=5335.07`)
+  - Runtime tuning delta landed:
+    - `compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`
+    - proxy auto relay-worker sizing now keeps floor `3` for `instance_hint >= 4`.
+  - Fresh cross-runtime publication rerun on identical DB-backed workload is green:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --lasm-mode-compare-repeats-file benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats-postgres-full-pass4.json --profile-retry-on-failure 0`
+    - totals: `passed=4 failed=0 skipped=0`
+  - Canonical benchmark publication family refreshed:
+    - `benchmark-suite/results/workbench-benchmark-report.md`
+    - `benchmark-suite/results/workbench-benchmark-report.html`
+    - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+    - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+    - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+  - Default mode-compare file now points to latest pass-4 output:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
 
 ### P2: Remaining LASM DB/runtime cleanup exposed by the canonical app
 

@@ -12475,3 +12475,20 @@ This roadmap is the canonical execution path until v0.1-alpha is running and doc
     - reuses worker batch buffers via drain processing,
     - prunes stale per-config locks on bounded cadence for long-running dynamic DSN workloads.
   - benchmark matrix runner now reuses a prebuilt sec4 binary for endpoint profiles (instead of per-endpoint `cargo run`) to reduce profiling startup overhead.
+- Post-alpha scaling pass 4 update (2026-03-10):
+  - completed full-endpoint repeated mode compare on Postgres (`--repeats 2`):
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats-postgres-full-pass4.json`
+    - recommendation: `mode=proxy` (`medianRequestsPerSec=5335.07`).
+  - applied runtime tuning delta in `compiler/sec4-cli/src/lasm_cluster_runtime_config.rs`:
+    - auto proxy relay-worker sizing now keeps floor `3` for `instance_hint >= 4`.
+  - reran cross-runtime canonical matrix on identical DB-backed workload:
+    - `benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh --impls sec4-lasm,node,go,rust --fail-on-impl-failure 0 --lasm-mode auto --lasm-mode-compare-repeats-file benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats-postgres-full-pass4.json --profile-retry-on-failure 0`
+    - totals: `passed=4 failed=0 skipped=0`.
+  - refreshed canonical publication artifacts:
+    - `benchmark-suite/results/workbench-benchmark-report.md`
+    - `benchmark-suite/results/workbench-benchmark-report.html`
+    - `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+    - `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+    - `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+  - latest mode-compare default artifact now synced:
+    - `benchmark-suite/results/summaries/workbench-lasm-mode-compare-repeats.json`
