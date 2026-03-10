@@ -9616,7 +9616,7 @@ fn cmd_run_lasm_backend(
     };
     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
         let postgres_prewarm_config = match dynamic_state.lock() {
-            Ok(state) => match build_lasm_postgres_thread_local_config(&state) {
+            Ok(mut state) => match build_lasm_postgres_thread_local_config(&mut state) {
                 Ok(config) => config,
                 Err(message) => {
                     eprintln!("run failed: {message}");
@@ -11701,8 +11701,7 @@ fn materialize_lasm_internal_runtime_error_envelope(
         &response.headers,
         LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER,
     )
-    .map(str::to_owned)
-    else {
+    .map(str::to_owned) else {
         return;
     };
     let code = response.headers.remove(&header_key).unwrap_or_default();

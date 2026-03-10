@@ -12,7 +12,9 @@ use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
 };
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
-use crate::lasm_db_runtime_postgres::LasmPostgresThreadLocalClient;
+use crate::lasm_db_runtime_postgres::{
+    LasmPostgresThreadLocalClient, LasmPostgresThreadLocalConfig,
+};
 use postgres::{Client as PostgresClient, Statement as PostgresStatement};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
@@ -63,6 +65,7 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_sqlite_connection: Option<rusqlite::Connection>,
     pub(crate) db_records_postgres_dsn: Option<String>,
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
+    pub(crate) db_postgres_thread_local_config_cache: Option<LasmPostgresThreadLocalConfig>,
     pub(crate) db_postgres_tx_clients: HashMap<i64, LasmPostgresThreadLocalClient>,
     pub(crate) db_records_postgres_bootstrapped: bool,
     pub(crate) db_records_postgres_statement_cache: HashMap<String, PostgresStatement>,
@@ -499,6 +502,7 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_sqlite_connection,
         db_records_postgres_dsn,
         db_records_postgres_client,
+        db_postgres_thread_local_config_cache: None,
         db_postgres_tx_clients,
         db_records_postgres_bootstrapped: false,
         db_records_postgres_statement_cache,
