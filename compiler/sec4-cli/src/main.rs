@@ -1384,7 +1384,8 @@ fn cmd_lasm_smoke(
             &exchange.response.headers,
             LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER,
         )
-        .and_then(|key| exchange.response.headers.get(&key).cloned())
+        .and_then(|key| exchange.response.headers.get(key))
+        .cloned()
         .filter(|code| !code.trim().is_empty());
         let runtime_error_kind = runtime_error_code.as_deref().map(|code| {
             lasm_internal_error_kind_for_code(code, exchange.response.status).to_string()
@@ -11699,7 +11700,9 @@ fn materialize_lasm_internal_runtime_error_envelope(
     let Some(header_key) = find_lasm_header_key_case_insensitive(
         &response.headers,
         LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER,
-    ) else {
+    )
+    .map(str::to_owned)
+    else {
         return;
     };
     let code = response.headers.remove(&header_key).unwrap_or_default();
@@ -14036,7 +14039,7 @@ fn normalize_lasm_response_headers_case_insensitive(
         if let Some(existing_key) =
             find_lasm_header_key_case_insensitive(&normalized, name.as_str())
         {
-            normalized.insert(existing_key, value.clone());
+            normalized.insert(existing_key.to_string(), value.clone());
         } else {
             normalized.insert(name.clone(), value.clone());
         }
@@ -14052,20 +14055,20 @@ fn upsert_lasm_header_case_insensitive(
     if let Some(existing_key) =
         find_lasm_header_key_case_insensitive(headers, canonical_name.as_str())
     {
-        headers.insert(existing_key, value);
+        headers.insert(existing_key.to_string(), value);
         return;
     }
     headers.insert(canonical_name, value);
 }
 
-fn find_lasm_header_key_case_insensitive(
-    headers: &BTreeMap<String, String>,
+fn find_lasm_header_key_case_insensitive<'a>(
+    headers: &'a BTreeMap<String, String>,
     target: &str,
-) -> Option<String> {
+) -> Option<&'a str> {
     headers
         .keys()
         .find(|name| name.eq_ignore_ascii_case(target))
-        .cloned()
+        .map(String::as_str)
 }
 
 fn is_lasm_cors_default_header_name(name: &str) -> bool {
@@ -14088,7 +14091,9 @@ fn set_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_id: &str) {
     if let Some(existing_key) =
         find_lasm_header_key_case_insensitive(&response.headers, "X-Trace-Id")
     {
-        response.headers.insert(existing_key, trace_id.to_string());
+        response
+            .headers
+            .insert(existing_key.to_string(), trace_id.to_string());
         return;
     }
     response

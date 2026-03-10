@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-10 | self | I used backticks in a double-quoted `gh pr create --body` string and zsh attempted command substitution (`command not found` noise in PR creation). | For PR descriptions containing backticks, always use `--body-file` (or a single-quoted heredoc) instead of inline double-quoted body strings. |
+| 2026-03-10 | self | I attempted to merge a PR that had drifted from `dev`, then resolved conflicts late in the flow. | Before `gh pr merge`, always run `git fetch origin dev` and rebase/merge the branch with `origin/dev` proactively if needed, then push before merge attempt. |
 | 2026-03-10 | self | After launching/waiting on sub-agents, local checkout had switched back to `dev` and I almost continued the slice there. | After every sub-agent completion/interruption, run `git branch --show-current`; if it is `dev`, switch/create the intended `codex/*` branch before any edits/tests. |
 | 2026-03-10 | self | After `gh pr merge --auto ...` I resumed editing immediately and forgot that local HEAD had switched back to `dev`, so the next slice started on `dev` again. | After every PR merge, run an explicit branch gate (`git branch --show-current`) and create/switch to the next `codex/*` branch before any edits. |
 | 2026-03-10 | self | I started editing on `main` during the benchmark auto-mode slice before switching back to a `codex/*` branch from `dev`. | Keep a strict pre-edit branch gate (`git branch --show-current`) and never apply patches unless on a `codex/*` branch created from `dev`. |
