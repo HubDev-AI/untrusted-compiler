@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-10 | self | I started a new extraction slice right after merging and forgot to create a `codex/*` branch, so the commit landed on local `dev` (`0a157b77`) and needed recovery. | Keep a hard post-merge gate: run `git branch --show-current` before first edit/commit; if `dev`, create the next `codex/*` branch immediately. If missed, recover by branching from the commit and resetting local `dev` to `origin/dev` before pushing. |
 | 2026-03-10 | self | I used backticks in a double-quoted `gh pr create --body` string and zsh attempted command substitution (`command not found` noise in PR creation). | For PR descriptions containing backticks, always use `--body-file` (or a single-quoted heredoc) instead of inline double-quoted body strings. |
 | 2026-03-10 | self | I attempted to merge a PR that had drifted from `dev`, then resolved conflicts late in the flow. | Before `gh pr merge`, always run `git fetch origin dev` and rebase/merge the branch with `origin/dev` proactively if needed, then push before merge attempt. |
 | 2026-03-10 | self | After launching/waiting on sub-agents, local checkout had switched back to `dev` and I almost continued the slice there. | After every sub-agent completion/interruption, run `git branch --show-current`; if it is `dev`, switch/create the intended `codex/*` branch before any edits/tests. |
