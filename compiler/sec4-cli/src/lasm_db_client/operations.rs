@@ -200,11 +200,10 @@ pub(crate) fn parse_lasm_db_template_and_params(
     params: &str,
     parsed_params: Option<&serde_json::Value>,
 ) -> Result<LasmPreparedDbOperationParams, String> {
-    let parsed_params = parsed_params.cloned();
     match adapter {
         LasmDbRecordsAdapter::Postgres => {
             let result = if let Some(parsed) = parsed_params {
-                parse_lasm_postgres_query_template_and_params_value(template, &parsed)
+                parse_lasm_postgres_query_template_and_params_value(template, parsed)
             } else {
                 parse_lasm_postgres_query_template_and_params(template, params)
             };
@@ -216,7 +215,7 @@ pub(crate) fn parse_lasm_db_template_and_params(
         }
         LasmDbRecordsAdapter::Sqlite => {
             let query_params = if let Some(parsed) = parsed_params {
-                parse_lasm_sqlite_query_params_value(&parsed)
+                parse_lasm_sqlite_query_params_value(parsed)
             } else {
                 parse_lasm_sqlite_query_params(params)
             }?;
