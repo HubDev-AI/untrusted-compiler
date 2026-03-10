@@ -23,7 +23,16 @@ mkdir -p "$(dirname "$out_path")"
 
 jq '
   def p99num($v):
-    (($v | tostring | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null)) // "0" | tonumber);
+    ($v | tostring | ascii_downcase) as $raw
+    | (try ($raw | capture("(?<n>[0-9]+(\\.[0-9]+)?)[[:space:]]*(?<u>us|µs|ms|s)?")) catch null) as $cap
+    | if $cap == null then 0
+      else ($cap.n | tonumber) as $n
+      | (($cap.u // "ms")) as $u
+      | if ($u == "us" or $u == "µs") then ($n / 1000)
+        elif $u == "s" then ($n * 1000)
+        else $n
+        end
+      end;
 
   def sev_rank($s):
     if $s == "CRITICAL" then 4
