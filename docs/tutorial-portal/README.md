@@ -45,7 +45,9 @@ It is organized for a new user first, then for operators who need deeper example
   - DB, FS, NET intrinsics
 - Benchmarks:
   - sec4 / sec4-lasm / node / go / rust comparison lanes
-  - workbench benchmark matrix + report generation
+  - canonical workbench benchmark matrix + report generation
+  - strict (`--fail-on-impl-failure 1`) and relaxed (`--fail-on-impl-failure 0`) publication modes
+  - LASM benchmark keep-alive tuning (`--lasm-max-keep-alive-requests`)
 
 ## Primary references
 

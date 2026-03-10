@@ -3,7 +3,7 @@
 Updated: 2026-03-10
 Primary branch: `dev`  
 Current baseline commit: `2bd2ae98`
-Live execution board: `todos/019-complete-p1-post-alpha-scaling-pass-4.md`
+Live execution board: `todos/033-in-progress-post-alpha-finalization-board.md`
 
 ## 1) Purpose
 

@@ -10,6 +10,7 @@ usage: $0 [--dry-run] [--matrix path] [--impls sec4-lasm,node,go,rust]
           [--lasm-db-adapter sqlite|postgres] [--lasm-db-base path] [--lasm-postgres-dsn-file path]
           [--lasm-db-records-persist-enabled 0|1]
           [--lasm-db-records-capture-enabled 0|1]
+          [--lasm-max-keep-alive-requests <n>]
           [--lasm-mode single|fixed|proxy|auto] [--lasm-mode-compare-repeats-file path]
           [--lasm-auto-mode-compare-generate 0|1]
           [--lasm-endpoint-modes default=fixed,wb-tasks-list=proxy]
@@ -42,6 +43,7 @@ lasm_db_base="${BENCH_WORKBENCH_LASM_DB_BASE:-}"
 lasm_postgres_dsn_file="${BENCH_WORKBENCH_LASM_POSTGRES_DSN_FILE:-}"
 lasm_db_records_persist_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_PERSIST_ENABLED:-0}"
 lasm_db_records_capture_enabled="${BENCH_WORKBENCH_LASM_DB_RECORDS_CAPTURE_ENABLED:-0}"
+lasm_max_keep_alive_requests="${BENCH_WORKBENCH_LASM_MAX_KEEP_ALIVE_REQUESTS:-4096}"
 lasm_mode="${BENCH_WORKBENCH_LASM_MODE:-}"
 lasm_mode_compare_repeats_file=""
 lasm_auto_mode_compare_generate="${BENCH_WORKBENCH_LASM_AUTO_MODE_COMPARE_GENERATE:-1}"
@@ -201,6 +203,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --lasm-db-records-capture-enabled=*)
       lasm_db_records_capture_enabled="${1#--lasm-db-records-capture-enabled=}"
+      shift
+      ;;
+    --lasm-max-keep-alive-requests)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      lasm_max_keep_alive_requests="$2"
+      shift 2
+      ;;
+    --lasm-max-keep-alive-requests=*)
+      lasm_max_keep_alive_requests="${1#--lasm-max-keep-alive-requests=}"
       shift
       ;;
     --lasm-mode)
@@ -750,6 +764,18 @@ if [ "$lasm_db_records_capture_enabled" != "0" ] && [ "$lasm_db_records_capture_
   echo "invalid --lasm-db-records-capture-enabled (expected 0 or 1): $lasm_db_records_capture_enabled" >&2
   exit 2
 fi
+case "$lasm_max_keep_alive_requests" in
+  ''|*[!0-9]*)
+    echo "invalid --lasm-max-keep-alive-requests (expected integer >= 1): $lasm_max_keep_alive_requests" >&2
+    exit 2
+    ;;
+  *)
+    if [ "$lasm_max_keep_alive_requests" -lt 1 ]; then
+      echo "invalid --lasm-max-keep-alive-requests (expected integer >= 1): $lasm_max_keep_alive_requests" >&2
+      exit 2
+    fi
+    ;;
+esac
 if [ "$lasm_auto_mode_compare_generate" != "0" ] && [ "$lasm_auto_mode_compare_generate" != "1" ]; then
   echo "invalid --lasm-auto-mode-compare-generate (expected 0 or 1): $lasm_auto_mode_compare_generate" >&2
   exit 2
@@ -1148,6 +1174,7 @@ start_impl_service() {
           cd "$repo_root"
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
+          SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS="$lasm_max_keep_alive_requests" \
           "$sec4_runner_bin" run \
             --path "$service_abs" \
             --backend lasm \
@@ -1163,6 +1190,7 @@ start_impl_service() {
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
+          SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS="$lasm_max_keep_alive_requests" \
             "$sec4_runner_bin" run \
               --path "$service_abs" \
               --backend lasm \
@@ -1339,9 +1367,9 @@ while IFS= read -r impl_row; do
   if [ "$dry_run" = "true" ]; then
     if [ "$impl" = "sec4-lasm" ]; then
       if [ "$lasm_db_adapter" = "postgres" ]; then
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmMaxKeepAliveRequests=${lasm_max_keep_alive_requests} lasmPostgresDsn=${lasm_postgres_dsn_file:-ENV/default}"
       else
-        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmDbBase=${lasm_db_base:-mktemp}"
+        echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port} lasmDbAdapter=${lasm_db_adapter} lasmMode=${current_lasm_cluster_mode} lasmModeSource=${lasm_mode_resolution_source} lasmInstances=${current_lasm_instances} lasmAutoscaleMaxInstances=${current_lasm_autoscale_max_instances} lasmDbRecordsPersist=${lasm_db_records_persist_enabled} lasmDbRecordsCapture=${lasm_db_records_capture_enabled} lasmMaxKeepAliveRequests=${lasm_max_keep_alive_requests} lasmDbBase=${lasm_db_base:-mktemp}"
       fi
     else
       echo "start: impl=${impl} servicePath=${service_rel} port=${current_bench_port}"
@@ -1484,6 +1512,7 @@ while IFS= read -r impl_row; do
       --argjson dbPostgresSharedClientMaxActiveTotal "$(if [ -n "$lasm_db_postgres_shared_client_max_active_total" ]; then printf '%s' "$lasm_db_postgres_shared_client_max_active_total"; else printf 'null'; fi)" \
       --argjson dbRecordsPersistEnabled "$lasm_db_records_persist_enabled" \
       --argjson dbRecordsCaptureEnabled "$lasm_db_records_capture_enabled" \
+      --argjson maxKeepAliveRequests "$lasm_max_keep_alive_requests" \
       '{
         dbAdapter: $dbAdapter,
         mode: $mode,
@@ -1501,7 +1530,8 @@ while IFS= read -r impl_row; do
         dbPostgresSharedClientMaxActivePerKey: $dbPostgresSharedClientMaxActivePerKey,
         dbPostgresSharedClientMaxActiveTotal: $dbPostgresSharedClientMaxActiveTotal,
         dbRecordsPersistEnabled: $dbRecordsPersistEnabled,
-        dbRecordsCaptureEnabled: $dbRecordsCaptureEnabled
+        dbRecordsCaptureEnabled: $dbRecordsCaptureEnabled,
+        maxKeepAliveRequests: $maxKeepAliveRequests
       }')"
   fi
 

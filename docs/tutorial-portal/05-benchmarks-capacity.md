@@ -49,24 +49,51 @@ Generate report:
 make -C benchmark-suite publish-report
 ```
 
-## 3) Workbench benchmark suite (canonical lane)
+## 3) Canonical cross-backend matrix (post-alpha)
+
+This is the primary comparison command for the canonical workbench contract.
+It runs the same DB-backed endpoint set across `sec4-lasm,node,go,rust` and publishes the report bundle.
 
 Dry run:
 
 ```bash
-make -C benchmark-suite workbench-full-bench-dry
+benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh \
+  --dry-run \
+  --impls sec4-lasm,node,go,rust \
+  --lasm-mode single \
+  --fail-on-impl-failure 0 \
+  --profile-retry-on-failure 0 \
+  --lasm-max-keep-alive-requests 4096
 ```
 
 Real run:
 
 ```bash
-make -C benchmark-suite workbench-full-bench
+BENCH_DURATION=20s \
+benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh \
+  --impls sec4-lasm,node,go,rust \
+  --lasm-mode single \
+  --fail-on-impl-failure 0 \
+  --profile-retry-on-failure 0 \
+  --lasm-max-keep-alive-requests 4096
 ```
 
 Outputs:
 
-- `benchmark-suite/results/workbench-full-benchmark-report.md`
-- `benchmark-suite/results/workbench-full-benchmark-report.html`
+- `benchmark-suite/results/workbench-benchmark-report.md`
+- `benchmark-suite/results/workbench-benchmark-report.html`
+- `benchmark-suite/results/summaries/workbench-benchmark-runs.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-compare-matrix.json`
+- `benchmark-suite/results/summaries/workbench-benchmark-analysis.json`
+
+Strict gate mode (fail immediately when any impl lane fails):
+
+```bash
+benchmark-suite/scripts/run_workbench_benchmark_matrix_local.sh \
+  --impls sec4-lasm,node,go,rust \
+  --lasm-mode single \
+  --fail-on-impl-failure 1
+```
 
 ## 4) Capacity probe (1M requests target)
 
@@ -82,7 +109,7 @@ LASM cluster:
 make -C benchmark-suite lasm-cluster-capacity-probe LASM_CAPACITY_TARGET_REQUESTS=1000000
 ```
 
-## 5) Local Postgres orchestrated suite
+## 5) Full-suite/repeat wrappers (optional)
 
 ```bash
 make -C benchmark-suite bench-alpha-postgres-suite-local

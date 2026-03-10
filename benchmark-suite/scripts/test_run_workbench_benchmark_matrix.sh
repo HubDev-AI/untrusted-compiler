@@ -239,6 +239,30 @@ if ! grep -q 'warning: LASM auto mode recommendation unavailable (missing mode-c
   echo "expected auto mode fallback warning in dry-run output" >&2
   exit 1
 fi
+
+keep_alive_out="$(
+  PATH="${bin_dir}:$PATH" \
+    BENCH_REQUIRE_WRK2=1 \
+    FAKE_WRK2_MARKER="$wrk_marker" \
+    "${suite_dir}/scripts/run_workbench_benchmark_matrix.sh" \
+      --dry-run \
+      --matrix "$matrix_path" \
+      --impls sec4-lasm \
+      --endpoints wb-task-get \
+      --lasm-mode single \
+      --lasm-max-keep-alive-requests 2048 \
+      --port 18136 \
+      --out-runs "$out_runs" \
+      --out-compare "$out_compare" \
+      --out-analysis "$out_analysis" \
+      --out-report "$out_report" \
+      --out-report-html "$out_report_html" \
+      2>&1
+)"
+if ! grep -q 'lasmMaxKeepAliveRequests=2048' <<<"$keep_alive_out"; then
+  echo "expected dry-run output to include lasm keep-alive tuning value" >&2
+  exit 1
+fi
 if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_out"; then
   echo "expected auto mode fallback to single mode start marker in dry-run output" >&2
   exit 1
