@@ -990,6 +990,7 @@ dependencies = [
  "postgres-native-tls",
  "rusqlite",
  "sec4-core",
+ "sec4-lasm-db-client",
  "serde",
  "serde_json",
  "socket2 0.5.10",
@@ -1004,6 +1005,10 @@ dependencies = [
  "thiserror",
  "toml",
 ]
+
+[[package]]
+name = "sec4-lasm-db-client"
+version = "0.1.0"
 
 [[package]]
 name = "sec4audit-language-server"

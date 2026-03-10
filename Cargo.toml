@@ -2,6 +2,7 @@
 members = [
   "compiler/sec4-core",
   "compiler/sec4-cli",
+  "compiler/sec4-lasm-db-client",
   "compiler/sec4-lsp",
 ]
 resolver = "2"

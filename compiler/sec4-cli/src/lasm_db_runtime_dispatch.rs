@@ -1,12 +1,5 @@
 use crate::lasm_db_client::{
-    apply_lasm_db_runtime_limit_overrides as apply_lasm_db_runtime_limit_overrides_config,
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
-    resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
-    resolve_lasm_db_params_max_bytes as resolve_lasm_db_params_max_bytes_config,
-    resolve_lasm_db_params_max_entries as resolve_lasm_db_params_max_entries_config,
-    resolve_lasm_db_query_one_row_max_bytes as resolve_lasm_db_query_one_row_max_bytes_config,
-    resolve_lasm_db_query_one_row_max_columns as resolve_lasm_db_query_one_row_max_columns_config,
-    resolve_lasm_db_sql_template_max_bytes as resolve_lasm_db_sql_template_max_bytes_config,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
     run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
     run_lasm_query_one_operation_with_adapter, validate_lasm_internal_db_operation_sequence_count,
@@ -28,10 +21,19 @@ use crate::{
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
     LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
+use sec4_lasm_db_client::{
+    apply_lasm_db_runtime_limit_overrides as apply_lasm_db_runtime_limit_overrides_config,
+    resolve_lasm_db_op_sequence_max as resolve_lasm_db_op_sequence_max_config,
+    resolve_lasm_db_params_max_bytes as resolve_lasm_db_params_max_bytes_config,
+    resolve_lasm_db_params_max_entries as resolve_lasm_db_params_max_entries_config,
+    resolve_lasm_db_query_one_row_max_bytes as resolve_lasm_db_query_one_row_max_bytes_config,
+    resolve_lasm_db_query_one_row_max_columns as resolve_lasm_db_query_one_row_max_columns_config,
+    resolve_lasm_db_sql_template_max_bytes as resolve_lasm_db_sql_template_max_bytes_config,
+};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) use crate::lasm_db_client::LasmDbRuntimeLimitOverrides;
+pub(crate) use sec4_lasm_db_client::LasmDbRuntimeLimitOverrides;
 
 pub(crate) fn lasm_db_sql_template_max_bytes_limit() -> usize {
     resolve_lasm_db_sql_template_max_bytes_config()

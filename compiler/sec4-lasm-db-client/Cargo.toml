@@ -1,0 +1,9 @@
+[package]
+name = "sec4-lasm-db-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "sec4_lasm_db_client"
+path = "src/lib.rs"
