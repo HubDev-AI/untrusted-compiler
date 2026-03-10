@@ -1,6 +1,7 @@
 mod adapter;
 mod config;
 mod operations;
+mod operations_non_postgres;
 mod operations_postgres;
 mod parse;
 mod records;
@@ -10,6 +11,7 @@ mod tx_state;
 pub(crate) use adapter::*;
 pub(crate) use config::*;
 pub(crate) use operations::*;
+pub(crate) use operations_non_postgres::*;
 pub(crate) use operations_postgres::*;
 pub(crate) use parse::*;
 pub(crate) use sequence::*;
