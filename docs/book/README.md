@@ -50,6 +50,10 @@ Canonical evidence set:
   - cross-runtime canonical rerun refreshed publication artifacts with totals:
     - `passed=4 failed=0 skipped=0`
   - details: `docs/book/1580-m39-post-alpha-scaling-pass-4-mode-compare-runtime-tuning-and-cross-runtime-rerun.md`.
+- 2026-03-10 DB-client packaging extraction landed:
+  - reusable LASM DB runtime config/limits + records capture/persist env resolution moved to:
+    - `compiler/sec4-lasm-db-client/`
+  - details: `docs/book/1581-m39-lasm-db-runtime-config-package-extraction.md`.
 
 ## Chapter order
 - `00-preface.md`
@@ -1598,5 +1602,6 @@ Canonical evidence set:
 - `1578-m39-workbench-post-alpha-failure-mode-controls-and-mode-refresh.md`
 - `1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`
 - `1580-m39-post-alpha-scaling-pass-4-mode-compare-runtime-tuning-and-cross-runtime-rerun.md`
+- `1581-m39-lasm-db-runtime-config-package-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
