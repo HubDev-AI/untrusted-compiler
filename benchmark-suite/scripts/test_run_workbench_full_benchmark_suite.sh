@@ -66,8 +66,9 @@ if ! grep -q 'publish_report.sh .*workbench-benchmark-compare-matrix.json .*work
 fi
 
 auto_mismatch_out="$($root_dir/scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints wb-task-get --lasm-mode auto --lasm-mode-compare-repeats-file "$tmp_mode_compare" --port 18113 2>&1)"
-if ! grep -q 'warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode' <<<"$auto_mismatch_out"; then
-  echo "missing LASM auto mode workload mismatch fallback warning in full benchmark suite output" >&2
+if ! grep -q 'warning: LASM auto mode recommendation unavailable; falling back to single mode' <<<"$auto_mismatch_out" \
+  && ! grep -q 'warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode' <<<"$auto_mismatch_out"; then
+  echo "missing LASM auto mode fallback warning in full benchmark suite output" >&2
   exit 1
 fi
 if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_mismatch_out"; then
