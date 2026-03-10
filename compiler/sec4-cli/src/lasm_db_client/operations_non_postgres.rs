@@ -1,11 +1,11 @@
 use super::drop_lasm_db_tx_handle;
-use super::operations::{
+use super::records::{allocate_lasm_db_runtime_record, persist_lasm_db_record_with_capacity_guard};
+use super::types::{
     LasmDbExecOperationResult, LasmDbExecTxError, LasmDbExecTxOperationResult,
     LasmDbQueryOneOperationError, LasmDbQueryOneOperationResult, LasmLockedExecSuccess,
     LasmLockedExecTxOperationError, LasmLockedExecTxSuccess, LasmLockedQueryOneOperationError,
     LasmLockedQueryOneSuccess, LasmPreparedDbOperationParams,
 };
-use super::records::{allocate_lasm_db_runtime_record, persist_lasm_db_record_with_capacity_guard};
 use super::{run_lasm_db_tx_commit, run_lasm_db_tx_rollback, LasmLockedOperationError};
 use crate::lasm_db_runtime_records_log::{
     build_lasm_records_log_query_one_row_object, find_lasm_records_log_latest_match,
