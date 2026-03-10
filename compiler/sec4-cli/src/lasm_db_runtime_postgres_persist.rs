@@ -39,9 +39,12 @@ static LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_RESOLVED: OnceLock<LasmPostgresPers
 static LASM_POSTGRES_PERSIST_QUEUE: OnceLock<Sender<LasmPostgresPersistTask>> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_CONFIG_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     OnceLock::new();
+static LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL: AtomicUsize = AtomicUsize::new(0);
+const LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_INTERVAL: usize = 4096;
+const LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_MIN_SIZE: usize = 64;
 
 #[derive(Clone, Copy)]
 enum LasmPostgresPersistQueueFullMode {
@@ -260,6 +263,14 @@ fn lasm_postgres_persist_config_lock(key: &str) -> Arc<Mutex<()>> {
             poisoned.into_inner()
         }
     };
+    if guard.len() >= LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_MIN_SIZE {
+        let prune_tick = LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_COUNTER
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        if prune_tick.is_multiple_of(LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_INTERVAL) {
+            guard.retain(|_, lock| Arc::strong_count(lock) > 1);
+        }
+    }
     guard
         .entry(key.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))
