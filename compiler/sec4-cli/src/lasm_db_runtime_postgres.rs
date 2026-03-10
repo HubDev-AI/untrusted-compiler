@@ -31,6 +31,8 @@ pub(crate) enum LasmPostgresParam {
 pub(crate) struct LasmPostgresThreadLocalConfig {
     pub(crate) dsn: String,
     pub(crate) tls_mode: LasmDbPostgresTlsMode,
+    pub(crate) shared_client_pool_key: String,
+    pub(crate) schema_ensure_key: String,
     pub(crate) statement_timeout_ms: u64,
     pub(crate) lock_timeout_ms: u64,
     pub(crate) connect_timeout_ms: u64,
@@ -137,9 +139,11 @@ const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MAX: usize = 1024;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL";
-const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT: usize = 4;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN: usize = 1;
 const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MAX: usize = 4096;
+const LASM_RUNTIME_MAX_CONCURRENCY_ENV: &str = "SEC4_RT_LASM_MAX_CONCURRENCY";
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP: usize = 16;
+const LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP: usize = 32;
 
 #[derive(Default)]
 struct LasmPostgresSharedClientPoolState {
@@ -169,6 +173,25 @@ static LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED: OnceLock<usize> = 
 static LASM_POSTGRES_SHARED_CLIENT_MAX_TOTAL_IDLE_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED: OnceLock<usize> = OnceLock::new();
+
+fn resolve_lasm_runtime_max_concurrency_hint() -> Option<usize> {
+    let raw = std::env::var(LASM_RUNTIME_MAX_CONCURRENCY_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<usize>().ok().filter(|value| *value > 0)
+}
+
+fn resolve_lasm_postgres_shared_client_auto_default(max_cap: usize) -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => hint.clamp(
+            LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT,
+            max_cap.max(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT),
+        ),
+        None => LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT,
+    }
+}
 
 fn resolve_lasm_postgres_shared_client_max_idle_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_IDLE_PER_KEY_RESOLVED.get_or_init(|| {
@@ -211,14 +234,20 @@ fn resolve_lasm_postgres_shared_client_max_total_idle() -> usize {
 fn resolve_lasm_postgres_shared_client_max_active_per_key() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_RESOLVED.get_or_init(|| {
         let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_ENV) else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_AUTO_DEFAULT_CAP,
+            );
         };
         parsed.clamp(
             LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_PER_KEY_MIN,
@@ -230,14 +259,20 @@ fn resolve_lasm_postgres_shared_client_max_active_per_key() -> usize {
 fn resolve_lasm_postgres_shared_client_max_active_total() -> usize {
     *LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_RESOLVED.get_or_init(|| {
         let Ok(raw) = std::env::var(LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_ENV) else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_DEFAULT;
+            return resolve_lasm_postgres_shared_client_auto_default(
+                LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_AUTO_DEFAULT_CAP,
+            );
         };
         parsed.clamp(
             LASM_POSTGRES_SHARED_CLIENT_MAX_ACTIVE_TOTAL_MIN,
@@ -314,9 +349,9 @@ pub(crate) fn lasm_postgres_shared_client_pool_active_total() -> usize {
     }
 }
 
-fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgresParam {
+fn parse_lasm_postgres_query_param_value(value: &serde_json::Value) -> LasmPostgresParam {
     match value {
-        serde_json::Value::String(inner) => LasmPostgresParam::Text(inner),
+        serde_json::Value::String(inner) => LasmPostgresParam::Text(inner.clone()),
         serde_json::Value::Number(inner) => {
             if let Some(value) = inner.as_i64() {
                 return LasmPostgresParam::Int(value);
@@ -332,7 +367,7 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
             }
             LasmPostgresParam::Text(inner.to_string())
         }
-        serde_json::Value::Bool(inner) => LasmPostgresParam::Bool(inner),
+        serde_json::Value::Bool(inner) => LasmPostgresParam::Bool(*inner),
         serde_json::Value::Null => LasmPostgresParam::Null(None),
         other => LasmPostgresParam::Text(serde_json::to_string(&other).unwrap_or_default()),
     }
@@ -341,21 +376,15 @@ fn parse_lasm_postgres_query_param_value(value: serde_json::Value) -> LasmPostgr
 fn parse_lasm_postgres_positional_object_params(
     entries: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<Vec<LasmPostgresParam>, String> {
-    let mut indexed = Vec::with_capacity(entries.len());
-    let mut max_index = 0usize;
+    let mut params = Vec::with_capacity(entries.len());
     for (key, value) in entries {
         let index = parse_lasm_postgres_positional_param_index(key.as_str()).ok_or_else(|| {
             format!("postgres params object key `{key}` is not a valid positional index")
         })?;
-        max_index = max_index.max(index);
-        indexed.push((index, parse_lasm_postgres_query_param_value(value.clone())));
-    }
-    let mut params = Vec::with_capacity(max_index);
-    for _ in 0..max_index {
-        params.push(LasmPostgresParam::Null(None));
-    }
-    for (index, value) in indexed {
-        params[index - 1] = value;
+        if params.len() < index {
+            params.resize(index, LasmPostgresParam::Null(None));
+        }
+        params[index - 1] = parse_lasm_postgres_query_param_value(value);
     }
     Ok(params)
 }
@@ -417,12 +446,17 @@ fn parse_lasm_postgres_named_object_params(
             normalize_lasm_postgres_named_param_key(key.as_str()).ok_or_else(|| {
                 format!("postgres params object key `{key}` is not a valid named parameter key")
             })?;
-        let normalized = normalized.to_string();
-        let value = parse_lasm_postgres_query_param_value(value.clone());
-        if named.insert(normalized.clone(), value).is_some() {
-            return Err(format!(
-                "postgres params object contains duplicate normalized key `{normalized}`"
-            ));
+        let value = parse_lasm_postgres_query_param_value(value);
+        match named.entry(normalized.to_string()) {
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                return Err(format!(
+                    "postgres params object contains duplicate normalized key `{}`",
+                    occupied.key()
+                ));
+            }
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(value);
+            }
         }
     }
     Ok(named)
@@ -667,7 +701,6 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params_value(
             query_template.to_string(),
             entries
                 .iter()
-                .cloned()
                 .map(parse_lasm_postgres_query_param_value)
                 .collect(),
         )),
@@ -695,7 +728,7 @@ pub(crate) fn parse_lasm_postgres_query_template_and_params_value(
         serde_json::Value::Null => Ok((query_template.to_string(), Vec::new())),
         other => Ok((
             query_template.to_string(),
-            vec![parse_lasm_postgres_query_param_value(other.clone())],
+            vec![parse_lasm_postgres_query_param_value(other)],
         )),
     }
 }
@@ -711,7 +744,7 @@ pub(crate) fn parse_lasm_postgres_query_params(
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
         return match parsed {
             serde_json::Value::Array(entries) => Ok(entries
-                .into_iter()
+                .iter()
                 .map(parse_lasm_postgres_query_param_value)
                 .collect()),
             serde_json::Value::Object(entries) => match classify_lasm_postgres_params_object_keys(
@@ -726,7 +759,7 @@ pub(crate) fn parse_lasm_postgres_query_params(
                 ),
             },
             serde_json::Value::Null => Ok(Vec::new()),
-            other => Ok(vec![parse_lasm_postgres_query_param_value(other)]),
+            other => Ok(vec![parse_lasm_postgres_query_param_value(&other)]),
         };
     }
     Ok(vec![LasmPostgresParam::Text(trimmed.to_string())])
@@ -1325,7 +1358,8 @@ pub(crate) fn ensure_lasm_postgres_tx_client(
 pub(crate) fn connect_lasm_postgres_tx_client(
     config: &LasmPostgresThreadLocalConfig,
 ) -> Result<LasmPostgresThreadLocalClient, String> {
-    checkout_lasm_postgres_shared_client_from_pool(lasm_postgres_shared_clients_pool(), config)
+    let key = lasm_postgres_thread_local_client_key(config);
+    checkout_lasm_postgres_shared_client_from_pool(lasm_postgres_shared_clients_pool(), config, key)
         .map_err(|err| match err {
             LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
             LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
@@ -1341,8 +1375,9 @@ pub(crate) fn connect_lasm_postgres_tx_client(
 pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
     config: &LasmPostgresThreadLocalConfig,
 ) -> Result<(), String> {
+    let key = lasm_postgres_thread_local_client_key(config);
     let shared_pool = lasm_postgres_shared_clients_pool();
-    let shared_client = checkout_lasm_postgres_shared_client_from_pool(shared_pool, config)
+    let shared_client = checkout_lasm_postgres_shared_client_from_pool(shared_pool, config, key)
         .map_err(|err| match err {
             LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
             LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
@@ -1353,22 +1388,24 @@ pub(crate) fn prewarm_lasm_postgres_shared_client_pools(
             }
             LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
         })?;
-    release_lasm_postgres_shared_client_to_pool(shared_pool, config, shared_client, true);
+    release_lasm_postgres_shared_client_to_pool(shared_pool, key, shared_client, true);
 
     if lasm_db_records_persist_enabled() {
         let persist_pool = lasm_postgres_persist_clients_pool();
-        let persist_client = checkout_lasm_postgres_shared_client_from_pool(persist_pool, config)
-            .map_err(|err| match err {
-            LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
-            LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
-                format_lasm_postgres_runtime_error(
-                    "postgres persist client prewarm failed",
-                    &query_err,
-                )
-            }
-            LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
-        })?;
-        release_lasm_postgres_shared_client_to_pool(persist_pool, config, persist_client, true);
+        let persist_client =
+            checkout_lasm_postgres_shared_client_from_pool(persist_pool, config, key).map_err(
+                |err| match err {
+                    LasmPostgresThreadLocalRuntimeError::Connect(message) => message,
+                    LasmPostgresThreadLocalRuntimeError::Query(query_err) => {
+                        format_lasm_postgres_runtime_error(
+                            "postgres persist client prewarm failed",
+                            &query_err,
+                        )
+                    }
+                    LasmPostgresThreadLocalRuntimeError::Validation(message) => message,
+                },
+            )?;
+        release_lasm_postgres_shared_client_to_pool(persist_pool, key, persist_client, true);
     }
 
     let tx_client = connect_lasm_postgres_tx_client(config)?;
@@ -1380,9 +1417,10 @@ pub(crate) fn return_lasm_postgres_tx_client_to_pool(
     config: &LasmPostgresThreadLocalConfig,
     client: LasmPostgresThreadLocalClient,
 ) {
+    let key = lasm_postgres_thread_local_client_key(config);
     release_lasm_postgres_shared_client_to_pool(
         lasm_postgres_shared_clients_pool(),
-        config,
+        key,
         client,
         true,
     );
@@ -1392,9 +1430,10 @@ pub(crate) fn discard_lasm_postgres_tx_client(
     config: &LasmPostgresThreadLocalConfig,
     client: LasmPostgresThreadLocalClient,
 ) {
+    let key = lasm_postgres_thread_local_client_key(config);
     release_lasm_postgres_shared_client_to_pool(
         lasm_postgres_shared_clients_pool(),
-        config,
+        key,
         client,
         false,
     );
@@ -1768,9 +1807,9 @@ pub(crate) fn run_lasm_postgres_exec(
     };
     let initial = if use_prepared {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        let statement = prepared_statement
-            .as_ref()
-            .expect("prepared statement should be available for prepared execution");
+        let Some(statement) = prepared_statement.as_ref() else {
+            return Err("internal postgres prepared statement unavailable".to_string());
+        };
         run_lasm_postgres_prepared_exec_with_count(client, statement, params)
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
@@ -2168,25 +2207,12 @@ pub(crate) fn run_lasm_postgres_exec_tx_rollback(
     }
 }
 
-fn lasm_postgres_thread_local_client_key(config: &LasmPostgresThreadLocalConfig) -> String {
-    let tls_mode = match config.tls_mode {
-        LasmDbPostgresTlsMode::Auto => "auto",
-        LasmDbPostgresTlsMode::Disable => "disable",
-        LasmDbPostgresTlsMode::Require => "require",
-    };
-    format!(
-        "{tls_mode}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
-        config.dsn, config.statement_timeout_ms, config.lock_timeout_ms, config.connect_timeout_ms
-    )
+fn lasm_postgres_thread_local_client_key(config: &LasmPostgresThreadLocalConfig) -> &str {
+    config.shared_client_pool_key.as_str()
 }
 
-fn lasm_postgres_schema_ensure_key(config: &LasmPostgresThreadLocalConfig) -> String {
-    let tls_mode = match config.tls_mode {
-        LasmDbPostgresTlsMode::Auto => "auto",
-        LasmDbPostgresTlsMode::Disable => "disable",
-        LasmDbPostgresTlsMode::Require => "require",
-    };
-    format!("{tls_mode}\u{1f}{}", config.dsn)
+fn lasm_postgres_schema_ensure_key(config: &LasmPostgresThreadLocalConfig) -> &str {
+    config.schema_ensure_key.as_str()
 }
 
 fn ensure_lasm_postgres_thread_local_schema_ready(
@@ -2201,7 +2227,7 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
             .0
             .lock()
             .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
-        match guard.get(key.as_str()).copied() {
+        match guard.get(key).copied() {
             Some(LasmPostgresSchemaEnsureState::Ready) => return Ok(()),
             Some(LasmPostgresSchemaEnsureState::InProgress) => {
                 guard = tracker
@@ -2211,7 +2237,7 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
                 drop(guard);
             }
             None => {
-                guard.insert(key.clone(), LasmPostgresSchemaEnsureState::InProgress);
+                guard.insert(key.to_string(), LasmPostgresSchemaEnsureState::InProgress);
                 drop(guard);
                 let result = ensure_lasm_dynamic_db_records_postgres_schema(client);
                 let mut finish_guard = tracker
@@ -2220,13 +2246,13 @@ fn ensure_lasm_postgres_thread_local_schema_ready(
                     .map_err(|_| "postgres schema ensure tracker unavailable".to_string())?;
                 match result {
                     Ok(()) => {
-                        finish_guard.insert(key, LasmPostgresSchemaEnsureState::Ready);
+                        finish_guard.insert(key.to_string(), LasmPostgresSchemaEnsureState::Ready);
                         drop(finish_guard);
                         tracker.1.notify_all();
                         return Ok(());
                     }
                     Err(error) => {
-                        finish_guard.remove(key.as_str());
+                        finish_guard.remove(key);
                         drop(finish_guard);
                         tracker.1.notify_all();
                         return Err(error);
@@ -2254,10 +2280,10 @@ fn connect_lasm_postgres_thread_local_client(
 fn checkout_lasm_postgres_shared_client_from_pool(
     pool: &'static LasmPostgresSharedClientPool,
     config: &LasmPostgresThreadLocalConfig,
+    key: &str,
 ) -> Result<LasmPostgresThreadLocalClient, LasmPostgresThreadLocalRuntimeError> {
     let max_active_per_key = resolve_lasm_postgres_shared_client_max_active_per_key();
     let max_active_total = resolve_lasm_postgres_shared_client_max_active_total();
-    let key = lasm_postgres_thread_local_client_key(config);
     loop {
         let mut should_connect = false;
         {
@@ -2266,27 +2292,23 @@ fn checkout_lasm_postgres_shared_client_from_pool(
                     "postgres shared client pool unavailable".to_string(),
                 )
             })?;
-            if let Some(client) = guard
-                .idle
-                .get_mut(key.as_str())
-                .and_then(|clients| clients.pop())
-            {
+            if let Some(client) = guard.idle.get_mut(key).and_then(|clients| clients.pop()) {
                 guard.idle_total = guard.idle_total.saturating_sub(1);
                 if guard
                     .idle
-                    .get(key.as_str())
+                    .get(key)
                     .is_some_and(|clients| clients.is_empty())
                 {
-                    guard.idle.remove(key.as_str());
+                    guard.idle.remove(key);
                 }
-                *guard.active_by_key.entry(key.clone()).or_insert(0) += 1;
+                *guard.active_by_key.entry(key.to_string()).or_insert(0) += 1;
                 guard.active_total = guard.active_total.saturating_add(1);
                 return Ok(client);
             }
 
-            let active_for_key = guard.active_by_key.get(key.as_str()).copied().unwrap_or(0);
+            let active_for_key = guard.active_by_key.get(key).copied().unwrap_or(0);
             if active_for_key < max_active_per_key && guard.active_total < max_active_total {
-                *guard.active_by_key.entry(key.clone()).or_insert(0) += 1;
+                *guard.active_by_key.entry(key.to_string()).or_insert(0) += 1;
                 guard.active_total = guard.active_total.saturating_add(1);
                 should_connect = true;
             } else {
@@ -2307,7 +2329,7 @@ fn checkout_lasm_postgres_shared_client_from_pool(
                             "postgres shared client pool unavailable".to_string(),
                         )
                     })?;
-                    release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key.as_str());
+                    release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key);
                     drop(guard);
                     pool.1.notify_one();
                     return Err(LasmPostgresThreadLocalRuntimeError::Connect(message));
@@ -2333,24 +2355,23 @@ fn release_lasm_postgres_shared_pool_active_slot_locked(
 
 fn release_lasm_postgres_shared_client_to_pool(
     pool: &'static LasmPostgresSharedClientPool,
-    config: &LasmPostgresThreadLocalConfig,
+    key: &str,
     client: LasmPostgresThreadLocalClient,
     keep_idle: bool,
 ) {
     let max_idle = resolve_lasm_postgres_shared_client_max_idle_per_key();
     let max_total_idle = resolve_lasm_postgres_shared_client_max_total_idle();
-    let key = lasm_postgres_thread_local_client_key(config);
     if let Ok(mut guard) = pool.0.lock() {
         if keep_idle {
             if guard.idle_total < max_total_idle {
-                let entry = guard.idle.entry(key.clone()).or_default();
+                let entry = guard.idle.entry(key.to_string()).or_default();
                 if entry.len() < max_idle {
                     entry.push(client);
                     guard.idle_total = guard.idle_total.saturating_add(1);
                 }
             }
         }
-        release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key.as_str());
+        release_lasm_postgres_shared_pool_active_slot_locked(&mut guard, key);
         drop(guard);
         pool.1.notify_one();
     }
@@ -2387,16 +2408,17 @@ fn run_lasm_postgres_thread_local_with_client_from_pool<R>(
         &mut LasmPostgresThreadLocalClient,
     ) -> Result<R, LasmPostgresThreadLocalRuntimeError>,
 ) -> Result<R, LasmPostgresThreadLocalRuntimeError> {
-    let mut client = checkout_lasm_postgres_shared_client_from_pool(pool, config)?;
+    let key = lasm_postgres_thread_local_client_key(config);
+    let mut client = checkout_lasm_postgres_shared_client_from_pool(pool, config, key)?;
     let result = operation(&mut client);
     match &result {
-        Ok(_) => release_lasm_postgres_shared_client_to_pool(pool, config, client, true),
+        Ok(_) => release_lasm_postgres_shared_client_to_pool(pool, key, client, true),
         Err(LasmPostgresThreadLocalRuntimeError::Query(err))
             if !is_lasm_postgres_reconnectable_error(err) =>
         {
-            release_lasm_postgres_shared_client_to_pool(pool, config, client, true);
+            release_lasm_postgres_shared_client_to_pool(pool, key, client, true);
         }
-        Err(_) => release_lasm_postgres_shared_client_to_pool(pool, config, client, false),
+        Err(_) => release_lasm_postgres_shared_client_to_pool(pool, key, client, false),
     }
     result
 }
@@ -2433,7 +2455,7 @@ fn invalidate_lasm_postgres_thread_local_client_in_pool(
 ) {
     let key = lasm_postgres_thread_local_client_key(config);
     if let Ok(mut guard) = pool.0.lock() {
-        if let Some(clients) = guard.idle.remove(key.as_str()) {
+        if let Some(clients) = guard.idle.remove(key) {
             guard.idle_total = guard.idle_total.saturating_sub(clients.len());
         }
     }

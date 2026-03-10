@@ -444,6 +444,9 @@ bench_port_base="$bench_port"
 
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "$suite_dir/.." && pwd)"
+sec4_default_bench_bin="${repo_root}/target/debug/sec4"
+sec4_bench_bin="${BENCH_WORKBENCH_SEC4_BIN:-$sec4_default_bench_bin}"
+sec4_runner_bin=""
 
 normalize_repo_path() {
   local path="$1"
@@ -478,9 +481,6 @@ if [ -z "$out_report" ]; then
 fi
 if [ -z "$out_report_html" ]; then
   out_report_html="${suite_dir}/results/workbench-benchmark-report.html"
-fi
-if [ -z "$lasm_mode_compare_repeats_file" ]; then
-  lasm_mode_compare_repeats_file="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
 fi
 
 if [ ! -f "$matrix_path" ]; then
@@ -535,6 +535,36 @@ supported_lasm_db_adapter() {
   esac
 }
 
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+default_workbench_lasm_mode_compare_repeats_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
 IFS=',' read -r -a endpoints <<<"$endpoints_csv"
 if [ "${#endpoints[@]}" -eq 0 ]; then
   echo "no workbench endpoints provided" >&2
@@ -571,6 +601,9 @@ fi
 if ! supported_lasm_db_adapter "$lasm_db_adapter"; then
   echo "unsupported LASM workbench DB adapter: $lasm_db_adapter" >&2
   exit 2
+fi
+if [ -z "$lasm_mode_compare_repeats_file" ]; then
+  lasm_mode_compare_repeats_file="$(default_workbench_lasm_mode_compare_repeats_path "$endpoints_csv" "$lasm_db_adapter")"
 fi
 if [ "$lasm_db_records_persist_enabled" != "0" ] && [ "$lasm_db_records_persist_enabled" != "1" ]; then
   echo "invalid --lasm-db-records-persist-enabled (expected 0 or 1): $lasm_db_records_persist_enabled" >&2
@@ -609,8 +642,8 @@ if [ -n "$lasm_mode" ]; then
     if [ "$artifact_endpoints_norm" != "$requested_endpoints_norm" ] || {
       [ -n "$artifact_lasm_db_adapter" ] && [ "$artifact_lasm_db_adapter" != "$lasm_db_adapter" ];
     }; then
-      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to fixed mode" >&2
-      lasm_mode="fixed"
+      echo "warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode" >&2
+      lasm_mode="single"
     else
       lasm_mode="$(jq -r '.recommendation.mode // empty' "$lasm_mode_compare_repeats_file")"
       if [ -z "$lasm_mode" ] || [ "$lasm_mode" = "null" ]; then
@@ -793,6 +826,38 @@ else
   BENCH_REQUIRE_WRK2="$require_wrk2" "${suite_dir}/scripts/preflight.sh" --impls "$runnable_impls_csv"
 fi
 
+ensure_sec4_bench_runner_ready() {
+  if [[ ",$runnable_impls_csv," != *",sec4,"* ]] && [[ ",$runnable_impls_csv," != *",sec4-lasm,"* ]]; then
+    return 0
+  fi
+  if [ "$dry_run" = "true" ]; then
+    return 0
+  fi
+  if [ -x "$sec4_bench_bin" ]; then
+    sec4_runner_bin="$sec4_bench_bin"
+    return 0
+  fi
+  if [ "$sec4_bench_bin" != "$sec4_default_bench_bin" ]; then
+    echo "configured sec4 benchmark binary is not executable: $sec4_bench_bin" >&2
+    return 1
+  fi
+  echo "building sec4 benchmark runner binary once: $sec4_default_bench_bin" >&2
+  (
+    cd "$repo_root"
+    cargo build -q -p sec4 --bin sec4
+  ) || return 1
+  if [ ! -x "$sec4_default_bench_bin" ]; then
+    echo "sec4 benchmark binary missing after build: $sec4_default_bench_bin" >&2
+    return 1
+  fi
+  sec4_runner_bin="$sec4_default_bench_bin"
+  return 0
+}
+
+if ! ensure_sec4_bench_runner_ready; then
+  exit 2
+fi
+
 current_bench_port="$bench_port_base"
 current_base_url="http://127.0.0.1:${current_bench_port}"
 base_url="$current_base_url"
@@ -864,6 +929,19 @@ cleanup_impl() {
   cleanup_temp_dir="false"
 }
 
+clear_impl_endpoint_artifacts() {
+  local clear_impl_name="$1"
+  local raw_endpoint=""
+  local endpoint=""
+  for raw_endpoint in "${endpoints[@]}"; do
+    endpoint="$(echo "$raw_endpoint" | tr -d '[:space:]')"
+    [ -z "$endpoint" ] && continue
+    rm -f "${suite_dir}/results/raw/${clear_impl_name}-${endpoint}.txt"
+    rm -f "${suite_dir}/results/summaries/${clear_impl_name}-${endpoint}.json"
+  done
+  rm -f "${suite_dir}/results/summaries/${clear_impl_name}-report.json"
+}
+
 start_impl_service() {
   local impl="$1"
   local service_abs="$2"
@@ -875,11 +953,15 @@ start_impl_service() {
 
   case "$impl" in
     sec4)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       service_temp_dir="$(mktemp -d "/tmp/sec4-workbench-bench-db.XXXXXX")"
       cleanup_temp_dir="true"
       (
         cd "$repo_root"
-        SEC4_RT_DB_BASE="$service_temp_dir" cargo run -q -p sec4 -- run \
+        SEC4_RT_DB_BASE="$service_temp_dir" "$sec4_runner_bin" run \
           --path "$service_abs" \
           --backend c \
           --port "$current_bench_port" \
@@ -887,6 +969,10 @@ start_impl_service() {
       ) >"$log_file" 2>&1 &
       ;;
     sec4-lasm)
+      if [ -z "$sec4_runner_bin" ] || [ ! -x "$sec4_runner_bin" ]; then
+        echo "sec4 benchmark runner unavailable for impl=${impl}" >&2
+        return 2
+      fi
       if [ "$lasm_db_adapter" = "sqlite" ]; then
         if [ -n "$lasm_db_base" ]; then
           service_temp_dir="$lasm_db_base"
@@ -900,7 +986,7 @@ start_impl_service() {
           cd "$repo_root"
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
-          cargo run -q -p sec4 -- run \
+          "$sec4_runner_bin" run \
             --path "$service_abs" \
             --backend lasm \
             --db-adapter sqlite \
@@ -915,7 +1001,7 @@ start_impl_service() {
           SEC4_RT_LASM_DB_POSTGRES_DSN="$lasm_postgres_dsn" \
           SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED="$lasm_db_records_persist_enabled" \
           SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED="$lasm_db_records_capture_enabled" \
-            cargo run -q -p sec4 -- run \
+            "$sec4_runner_bin" run \
               --path "$service_abs" \
               --backend lasm \
               --db-adapter postgres \
@@ -1113,6 +1199,7 @@ while IFS= read -r impl_row; do
   exit_code=0
   seed_task_id=""
   profile_service_pid=""
+  clear_impl_endpoint_artifacts "$impl"
 
   if [ "$result" = "passed" ]; then
     for raw_endpoint in "${endpoints[@]}"; do

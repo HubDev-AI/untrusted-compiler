@@ -2,12 +2,10 @@ use crate::lasm_db_client::{
     cleanup_lasm_internal_db_sequence_tx_handles as cleanup_lasm_internal_db_sequence_tx_handles_from_adapter,
     ensure_lasm_db_records_client_ready, parse_lasm_db_template_and_params,
     resolve_lasm_exec_tx_state_bindings_locked, run_lasm_db_tx_allocate_locked_operation,
-    run_lasm_non_postgres_exec_locked_operation, run_lasm_non_postgres_exec_tx_locked_operation,
-    run_lasm_non_postgres_query_one_locked_operation, run_lasm_postgres_exec_unlocked_operation,
-    run_lasm_postgres_query_one_unlocked_operation, LasmExecTxSource,
-    LasmLockedExecTxOperationError, LasmLockedOperationError, LasmLockedQueryOneOperationError,
-    LasmPreparedDbOperationParams, LasmUnlockedPostgresExecTxOperationError,
-    LasmUnlockedPostgresOperationError,
+    run_lasm_exec_operation_with_adapter, run_lasm_exec_tx_operation_with_adapter,
+    run_lasm_query_one_operation_with_adapter, LasmExecTxSource, LasmLockedOperationError,
+    LasmPreparedDbOperationParams, LasmUnifiedExecOperationError, LasmUnifiedExecTxOperationError,
+    LasmUnifiedQueryOneOperationError,
 };
 use crate::lasm_db_records_response::apply_lasm_db_list_records_response_materialization;
 use crate::lasm_db_runtime_common::{
@@ -1800,51 +1798,7 @@ fn handle_lasm_internal_db_exec_operation(
         Some(value) => value,
         None => return true,
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let success = match run_lasm_postgres_exec_unlocked_operation(
-            dynamic_state,
-            db,
-            template.as_str(),
-            params.as_str(),
-            &prepared_params,
-        ) {
-            Ok(value) => value,
-            Err(LasmUnlockedPostgresOperationError::StateUnavailable) => {
-                set_lasm_dynamic_state_unavailable_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::AdapterMismatch) => {
-                set_lasm_db_adapter_mismatch_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::PreparationMismatch) => {
-                set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::Runtime(message)) => {
-                set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::NotFound) => {
-                set_lasm_db_runtime_error_response(
-                    response,
-                    "exec",
-                    "postgres exec returned unexpected not-found result",
-                    trace_id,
-                );
-                return true;
-            }
-        };
-        set_lasm_db_exec_like_success_response(
-            response,
-            &success.record,
-            success.record.affected_rows,
-            request,
-            trace_id,
-        );
-        return true;
-    }
-    let record = match run_lasm_non_postgres_exec_locked_operation(
+    let success = match run_lasm_exec_operation_with_adapter(
         dynamic_state,
         db_records_adapter,
         db,
@@ -1852,35 +1806,28 @@ fn handle_lasm_internal_db_exec_operation(
         params.as_str(),
         &prepared_params,
     ) {
-        Ok(value) => value.record,
-        Err(LasmLockedOperationError::StateUnavailable) => {
+        Ok(value) => value,
+        Err(LasmUnifiedExecOperationError::StateUnavailable) => {
             set_lasm_dynamic_state_unavailable_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedOperationError::AdapterMismatch) => {
+        Err(LasmUnifiedExecOperationError::AdapterMismatch) => {
             set_lasm_db_adapter_mismatch_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedOperationError::Capacity { .. })
-        | Err(LasmLockedOperationError::InvalidHandle)
-        | Err(LasmLockedOperationError::ConflictInUse) => {
-            set_lasm_db_runtime_error_response(
-                response,
-                "exec",
-                "internal non-postgres exec control-state mismatch",
-                trace_id,
-            );
+        Err(LasmUnifiedExecOperationError::PreparationMismatch) => {
+            set_lasm_db_preparse_mismatch_response(response, "exec", trace_id);
             return true;
         }
-        Err(LasmLockedOperationError::Runtime(message)) => {
+        Err(LasmUnifiedExecOperationError::Runtime(message)) => {
             set_lasm_db_runtime_error_response(response, "exec", message.as_str(), trace_id);
             return true;
         }
     };
     set_lasm_db_exec_like_success_response(
         response,
-        &record,
-        record.affected_rows,
+        &success.record,
+        success.record.affected_rows,
         request,
         trace_id,
     );
@@ -1993,50 +1940,7 @@ fn handle_lasm_internal_db_exec_tx_operation(
         bindings.tx_active,
         bindings.allocated_tx_handle,
     );
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let success = match crate::lasm_db_client::run_lasm_postgres_exec_tx_unlocked_operation(
-            dynamic_state,
-            db,
-            tx,
-            tx_active,
-            allocated_tx_handle,
-            keep_allocated_tx_handle,
-            template.as_str(),
-            params.as_str(),
-            &prepared_params,
-        ) {
-            Ok(value) => value,
-            Err(LasmUnlockedPostgresExecTxOperationError::StateUnavailable) => {
-                set_lasm_dynamic_state_unavailable_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch) => {
-                set_lasm_db_adapter_mismatch_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresExecTxOperationError::PreparationMismatch) => {
-                set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresExecTxOperationError::Runtime(message)) => {
-                set_lasm_db_runtime_error_response(response, "execTx", message.as_str(), trace_id);
-                return true;
-            }
-        };
-        set_lasm_db_exec_like_success_response(
-            response,
-            &success.record,
-            success.record.affected_rows,
-            request,
-            trace_id,
-        );
-        response.headers.insert(
-            LASM_INTERNAL_DB_TX_RESULT_HEADER.to_string(),
-            success.record.tx.to_string(),
-        );
-        return true;
-    }
-    let success = match run_lasm_non_postgres_exec_tx_locked_operation(
+    let success = match run_lasm_exec_tx_operation_with_adapter(
         dynamic_state,
         db_records_adapter,
         db,
@@ -2049,15 +1953,19 @@ fn handle_lasm_internal_db_exec_tx_operation(
         &prepared_params,
     ) {
         Ok(value) => value,
-        Err(LasmLockedExecTxOperationError::StateUnavailable) => {
+        Err(LasmUnifiedExecTxOperationError::StateUnavailable) => {
             set_lasm_dynamic_state_unavailable_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedExecTxOperationError::AdapterMismatch) => {
+        Err(LasmUnifiedExecTxOperationError::AdapterMismatch) => {
             set_lasm_db_adapter_mismatch_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedExecTxOperationError::Runtime(message)) => {
+        Err(LasmUnifiedExecTxOperationError::PreparationMismatch) => {
+            set_lasm_db_preparse_mismatch_response(response, "execTx", trace_id);
+            return true;
+        }
+        Err(LasmUnifiedExecTxOperationError::Runtime(message)) => {
             set_lasm_db_runtime_error_response(response, "execTx", message.as_str(), trace_id);
             return true;
         }
@@ -2128,70 +2036,7 @@ fn handle_lasm_internal_db_query_one_operation(
         Some(value) => value,
         None => return true,
     };
-    if db_records_adapter == LasmDbRecordsAdapter::Postgres {
-        let success = match run_lasm_postgres_query_one_unlocked_operation(
-            dynamic_state,
-            db,
-            template.as_str(),
-            params.as_str(),
-            &prepared_params,
-        ) {
-            Ok(value) => value,
-            Err(LasmUnlockedPostgresOperationError::StateUnavailable) => {
-                set_lasm_dynamic_state_unavailable_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::AdapterMismatch) => {
-                set_lasm_db_adapter_mismatch_response(response, trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::PreparationMismatch) => {
-                set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::NotFound) => {
-                set_lasm_json_response(
-                    response,
-                    404,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_NOT_FOUND",
-                        "missing_dependency",
-                        "db.queryOne row not found",
-                        404,
-                        trace_id,
-                    ),
-                );
-                return true;
-            }
-            Err(LasmUnlockedPostgresOperationError::Runtime(message)) => {
-                set_lasm_db_runtime_error_response(
-                    response,
-                    "queryOne",
-                    message.as_str(),
-                    trace_id,
-                );
-                return true;
-            }
-        };
-        let row = serde_json::to_string(&success.row_object).unwrap_or_else(|_| "{}".to_string());
-        if !enforce_lasm_db_query_one_row_max_columns(response, &success.row_object, trace_id) {
-            return true;
-        }
-        if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
-            return true;
-        }
-        set_lasm_db_query_one_success_response(
-            response,
-            &success.record,
-            row_schema,
-            row.as_str(),
-            &success.row_object,
-            request,
-            trace_id,
-        );
-        return true;
-    }
-    let query_result = match run_lasm_non_postgres_query_one_locked_operation(
+    let success = match run_lasm_query_one_operation_with_adapter(
         dynamic_state,
         db_records_adapter,
         db,
@@ -2200,41 +2045,40 @@ fn handle_lasm_internal_db_query_one_operation(
         row_schema,
         &prepared_params,
     ) {
-        Ok(value) => Some((value.record, value.row_object)),
-        Err(LasmLockedQueryOneOperationError::StateUnavailable) => {
+        Ok(value) => value,
+        Err(LasmUnifiedQueryOneOperationError::StateUnavailable) => {
             set_lasm_dynamic_state_unavailable_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedQueryOneOperationError::AdapterMismatch) => {
+        Err(LasmUnifiedQueryOneOperationError::AdapterMismatch) => {
             set_lasm_db_adapter_mismatch_response(response, trace_id);
             return true;
         }
-        Err(LasmLockedQueryOneOperationError::NotFound) => None,
-        Err(LasmLockedQueryOneOperationError::PreparationMismatch) => {
+        Err(LasmUnifiedQueryOneOperationError::NotFound) => {
+            set_lasm_json_response(
+                response,
+                404,
+                &lasm_error_envelope(
+                    "DB.QUERY_ONE_NOT_FOUND",
+                    "missing_dependency",
+                    "db.queryOne row not found",
+                    404,
+                    trace_id,
+                ),
+            );
+            return true;
+        }
+        Err(LasmUnifiedQueryOneOperationError::PreparationMismatch) => {
             set_lasm_db_preparse_mismatch_response(response, "queryOne", trace_id);
             return true;
         }
-        Err(LasmLockedQueryOneOperationError::Runtime(message)) => {
+        Err(LasmUnifiedQueryOneOperationError::Runtime(message)) => {
             set_lasm_db_runtime_error_response(response, "queryOne", message.as_str(), trace_id);
             return true;
         }
     };
-    let Some((record, row_object)) = query_result else {
-        set_lasm_json_response(
-            response,
-            404,
-            &lasm_error_envelope(
-                "DB.QUERY_ONE_NOT_FOUND",
-                "missing_dependency",
-                "db.queryOne row not found",
-                404,
-                trace_id,
-            ),
-        );
-        return true;
-    };
-    let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-    if !enforce_lasm_db_query_one_row_max_columns(response, &row_object, trace_id) {
+    let row = serde_json::to_string(&success.row_object).unwrap_or_else(|_| "{}".to_string());
+    if !enforce_lasm_db_query_one_row_max_columns(response, &success.row_object, trace_id) {
         return true;
     }
     if !enforce_lasm_db_query_one_row_max_bytes(response, row.as_str(), trace_id) {
@@ -2242,10 +2086,10 @@ fn handle_lasm_internal_db_query_one_operation(
     }
     set_lasm_db_query_one_success_response(
         response,
-        &record,
+        &success.record,
         row_schema,
         row.as_str(),
-        &row_object,
+        &success.row_object,
         request,
         trace_id,
     );

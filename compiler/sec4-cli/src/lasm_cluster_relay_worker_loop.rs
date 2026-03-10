@@ -419,9 +419,12 @@ fn try_lasm_cluster_relay_fallback_connect(
 ) -> bool {
     match TcpStream::connect_timeout(&fallback_backend_addr, relay_backend_connect_timeout) {
         Ok(upstream) => {
-            let client_for_fallback = fallback_client
-                .take()
-                .expect("relay fallback keeps client stream until fallback connect succeeds");
+            let Some(client_for_fallback) = fallback_client.take() else {
+                eprintln!(
+                    "warning: LASM cluster relay fallback connect succeeded but client stream was unavailable"
+                );
+                return false;
+            };
             initialize_lasm_cluster_relay_connection(
                 client_for_fallback,
                 upstream,

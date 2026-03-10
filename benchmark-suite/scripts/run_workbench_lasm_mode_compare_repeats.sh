@@ -23,7 +23,7 @@ USAGE
 suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
 base_script="${suite_dir}/scripts/run_workbench_lasm_mode_compare.sh"
 repeats=3
-out_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
+out_path=""
 keep_repeat_files="false"
 dry_run="false"
 pass_args=()
@@ -75,6 +75,79 @@ done
 if ! [[ "$repeats" =~ ^[0-9]+$ ]] || [ "$repeats" -lt 1 ]; then
   echo "--repeats must be an integer >= 1" >&2
   exit 2
+fi
+
+resolve_passthrough_option_value() {
+  local option="$1"
+  local default_value="$2"
+  local resolved_value="$default_value"
+  local token=""
+  local next=""
+  local i=0
+  while [ "$i" -lt "${#pass_args[@]}" ]; do
+    token="${pass_args[$i]}"
+    case "$token" in
+      "$option")
+        if [ "$((i + 1))" -lt "${#pass_args[@]}" ]; then
+          next="${pass_args[$((i + 1))]}"
+          case "$next" in
+            --*)
+              ;;
+            *)
+              resolved_value="$next"
+              ;;
+          esac
+        fi
+        ;;
+      "$option="*)
+        resolved_value="${token#${option}=}"
+        ;;
+    esac
+    i=$((i + 1))
+  done
+  printf '%s' "$resolved_value"
+}
+
+normalize_workbench_endpoints_csv() {
+  local endpoints_csv="$1"
+  printf '%s\n' "$endpoints_csv" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d' \
+    | sort -u \
+    | paste -sd, -
+}
+
+sanitize_workbench_endpoints_key() {
+  local endpoints_norm="$1"
+  local endpoints_key=""
+  endpoints_key="$(printf '%s' "$endpoints_norm" | tr ',' '_' | sed 's/[^A-Za-z0-9_-]/-/g')"
+  if [ -z "$endpoints_key" ]; then
+    endpoints_key="none"
+  fi
+  printf '%s' "$endpoints_key"
+}
+
+compute_workbench_lasm_mode_compare_repeats_default_path() {
+  local endpoints_csv="$1"
+  local lasm_db_adapter="$2"
+  local endpoints_norm=""
+  local endpoints_key=""
+  endpoints_norm="$(normalize_workbench_endpoints_csv "$endpoints_csv")"
+  endpoints_key="$(sanitize_workbench_endpoints_key "$endpoints_norm")"
+  printf '%s/results/summaries/workbench-lasm-mode-compare-repeats-%s-%s.json' "$suite_dir" "$lasm_db_adapter" "$endpoints_key"
+}
+
+mode_compare_endpoints="$(
+  resolve_passthrough_option_value \
+    "--endpoints" \
+    "wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+)"
+mode_compare_lasm_db_adapter="$(resolve_passthrough_option_value "--lasm-db-adapter" "sqlite")"
+mode_compare_endpoints_norm="$(normalize_workbench_endpoints_csv "$mode_compare_endpoints")"
+
+if [ -z "$out_path" ]; then
+  out_path="$(compute_workbench_lasm_mode_compare_repeats_default_path "$mode_compare_endpoints" "$mode_compare_lasm_db_adapter")"
 fi
 
 mkdir -p "$(dirname "$out_path")"
@@ -193,3 +266,12 @@ jq -s \
   ' "${repeat_outputs[@]}" >"$out_path"
 
 echo "wrote ${out_path}"
+
+canonical_endpoints_norm="$(
+  normalize_workbench_endpoints_csv "wb-tasks-post,wb-tasks-with-comment,wb-task-comment-post,wb-task-get,wb-tasks-list"
+)"
+legacy_alias_path="${suite_dir}/results/summaries/workbench-lasm-mode-compare-repeats.json"
+if [ "$mode_compare_lasm_db_adapter" = "postgres" ] && [ "$mode_compare_endpoints_norm" = "$canonical_endpoints_norm" ] && [ "$out_path" != "$legacy_alias_path" ]; then
+  cp "$out_path" "$legacy_alias_path"
+  echo "wrote ${legacy_alias_path}"
+fi

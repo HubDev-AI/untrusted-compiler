@@ -3,8 +3,20 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 tmp_dsn="$(mktemp)"
-trap 'rm -f "$tmp_dsn"' EXIT
+tmp_mode_compare="$(mktemp)"
+trap 'rm -f "$tmp_dsn" "$tmp_mode_compare"' EXIT
 printf '%s\n' 'postgresql://bench:bench@127.0.0.1:5432/bench' >"$tmp_dsn"
+cat >"$tmp_mode_compare" <<'EOF'
+{
+  "config": {
+    "endpoints": ["wb-tasks-list"],
+    "lasmDbAdapter": "sqlite"
+  },
+  "recommendation": {
+    "mode": "proxy"
+  }
+}
+EOF
 
 out="$($root_dir/scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls sec4 --endpoints wb-task-get --port 18110)"
 
@@ -44,12 +56,22 @@ if ! grep -q '^repeat 1: .*run_workbench_lasm_mode_compare.sh .*--lasm-db-record
   echo "missing repeated LASM mode compare records-capture passthrough" >&2
   exit 1
 fi
-if ! grep -q '^aggregate artifact: .*/workbench-lasm-mode-compare-repeats.json$' <<<"$repeat_out"; then
+if ! grep -q '^aggregate artifact: .*/workbench-lasm-mode-compare-repeats-sqlite-wb-task-get.json$' <<<"$repeat_out"; then
   echo "missing repeated LASM mode compare aggregate artifact marker" >&2
   exit 1
 fi
-if ! grep -q 'publish_report.sh .*workbench-benchmark-compare-matrix.json .*workbench-full-benchmark-report.md .*workbench-benchmark-analysis.json .*workbench-step-matrix.json .*workbench-lasm-mode-compare-repeats.json' <<<"$repeat_out"; then
+if ! grep -q 'publish_report.sh .*workbench-benchmark-compare-matrix.json .*workbench-full-benchmark-report.md .*workbench-benchmark-analysis.json .*workbench-step-matrix.json .*workbench-lasm-mode-compare-repeats-sqlite-wb-task-get.json' <<<"$repeat_out"; then
   echo "missing publish command with repeated LASM mode compare artifact" >&2
+  exit 1
+fi
+
+auto_mismatch_out="$($root_dir/scripts/run_workbench_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints wb-task-get --lasm-mode auto --lasm-mode-compare-repeats-file "$tmp_mode_compare" --port 18113 2>&1)"
+if ! grep -q 'warning: LASM auto mode recommendation artifact workload does not match requested benchmark workload; falling back to single mode' <<<"$auto_mismatch_out"; then
+  echo "missing LASM auto mode workload mismatch fallback warning in full benchmark suite output" >&2
+  exit 1
+fi
+if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_mismatch_out"; then
+  echo "expected LASM auto mode fallback to single mode in full benchmark suite output" >&2
   exit 1
 fi
 

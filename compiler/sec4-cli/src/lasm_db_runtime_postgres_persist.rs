@@ -5,7 +5,8 @@ use crate::lasm_db_runtime_postgres::{
 };
 use crate::LasmDbRecord;
 use crossbeam_channel::{bounded, SendError, Sender, TryRecvError, TrySendError};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::env;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -26,6 +27,9 @@ const LASM_POSTGRES_PERSIST_BATCH_MAX_MIN: usize = 1;
 const LASM_POSTGRES_PERSIST_BATCH_MAX_MAX: usize = 4096;
 const LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE";
+const LASM_RUNTIME_MAX_CONCURRENCY_ENV: &str = "SEC4_RT_LASM_MAX_CONCURRENCY";
+const LASM_POSTGRES_PERSIST_WORKERS_AUTO_DEFAULT_CAP: usize = 16;
+const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_AUTO_DEFAULT_CAP: usize = 131_072;
 
 static LASM_POSTGRES_PERSIST_WORKERS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED: OnceLock<usize> = OnceLock::new();
@@ -35,9 +39,12 @@ static LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_RESOLVED: OnceLock<LasmPostgresPers
 static LASM_POSTGRES_PERSIST_QUEUE: OnceLock<Sender<LasmPostgresPersistTask>> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_CONFIG_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     OnceLock::new();
+static LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static LASM_POSTGRES_PERSIST_QUEUE_BACKPRESSURE_TOTAL: AtomicUsize = AtomicUsize::new(0);
 static LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL: AtomicUsize = AtomicUsize::new(0);
+const LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_INTERVAL: usize = 4096;
+const LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_MIN_SIZE: usize = 64;
 
 #[derive(Clone, Copy)]
 enum LasmPostgresPersistQueueFullMode {
@@ -56,17 +63,59 @@ fn lasm_postgres_persist_queue_full_mode_label(
 }
 
 #[inline(always)]
+fn resolve_lasm_runtime_max_concurrency_hint() -> Option<usize> {
+    let raw = env::var(LASM_RUNTIME_MAX_CONCURRENCY_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<usize>().ok().filter(|value| *value > 0)
+}
+
+#[inline(always)]
+fn resolve_lasm_postgres_persist_workers_auto_default() -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => {
+            // Keep persist workers below request-worker fanout while still scaling
+            // with runtime concurrency for DB-heavy workloads.
+            let derived = hint.div_ceil(8);
+            derived.clamp(
+                LASM_POSTGRES_PERSIST_WORKERS_DEFAULT,
+                LASM_POSTGRES_PERSIST_WORKERS_AUTO_DEFAULT_CAP,
+            )
+        }
+        None => LASM_POSTGRES_PERSIST_WORKERS_DEFAULT,
+    }
+}
+
+#[inline(always)]
+fn resolve_lasm_postgres_persist_queue_capacity_auto_default() -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => {
+            // Provide enough queue headroom per concurrent worker without
+            // unbounded growth on high-concurrency settings.
+            let derived = hint.saturating_mul(64);
+            derived.clamp(
+                LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT,
+                LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_AUTO_DEFAULT_CAP,
+            )
+        }
+        None => LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT,
+    }
+}
+
+#[inline(always)]
 fn resolve_lasm_postgres_persist_workers() -> usize {
     *LASM_POSTGRES_PERSIST_WORKERS_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_WORKERS_ENV) else {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         };
         parsed.clamp(
             LASM_POSTGRES_PERSIST_WORKERS_MIN,
@@ -79,14 +128,14 @@ fn resolve_lasm_postgres_persist_workers() -> usize {
 fn resolve_lasm_postgres_persist_queue_capacity() -> usize {
     *LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_ENV) else {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         };
         parsed.clamp(
             LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_MIN,
@@ -168,9 +217,27 @@ pub(crate) fn lasm_postgres_persist_queue_depth() -> usize {
 
 #[derive(Clone)]
 struct LasmPostgresPersistTask {
+    config_key: String,
     config: LasmPostgresThreadLocalConfig,
     record: LasmDbRecord,
     compaction_snapshot: Option<Vec<LasmDbRecord>>,
+}
+
+impl LasmPostgresPersistTask {
+    #[inline(always)]
+    fn new(
+        config: LasmPostgresThreadLocalConfig,
+        record: LasmDbRecord,
+        compaction_snapshot: Option<Vec<LasmDbRecord>>,
+    ) -> Self {
+        let config_key = lasm_postgres_persist_config_key(&config);
+        Self {
+            config_key,
+            config,
+            record,
+            compaction_snapshot,
+        }
+    }
 }
 
 fn lasm_postgres_persist_config_key(config: &LasmPostgresThreadLocalConfig) -> String {
@@ -187,44 +254,74 @@ fn lasm_postgres_persist_config_key(config: &LasmPostgresThreadLocalConfig) -> S
 
 fn lasm_postgres_persist_config_lock(key: &str) -> Arc<Mutex<()>> {
     let locks = LASM_POSTGRES_PERSIST_CONFIG_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = locks.lock().expect("persist config locks poisoned");
+    let mut guard = match locks.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!(
+                "warning: LASM dynamic postgres persist config lock registry poisoned; continuing with recovered state"
+            );
+            poisoned.into_inner()
+        }
+    };
+    if guard.len() >= LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_MIN_SIZE {
+        let prune_tick = LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_COUNTER
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        if prune_tick.is_multiple_of(LASM_POSTGRES_PERSIST_CONFIG_LOCKS_PRUNE_INTERVAL) {
+            guard.retain(|_, lock| Arc::strong_count(lock) > 1);
+        }
+    }
     guard
         .entry(key.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))
         .clone()
 }
 
-fn run_lasm_postgres_persist_task_batch(tasks: Vec<LasmPostgresPersistTask>) {
+fn run_lasm_postgres_persist_task_batch(tasks: &mut Vec<LasmPostgresPersistTask>) {
     if tasks.is_empty() {
         return;
     }
-    let mut grouped: BTreeMap<
+    let mut grouped: HashMap<
         String,
         (
             LasmPostgresThreadLocalConfig,
             Vec<LasmDbRecord>,
             Option<Vec<LasmDbRecord>>,
         ),
-    > = BTreeMap::new();
-    for task in tasks {
+    > = HashMap::new();
+    for task in tasks.drain(..) {
         let LasmPostgresPersistTask {
+            config_key,
             config,
             record,
             compaction_snapshot,
         } = task;
-        let key = lasm_postgres_persist_config_key(&config);
-        let entry = grouped
-            .entry(key)
-            .or_insert_with(|| (config.clone(), Vec::new(), None));
-        entry.1.push(record);
-        if compaction_snapshot.is_some() {
-            entry.2 = compaction_snapshot;
+        match grouped.entry(config_key) {
+            Entry::Occupied(mut occupied) => {
+                let entry = occupied.get_mut();
+                entry.1.push(record);
+                if compaction_snapshot.is_some() {
+                    entry.2 = compaction_snapshot;
+                }
+            }
+            Entry::Vacant(vacant) => {
+                let mut records = Vec::with_capacity(1);
+                records.push(record);
+                vacant.insert((config, records, compaction_snapshot));
+            }
         }
     }
-    for (_, (config, records, compaction_snapshot)) in grouped {
-        let config_key = lasm_postgres_persist_config_key(&config);
+    for (config_key, (config, records, compaction_snapshot)) in grouped {
         let config_lock = lasm_postgres_persist_config_lock(config_key.as_str());
-        let _config_guard = config_lock.lock().expect("persist config lock poisoned");
+        let _config_guard = match config_lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!(
+                    "warning: LASM dynamic postgres persist per-config lock poisoned; continuing with recovered state"
+                );
+                poisoned.into_inner()
+            }
+        };
         let mut append_records = records;
         let mut full_sync_failed = false;
         if let Some(snapshot) = compaction_snapshot.as_deref() {
@@ -285,8 +382,9 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
             match thread::Builder::new()
                 .name(format!("sec4-lasm-postgres-persist-{worker_index}"))
                 .spawn(move || {
+                    let mut batch = Vec::with_capacity(batch_max);
                     while let Ok(task) = worker_receiver.recv() {
-                        let mut batch = Vec::with_capacity(batch_max);
+                        batch.clear();
                         batch.push(task);
                         for _ in 1..batch_max {
                             match worker_receiver.try_recv() {
@@ -296,7 +394,7 @@ fn lasm_postgres_persist_queue_sender() -> &'static Sender<LasmPostgresPersistTa
                                 }
                             }
                         }
-                        run_lasm_postgres_persist_task_batch(batch);
+                        run_lasm_postgres_persist_task_batch(&mut batch);
                     }
                 }) {
                 Ok(_) => {
@@ -331,20 +429,13 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
     compaction_snapshot: Option<Vec<LasmDbRecord>>,
 ) {
     let sender = lasm_postgres_persist_queue_sender();
+    let task = LasmPostgresPersistTask::new(config.clone(), record.clone(), compaction_snapshot);
     if !LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.load(Ordering::Relaxed) {
         LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-        run_lasm_postgres_persist_task_batch(vec![LasmPostgresPersistTask {
-            config: config.clone(),
-            record: record.clone(),
-            compaction_snapshot,
-        }]);
+        let mut tasks = vec![task];
+        run_lasm_postgres_persist_task_batch(&mut tasks);
         return;
     }
-    let task = LasmPostgresPersistTask {
-        config: config.clone(),
-        record: record.clone(),
-        compaction_snapshot,
-    };
     match sender.try_send(task) {
         Ok(()) => {}
         Err(TrySendError::Full(full_task)) => {
@@ -367,19 +458,22 @@ pub(crate) fn persist_lasm_postgres_record_after_unlock(
                     Err(SendError(disconnected_task)) => {
                         LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
                         LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-                        run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+                        let mut tasks = vec![disconnected_task];
+                        run_lasm_postgres_persist_task_batch(&mut tasks);
                     }
                 },
                 LasmPostgresPersistQueueFullMode::SyncFallback => {
                     LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-                    run_lasm_postgres_persist_task_batch(vec![full_task]);
+                    let mut tasks = vec![full_task];
+                    run_lasm_postgres_persist_task_batch(&mut tasks);
                 }
             }
         }
         Err(TrySendError::Disconnected(disconnected_task)) => {
             LASM_POSTGRES_PERSIST_WORKERS_AVAILABLE.store(false, Ordering::Relaxed);
             LASM_POSTGRES_PERSIST_SYNC_FALLBACK_TOTAL.fetch_add(1, Ordering::Relaxed);
-            run_lasm_postgres_persist_task_batch(vec![disconnected_task]);
+            let mut tasks = vec![disconnected_task];
+            run_lasm_postgres_persist_task_batch(&mut tasks);
         }
     }
 }
