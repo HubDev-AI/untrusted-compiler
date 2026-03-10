@@ -26,6 +26,9 @@ const LASM_POSTGRES_PERSIST_BATCH_MAX_MIN: usize = 1;
 const LASM_POSTGRES_PERSIST_BATCH_MAX_MAX: usize = 4096;
 const LASM_POSTGRES_PERSIST_QUEUE_FULL_MODE_ENV: &str =
     "SEC4_RT_LASM_DB_POSTGRES_PERSIST_QUEUE_FULL_MODE";
+const LASM_RUNTIME_MAX_CONCURRENCY_ENV: &str = "SEC4_RT_LASM_MAX_CONCURRENCY";
+const LASM_POSTGRES_PERSIST_WORKERS_AUTO_DEFAULT_CAP: usize = 16;
+const LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_AUTO_DEFAULT_CAP: usize = 131_072;
 
 static LASM_POSTGRES_PERSIST_WORKERS_RESOLVED: OnceLock<usize> = OnceLock::new();
 static LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED: OnceLock<usize> = OnceLock::new();
@@ -56,17 +59,59 @@ fn lasm_postgres_persist_queue_full_mode_label(
 }
 
 #[inline(always)]
+fn resolve_lasm_runtime_max_concurrency_hint() -> Option<usize> {
+    let raw = env::var(LASM_RUNTIME_MAX_CONCURRENCY_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<usize>().ok().filter(|value| *value > 0)
+}
+
+#[inline(always)]
+fn resolve_lasm_postgres_persist_workers_auto_default() -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => {
+            // Keep persist workers below request-worker fanout while still scaling
+            // with runtime concurrency for DB-heavy workloads.
+            let derived = hint.div_ceil(8);
+            derived.clamp(
+                LASM_POSTGRES_PERSIST_WORKERS_DEFAULT,
+                LASM_POSTGRES_PERSIST_WORKERS_AUTO_DEFAULT_CAP,
+            )
+        }
+        None => LASM_POSTGRES_PERSIST_WORKERS_DEFAULT,
+    }
+}
+
+#[inline(always)]
+fn resolve_lasm_postgres_persist_queue_capacity_auto_default() -> usize {
+    match resolve_lasm_runtime_max_concurrency_hint() {
+        Some(hint) => {
+            // Provide enough queue headroom per concurrent worker without
+            // unbounded growth on high-concurrency settings.
+            let derived = hint.saturating_mul(64);
+            derived.clamp(
+                LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT,
+                LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_AUTO_DEFAULT_CAP,
+            )
+        }
+        None => LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT,
+    }
+}
+
+#[inline(always)]
 fn resolve_lasm_postgres_persist_workers() -> usize {
     *LASM_POSTGRES_PERSIST_WORKERS_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_WORKERS_ENV) else {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_PERSIST_WORKERS_DEFAULT;
+            return resolve_lasm_postgres_persist_workers_auto_default();
         };
         parsed.clamp(
             LASM_POSTGRES_PERSIST_WORKERS_MIN,
@@ -79,14 +124,14 @@ fn resolve_lasm_postgres_persist_workers() -> usize {
 fn resolve_lasm_postgres_persist_queue_capacity() -> usize {
     *LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_RESOLVED.get_or_init(|| {
         let Ok(raw) = env::var(LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_ENV) else {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         };
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         }
         let Ok(parsed) = trimmed.parse::<usize>() else {
-            return LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_DEFAULT;
+            return resolve_lasm_postgres_persist_queue_capacity_auto_default();
         };
         parsed.clamp(
             LASM_POSTGRES_PERSIST_QUEUE_CAPACITY_MIN,
