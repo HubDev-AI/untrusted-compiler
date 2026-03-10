@@ -91,7 +91,7 @@ pub(crate) fn cleanup_lasm_internal_db_sequence_tx_handles(
     };
     if db_records_adapter == LasmDbRecordsAdapter::Postgres {
         postgres_config =
-            crate::lasm_db_client::build_lasm_postgres_thread_local_config(&state).ok();
+            crate::lasm_db_client::build_lasm_postgres_thread_local_config(&mut state).ok();
     }
     let mut consumed_handles = BTreeSet::new();
     for handle in handles {

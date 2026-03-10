@@ -191,13 +191,13 @@ pub(crate) fn run_lasm_postgres_exec_unlocked_operation(
         return Err(LasmUnlockedPostgresOperationError::PreparationMismatch);
     };
     let config = {
-        let state = dynamic_state
+        let mut state = dynamic_state
             .lock()
             .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
         }
-        build_lasm_postgres_thread_local_config(&state)
+        build_lasm_postgres_thread_local_config(&mut state)
             .map_err(LasmUnlockedPostgresOperationError::Runtime)?
     };
     let affected_rows = run_lasm_postgres_exec_thread_local(
@@ -260,13 +260,13 @@ pub(crate) fn run_lasm_postgres_query_one_unlocked_operation(
         return Err(LasmUnlockedPostgresOperationError::PreparationMismatch);
     };
     let config = {
-        let state = dynamic_state
+        let mut state = dynamic_state
             .lock()
             .map_err(|_| LasmUnlockedPostgresOperationError::StateUnavailable)?;
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             return Err(LasmUnlockedPostgresOperationError::AdapterMismatch);
         }
-        build_lasm_postgres_thread_local_config(&state)
+        build_lasm_postgres_thread_local_config(&mut state)
             .map_err(LasmUnlockedPostgresOperationError::Runtime)?
     };
     let row_object = match run_lasm_postgres_query_one_thread_local(
@@ -330,7 +330,7 @@ pub(crate) fn run_lasm_postgres_exec_tx_unlocked_operation(
         if state.db_records_adapter != LasmDbRecordsAdapter::Postgres {
             return Err(LasmUnlockedPostgresExecTxOperationError::AdapterMismatch);
         }
-        let config = match build_lasm_postgres_thread_local_config(&state) {
+        let config = match build_lasm_postgres_thread_local_config(&mut state) {
             Ok(config) => config,
             Err(message) => {
                 if keep_allocated_tx_handle {
