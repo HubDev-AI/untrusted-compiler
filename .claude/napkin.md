@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-03-10 | self | After launching/waiting on sub-agents, local checkout had switched back to `dev` and I almost continued the slice there. | After every sub-agent completion/interruption, run `git branch --show-current`; if it is `dev`, switch/create the intended `codex/*` branch before any edits/tests. |
 | 2026-03-10 | self | After `gh pr merge --auto ...` I resumed editing immediately and forgot that local HEAD had switched back to `dev`, so the next slice started on `dev` again. | After every PR merge, run an explicit branch gate (`git branch --show-current`) and create/switch to the next `codex/*` branch before any edits. |
 | 2026-03-10 | self | I started editing on `main` during the benchmark auto-mode slice before switching back to a `codex/*` branch from `dev`. | Keep a strict pre-edit branch gate (`git branch --show-current`) and never apply patches unless on a `codex/*` branch created from `dev`. |
 | 2026-03-10 | self | I relied on command substitution to capture `resolve_lasm_auto_mode_recommendation` output, which runs in a subshell and dropped the resolver error/recommendation globals needed for clear warnings. | For shell helpers that must preserve side effects, avoid command substitution; have the function set globals directly and consume them after a direct function call. |

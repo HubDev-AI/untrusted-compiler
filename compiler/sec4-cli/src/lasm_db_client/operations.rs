@@ -27,6 +27,7 @@ use crate::lasm_db_runtime_sqlite::{
     run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one, LasmSqliteQueryParams,
 };
 use crate::{LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 pub(crate) enum LasmPreparedDbOperationParams {
@@ -102,6 +103,50 @@ pub(crate) struct LasmLockedExecSuccess {
 pub(crate) enum LasmExecTxSource {
     AllocateFromDb(i64),
     ExistingTx(i64),
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct LasmInternalDbSequenceState {
+    tx_handles_by_source: BTreeMap<i64, i64>,
+    tx_handles: BTreeSet<i64>,
+}
+
+impl LasmInternalDbSequenceState {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn tracked_tx_for_source(&self, db_source: i64) -> Option<i64> {
+        self.tx_handles_by_source.get(&db_source).copied()
+    }
+
+    pub(crate) fn track_tx_handle(&mut self, tx_handle: i64) {
+        self.tx_handles.insert(tx_handle);
+    }
+
+    pub(crate) fn track_source_tx_handle(&mut self, db_source: i64, tx_handle: i64) {
+        self.tx_handles_by_source.insert(db_source, tx_handle);
+    }
+
+    pub(crate) fn cleanup(
+        &self,
+        dynamic_state: &Mutex<LasmDynamicResponseState>,
+        db_records_adapter: LasmDbRecordsAdapter,
+        operation_succeeded: bool,
+    ) {
+        super::cleanup_lasm_internal_db_sequence_tx_handles(
+            dynamic_state,
+            db_records_adapter,
+            self.tx_handles_by_source.values().copied(),
+            operation_succeeded,
+        );
+        super::cleanup_lasm_internal_db_sequence_tx_handles(
+            dynamic_state,
+            db_records_adapter,
+            self.tx_handles.iter().copied(),
+            operation_succeeded,
+        );
+    }
 }
 
 pub(crate) struct LasmResolvedExecTxStateBindings {
