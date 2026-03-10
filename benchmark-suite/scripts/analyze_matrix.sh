@@ -24,12 +24,13 @@ mkdir -p "$(dirname "$out_path")"
 jq '
   def p99num($v):
     ($v | tostring | ascii_downcase) as $raw
-    | (try ($raw | capture("(?<n>[0-9]+(\\.[0-9]+)?)[[:space:]]*(?<u>us|µs|ms|s)?")) catch null) as $cap
+    | (try ($raw | capture("(?<n>[0-9]+(\\.[0-9]+)?)[[:space:]]*(?<u>us|µs|ms|s|m)?")) catch null) as $cap
     | if $cap == null then 0
       else ($cap.n | tonumber) as $n
       | (($cap.u // "ms")) as $u
       | if ($u == "us" or $u == "µs") then ($n / 1000)
         elif $u == "s" then ($n * 1000)
+        elif $u == "m" then ($n * 60000)
         else $n
         end
       end;
