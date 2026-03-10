@@ -64,6 +64,19 @@ For the canonical workbench app, use `postgres` only.
 - `--db-base <path>`
 - `--db-postgres-dsn <dsn>`
 - `--db-postgres-dsn-file <path>`
+- `--max-keep-alive-requests <n>`
+
+For benchmark-heavy runs, use a higher keep-alive budget (example: `4096`) to reduce reconnect churn:
+
+```bash
+cargo run -p sec4 -- run \
+  --path benchmark-suite/services/sec4-lasm-workbench \
+  --backend lasm \
+  --db-adapter postgres \
+  --db-postgres-dsn "$SEC4_RT_LASM_DB_POSTGRES_DSN" \
+  --max-keep-alive-requests 4096 \
+  --port 18088
+```
 
 ## Next step
 
