@@ -243,5 +243,9 @@ if ! grep -q 'start: impl=sec4-lasm .* lasmMode=single ' <<<"$auto_out"; then
   echo "expected auto mode fallback to single mode start marker in dry-run output" >&2
   exit 1
 fi
+if ! grep -q 'start: impl=sec4-lasm .* lasmModeSource=auto-fallback-single ' <<<"$auto_out"; then
+  echo "expected auto mode source marker in dry-run output" >&2
+  exit 1
+fi
 
 echo "run_workbench_benchmark_matrix test passed"
