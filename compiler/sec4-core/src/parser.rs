@@ -1128,6 +1128,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume current token if it's a string literal, returning its value.
+    #[allow(clippy::result_large_err)]
     fn expect_string_literal(
         &mut self,
         code: &str,
@@ -1150,6 +1151,7 @@ impl<'a> Parser<'a> {
         self.bump();
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_resource_item(&mut self, start: Token) -> Result<Item, Diagnostic> {
         let (name, _name_token) =
             self.expect_identifier("P2050", "expected resource name after `resource`")?;

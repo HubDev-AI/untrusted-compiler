@@ -1851,9 +1851,9 @@ fn generate_resource_route_plans(
         let plan_json = serde_json::to_string(&resource_plan).unwrap_or_default();
 
         let mut crud_ops: Vec<(&str, String, &str)> = vec![
-            ("GET", format!("{}", prefix), "list"),
+            ("GET", prefix.to_string(), "list"),
             ("GET", format!("{}/:id", prefix), "get"),
-            ("POST", format!("{}", prefix), "create"),
+            ("POST", prefix.to_string(), "create"),
             ("POST", format!("{}/:id/update", prefix), "update"),
         ];
         if resource_policy.allow_delete {
