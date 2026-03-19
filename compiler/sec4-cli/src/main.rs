@@ -440,6 +440,27 @@ enum Commands {
         #[arg(long, default_value = ".")]
         output: PathBuf,
     },
+    /// Generate DDL from resource declarations
+    Migrate {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+        /// Database adapter (sqlite or postgres)
+        #[arg(long, default_value = "sqlite")]
+        adapter: String,
+    },
+    /// Show resource endpoints and fields
+    Describe {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+    },
+    /// Generate OpenAPI 3.0 spec from resource declarations
+    Openapi {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -968,6 +989,9 @@ fn main() {
             resources,
             output,
         } => cmd_generate(&name, &resources, &output),
+        Commands::Migrate { path, adapter } => cmd_migrate(&path, &adapter),
+        Commands::Describe { path } => cmd_describe(&path),
+        Commands::Openapi { path } => cmd_openapi(&path),
     };
 
     if let Err(code) = result {
@@ -1866,6 +1890,12 @@ fn generate_resource_route_plans(
                     default_value: f.annotations.iter().find_map(|a| match a {
                         sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
                         _ => None,
+                    }),
+                    unique: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Unique)
+                    }),
+                    optional: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional)
                     }),
                 }
             }).collect(),
@@ -7695,7 +7725,13 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
             .ok_or_else(|| "expected '(' after resource name".to_string())?;
         let name = remaining[..paren_pos].trim().to_string();
         if name.is_empty() {
-            return Err("resource name must not be empty".to_string());
+            return Err("resource name cannot be empty".to_string());
+        }
+        if !name.chars().next().unwrap().is_uppercase() {
+            return Err(format!("resource name '{}' must start with an uppercase letter", name));
+        }
+        if !name.chars().all(|c| c.is_alphanumeric()) {
+            return Err(format!("resource name '{}' must be alphanumeric", name));
         }
         remaining = &remaining[paren_pos + 1..];
 
@@ -7749,6 +7785,12 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
             })?;
             let field_name = field_part[..colon_pos].trim().to_string();
             let field_type = field_part[colon_pos + 1..].trim().to_string();
+
+            let allowed_types = ["Uuid", "String", "Email", "Int64", "Int", "Time", "Bool"];
+            if !allowed_types.contains(&field_type.as_str()) {
+                return Err(format!("unknown field type '{}' for field '{}'; allowed types: {}",
+                    field_type, field_name, allowed_types.join(", ")));
+            }
 
             fields.push(GeneratedField {
                 name: field_name,
@@ -7838,7 +7880,7 @@ fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i3
     };
 
     if resources.is_empty() {
-        eprintln!("generate failed: no resources defined");
+        eprintln!("generate failed: no resources defined; expected format: sec4 generate --name MyApp --resources \"Task(title:String, status:String)\"");
         return Err(1);
     }
 
@@ -7895,6 +7937,460 @@ fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i3
     );
 
     Ok(())
+}
+
+fn cmd_migrate(project_path: &Path, adapter: &str) -> Result<(), i32> {
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let mut ddl_statements = Vec::new();
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                let snake = to_snake_case(&decl.name);
+                format!("{}s", snake)
+            });
+            ddl_statements.push(generate_ddl(&table, &decl.fields, adapter));
+        }
+    }
+
+    if ddl_statements.is_empty() {
+        eprintln!("no resources found in {}", source_path.display());
+        return Ok(());
+    }
+
+    for ddl in &ddl_statements {
+        println!("{}", ddl);
+    }
+
+    Ok(())
+}
+
+fn cmd_describe(project_path: &Path) -> Result<(), i32> {
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let mut found = false;
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            found = true;
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                format!("{}s", to_snake_case(&decl.name))
+            });
+            let prefix = format!("/{}", table);
+
+            println!("Resource: {} (table: {})", decl.name, table);
+            println!("  Fields:");
+            for field in &decl.fields {
+                let type_name = match &field.ty.kind {
+                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+                };
+                let mut annotations = Vec::new();
+                for ann in &field.annotations {
+                    match ann {
+                        sec4_core::ast::ResourceFieldAnnotation::Primary => {
+                            annotations.push("@primary".to_string())
+                        }
+                        sec4_core::ast::ResourceFieldAnnotation::Auto => {
+                            annotations.push("@auto".to_string())
+                        }
+                        sec4_core::ast::ResourceFieldAnnotation::Default(v) => {
+                            annotations.push(format!("@default(\"{}\")", v))
+                        }
+                        _ => {}
+                    }
+                }
+                let ann_str = if annotations.is_empty() {
+                    String::new()
+                } else {
+                    format!("  {}", annotations.join(" "))
+                };
+                println!("    {:<12} {:<8}{}", field.name, type_name, ann_str);
+            }
+            println!();
+            println!("  Endpoints:");
+            println!("    POST   {:<24} → create", prefix);
+            println!("    GET    {:<24} → list (paginated)", prefix);
+            println!(
+                "    GET    {:<24} → get by id",
+                format!("{}/:id", prefix)
+            );
+            println!(
+                "    POST   {:<24} → update (PATCH)",
+                format!("{}/:id/update", prefix)
+            );
+            println!(
+                "    POST   {:<24} → delete",
+                format!("{}/:id/delete", prefix)
+            );
+            println!();
+        }
+    }
+
+    if !found {
+        eprintln!("no resources found in {}", source_path.display());
+    }
+
+    Ok(())
+}
+
+fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let project_name = manifest.package.name.clone();
+
+    let mut paths = serde_json::Map::new();
+    let mut schemas = serde_json::Map::new();
+
+    let mut found = false;
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            found = true;
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                format!("{}s", to_snake_case(&decl.name))
+            });
+            let prefix = format!("/{}", table);
+
+            let mut all_props = serde_json::Map::new();
+            let mut create_props = serde_json::Map::new();
+            let mut required_fields: Vec<serde_json::Value> = Vec::new();
+
+            for field in &decl.fields {
+                let type_name = match &field.ty.kind {
+                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+                };
+
+                let json_type = match type_name {
+                    "Uuid" | "String" | "Email" | "Time" => "string",
+                    "Int" | "Int64" => "integer",
+                    "Bool" => "boolean",
+                    _ => "string",
+                };
+                let format_str: Option<&str> = match type_name {
+                    "Uuid" => Some("uuid"),
+                    "Email" => Some("email"),
+                    "Time" => Some("date-time"),
+                    "Int64" => Some("int64"),
+                    _ => None,
+                };
+
+                let mut prop = serde_json::json!({ "type": json_type });
+                if let Some(fmt) = format_str {
+                    prop["format"] = serde_json::json!(fmt);
+                }
+
+                let is_primary = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary));
+                let is_auto = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
+                let has_default = field.annotations.iter().any(|a| {
+                    matches!(a, sec4_core::ast::ResourceFieldAnnotation::Default(_))
+                });
+
+                all_props.insert(field.name.clone(), prop.clone());
+
+                if !is_primary && !is_auto {
+                    create_props.insert(field.name.clone(), prop);
+                    if !has_default {
+                        required_fields.push(serde_json::json!(field.name));
+                    }
+                }
+            }
+
+            // Response schema (all fields)
+            schemas.insert(
+                decl.name.clone(),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": all_props,
+                }),
+            );
+
+            // Create request schema (non-auto, non-primary fields)
+            schemas.insert(
+                format!("{}Create", decl.name),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": create_props,
+                    "required": required_fields,
+                }),
+            );
+
+            // Update request schema reuses same shape as Create
+            schemas.insert(
+                format!("{}Update", decl.name),
+                serde_json::json!({
+                    "$ref": format!("#/components/schemas/{}Create", decl.name),
+                }),
+            );
+
+            let schema_ref = format!("#/components/schemas/{}", decl.name);
+            let create_ref = format!("#/components/schemas/{}Create", decl.name);
+            let update_ref = format!("#/components/schemas/{}Update", decl.name);
+
+            let id_param = serde_json::json!({
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Resource identifier",
+            });
+
+            let limit_param = serde_json::json!({
+                "name": "limit",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "integer", "default": 20 },
+                "description": "Maximum number of results to return",
+            });
+
+            let offset_param = serde_json::json!({
+                "name": "offset",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "integer", "default": 0 },
+                "description": "Number of results to skip",
+            });
+
+            // POST + GET on /prefix (collection)
+            let collection_path = serde_json::json!({
+                "get": {
+                    "operationId": format!("list{}", decl.name),
+                    "summary": format!("List {}", decl.name),
+                    "parameters": [limit_param, offset_param],
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": { "$ref": schema_ref },
+                                    }
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                    }
+                },
+                "post": {
+                    "operationId": format!("create{}", decl.name),
+                    "summary": format!("Create {}", decl.name),
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": create_ref },
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Created",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                    }
+                },
+            });
+            paths.insert(prefix.clone(), collection_path);
+
+            // GET /prefix/{id}
+            let get_path = serde_json::json!({
+                "get": {
+                    "operationId": format!("get{}", decl.name),
+                    "summary": format!("Get {} by id", decl.name),
+                    "parameters": [id_param.clone()],
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}", prefix), get_path);
+
+            // POST /prefix/{id}/update
+            let update_path = serde_json::json!({
+                "post": {
+                    "operationId": format!("update{}", decl.name),
+                    "summary": format!("Update {}", decl.name),
+                    "parameters": [id_param.clone()],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": update_ref },
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}/update", prefix), update_path);
+
+            // POST /prefix/{id}/delete
+            let delete_path = serde_json::json!({
+                "post": {
+                    "operationId": format!("delete{}", decl.name),
+                    "summary": format!("Delete {}", decl.name),
+                    "parameters": [id_param],
+                    "responses": {
+                        "200": { "description": "Deleted" },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}/delete", prefix), delete_path);
+        }
+    }
+
+    if !found {
+        eprintln!("no resources found in {}", source_path.display());
+        return Ok(());
+    }
+
+    let spec = serde_json::json!({
+        "openapi": "3.0.3",
+        "info": {
+            "title": project_name,
+            "version": "0.1.0",
+        },
+        "paths": paths,
+        "components": {
+            "schemas": schemas,
+        },
+    });
+
+    println!("{}", serde_json::to_string_pretty(&spec).unwrap());
+    Ok(())
+}
+
+fn generate_ddl(
+    table: &str,
+    fields: &[sec4_core::ast::ResourceFieldDecl],
+    adapter: &str,
+) -> String {
+    let mut columns = Vec::new();
+
+    for field in fields {
+        let type_name = match &field.ty.kind {
+            sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+        };
+
+        let is_primary = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary));
+        let is_auto = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
+        let default_value = field.annotations.iter().find_map(|a| match a {
+            sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
+            _ => None,
+        });
+
+        let sql_type = match adapter {
+            "postgres" => match type_name {
+                "Uuid" => "UUID",
+                "String" | "Email" => "TEXT",
+                "Int64" => "BIGINT",
+                "Int" => "INTEGER",
+                "Time" => "TIMESTAMPTZ",
+                "Bool" => "BOOLEAN",
+                _ => "TEXT",
+            },
+            _ => "TEXT", // SQLite: everything is TEXT
+        };
+
+        let mut col = format!("  \"{}\" {}", field.name, sql_type);
+
+        if is_primary {
+            col.push_str(" PRIMARY KEY");
+        } else {
+            col.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &default_value {
+            col.push_str(&format!(" DEFAULT '{}'", default));
+        } else if is_auto && type_name == "Time" && adapter == "postgres" {
+            col.push_str(" DEFAULT NOW()");
+        }
+
+        columns.push(col);
+    }
+
+    format!(
+        "CREATE TABLE IF NOT EXISTS \"{}\" (\n{}\n);",
+        table,
+        columns.join(",\n"),
+    )
 }
 
 fn directory_has_entries(path: &Path) -> Result<bool, std::io::Error> {

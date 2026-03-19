@@ -587,6 +587,39 @@ impl<'a> Analyzer<'a> {
                         }
                     }
 
+                    // Check @optional and @primary cannot coexist on the same field
+                    for field in &decl.fields {
+                        let has_primary = field.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Primary));
+                        let has_optional = field.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Optional));
+                        if has_primary && has_optional {
+                            self.diagnostics.push(
+                                Diagnostic::error(
+                                    "E5006",
+                                    "@primary field cannot be @optional",
+                                    field.span.clone(),
+                                )
+                                .with_note(format!(
+                                    "field `{}` has both @primary and @optional annotations; primary fields are always required",
+                                    field.name
+                                )),
+                            );
+                        }
+                    }
+
+                    // Warn if the resource has only a primary key field (no updatable fields)
+                    if decl.fields.len() == 1 {
+                        self.diagnostics.push(Diagnostic {
+                            severity: Severity::Warning,
+                            code: "W5002".to_string(),
+                            message: "resource has only a primary key field".to_string(),
+                            span: item.span.clone(),
+                            notes: vec![
+                                format!("resource `{}` has no fields besides @primary; UPDATE will always fail", decl.name),
+                            ],
+                            tags: Vec::new(),
+                        });
+                    }
+
                     // Resource name was already registered at the top of this arm
                 }
             }

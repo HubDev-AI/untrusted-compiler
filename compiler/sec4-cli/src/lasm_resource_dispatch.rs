@@ -32,11 +32,15 @@ pub struct LasmResourceFieldPlan {
     pub primary: bool,
     pub auto_fill: bool,
     pub default_value: Option<String>,
+    pub unique: bool,
+    pub optional: bool,
 }
 
 // ---------------------------------------------------------------------------
 // Header constants
 // ---------------------------------------------------------------------------
+
+const UUID_STRING_LEN: usize = 36;
 
 const RESOURCE_OP_HEADER: &str = "X-Sec4-Internal-Resource-Op";
 const RESOURCE_PLAN_HEADER: &str = "X-Sec4-Internal-Resource-Plan";
@@ -78,7 +82,7 @@ pub fn try_dispatch_resource_operation(
     };
 
     // Build a DB executor if adapter is SQLite; otherwise fall back to dry-run SQL.
-    let db_exec = ResourceDbExecutor::new(dynamic_state, db_adapter, &plan, trace_id);
+    let db_exec = ResourceDbExecutor::new(dynamic_state, db_adapter, &plan);
 
     match op.as_str() {
         "create" => dispatch_create(response, request_body, &plan, trace_id, &db_exec),
@@ -196,6 +200,8 @@ fn dispatch_create(
 
         // Field not provided — try default, else skip if primary (already handled) or error.
         if let Some(ref default) = field.default_value {
+            // Default values are validated at compile time (semantic.rs E5004).
+            // Runtime trusts the compiler's validation — no re-validation needed.
             columns.push(field.name.clone());
             values.push(Value::String(default.clone()));
             continue;
@@ -217,7 +223,26 @@ fn dispatch_create(
             return;
         }
 
-        // Non-required, non-auto, no default, not provided — skip.
+        if field.optional {
+            // Optional field absent from request — insert SQL NULL.
+            columns.push(field.name.clone());
+            values.push(Value::Null);
+            continue;
+        }
+
+        // Non-optional, non-auto, no default, not provided — error.
+        set_json_response(
+            response,
+            400,
+            &error_envelope(
+                400,
+                "RESOURCE.MISSING_FIELD",
+                "validation",
+                &format!("missing required field '{}'", field.name),
+                trace_id,
+            ),
+        );
+        return;
     }
 
     match generate_create_sql(plan, &columns, &values) {
@@ -231,11 +256,28 @@ fn dispatch_create(
                     );
                 }
                 DbExecResult::Error(msg) => {
-                    set_json_response(
-                        response,
-                        500,
-                        &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
-                    );
+                    let is_conflict = msg.to_lowercase().contains("unique")
+                        || msg.to_lowercase().contains("duplicate")
+                        || msg.to_lowercase().contains("constraint");
+                    if is_conflict {
+                        set_json_response(
+                            response,
+                            409,
+                            &error_envelope(
+                                409,
+                                "RESOURCE.CONFLICT",
+                                "conflict",
+                                "duplicate value for unique field",
+                                trace_id,
+                            ),
+                        );
+                    } else {
+                        set_json_response(
+                            response,
+                            500,
+                            &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                        );
+                    }
                 }
                 DbExecResult::DryRun => {
                     // Build a synthetic record from the column/value pairs for dry-run.
@@ -327,6 +369,8 @@ fn dispatch_list(
     db_exec: &ResourceDbExecutor,
 ) {
     // Parse limit/offset from request query params, clamping to policy bounds.
+    // Limit is clamped to [1, max_list_limit]. Zero, negative, or non-numeric values
+    // fall through to default_list_limit. This prevents unbounded queries.
     let raw_limit = query_params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok());
@@ -339,11 +383,66 @@ fn dispatch_list(
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
 
-    let sql = generate_list_sql(plan);
-    let params = vec![
-        Value::Number(serde_json::Number::from(limit)),
-        Value::Number(serde_json::Number::from(offset)),
-    ];
+    // --- Filtering ---
+    // Reserved params that are not field filters.
+    let reserved_params = ["limit", "offset", "sort", "order"];
+    let mut where_clauses: Vec<String> = Vec::new();
+    let mut where_params: Vec<Value> = Vec::new();
+    let mut param_idx: usize = 1; // $1, $2, ... for WHERE; LIMIT and OFFSET appended last
+
+    for (key, value) in query_params {
+        if reserved_params.contains(&key.as_str()) {
+            continue;
+        }
+        // Only filter on known resource fields.
+        if let Some(field) = plan.fields.iter().find(|f| f.name == *key) {
+            let json_value = Value::String(value.clone());
+            if validate_field(field, &json_value).is_ok() {
+                where_clauses.push(format!("{} = ${}", quote_ident(key), param_idx));
+                where_params.push(json_value);
+                param_idx += 1;
+            }
+        }
+    }
+
+    // --- Sorting ---
+    let sort_field = query_params
+        .get("sort")
+        .and_then(|s| plan.fields.iter().find(|f| f.name == *s))
+        .map(|f| f.name.clone());
+    let sort_order = query_params
+        .get("order")
+        .map(|o| if o.eq_ignore_ascii_case("asc") { "ASC" } else { "DESC" })
+        .unwrap_or("DESC");
+
+    // --- Build SQL ---
+    let where_sql = if where_clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_clauses.join(" AND "))
+    };
+
+    let default_order_column = primary_key_column(plan);
+    let order_column = sort_field.as_deref().unwrap_or(&default_order_column);
+
+    let limit_placeholder = param_idx;
+    let offset_placeholder = param_idx + 1;
+
+    let sql = format!(
+        "SELECT * FROM {}{} ORDER BY {} {} LIMIT ${} OFFSET ${}",
+        quote_ident(&plan.table),
+        where_sql,
+        quote_ident(order_column),
+        sort_order,
+        limit_placeholder,
+        offset_placeholder,
+    );
+
+    // Combine params: where_params first, then limit, then offset.
+    let mut params: Vec<Value> = where_params;
+    params.push(Value::Number(serde_json::Number::from(limit)));
+    params.push(Value::Number(serde_json::Number::from(offset)));
+
     match db_exec.query_many(&sql, &params) {
         DbExecResult::Row(rows_value) => {
             let items = rows_value.as_array().cloned().unwrap_or_default();
@@ -371,7 +470,7 @@ fn dispatch_list(
                 200,
                 &success_envelope(
                     200,
-                    &json!({ "sql": sql, "params": [limit, offset] }),
+                    &json!({ "sql": sql, "params": params }),
                     trace_id,
                 ),
             );
@@ -574,7 +673,6 @@ impl<'a> ResourceDbExecutor<'a> {
         dynamic_state: &'a Mutex<LasmDynamicResponseState>,
         adapter: LasmDbRecordsAdapter,
         plan: &LasmResourcePlan,
-        _trace_id: &str,
     ) -> Self {
         let table_ddl = match adapter {
             LasmDbRecordsAdapter::Sqlite => Some(generate_create_table_ddl(plan)),
@@ -819,6 +917,8 @@ fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
+        let not_null_clause = if !field.primary && !field.optional { " NOT NULL" } else { "" };
+        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
         let default_clause: String = if !field.primary {
             if let Some(val) = field.default_value.as_deref() {
                 format!(" DEFAULT '{}'", val.replace('\'', "''"))
@@ -829,7 +929,7 @@ fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
             String::new()
         };
         cols.push(format!(
-            "{} {col_type}{pk}{default_clause}",
+            "{} {col_type}{pk}{not_null_clause}{unique_clause}{default_clause}",
             quote_ident(&field.name)
         ));
     }
@@ -1017,7 +1117,8 @@ fn generate_create_table_ddl(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
-        cols.push(format!("{} {col_type}{pk}", quote_ident(&field.name)));
+        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
+        cols.push(format!("{} {col_type}{pk}{unique_clause}", quote_ident(&field.name)));
     }
     format!(
         "CREATE TABLE IF NOT EXISTS {} ({})",
@@ -1067,15 +1168,6 @@ fn generate_get_sql(plan: &LasmResourcePlan) -> String {
     )
 }
 
-fn generate_list_sql(plan: &LasmResourcePlan) -> String {
-    let pk = primary_key_column(plan);
-    format!(
-        "SELECT * FROM {} ORDER BY {} DESC LIMIT $1 OFFSET $2",
-        quote_ident(&plan.table),
-        quote_ident(&pk),
-    )
-}
-
 fn generate_update_sql(
     plan: &LasmResourcePlan,
     body: &serde_json::Map<String, Value>,
@@ -1109,7 +1201,7 @@ fn generate_update_sql(
             "error": {
                 "code": "RESOURCE.EMPTY_UPDATE",
                 "kind": "validation",
-                "message": "no fields to update",
+                "message": "no updatable fields provided; primary key cannot be updated — provide at least one non-primary, non-auto field",
             }
         }));
     }
@@ -1139,6 +1231,12 @@ fn generate_delete_sql(plan: &LasmResourcePlan) -> String {
 // ---------------------------------------------------------------------------
 
 fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), String> {
+    if value.is_null() {
+        if field.optional {
+            return Ok(());
+        }
+        return Err("null values are not allowed".to_string());
+    }
     match field.field_type.as_str() {
         "Uuid" => {
             let s = value
@@ -1150,20 +1248,17 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
             Ok(())
         }
         "Email" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string for Email".to_string())?;
-            if s.len() < 3 || !s.contains('@') {
-                return Err("invalid email address".to_string());
+            let s = value.as_str().ok_or("expected string for Email field")?;
+            let parts: Vec<&str> = s.split('@').collect();
+            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() || !parts[1].contains('.') {
+                return Err(format!("invalid email: {}", s));
             }
             Ok(())
         }
         "String" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string".to_string())?;
-            if s.is_empty() {
-                return Err("string must not be empty".to_string());
+            let s = value.as_str().ok_or("expected string")?;
+            if s.trim().is_empty() {
+                return Err("string must not be empty or whitespace-only".to_string());
             }
             Ok(())
         }
@@ -1186,11 +1281,9 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
             }
         }
         "Time" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string for Time (ISO 8601)".to_string())?;
-            if s.is_empty() {
-                return Err("time string must not be empty".to_string());
+            let s = value.as_str().ok_or("expected ISO 8601 string for Time field")?;
+            if s.len() < 10 || (!s.contains('T') && !s.contains(' ')) {
+                return Err(format!("invalid time format (expected ISO 8601): {}", s));
             }
             Ok(())
         }
@@ -1215,6 +1308,11 @@ fn validate_id_param(plan: &LasmResourcePlan, id: &str) -> Result<(), String> {
                 id.parse::<i64>()
                     .map_err(|_| "invalid integer for :id".to_string())?;
             }
+            "String" => {
+                if id.trim().is_empty() {
+                    return Err("path parameter must not be empty".to_string());
+                }
+            }
             _ => {}
         }
     }
@@ -1227,7 +1325,7 @@ fn validate_id_param(plan: &LasmResourcePlan, id: &str) -> Result<(), String> {
 
 fn is_valid_uuid(value: &str) -> bool {
     // 8-4-4-4-12 hex digits with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    if value.len() != 36 {
+    if value.len() != UUID_STRING_LEN {
         return false;
     }
     for (i, b) in value.as_bytes().iter().enumerate() {
@@ -1297,29 +1395,39 @@ fn quote_ident(name: &str) -> String {
 fn generate_uuid() -> String {
     use std::fs::File;
     use std::io::Read;
+    use std::sync::atomic::AtomicU64;
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let mut bytes = [0u8; 16];
     if let Ok(mut f) = File::open("/dev/urandom") {
-        let _ = f.read_exact(&mut bytes);
+        if f.read_exact(&mut bytes).is_err() {
+            fill_fallback_bytes(&mut bytes, &COUNTER);
+        }
     } else {
-        // Fallback to timestamp-based
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        bytes = (nanos as u128).to_le_bytes();
+        fill_fallback_bytes(&mut bytes, &COUNTER);
     }
+
     // Set version 4 and variant bits
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
         bytes[0], bytes[1], bytes[2], bytes[3],
-        bytes[4], bytes[5],
-        bytes[6], bytes[7],
-        bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
     )
+}
+
+fn fill_fallback_bytes(bytes: &mut [u8; 16], counter: &std::sync::atomic::AtomicU64) {
+    use std::sync::atomic::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let count = counter.fetch_add(1, Ordering::Relaxed);
+    let combined = nanos as u64 ^ (count.wrapping_mul(6364136223846793005));
+    bytes[..8].copy_from_slice(&combined.to_le_bytes());
+    bytes[8..16].copy_from_slice(&(combined.wrapping_add(count)).to_le_bytes());
 }
 
 fn epoch_ms() -> u64 {
@@ -1334,77 +1442,50 @@ fn primary_key_column(plan: &LasmResourcePlan) -> String {
         .iter()
         .find(|f| f.primary)
         .map(|f| f.name.clone())
-        .unwrap_or_else(|| "id".to_string())
+        .expect("resource must have a @primary field (compiler should have rejected this)")
 }
 
 fn iso8601_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let duration = SystemTime::now()
+    let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
-    let days_since_epoch = secs / 86400;
+        .unwrap_or_default()
+        .as_secs();
+
+    let days = (secs / 86400) as i64;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
     let minutes = (time_of_day % 3600) / 60;
     let seconds = time_of_day % 60;
 
-    // Calculate date from days since epoch (1970-01-01)
-    let mut y = 1970i64;
-    let mut remaining_days = days_since_epoch as i64;
-    loop {
-        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
-            366
-        } else {
-            365
-        };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        y += 1;
-    }
-    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let month_days: [i64; 12] = [
-        31,
-        if leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut m = 0usize;
-    for md in &month_days {
-        if remaining_days < *md {
-            break;
-        }
-        remaining_days -= *md;
-        m += 1;
-    }
-    let d = remaining_days + 1;
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm)
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        y,
-        m + 1,
-        d,
-        hours,
-        minutes,
-        seconds
-    )
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, minutes, seconds)
 }
 
 fn auto_fill_value(field_type: &str) -> Value {
     match field_type {
-        "Uuid" => Value::String(generate_uuid()),
+        "Uuid" => {
+            let uuid = generate_uuid();
+            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            Value::String(uuid)
+        }
         "Time" => Value::String(iso8601_now()),
         "Int64" | "Int" => Value::Number(serde_json::Number::from(epoch_ms() as i64)),
-        _ => Value::String(generate_uuid()),
+        _ => {
+            let uuid = generate_uuid();
+            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            Value::String(uuid)
+        }
     }
 }

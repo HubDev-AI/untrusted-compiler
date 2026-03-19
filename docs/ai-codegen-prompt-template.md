@@ -11,7 +11,10 @@ language where you declare resources and the runtime generates secure CRUD endpo
 ## Rules
 - Use `resource` declarations for data models
 - Field types: Uuid, String, Email, Int64, Int, Time, Bool
-- Annotations: @primary (exactly one per resource), @auto (runtime-filled), @default("value")
+- Annotations: @primary, @auto, @default("value"), @unique, @optional
+- Use @unique for fields that must have unique values (e.g., email, username)
+- Use @optional for nullable fields that may be omitted in create/update requests
+- @default also accepts integer and boolean literals: @default(42), @default(true), @default(false)
 - Every resource needs exactly one @primary field
 - Table names are auto-derived (Task → tasks) or override with: resource Name table "custom" { ... }
 - Custom handlers override auto-generated routes when registered with same method+path

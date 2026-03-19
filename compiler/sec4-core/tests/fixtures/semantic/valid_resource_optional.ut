@@ -1,0 +1,5 @@
+resource Profile {
+  id: Uuid @primary,
+  name: String,
+  bio: String @optional,
+}
