@@ -18,7 +18,9 @@ resource <Name> {
 **Annotations**:
 - `@primary` — marks the primary key field (exactly one per resource, required)
 - `@auto` — runtime-filled; never set by the caller (use for `id`, `created_at`)
-- `@default("value")` — compile-time-validated default value for the field
+- `@default("value")` — compile-time-validated default value for the field; also accepts integer and boolean literals: `@default(42)`, `@default(true)`
+- `@unique` — enforces a unique constraint on the field; creates a `UNIQUE` column in DDL and returns a 409 on duplicate writes
+- `@optional` — marks the field as nullable; omitting it in a create request is allowed
 
 **Table name**: auto-derived as lowercase plural (`Task` → `tasks`). Override with:
 ```ut
@@ -35,7 +37,7 @@ resource Name table "custom_table" { ... }
 | `Int64`  | 64-bit integer                             |
 | `Int`    | 32-bit integer                             |
 | `Time`   | Timestamp; use `@auto` for `created_at`    |
-| `Bool`   | Boolean; `@default("false")` or `@default("true")` |
+| `Bool`   | Boolean; `@default(false)` or `@default(true)` |
 
 ### Handler Syntax
 
@@ -205,6 +207,65 @@ Custom handlers registered with the same method and path override the auto-gener
 
 ---
 
+### Example 4 — `@unique` and `@optional` annotations
+
+**Prompt**: "Create a user profile API where email must be unique and bio is optional"
+
+```ut
+resource Profile {
+  id:    Uuid   @primary @auto,
+  email: Email  @unique,
+  name:  String,
+  bio:   String @optional,
+  score: Int    @default(0),
+  created_at: Time @auto,
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.serve(8080, router);
+  0
+}
+```
+
+- `@unique` adds a `UNIQUE` constraint in the schema and returns HTTP 409 if a duplicate value is written.
+- `@optional` marks the field as nullable; it may be omitted in create or update requests.
+- `@default(0)` uses an integer literal (also valid: `@default(true)`, `@default(false)`).
+
+---
+
+### Filtering and Sorting the List Endpoint
+
+The auto-generated `GET /resources` endpoint supports query-parameter filtering and sorting without any extra code:
+
+**Filtering** — pass any known field name as a query parameter to add a `WHERE` clause:
+
+```
+GET /profiles?name=Alice
+GET /profiles?score=10
+```
+
+Multiple filters are combined with `AND`:
+
+```
+GET /profiles?score=10&name=Alice
+```
+
+Unknown fields are ignored. Values are validated against the field type before being used in SQL.
+
+**Sorting** — use `sort` and `order` parameters:
+
+```
+GET /profiles?sort=score&order=asc
+GET /profiles?sort=created_at&order=desc
+```
+
+`order` accepts `asc` or `desc` (case-insensitive). Default sort is `desc` by the primary key.
+
+**Pagination** (unchanged) — `limit` and `offset` are reserved parameters alongside `sort` and `order` and are not treated as field filters.
+
+---
+
 ## Common Mistakes (and the Compiler Errors They Produce)
 
 | Mistake | Error |
@@ -215,6 +276,54 @@ Custom handlers registered with the same method and path override the auto-gener
 | Using `db.write` in a handler without declaring it | E4002 — undeclared effect |
 
 **Rule of thumb**: Every value from `req.*` is `Untrusted<T>`. Run it through a `validate.*` or `sanitize.*` intrinsic before passing it anywhere typed.
+
+---
+
+## CLI Commands
+
+These commands operate on a sec4 project directory (one containing a `sec4.toml` manifest and a `.ut` entry file).
+
+| Command | Description |
+|---------|-------------|
+| `sec4 generate --name MyApp --resources "Task(title:String, status:String)" --output ./myapp` | Scaffold a new project from resource descriptions |
+| `sec4 check --path ./myapp` | Compile and check the project for errors |
+| `sec4 describe --path ./myapp` | Print all resource fields and auto-generated endpoints |
+| `sec4 migrate --path ./myapp --adapter sqlite` | Print `CREATE TABLE` DDL for all resources (SQLite) |
+| `sec4 migrate --path ./myapp --adapter postgres` | Print `CREATE TABLE` DDL for all resources (Postgres) |
+| `sec4 run --path ./myapp` | Build and run the project |
+
+**`sec4 describe`** is useful when verifying what endpoints will be generated before running:
+
+```
+$ sec4 describe --path ./myapp
+
+Resource: Task (table: tasks)
+  Fields:
+    id           Uuid    @primary @auto
+    title        String
+    status       String  @default("pending")
+    created_at   Time    @auto
+
+  Endpoints:
+    POST   /tasks                    → create
+    GET    /tasks                    → list (paginated)
+    GET    /tasks/:id                → get by id
+    POST   /tasks/:id/update         → update (PATCH)
+    POST   /tasks/:id/delete         → delete
+```
+
+**`sec4 migrate`** outputs SQL you can pipe directly to your database:
+
+```
+$ sec4 migrate --path ./myapp --adapter postgres
+
+CREATE TABLE IF NOT EXISTS "tasks" (
+  "id" UUID PRIMARY KEY,
+  "title" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "created_at" TIMESTAMPTZ DEFAULT NOW()
+);
+```
 
 ---
 
