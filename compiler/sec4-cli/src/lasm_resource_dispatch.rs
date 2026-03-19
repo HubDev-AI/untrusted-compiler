@@ -1305,29 +1305,39 @@ fn quote_ident(name: &str) -> String {
 fn generate_uuid() -> String {
     use std::fs::File;
     use std::io::Read;
+    use std::sync::atomic::AtomicU64;
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let mut bytes = [0u8; 16];
     if let Ok(mut f) = File::open("/dev/urandom") {
-        let _ = f.read_exact(&mut bytes);
+        if f.read_exact(&mut bytes).is_err() {
+            fill_fallback_bytes(&mut bytes, &COUNTER);
+        }
     } else {
-        // Fallback to timestamp-based
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        bytes = (nanos as u128).to_le_bytes();
+        fill_fallback_bytes(&mut bytes, &COUNTER);
     }
+
     // Set version 4 and variant bits
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
         bytes[0], bytes[1], bytes[2], bytes[3],
-        bytes[4], bytes[5],
-        bytes[6], bytes[7],
-        bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
     )
+}
+
+fn fill_fallback_bytes(bytes: &mut [u8; 16], counter: &std::sync::atomic::AtomicU64) {
+    use std::sync::atomic::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let count = counter.fetch_add(1, Ordering::Relaxed);
+    let combined = nanos as u64 ^ (count.wrapping_mul(6364136223846793005));
+    bytes[..8].copy_from_slice(&combined.to_le_bytes());
+    bytes[8..16].copy_from_slice(&(combined.wrapping_add(count)).to_le_bytes());
 }
 
 fn epoch_ms() -> u64 {
@@ -1347,65 +1357,30 @@ fn primary_key_column(plan: &LasmResourcePlan) -> String {
 
 fn iso8601_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let duration = SystemTime::now()
+    let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
-    let days_since_epoch = secs / 86400;
+        .unwrap_or_default()
+        .as_secs();
+
+    let days = (secs / 86400) as i64;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
     let minutes = (time_of_day % 3600) / 60;
     let seconds = time_of_day % 60;
 
-    // Calculate date from days since epoch (1970-01-01)
-    let mut y = 1970i64;
-    let mut remaining_days = days_since_epoch as i64;
-    loop {
-        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
-            366
-        } else {
-            365
-        };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        y += 1;
-    }
-    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let month_days: [i64; 12] = [
-        31,
-        if leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut m = 0usize;
-    for md in &month_days {
-        if remaining_days < *md {
-            break;
-        }
-        remaining_days -= *md;
-        m += 1;
-    }
-    let d = remaining_days + 1;
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm)
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        y,
-        m + 1,
-        d,
-        hours,
-        minutes,
-        seconds
-    )
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, minutes, seconds)
 }
 
 fn auto_fill_value(field_type: &str) -> Value {
