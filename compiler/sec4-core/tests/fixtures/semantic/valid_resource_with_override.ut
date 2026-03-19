@@ -1,0 +1,16 @@
+resource Task {
+  id: Uuid @primary,
+  title: String,
+}
+
+fn createTask() effects { net } -> Int {
+  res.text(201, "created");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/tasks", createTask);
+  http.serve(8080, router);
+  0
+}
