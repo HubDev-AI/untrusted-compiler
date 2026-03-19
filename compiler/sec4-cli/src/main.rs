@@ -428,6 +428,18 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = ExplainOutputFormat::Text)]
         format: ExplainOutputFormat,
     },
+    /// Generate a sec4 project from resource descriptions
+    Generate {
+        /// Project name
+        #[arg(long)]
+        name: String,
+        /// Resource definitions: "Resource1(field1:Type1, field2:Type2), Resource2(...)"
+        #[arg(long)]
+        resources: String,
+        /// Output directory (default: current directory)
+        #[arg(long, default_value = ".")]
+        output: PathBuf,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -951,6 +963,11 @@ fn main() {
             stubs.as_deref(),
         ),
         Commands::Explain { code, format } => cmd_explain(&code, format),
+        Commands::Generate {
+            name,
+            resources,
+            output,
+        } => cmd_generate(&name, &resources, &output),
     };
 
     if let Err(code) = result {
@@ -7651,6 +7668,231 @@ fn main() effects { net } -> Int {\n\
     println!("  {}", manifest_path.display());
     println!("  {}", policy_path.display());
     println!("  {}", entry_path.display());
+
+    Ok(())
+}
+
+// ── generate command ─────────────────────────────────────────────────────────
+
+struct GeneratedResource {
+    name: String,
+    fields: Vec<GeneratedField>,
+}
+
+struct GeneratedField {
+    name: String,
+    field_type: String,
+    default_value: Option<String>,
+}
+
+fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, String> {
+    let mut resources = Vec::new();
+    let mut remaining = input.trim();
+
+    while !remaining.is_empty() {
+        let paren_pos = remaining
+            .find('(')
+            .ok_or_else(|| "expected '(' after resource name".to_string())?;
+        let name = remaining[..paren_pos].trim().to_string();
+        if name.is_empty() {
+            return Err("resource name must not be empty".to_string());
+        }
+        remaining = &remaining[paren_pos + 1..];
+
+        // Find the matching closing ')' respecting nested parens (e.g. @default(value))
+        let close_pos = {
+            let mut depth = 1usize;
+            let mut pos = None;
+            for (i, ch) in remaining.char_indices() {
+                match ch {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            pos = Some(i);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            pos.ok_or_else(|| format!("expected ')' to close resource '{name}'"))?
+        };
+        let fields_str = &remaining[..close_pos];
+        remaining = remaining[close_pos + 1..].trim();
+
+        // Skip comma separator between resources
+        if remaining.starts_with(',') {
+            remaining = remaining[1..].trim();
+        }
+
+        let mut fields = Vec::new();
+        for field_str in fields_str.split(',') {
+            let field_str = field_str.trim();
+            if field_str.is_empty() {
+                continue;
+            }
+
+            let (field_part, default_value) = if let Some(at_pos) = field_str.find("@default(") {
+                let after_at = &field_str[at_pos + 9..];
+                let end_pos = after_at
+                    .find(')')
+                    .ok_or_else(|| "unclosed @default".to_string())?;
+                let value = after_at[..end_pos].to_string();
+                (field_str[..at_pos].trim(), Some(value))
+            } else {
+                (field_str, None)
+            };
+
+            let colon_pos = field_part.find(':').ok_or_else(|| {
+                format!("expected ':' in field definition: {field_part}")
+            })?;
+            let field_name = field_part[..colon_pos].trim().to_string();
+            let field_type = field_part[colon_pos + 1..].trim().to_string();
+
+            fields.push(GeneratedField {
+                name: field_name,
+                field_type,
+                default_value,
+            });
+        }
+
+        resources.push(GeneratedResource { name, fields });
+    }
+
+    Ok(resources)
+}
+
+fn generate_toml(name: &str) -> String {
+    format!(
+        "[package]\n\
+         name = \"{name}\"\n\
+         version = \"0.1.0\"\n\
+         edition = \"2026\"\n\
+         \n\
+         [build]\n\
+         entry = \"src/main.ut\"\n"
+    )
+}
+
+fn generate_policy(name: &str) -> String {
+    format!(
+        "[policy]\n\
+         name = \"{name}-dev\"\n\
+         mode = \"enforce\"\n\
+         \n\
+         [http]\n\
+         max_body_bytes = 65536\n\
+         \n\
+         [auth]\n\
+         mode = \"token\"\n\
+         \n\
+         [resource]\n\
+         max_list_limit = 100\n\
+         default_list_limit = 20\n\
+         allow_delete = true\n\
+         require_auth = true\n"
+    )
+}
+
+fn generate_main_ut(resources: &[GeneratedResource]) -> String {
+    let mut out = String::new();
+
+    for resource in resources {
+        out.push_str(&format!("resource {} {{\n", resource.name));
+        out.push_str("  id: Uuid @primary @auto,\n");
+        for field in &resource.fields {
+            out.push_str(&format!("  {}: {}", field.name, field.field_type));
+            if let Some(ref default) = field.default_value {
+                out.push_str(&format!(" @default(\"{}\")", default));
+            }
+            out.push_str(",\n");
+        }
+        out.push_str("  created_at: Time @auto,\n");
+        out.push_str("}\n\n");
+    }
+
+    out.push_str("fn health() effects { net } -> Int {\n");
+    out.push_str("  res.text(200, \"ok\");\n");
+    out.push_str("  0\n");
+    out.push_str("}\n\n");
+    out.push_str("fn main() effects { net } -> Int {\n");
+    out.push_str("  let router = http.router();\n");
+    out.push_str("  http.get(router, \"/health\", health);\n");
+    out.push_str("  http.serve(8080, router);\n");
+    out.push_str("  0\n");
+    out.push_str("}\n");
+
+    out
+}
+
+fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i32> {
+    let project_dir = output.join(name);
+
+    let resources = match parse_resource_definitions(resources_str) {
+        Ok(r) => r,
+        Err(err) => {
+            eprintln!("generate failed: {err}");
+            return Err(1);
+        }
+    };
+
+    if resources.is_empty() {
+        eprintln!("generate failed: no resources defined");
+        return Err(1);
+    }
+
+    let src_dir = project_dir.join("src");
+    if let Err(err) = fs::create_dir_all(&src_dir) {
+        eprintln!(
+            "generate failed: could not create directory `{}`: {err}",
+            src_dir.display()
+        );
+        return Err(2);
+    }
+
+    let manifest_path = project_dir.join("sec4.toml");
+    if let Err(err) = fs::write(&manifest_path, generate_toml(name)) {
+        eprintln!(
+            "generate failed: could not write `{}`: {err}",
+            manifest_path.display()
+        );
+        return Err(2);
+    }
+
+    let policy_path = project_dir.join("sec4.policy");
+    if let Err(err) = fs::write(&policy_path, generate_policy(name)) {
+        eprintln!(
+            "generate failed: could not write `{}`: {err}",
+            policy_path.display()
+        );
+        return Err(2);
+    }
+
+    let entry_path = src_dir.join("main.ut");
+    if let Err(err) = fs::write(&entry_path, generate_main_ut(&resources)) {
+        eprintln!(
+            "generate failed: could not write `{}`: {err}",
+            entry_path.display()
+        );
+        return Err(2);
+    }
+
+    eprintln!("Generated project: {}", project_dir.display());
+    eprintln!(
+        "Resources: {}",
+        resources
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    eprintln!("\nRun with:");
+    eprintln!(
+        "  sec4 run --path {} --backend lasm --db-adapter sqlite --db-base /tmp/{}-db",
+        project_dir.display(),
+        name
+    );
 
     Ok(())
 }
