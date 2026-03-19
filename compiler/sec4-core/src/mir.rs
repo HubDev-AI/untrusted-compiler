@@ -99,7 +99,7 @@ pub fn lower_program_to_mir(program: &ast::Program) -> MirProgram {
         .iter()
         .filter_map(|item| match &item.kind {
             ItemKind::Function(function) => Some(lower_function(function, &item.span)),
-            ItemKind::Struct(_) | ItemKind::Enum(_) => None,
+            ItemKind::Struct(_) | ItemKind::Enum(_) | ItemKind::Resource(_) => None,
         })
         .collect::<Vec<_>>();
 

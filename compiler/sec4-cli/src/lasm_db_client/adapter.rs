@@ -13,53 +13,19 @@ use crate::lasm_db_runtime_sqlite::{
     run_lasm_sqlite_exec_tx_commit, run_lasm_sqlite_exec_tx_rollback,
 };
 use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
+use sec4_lasm_db_client::{
+    lasm_db_records_capture_enabled as lasm_db_records_capture_enabled_config,
+    lasm_db_records_persist_enabled as lasm_db_records_persist_enabled_config,
+};
 use std::collections::BTreeSet;
-use std::env;
 use std::sync::Mutex;
-use std::sync::OnceLock;
-
-const LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS: [&str; 2] = [
-    "SEC4_DB_ALPHA_DB_RECORDS_PERSIST_ENABLED",
-    "SEC4_RT_LASM_DB_RECORDS_PERSIST_ENABLED",
-];
-const LASM_DB_RECORDS_CAPTURE_ENABLED_ENV_KEYS: [&str; 2] = [
-    "SEC4_DB_ALPHA_DB_RECORDS_CAPTURE_ENABLED",
-    "SEC4_RT_LASM_DB_RECORDS_CAPTURE_ENABLED",
-];
-
-static LASM_DB_RECORDS_PERSIST_ENABLED: OnceLock<bool> = OnceLock::new();
-static LASM_DB_RECORDS_CAPTURE_ENABLED: OnceLock<bool> = OnceLock::new();
 
 pub(crate) fn lasm_db_records_persist_enabled() -> bool {
-    *LASM_DB_RECORDS_PERSIST_ENABLED.get_or_init(|| {
-        for key in LASM_DB_RECORDS_PERSIST_ENABLED_ENV_KEYS {
-            let Ok(raw) = env::var(key) else {
-                continue;
-            };
-            let normalized = raw.trim().to_ascii_lowercase();
-            if normalized.is_empty() {
-                continue;
-            }
-            return !matches!(normalized.as_str(), "0" | "false" | "no" | "off");
-        }
-        true
-    })
+    lasm_db_records_persist_enabled_config()
 }
 
 pub(crate) fn lasm_db_records_capture_enabled() -> bool {
-    *LASM_DB_RECORDS_CAPTURE_ENABLED.get_or_init(|| {
-        for key in LASM_DB_RECORDS_CAPTURE_ENABLED_ENV_KEYS {
-            let Ok(raw) = env::var(key) else {
-                continue;
-            };
-            let normalized = raw.trim().to_ascii_lowercase();
-            if normalized.is_empty() {
-                continue;
-            }
-            return !matches!(normalized.as_str(), "0" | "false" | "no" | "off");
-        }
-        true
-    })
+    lasm_db_records_capture_enabled_config()
 }
 
 struct PendingLasmPostgresSequenceTxCleanup {

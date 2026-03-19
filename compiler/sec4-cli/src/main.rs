@@ -54,6 +54,7 @@ mod lasm_db_runtime_sqlite;
 mod lasm_db_smoke_summary;
 mod lasm_dynamic_state;
 mod lasm_request_template;
+mod lasm_resource_dispatch;
 mod lasm_sql_safety;
 
 use lasm_cluster_accept_workers::{
@@ -92,10 +93,9 @@ use lasm_db_client::build_lasm_postgres_thread_local_config;
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, lasm_internal_db_indexed_header,
     LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_COUNT_HEADER, LASM_INTERNAL_DB_OP_HEADER,
-    LASM_INTERNAL_DB_OP_SEQUENCE_MAX, LASM_INTERNAL_DB_PARAMS_HEADER,
-    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
-    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER, LASM_INTERNAL_DB_TX_RESULT_HEADER,
-    LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
+    LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_TX_RESULT_HEADER, LASM_INTERNAL_DB_TX_SEQUENCE_RETAIN_HEADER,
 };
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 use lasm_db_runtime_postgres::prewarm_lasm_postgres_shared_client_pools;
@@ -1762,6 +1762,8 @@ struct LasmRunRoutePlan {
     headers: BTreeMap<String, String>,
 }
 
+use lasm_resource_dispatch::{LasmResourceFieldPlan, LasmResourcePlan};
+
 #[derive(Debug, Clone)]
 struct LasmResponsePlan {
     status: u16,
@@ -1788,9 +1790,127 @@ const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 const LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
 
+fn to_snake_case(name: &str) -> String {
+    let mut result = String::new();
+    for (i, ch) in name.chars().enumerate() {
+        if ch.is_uppercase() && i > 0 {
+            result.push('_');
+        }
+        result.push(ch.to_ascii_lowercase());
+    }
+    result
+}
+
+fn generate_resource_route_plans(
+    program: &sec4_core::ast::Program,
+    explicit_routes: &[(String, String)], // (method, path) pairs
+    resource_policy: &sec4_core::policy::ResourcePolicyConfig,
+) -> Vec<LasmRunRoutePlan> {
+    let mut plans = Vec::new();
+    let mut used_prefixes: HashSet<String> = HashSet::new();
+
+    for item in &program.items {
+        let decl = match &item.kind {
+            sec4_core::ast::ItemKind::Resource(decl) => decl,
+            _ => continue,
+        };
+
+        let table = decl.table_override.clone().unwrap_or_else(|| {
+            let snake = to_snake_case(&decl.name);
+            format!("{}s", snake)
+        });
+
+        let prefix = format!("/{}", table);
+
+        if !used_prefixes.insert(prefix.clone()) {
+            eprintln!(
+                "warning: resource `{}` route prefix `{}` collides with another resource",
+                decl.name, prefix
+            );
+            continue; // Skip this resource's routes
+        }
+
+        let resource_plan = LasmResourcePlan {
+            name: decl.name.clone(),
+            table: table.clone(),
+            fields: decl.fields.iter().map(|f| {
+                let field_type = match &f.ty.kind {
+                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.clone(),
+                };
+                LasmResourceFieldPlan {
+                    name: f.name.clone(),
+                    field_type,
+                    primary: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary)
+                    }),
+                    auto_fill: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto)
+                    }),
+                    default_value: f.annotations.iter().find_map(|a| match a {
+                        sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
+                        _ => None,
+                    }),
+                }
+            }).collect(),
+            route_prefix: prefix.clone(),
+            max_list_limit: resource_policy.max_list_limit,
+            default_list_limit: resource_policy.default_list_limit,
+        };
+
+        let plan_json = serde_json::to_string(&resource_plan).unwrap_or_default();
+
+        let mut crud_ops: Vec<(&str, String, &str)> = vec![
+            ("GET", prefix.to_string(), "list"),
+            ("GET", format!("{}/:id", prefix), "get"),
+            ("POST", prefix.to_string(), "create"),
+            ("POST", format!("{}/:id/update", prefix), "update"),
+        ];
+        if resource_policy.allow_delete {
+            crud_ops.push(("POST", format!("{}/:id/delete", prefix), "delete"));
+        }
+
+        for (method, path, op) in crud_ops {
+            if explicit_routes.iter().any(|(m, p)| m == method && p == &path) {
+                continue; // Developer override — skip auto-generated route
+            }
+
+            let mut headers = BTreeMap::new();
+            headers.insert(
+                "X-Sec4-Internal-Resource-Op".to_string(),
+                op.to_string(),
+            );
+            headers.insert(
+                "X-Sec4-Internal-Resource-Plan".to_string(),
+                plan_json.clone(),
+            );
+            headers.insert(
+                "Content-Type".to_string(),
+                "application/json; charset=utf-8".to_string(),
+            );
+            if resource_policy.require_auth {
+                headers.insert(
+                    LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER.to_string(),
+                    "1".to_string(),
+                );
+            }
+
+            plans.push(LasmRunRoutePlan {
+                method: method.to_string(),
+                path,
+                status: if op == "create" { 201 } else { 200 },
+                body: String::new(),
+                headers,
+            });
+        }
+    }
+
+    plans
+}
+
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
     entry_name: &str,
+    resource_policy: &sec4_core::policy::ResourcePolicyConfig,
 ) -> Vec<LasmRunRoutePlan> {
     let functions = program
         .items
@@ -1877,6 +1997,16 @@ fn collect_lasm_route_plans(
             headers,
         });
     }
+
+    // Collect explicit (method, path) pairs for override detection
+    let explicit_routes: Vec<(String, String)> = plans
+        .iter()
+        .map(|p| (p.method.clone(), p.path.clone()))
+        .collect();
+
+    // Generate resource CRUD routes, skipping those with explicit overrides
+    let resource_plans = generate_resource_route_plans(program, &explicit_routes, resource_policy);
+    plans.extend(resource_plans);
 
     plans
 }
@@ -9549,7 +9679,7 @@ fn cmd_run_lasm_backend(
         });
     }
 
-    let routes = collect_lasm_route_plans(&program, entry.name.as_str());
+    let routes = collect_lasm_route_plans(&program, entry.name.as_str(), &policy.resource);
     if routes.is_empty() {
         eprintln!(
             "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
@@ -10329,16 +10459,31 @@ fn process_lasm_connection_with_runtime(
                     String::from_utf8_lossy(&response.body),
                 );
             }
-            apply_lasm_dynamic_response_materialization(
-                &mut response,
-                &request,
-                &exchange.path_params,
-                header_defaults,
-                dynamic_state,
-                db_records_adapter,
-                trace_id.as_str(),
-            );
-            materialize_lasm_internal_runtime_error_envelope(&mut response, trace_id.as_str());
+            if lasm_resource_dispatch::is_resource_route(&response.headers) {
+                let route_headers = response.headers.clone();
+                lasm_resource_dispatch::try_dispatch_resource_operation(
+                    &mut response,
+                    &request.body,
+                    &exchange.path_params,
+                    &request.query_params,
+                    &route_headers,
+                    trace_id.as_str(),
+                );
+            } else {
+                apply_lasm_dynamic_response_materialization(
+                    &mut response,
+                    &request,
+                    &exchange.path_params,
+                    header_defaults,
+                    dynamic_state,
+                    db_records_adapter,
+                    trace_id.as_str(),
+                );
+                materialize_lasm_internal_runtime_error_envelope(
+                    &mut response,
+                    trace_id.as_str(),
+                );
+            }
             response
         } else {
             let mut response = sec4_core::HttpResponse::text(500, "");

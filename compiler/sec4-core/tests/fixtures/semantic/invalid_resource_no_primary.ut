@@ -1,0 +1,4 @@
+resource Task {
+  title: String,
+  status: String,
+}

@@ -147,6 +147,14 @@ pub struct FsPolicyConfig {
     pub forbid_symlinks: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResourcePolicyConfig {
+    pub max_list_limit: u32,
+    pub default_list_limit: u32,
+    pub allow_delete: bool,
+    pub require_auth: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     pub name: String,
@@ -171,6 +179,7 @@ pub struct Policy {
     pub net_internal: NetInternalPolicyConfig,
     pub net_ssrf: NetSsrfPolicyConfig,
     pub fs: FsPolicyConfig,
+    pub resource: ResourcePolicyConfig,
 }
 
 impl Default for Policy {
@@ -305,6 +314,12 @@ impl Default for Policy {
                 allowed_base_paths: Vec::new(),
                 forbid_symlinks: "enforce".to_string(),
             },
+            resource: ResourcePolicyConfig {
+                max_list_limit: 100,
+                default_list_limit: 20,
+                allow_delete: true,
+                require_auth: true,
+            },
         }
     }
 }
@@ -341,6 +356,7 @@ impl Policy {
             "net_internal": self.net_internal,
             "net_ssrf": self.net_ssrf,
             "fs": self.fs,
+            "resource": self.resource,
         });
 
         let serialized =
@@ -394,6 +410,8 @@ struct PolicyFile {
     csrf: Option<CsrfSection>,
     #[serde(default)]
     auth: Option<AuthSection>,
+    #[serde(default)]
+    resource: Option<ResourceSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -743,6 +761,19 @@ struct AuthTokenSection {
     header_name: Option<String>,
     #[serde(default)]
     scheme: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceSection {
+    #[serde(default)]
+    max_list_limit: Option<u32>,
+    #[serde(default)]
+    default_list_limit: Option<u32>,
+    #[serde(default)]
+    allow_delete: Option<bool>,
+    #[serde(default)]
+    require_auth: Option<bool>,
 }
 
 pub fn load_policy(project_root: &Path) -> Result<Policy, Vec<Diagnostic>> {
@@ -1497,6 +1528,43 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     );
                 }
             }
+        }
+    }
+
+    if let Some(section) = raw.resource {
+        if let Some(max_list_limit) = section.max_list_limit {
+            if max_list_limit < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid resource.max_list_limit",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("resource.max_list_limit must be >= 1"),
+                );
+            } else {
+                policy.resource.max_list_limit = max_list_limit;
+            }
+        }
+        if let Some(default_list_limit) = section.default_list_limit {
+            if default_list_limit < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid resource.default_list_limit",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("resource.default_list_limit must be >= 1"),
+                );
+            } else {
+                policy.resource.default_list_limit = default_list_limit;
+            }
+        }
+        if let Some(allow_delete) = section.allow_delete {
+            policy.resource.allow_delete = allow_delete;
+        }
+        if let Some(require_auth) = section.require_auth {
+            policy.resource.require_auth = require_auth;
         }
     }
 

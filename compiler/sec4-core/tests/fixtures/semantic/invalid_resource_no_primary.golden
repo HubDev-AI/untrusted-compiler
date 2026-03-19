@@ -1,0 +1,4 @@
+error[E5001]: resource requires exactly one @primary field
+  --> invalid_resource_no_primary.ut:1:1
+  note: resource `Task` has no @primary field
+  note: add `@primary` annotation to the identity field

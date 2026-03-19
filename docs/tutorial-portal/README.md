@@ -15,6 +15,7 @@ It is organized for a new user first, then for operators who need deeper example
 | Explore all runnable examples | `04-example-catalog.md` |
 | Run cross-backend benchmarks and capacity probes | `05-benchmarks-capacity.md` |
 | Resolve common failures quickly | `06-troubleshooting.md` |
+| Integrate sec4 as a hybrid backend for Vibecode Arena MVP | `07-vibecode-arena-hybrid-with-sec4.md` |
 
 ## Learning path (recommended)
 

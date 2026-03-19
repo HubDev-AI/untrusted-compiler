@@ -169,6 +169,10 @@ Workbench runtime status note (2026-03-07):
 - The remaining sqlite/records-log `db.execTx` lifecycle now follows the same pattern: dispatch resolves tx sources and response envelopes, while `lasm_db_client` owns locked adapter execution, commit/rollback decisions, tx-handle cleanup, and record persistence.
 - The remaining sqlite/records-log `db.exec` and `db.queryOne` paths now follow the same helper-driven pattern: dispatch resolves request inputs and HTTP envelopes, while `lasm_db_client` owns locked adapter execution, row materialization, and record persistence for non-Postgres adapters.
 - `db.tx` allocation and `execTx` state-binding resolution now also live behind `lasm_db_client`, so top-level DB dispatch no longer owns tx-handle allocation or in-use binding state directly.
+- LASM DB runtime config/limits packaging extraction is complete:
+  - reusable runtime limit/override logic and records capture/persist env resolution now live in `compiler/sec4-lasm-db-client/`,
+  - `compiler/sec4-cli/src/lasm_db_client/config.rs` now keeps only the CLI state-bound Postgres thread-local config/caching helper,
+  - details: `docs/book/1581-m39-lasm-db-runtime-config-package-extraction.md`.
 - Focused explicit-tx step rerun on the canonical Postgres route improved from about `443.68 req/s` / `p99 3.76s` to about `489.63 req/s` / `p99 154.75ms` at the `500`-target lane.
 - Current tuned same-workload fixed compare on Postgres keeps `sec4-lasm` in front on the canonical tx routes:
   - `wb-tasks-with-comment`: about `198.35 req/s`, `p99 36.54ms`
