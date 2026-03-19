@@ -1,4 +1,6 @@
-use sec4_core::ast::{Expr, ExprKind, ItemKind, Program, StmtKind, TypeExpr, TypeExprKind};
+use sec4_core::ast::{
+    Expr, ExprKind, ItemKind, Program, ResourceFieldAnnotation, StmtKind, TypeExpr, TypeExprKind,
+};
 use sec4_core::parse_source;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -181,6 +183,44 @@ fn render_program_signature(program: &Program) -> String {
                             render_expr_kind(expr)
                         )),
                     }
+                }
+            }
+            ItemKind::Resource(decl) => {
+                let table_text = decl
+                    .table_override
+                    .as_deref()
+                    .map(|t| format!(" table=\"{t}\""))
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "resource {}{} ({} fields)\n",
+                    decl.name,
+                    table_text,
+                    decl.fields.len()
+                ));
+                for field in &decl.fields {
+                    let annotations = field
+                        .annotations
+                        .iter()
+                        .map(|ann| match ann {
+                            ResourceFieldAnnotation::Primary => "@primary".to_string(),
+                            ResourceFieldAnnotation::Auto => "@auto".to_string(),
+                            ResourceFieldAnnotation::Default(v) => {
+                                format!("@default(\"{v}\")")
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let ann_text = if annotations.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {annotations}")
+                    };
+                    out.push_str(&format!(
+                        "  {}: {}{}\n",
+                        field.name,
+                        render_type(&field.ty),
+                        ann_text
+                    ));
                 }
             }
         }

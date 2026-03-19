@@ -1,0 +1,7 @@
+OK
+program.items=1
+resource Task (4 fields)
+  id: Uuid @primary
+  title: String
+  status: String @default("pending")
+  created_at: Time @auto

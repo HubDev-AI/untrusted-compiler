@@ -1,7 +1,8 @@
 use crate::ast::{
     BinaryOp, Block, EffectSpec, EnumDecl, EnumVariant, Expr, ExprKind, FieldDecl, FunctionDecl,
-    Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl,
-    TypeExpr, TypeExprKind, UnaryOp, VariantField,
+    Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, ResourceDecl,
+    ResourceFieldAnnotation, ResourceFieldDecl, Stmt, StmtKind, StructDecl, TypeExpr,
+    TypeExprKind, UnaryOp, VariantField,
 };
 use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::lexer;
@@ -71,11 +72,13 @@ impl<'a> Parser<'a> {
                 self.parse_struct_item(start)
             } else if let Some(start) = self.match_keyword(Keyword::Enum) {
                 self.parse_enum_item(start)
+            } else if let Some(start) = self.match_keyword(Keyword::Resource) {
+                self.parse_resource_item(start)
             } else {
                 let token = self.current().clone();
                 self.diagnostics.push(
                     Diagnostic::error("P2001", "expected top-level declaration", token.span)
-                        .with_note("top-level items must start with `fn`, `struct`, or `enum`"),
+                        .with_note("top-level items must start with `fn`, `struct`, `enum`, or `resource`"),
                 );
                 self.synchronize_top_level();
                 continue;
@@ -115,6 +118,7 @@ impl<'a> Parser<'a> {
             if self.check_keyword(Keyword::Fn)
                 || self.check_keyword(Keyword::Struct)
                 || self.check_keyword(Keyword::Enum)
+                || self.check_keyword(Keyword::Resource)
             {
                 return;
             }
@@ -1116,6 +1120,128 @@ impl<'a> Parser<'a> {
         let token = self.current().clone();
         Diagnostic::error(code, message, token.span)
             .with_note(format!("found {}", token.kind.describe()))
+    }
+
+    /// Check if current token is an identifier with a specific value (does not consume).
+    fn check_identifier_value(&self, value: &str) -> bool {
+        matches!(&self.current().kind, TokenKind::Identifier(name) if name == value)
+    }
+
+    /// Consume current token if it's a string literal, returning its value.
+    fn expect_string_literal(
+        &mut self,
+        code: &str,
+        message: &str,
+    ) -> Result<(String, Token), Diagnostic> {
+        let token = self.current().clone();
+        match &token.kind {
+            TokenKind::String(value) => {
+                let value = value.clone();
+                self.advance();
+                Ok((value, token))
+            }
+            _ => Err(Diagnostic::error(code, message, token.span)
+                .with_note(format!("found {}", token.kind.describe()))),
+        }
+    }
+
+    /// Advance the parser by one token (alias for bump that discards the return value).
+    fn advance(&mut self) {
+        self.bump();
+    }
+
+    fn parse_resource_item(&mut self, start: Token) -> Result<Item, Diagnostic> {
+        let (name, _name_token) =
+            self.expect_identifier("P2050", "expected resource name after `resource`")?;
+
+        // Optional table override: resource Person table "people" { ... }
+        let table_override = if self.check_identifier_value("table") {
+            self.advance(); // consume "table"
+            let (table_name, _) = self
+                .expect_string_literal("P2051", "expected table name string after `table`")?;
+            Some(table_name)
+        } else {
+            None
+        };
+
+        self.expect_symbol(Symbol::LBrace, "P2052", "expected `{` after resource name")?;
+
+        let mut fields = Vec::new();
+        while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
+            let (field_name, field_name_token) =
+                self.expect_identifier("P2053", "expected resource field name")?;
+            self.expect_symbol(Symbol::Colon, "P2054", "expected `:` after field name")?;
+            let field_type = self.parse_type()?;
+
+            // Parse field annotations: @primary, @auto, @default("value")
+            let mut annotations = Vec::new();
+            while self.check_symbol(Symbol::At) {
+                self.advance(); // consume @
+                let (ann_name, _) =
+                    self.expect_identifier("P2055", "expected annotation name after `@`")?;
+                match ann_name.as_str() {
+                    "primary" => annotations.push(ResourceFieldAnnotation::Primary),
+                    "auto" => annotations.push(ResourceFieldAnnotation::Auto),
+                    "default" => {
+                        self.expect_symbol(
+                            Symbol::LParen,
+                            "P2056",
+                            "expected `(` after @default",
+                        )?;
+                        let (value, _) = self.expect_string_literal(
+                            "P2057",
+                            "expected default value string in @default(...)",
+                        )?;
+                        self.expect_symbol(
+                            Symbol::RParen,
+                            "P2058",
+                            "expected `)` after default value",
+                        )?;
+                        annotations.push(ResourceFieldAnnotation::Default(value));
+                    }
+                    other => {
+                        return Err(self.error_current(
+                            "P2059",
+                            &format!("unknown resource field annotation `@{}`", other),
+                        ));
+                    }
+                }
+            }
+
+            let field_span = join_spans(&field_name_token.span, &field_type.span);
+            fields.push(ResourceFieldDecl {
+                name: field_name,
+                ty: field_type,
+                annotations,
+                span: field_span,
+            });
+
+            if self.match_symbol(Symbol::Comma).is_some() {
+                continue;
+            }
+            if self.check_symbol(Symbol::RBrace) {
+                break;
+            }
+            return Err(
+                self.error_current("P2060", "expected `,` or `}` in resource declaration")
+            );
+        }
+
+        let end =
+            self.expect_symbol(Symbol::RBrace, "P2061", "expected `}` to close resource")?;
+        let span = join_spans(&start.span, &end.span);
+
+        Ok(Item {
+            kind: ItemKind::Resource(ResourceDecl {
+                name,
+                table_override,
+                fields,
+            }),
+            span,
+        })
     }
 }
 
