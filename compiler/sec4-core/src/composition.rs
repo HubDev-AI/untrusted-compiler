@@ -182,7 +182,7 @@ fn collect_contract_violations_from_domain_dependency_calls(
     module: &crate::project::ResolvedModuleSource,
     forbidden_roots: &HashSet<String>,
 ) -> Result<Vec<PromoteContractViolation>, Vec<crate::diagnostics::Diagnostic>> {
-    if is_domain_module(module) == false {
+    if !is_domain_module(module) {
         return Ok(Vec::new());
     }
 
@@ -750,11 +750,8 @@ fn collect_references_from_item(
     references: &mut Vec<PromoteBindingReference>,
     seen: &mut HashSet<(PathBuf, usize, usize)>,
 ) {
-    match &item.kind {
-        ItemKind::Function(function) => {
-            collect_references_from_block(&function.body, file, roots, references, seen);
-        }
-        _ => {}
+    if let ItemKind::Function(function) = &item.kind {
+        collect_references_from_block(&function.body, file, roots, references, seen);
     }
 }
 

@@ -635,7 +635,7 @@ impl LasmHttpRuntime {
         let request_segments = split_request_segments(request_match_path);
         let mut methods = BTreeSet::new();
 
-        for ((method, route_path), _route) in &self.exact_routes {
+        for (method, route_path) in self.exact_routes.keys() {
             if route_path == request_match_path {
                 methods.insert(method.clone());
             }
