@@ -686,18 +686,30 @@ fn quote_ident(name: &str) -> String {
 }
 
 fn generate_uuid() -> String {
-    // Timestamp-based UUID-like string (not a real v4 but unique enough for dry-run).
-    let now = epoch_ms();
-    let high = (now >> 32) as u32;
-    let low = now as u32;
-    let extra = (now.wrapping_mul(6364136223846793005).wrapping_add(1)) as u32;
+    use std::fs::File;
+    use std::io::Read;
+    let mut bytes = [0u8; 16];
+    if let Ok(mut f) = File::open("/dev/urandom") {
+        let _ = f.read_exact(&mut bytes);
+    } else {
+        // Fallback to timestamp-based
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        bytes = (nanos as u128).to_le_bytes();
+    }
+    // Set version 4 and variant bits
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
     format!(
-        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-        high,
-        (low >> 16) & 0xffff,
-        low & 0xffff,
-        (extra >> 16) & 0xffff,
-        extra as u64 | ((now & 0xffff_0000_0000) >> 8),
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5],
+        bytes[6], bytes[7],
+        bytes[8], bytes[9],
+        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
     )
 }
 

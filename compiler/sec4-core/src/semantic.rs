@@ -545,6 +545,48 @@ impl<'a> Analyzer<'a> {
                         }
                     }
 
+                    // Validate @default values are compatible with field types
+                    for field in &decl.fields {
+                        let type_name = match &field.ty.kind {
+                            crate::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+                        };
+                        for ann in &field.annotations {
+                            if let ResourceFieldAnnotation::Default(value) = ann {
+                                let valid = match type_name {
+                                    "String" => true,
+                                    "Int" | "Int64" => value.parse::<i64>().is_ok(),
+                                    "Bool" => value == "true" || value == "false",
+                                    "Uuid" => {
+                                        let parts: Vec<&str> = value.split('-').collect();
+                                        parts.len() == 5
+                                            && parts[0].len() == 8
+                                            && parts[1].len() == 4
+                                            && parts[2].len() == 4
+                                            && parts[3].len() == 4
+                                            && parts[4].len() == 12
+                                            && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+                                    }
+                                    "Email" => value.contains('@'),
+                                    "Time" => !value.is_empty(),
+                                    _ => true,
+                                };
+                                if !valid {
+                                    self.diagnostics.push(
+                                        Diagnostic::error(
+                                            "E5004",
+                                            "@default value does not match field type",
+                                            field.span.clone(),
+                                        )
+                                        .with_note(format!(
+                                            "field `{}` has type `{}` but @default value `\"{}\"` is not a valid {}",
+                                            field.name, type_name, value, type_name
+                                        )),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     // Resource name was already registered at the top of this arm
                 }
             }
