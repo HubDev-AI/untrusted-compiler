@@ -207,6 +207,8 @@ fn render_program_signature(program: &Program) -> String {
                             ResourceFieldAnnotation::Default(v) => {
                                 format!("@default(\"{v}\")")
                             }
+                            ResourceFieldAnnotation::Unique => "@unique".to_string(),
+                            ResourceFieldAnnotation::Optional => "@optional".to_string(),
                         })
                         .collect::<Vec<_>>()
                         .join(" ");

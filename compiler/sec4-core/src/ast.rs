@@ -93,6 +93,8 @@ pub enum ResourceFieldAnnotation {
     Primary,
     Auto,
     Default(String),
+    Unique,
+    Optional,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

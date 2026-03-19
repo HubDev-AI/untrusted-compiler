@@ -32,6 +32,8 @@ pub struct LasmResourceFieldPlan {
     pub primary: bool,
     pub auto_fill: bool,
     pub default_value: Option<String>,
+    pub unique: bool,
+    pub optional: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -221,7 +223,26 @@ fn dispatch_create(
             return;
         }
 
-        // Non-required, non-auto, no default, not provided — skip.
+        if field.optional {
+            // Optional field absent from request — insert SQL NULL.
+            columns.push(field.name.clone());
+            values.push(Value::Null);
+            continue;
+        }
+
+        // Non-optional, non-auto, no default, not provided — error.
+        set_json_response(
+            response,
+            400,
+            &error_envelope(
+                400,
+                "RESOURCE.MISSING_FIELD",
+                "validation",
+                &format!("missing required field '{}'", field.name),
+                trace_id,
+            ),
+        );
+        return;
     }
 
     match generate_create_sql(plan, &columns, &values) {
@@ -235,11 +256,28 @@ fn dispatch_create(
                     );
                 }
                 DbExecResult::Error(msg) => {
-                    set_json_response(
-                        response,
-                        500,
-                        &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
-                    );
+                    let is_conflict = msg.to_lowercase().contains("unique")
+                        || msg.to_lowercase().contains("duplicate")
+                        || msg.to_lowercase().contains("constraint");
+                    if is_conflict {
+                        set_json_response(
+                            response,
+                            409,
+                            &error_envelope(
+                                409,
+                                "RESOURCE.CONFLICT",
+                                "conflict",
+                                "duplicate value for unique field",
+                                trace_id,
+                            ),
+                        );
+                    } else {
+                        set_json_response(
+                            response,
+                            500,
+                            &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                        );
+                    }
                 }
                 DbExecResult::DryRun => {
                     // Build a synthetic record from the column/value pairs for dry-run.
@@ -345,11 +383,66 @@ fn dispatch_list(
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
 
-    let sql = generate_list_sql(plan);
-    let params = vec![
-        Value::Number(serde_json::Number::from(limit)),
-        Value::Number(serde_json::Number::from(offset)),
-    ];
+    // --- Filtering ---
+    // Reserved params that are not field filters.
+    let reserved_params = ["limit", "offset", "sort", "order"];
+    let mut where_clauses: Vec<String> = Vec::new();
+    let mut where_params: Vec<Value> = Vec::new();
+    let mut param_idx: usize = 1; // $1, $2, ... for WHERE; LIMIT and OFFSET appended last
+
+    for (key, value) in query_params {
+        if reserved_params.contains(&key.as_str()) {
+            continue;
+        }
+        // Only filter on known resource fields.
+        if let Some(field) = plan.fields.iter().find(|f| f.name == *key) {
+            let json_value = Value::String(value.clone());
+            if validate_field(field, &json_value).is_ok() {
+                where_clauses.push(format!("{} = ${}", quote_ident(key), param_idx));
+                where_params.push(json_value);
+                param_idx += 1;
+            }
+        }
+    }
+
+    // --- Sorting ---
+    let sort_field = query_params
+        .get("sort")
+        .and_then(|s| plan.fields.iter().find(|f| f.name == *s))
+        .map(|f| f.name.clone());
+    let sort_order = query_params
+        .get("order")
+        .map(|o| if o.eq_ignore_ascii_case("asc") { "ASC" } else { "DESC" })
+        .unwrap_or("DESC");
+
+    // --- Build SQL ---
+    let where_sql = if where_clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_clauses.join(" AND "))
+    };
+
+    let default_order_column = primary_key_column(plan);
+    let order_column = sort_field.as_deref().unwrap_or(&default_order_column);
+
+    let limit_placeholder = param_idx;
+    let offset_placeholder = param_idx + 1;
+
+    let sql = format!(
+        "SELECT * FROM {}{} ORDER BY {} {} LIMIT ${} OFFSET ${}",
+        quote_ident(&plan.table),
+        where_sql,
+        quote_ident(order_column),
+        sort_order,
+        limit_placeholder,
+        offset_placeholder,
+    );
+
+    // Combine params: where_params first, then limit, then offset.
+    let mut params: Vec<Value> = where_params;
+    params.push(Value::Number(serde_json::Number::from(limit)));
+    params.push(Value::Number(serde_json::Number::from(offset)));
+
     match db_exec.query_many(&sql, &params) {
         DbExecResult::Row(rows_value) => {
             let items = rows_value.as_array().cloned().unwrap_or_default();
@@ -377,7 +470,7 @@ fn dispatch_list(
                 200,
                 &success_envelope(
                     200,
-                    &json!({ "sql": sql, "params": [limit, offset] }),
+                    &json!({ "sql": sql, "params": params }),
                     trace_id,
                 ),
             );
@@ -824,6 +917,8 @@ fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
+        let not_null_clause = if !field.primary && !field.optional { " NOT NULL" } else { "" };
+        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
         let default_clause: String = if !field.primary {
             if let Some(val) = field.default_value.as_deref() {
                 format!(" DEFAULT '{}'", val.replace('\'', "''"))
@@ -834,7 +929,7 @@ fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
             String::new()
         };
         cols.push(format!(
-            "{} {col_type}{pk}{default_clause}",
+            "{} {col_type}{pk}{not_null_clause}{unique_clause}{default_clause}",
             quote_ident(&field.name)
         ));
     }
@@ -1022,7 +1117,8 @@ fn generate_create_table_ddl(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
-        cols.push(format!("{} {col_type}{pk}", quote_ident(&field.name)));
+        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
+        cols.push(format!("{} {col_type}{pk}{unique_clause}", quote_ident(&field.name)));
     }
     format!(
         "CREATE TABLE IF NOT EXISTS {} ({})",
@@ -1067,15 +1163,6 @@ fn generate_get_sql(plan: &LasmResourcePlan) -> String {
     let pk = primary_key_column(plan);
     format!(
         "SELECT * FROM {} WHERE {} = $1 LIMIT 1",
-        quote_ident(&plan.table),
-        quote_ident(&pk),
-    )
-}
-
-fn generate_list_sql(plan: &LasmResourcePlan) -> String {
-    let pk = primary_key_column(plan);
-    format!(
-        "SELECT * FROM {} ORDER BY {} DESC LIMIT $1 OFFSET $2",
         quote_ident(&plan.table),
         quote_ident(&pk),
     )
@@ -1145,6 +1232,9 @@ fn generate_delete_sql(plan: &LasmResourcePlan) -> String {
 
 fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), String> {
     if value.is_null() {
+        if field.optional {
+            return Ok(());
+        }
         return Err("null values are not allowed".to_string());
     }
     match field.field_type.as_str() {

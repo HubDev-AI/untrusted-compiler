@@ -1187,6 +1187,8 @@ impl<'a> Parser<'a> {
                 match ann_name.as_str() {
                     "primary" => annotations.push(ResourceFieldAnnotation::Primary),
                     "auto" => annotations.push(ResourceFieldAnnotation::Auto),
+                    "unique" => annotations.push(ResourceFieldAnnotation::Unique),
+                    "optional" => annotations.push(ResourceFieldAnnotation::Optional),
                     "default" => {
                         self.expect_symbol(
                             Symbol::LParen,

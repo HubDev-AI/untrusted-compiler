@@ -7933,40 +7933,21 @@ fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i3
 }
 
 fn cmd_migrate(project_path: &Path, adapter: &str) -> Result<(), i32> {
-    let manifest_path = project_path.join("sec4.toml");
-    let manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
-        eprintln!("migrate failed: failed to read sec4.toml: {}", e);
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
         1
     })?;
 
-    let manifest: toml::Value = toml::from_str(&manifest_str).map_err(|e| {
-        eprintln!("migrate failed: invalid sec4.toml: {}", e);
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
         1
     })?;
-
-    let entry = manifest
-        .get("build")
-        .and_then(|b| b.get("entry"))
-        .and_then(|e| e.as_str())
-        .unwrap_or("src/main.ut");
-
-    let source_path = project_path.join(entry);
-    let source = std::fs::read_to_string(&source_path).map_err(|e| {
-        eprintln!(
-            "migrate failed: failed to read {}: {}",
-            source_path.display(),
-            e
-        );
-        1
-    })?;
-
-    let program =
-        sec4_core::parse_source(std::path::Path::new(entry), &source).map_err(|diags| {
-            for d in &diags {
-                eprintln!("{}", d.render_plain_with_source(&source));
-            }
-            1
-        })?;
 
     let mut ddl_statements = Vec::new();
     for item in &program.items {
@@ -7992,40 +7973,21 @@ fn cmd_migrate(project_path: &Path, adapter: &str) -> Result<(), i32> {
 }
 
 fn cmd_describe(project_path: &Path) -> Result<(), i32> {
-    let manifest_path = project_path.join("sec4.toml");
-    let manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
-        eprintln!("describe failed: failed to read sec4.toml: {}", e);
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
         1
     })?;
 
-    let manifest: toml::Value = toml::from_str(&manifest_str).map_err(|e| {
-        eprintln!("describe failed: invalid sec4.toml: {}", e);
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
         1
     })?;
-
-    let entry = manifest
-        .get("build")
-        .and_then(|b| b.get("entry"))
-        .and_then(|e| e.as_str())
-        .unwrap_or("src/main.ut");
-
-    let source_path = project_path.join(entry);
-    let source = std::fs::read_to_string(&source_path).map_err(|e| {
-        eprintln!(
-            "describe failed: failed to read {}: {}",
-            source_path.display(),
-            e
-        );
-        1
-    })?;
-
-    let program =
-        sec4_core::parse_source(std::path::Path::new(entry), &source).map_err(|diags| {
-            for d in &diags {
-                eprintln!("{}", d.render_plain_with_source(&source));
-            }
-            1
-        })?;
 
     let mut found = false;
     for item in &program.items {
