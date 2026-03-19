@@ -10468,6 +10468,8 @@ fn process_lasm_connection_with_runtime(
                     &request.query_params,
                     &route_headers,
                     trace_id.as_str(),
+                    dynamic_state,
+                    db_records_adapter,
                 );
             } else {
                 apply_lasm_dynamic_response_materialization(

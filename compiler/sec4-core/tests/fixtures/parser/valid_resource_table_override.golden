@@ -1,0 +1,5 @@
+OK
+program.items=1
+resource Person table="people" (2 fields)
+  id: Uuid @primary
+  name: String

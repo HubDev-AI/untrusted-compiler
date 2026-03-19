@@ -1,0 +1,4 @@
+error[E5003]: resource field type must be a built-in type
+  --> invalid_resource_unknown_type.ut:3:3
+  note: field `data` has type `HashMap` which is not supported in resource declarations
+  note: allowed types: Uuid, String, Email, Int64, Int, Time, Bool

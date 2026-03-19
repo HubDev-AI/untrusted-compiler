@@ -1,0 +1,3 @@
+error[E5004]: @default value does not match field type
+  --> invalid_resource_bad_default.ut:3:3
+  note: field `count` has type `Int64` but @default value `"not_a_number"` is not a valid Int64
