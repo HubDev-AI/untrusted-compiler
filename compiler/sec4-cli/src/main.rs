@@ -54,6 +54,7 @@ mod lasm_db_runtime_sqlite;
 mod lasm_db_smoke_summary;
 mod lasm_dynamic_state;
 mod lasm_request_template;
+mod lasm_resource_dispatch;
 mod lasm_sql_safety;
 
 use lasm_cluster_accept_workers::{
@@ -1761,22 +1762,7 @@ struct LasmRunRoutePlan {
     headers: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct LasmResourceFieldPlan {
-    name: String,
-    field_type: String,
-    primary: bool,
-    auto_fill: bool,
-    default_value: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct LasmResourcePlan {
-    name: String,
-    table: String,
-    fields: Vec<LasmResourceFieldPlan>,
-    route_prefix: String,
-}
+use lasm_resource_dispatch::{LasmResourceFieldPlan, LasmResourcePlan};
 
 #[derive(Debug, Clone)]
 struct LasmResponsePlan {
@@ -10452,16 +10438,30 @@ fn process_lasm_connection_with_runtime(
                     String::from_utf8_lossy(&response.body),
                 );
             }
-            apply_lasm_dynamic_response_materialization(
-                &mut response,
-                &request,
-                &exchange.path_params,
-                header_defaults,
-                dynamic_state,
-                db_records_adapter,
-                trace_id.as_str(),
-            );
-            materialize_lasm_internal_runtime_error_envelope(&mut response, trace_id.as_str());
+            if lasm_resource_dispatch::is_resource_route(&response.headers) {
+                let route_headers = response.headers.clone();
+                lasm_resource_dispatch::try_dispatch_resource_operation(
+                    &mut response,
+                    &request.body,
+                    &exchange.path_params,
+                    &route_headers,
+                    trace_id.as_str(),
+                );
+            } else {
+                apply_lasm_dynamic_response_materialization(
+                    &mut response,
+                    &request,
+                    &exchange.path_params,
+                    header_defaults,
+                    dynamic_state,
+                    db_records_adapter,
+                    trace_id.as_str(),
+                );
+                materialize_lasm_internal_runtime_error_envelope(
+                    &mut response,
+                    trace_id.as_str(),
+                );
+            }
             response
         } else {
             let mut response = sec4_core::HttpResponse::text(500, "");
