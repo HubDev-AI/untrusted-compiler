@@ -15,6 +15,7 @@ pub enum Keyword {
     Return,
     Struct,
     Enum,
+    Resource,
 }
 
 impl Keyword {
@@ -31,6 +32,7 @@ impl Keyword {
             Keyword::Return => "return",
             Keyword::Struct => "struct",
             Keyword::Enum => "enum",
+            Keyword::Resource => "resource",
         }
     }
 }
@@ -71,6 +73,7 @@ pub enum Symbol {
     AndAnd,
     OrOr,
     Question,
+    At,
 }
 
 impl Symbol {
@@ -104,6 +107,7 @@ impl Symbol {
             Symbol::AndAnd => "&&",
             Symbol::OrOr => "||",
             Symbol::Question => "?",
+            Symbol::At => "@",
         }
     }
 }
