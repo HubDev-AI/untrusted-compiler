@@ -1,0 +1,4 @@
+resource Log {
+  id: Uuid @primary @auto,
+  created_at: Time @auto,
+}

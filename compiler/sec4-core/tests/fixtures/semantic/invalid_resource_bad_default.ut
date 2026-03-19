@@ -1,0 +1,4 @@
+resource Task {
+  id: Uuid @primary,
+  count: Int64 @default("not_a_number"),
+}
