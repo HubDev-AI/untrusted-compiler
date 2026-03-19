@@ -455,6 +455,12 @@ enum Commands {
         #[arg(long)]
         path: PathBuf,
     },
+    /// Generate OpenAPI 3.0 spec from resource declarations
+    Openapi {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -985,6 +991,7 @@ fn main() {
         } => cmd_generate(&name, &resources, &output),
         Commands::Migrate { path, adapter } => cmd_migrate(&path, &adapter),
         Commands::Describe { path } => cmd_describe(&path),
+        Commands::Openapi { path } => cmd_openapi(&path),
     };
 
     if let Err(code) = result {
@@ -8050,6 +8057,277 @@ fn cmd_describe(project_path: &Path) -> Result<(), i32> {
         eprintln!("no resources found in {}", source_path.display());
     }
 
+    Ok(())
+}
+
+fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
+    let manifest = sec4_core::validate_project(project_path).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let source_path = manifest.entry_path(project_path);
+
+    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+        for d in &diags {
+            eprintln!("{}", d.render_plain());
+        }
+        1
+    })?;
+
+    let project_name = manifest.package.name.clone();
+
+    let mut paths = serde_json::Map::new();
+    let mut schemas = serde_json::Map::new();
+
+    let mut found = false;
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            found = true;
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                format!("{}s", to_snake_case(&decl.name))
+            });
+            let prefix = format!("/{}", table);
+
+            let mut all_props = serde_json::Map::new();
+            let mut create_props = serde_json::Map::new();
+            let mut required_fields: Vec<serde_json::Value> = Vec::new();
+
+            for field in &decl.fields {
+                let type_name = match &field.ty.kind {
+                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+                };
+
+                let json_type = match type_name {
+                    "Uuid" | "String" | "Email" | "Time" => "string",
+                    "Int" | "Int64" => "integer",
+                    "Bool" => "boolean",
+                    _ => "string",
+                };
+                let format_str: Option<&str> = match type_name {
+                    "Uuid" => Some("uuid"),
+                    "Email" => Some("email"),
+                    "Time" => Some("date-time"),
+                    "Int64" => Some("int64"),
+                    _ => None,
+                };
+
+                let mut prop = serde_json::json!({ "type": json_type });
+                if let Some(fmt) = format_str {
+                    prop["format"] = serde_json::json!(fmt);
+                }
+
+                let is_primary = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary));
+                let is_auto = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
+                let has_default = field.annotations.iter().any(|a| {
+                    matches!(a, sec4_core::ast::ResourceFieldAnnotation::Default(_))
+                });
+
+                all_props.insert(field.name.clone(), prop.clone());
+
+                if !is_primary && !is_auto {
+                    create_props.insert(field.name.clone(), prop);
+                    if !has_default {
+                        required_fields.push(serde_json::json!(field.name));
+                    }
+                }
+            }
+
+            // Response schema (all fields)
+            schemas.insert(
+                decl.name.clone(),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": all_props,
+                }),
+            );
+
+            // Create request schema (non-auto, non-primary fields)
+            schemas.insert(
+                format!("{}Create", decl.name),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": create_props,
+                    "required": required_fields,
+                }),
+            );
+
+            // Update request schema reuses same shape as Create
+            schemas.insert(
+                format!("{}Update", decl.name),
+                serde_json::json!({
+                    "$ref": format!("#/components/schemas/{}Create", decl.name),
+                }),
+            );
+
+            let schema_ref = format!("#/components/schemas/{}", decl.name);
+            let create_ref = format!("#/components/schemas/{}Create", decl.name);
+            let update_ref = format!("#/components/schemas/{}Update", decl.name);
+
+            let id_param = serde_json::json!({
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Resource identifier",
+            });
+
+            let limit_param = serde_json::json!({
+                "name": "limit",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "integer", "default": 20 },
+                "description": "Maximum number of results to return",
+            });
+
+            let offset_param = serde_json::json!({
+                "name": "offset",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "integer", "default": 0 },
+                "description": "Number of results to skip",
+            });
+
+            // POST + GET on /prefix (collection)
+            let collection_path = serde_json::json!({
+                "get": {
+                    "operationId": format!("list{}", decl.name),
+                    "summary": format!("List {}", decl.name),
+                    "parameters": [limit_param, offset_param],
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": { "$ref": schema_ref },
+                                    }
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                    }
+                },
+                "post": {
+                    "operationId": format!("create{}", decl.name),
+                    "summary": format!("Create {}", decl.name),
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": create_ref },
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Created",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                    }
+                },
+            });
+            paths.insert(prefix.clone(), collection_path);
+
+            // GET /prefix/{id}
+            let get_path = serde_json::json!({
+                "get": {
+                    "operationId": format!("get{}", decl.name),
+                    "summary": format!("Get {} by id", decl.name),
+                    "parameters": [id_param.clone()],
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}", prefix), get_path);
+
+            // POST /prefix/{id}/update
+            let update_path = serde_json::json!({
+                "post": {
+                    "operationId": format!("update{}", decl.name),
+                    "summary": format!("Update {}", decl.name),
+                    "parameters": [id_param.clone()],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": update_ref },
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": schema_ref },
+                                }
+                            }
+                        },
+                        "400": { "description": "Bad request" },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}/update", prefix), update_path);
+
+            // POST /prefix/{id}/delete
+            let delete_path = serde_json::json!({
+                "post": {
+                    "operationId": format!("delete{}", decl.name),
+                    "summary": format!("Delete {}", decl.name),
+                    "parameters": [id_param],
+                    "responses": {
+                        "200": { "description": "Deleted" },
+                        "404": { "description": "Not found" },
+                    }
+                },
+            });
+            paths.insert(format!("{}/{{id}}/delete", prefix), delete_path);
+        }
+    }
+
+    if !found {
+        eprintln!("no resources found in {}", source_path.display());
+        return Ok(());
+    }
+
+    let spec = serde_json::json!({
+        "openapi": "3.0.3",
+        "info": {
+            "title": project_name,
+            "version": "0.1.0",
+        },
+        "paths": paths,
+        "components": {
+            "schemas": schemas,
+        },
+    });
+
+    println!("{}", serde_json::to_string_pretty(&spec).unwrap());
     Ok(())
 }
 
