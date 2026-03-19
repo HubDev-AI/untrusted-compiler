@@ -587,6 +587,20 @@ impl<'a> Analyzer<'a> {
                         }
                     }
 
+                    // Warn if the resource has only a primary key field (no updatable fields)
+                    if decl.fields.len() == 1 {
+                        self.diagnostics.push(Diagnostic {
+                            severity: Severity::Warning,
+                            code: "W5002".to_string(),
+                            message: "resource has only a primary key field".to_string(),
+                            span: item.span.clone(),
+                            notes: vec![
+                                format!("resource `{}` has no fields besides @primary; UPDATE will always fail", decl.name),
+                            ],
+                            tags: Vec::new(),
+                        });
+                    }
+
                     // Resource name was already registered at the top of this arm
                 }
             }

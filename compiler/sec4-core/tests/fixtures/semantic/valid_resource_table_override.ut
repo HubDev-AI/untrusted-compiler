@@ -1,0 +1,5 @@
+resource Person table "people" {
+  id: Uuid @primary,
+  name: String,
+  email: Email,
+}

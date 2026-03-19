@@ -1,0 +1,9 @@
+resource Task {
+  id: Uuid @primary,
+  title: String,
+}
+
+resource Task {
+  id: Uuid @primary,
+  name: String,
+}
