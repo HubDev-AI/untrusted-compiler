@@ -1,0 +1,9 @@
+[policy]
+name = "resource-basic-dev"
+mode = "enforce"
+
+[http]
+max_body_bytes = 65536
+
+[auth]
+mode = "token"

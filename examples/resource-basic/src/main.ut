@@ -1,0 +1,18 @@
+resource Task {
+  id: Uuid @primary @auto,
+  title: String,
+  status: String @default("pending"),
+  created_at: Time @auto,
+}
+
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
