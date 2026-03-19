@@ -2494,6 +2494,16 @@ fn run_lasm_postgres_thread_local_prepared_query_opt(
     client.client.query_opt(&statement, param_refs.as_slice())
 }
 
+fn run_lasm_postgres_thread_local_prepared_query_all(
+    client: &mut LasmPostgresThreadLocalClient,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+) -> Result<Vec<postgres::Row>, postgres::Error> {
+    let statement = client.get_or_prepare_statement_cached(query_template)?;
+    let param_refs = lasm_postgres_query_param_refs(params);
+    client.client.query(&statement, param_refs.as_slice())
+}
+
 fn run_lasm_postgres_thread_local_operation<R>(
     config: &LasmPostgresThreadLocalConfig,
     context: &str,
@@ -2916,6 +2926,167 @@ pub(crate) fn run_lasm_postgres_query_one_thread_local(
     let row_json = serde_json::from_str::<serde_json::Value>(row_payload.as_str())
         .map_err(|err| format!("postgres queryOne row json decode failed: {err}"))?;
     Ok(Some(row_json))
+}
+
+/// Execute a DML statement with `RETURNING *` (or a row-returning SELECT) via
+/// the thread-local shared client pool and return the first row as JSON.
+///
+/// For DML+RETURNING (`INSERT`, `UPDATE`, `DELETE`, `MERGE`) the statement is
+/// wrapped in a CTE so `row_to_json` can materialise the result:
+///   `WITH _sec4_cte AS (<dml>) SELECT row_to_json(…) FROM _sec4_cte LIMIT 1`
+///
+/// For pure SELECT / WITH / VALUES / TABLE the normal subquery wrapper is used,
+/// identical to `run_lasm_postgres_query_one_thread_local`.
+pub(crate) fn run_lasm_postgres_exec_returning_one_thread_local(
+    config: &LasmPostgresThreadLocalConfig,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+) -> Result<Option<serde_json::Value>, String> {
+    let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
+    if normalized_query.trim().is_empty() {
+        return Err(
+            "postgres exec returning one requires non-empty SQL statement".to_string(),
+        );
+    }
+    if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
+    }
+    let is_dml = is_lasm_postgres_dml_returning(normalized_query.as_str());
+    let wrapped_query = if is_dml {
+        format!(
+            "WITH _sec4_cte AS ({}) \
+             SELECT row_to_json(_sec4_cte)::text AS __sec4_row \
+             FROM _sec4_cte LIMIT 1",
+            normalized_query
+        )
+    } else {
+        format!(
+            "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
+             FROM ({}) AS _sec4_row LIMIT 1",
+            normalized_query
+        )
+    };
+    let row = run_lasm_postgres_thread_local_operation(
+        config,
+        "postgres exec returning one execution failed",
+        |client| {
+            let required_params = client.max_placeholder_index_cached(wrapped_query.as_str());
+            validate_lasm_postgres_parameter_arity(required_params, params.len())
+                .map_err(LasmPostgresThreadLocalRuntimeError::Validation)?;
+            let bound_params = if required_params > 0 {
+                params
+            } else {
+                &[] as &[LasmPostgresParam]
+            };
+            let mut stale_refresh_attempted = false;
+            loop {
+                let result = run_lasm_postgres_thread_local_prepared_query_opt(
+                    client,
+                    wrapped_query.as_str(),
+                    bound_params,
+                );
+                match result {
+                    Ok(row) => return Ok(row),
+                    Err(err)
+                        if is_lasm_postgres_stale_prepared_statement_error(&err)
+                            && !stale_refresh_attempted =>
+                    {
+                        stale_refresh_attempted = true;
+                        client.invalidate_statement_cached(wrapped_query.as_str());
+                    }
+                    Err(err) => return Err(LasmPostgresThreadLocalRuntimeError::Query(err)),
+                }
+            }
+        },
+    )?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let row_payload: Option<String> = row
+        .try_get(0)
+        .map_err(|err| format!("postgres exec returning one row materialization failed: {err}"))?;
+    let row_payload = row_payload.unwrap_or_else(|| "null".to_string());
+    let row_json = serde_json::from_str::<serde_json::Value>(row_payload.as_str())
+        .map_err(|err| format!("postgres exec returning one row json decode failed: {err}"))?;
+    Ok(Some(row_json))
+}
+
+/// Returns `true` if the SQL is a DML statement that has a RETURNING clause
+/// (INSERT, UPDATE, DELETE, or MERGE … RETURNING). These cannot be used as
+/// plain `FROM` subqueries in Postgres and must be wrapped in a CTE instead.
+fn is_lasm_postgres_dml_returning(normalized_query: &str) -> bool {
+    match first_lasm_postgres_keyword(normalized_query).as_deref() {
+        Some("INSERT" | "UPDATE" | "DELETE" | "MERGE") => {
+            has_lasm_postgres_keyword(normalized_query, "RETURNING")
+        }
+        _ => false,
+    }
+}
+
+/// Execute a SELECT query via the thread-local shared client pool and return
+/// all matching rows as a `Vec<serde_json::Value>`. Each row is materialised
+/// through Postgres `row_to_json()` so the caller gets plain JSON objects.
+pub(crate) fn run_lasm_postgres_query_many_thread_local(
+    config: &LasmPostgresThreadLocalConfig,
+    query_template: &str,
+    params: &[LasmPostgresParam],
+) -> Result<Vec<serde_json::Value>, String> {
+    let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
+    if normalized_query.trim().is_empty() {
+        return Err("postgres queryMany requires non-empty SQL statement".to_string());
+    }
+    if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
+    }
+    let wrapped_query = format!(
+        "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
+         FROM ({}) AS _sec4_row",
+        normalized_query
+    );
+    let rows = run_lasm_postgres_thread_local_operation(
+        config,
+        "postgres queryMany execution failed",
+        |client| {
+            let required_params = client.max_placeholder_index_cached(wrapped_query.as_str());
+            validate_lasm_postgres_parameter_arity(required_params, params.len())
+                .map_err(LasmPostgresThreadLocalRuntimeError::Validation)?;
+            let bound_params = if required_params > 0 {
+                params
+            } else {
+                &[] as &[LasmPostgresParam]
+            };
+            let mut stale_refresh_attempted = false;
+            loop {
+                let result = run_lasm_postgres_thread_local_prepared_query_all(
+                    client,
+                    wrapped_query.as_str(),
+                    bound_params,
+                );
+                match result {
+                    Ok(rows) => return Ok(rows),
+                    Err(err)
+                        if is_lasm_postgres_stale_prepared_statement_error(&err)
+                            && !stale_refresh_attempted =>
+                    {
+                        stale_refresh_attempted = true;
+                        client.invalidate_statement_cached(wrapped_query.as_str());
+                    }
+                    Err(err) => return Err(LasmPostgresThreadLocalRuntimeError::Query(err)),
+                }
+            }
+        },
+    )?;
+    let mut results = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let row_payload: Option<String> = row
+            .try_get(0)
+            .map_err(|err| format!("postgres queryMany row materialization failed: {err}"))?;
+        let row_payload = row_payload.unwrap_or_else(|| "null".to_string());
+        let row_json = serde_json::from_str::<serde_json::Value>(row_payload.as_str())
+            .map_err(|err| format!("postgres queryMany row json decode failed: {err}"))?;
+        results.push(row_json);
+    }
+    Ok(results)
 }
 
 #[allow(dead_code)]
