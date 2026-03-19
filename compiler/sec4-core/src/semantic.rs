@@ -1,6 +1,6 @@
 use crate::ast::{
     BinaryOp, Block, Expr, ExprKind, FunctionDecl, ItemKind, MatchArm, Pattern, PatternKind,
-    Program, Stmt, StmtKind, TypeExpr, TypeExprKind, UnaryOp,
+    Program, ResourceFieldAnnotation, Stmt, StmtKind, TypeExpr, TypeExprKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::policy::Policy;
@@ -397,6 +397,10 @@ impl<'a> Analyzer<'a> {
     }
 
     fn collect_types(&mut self, program: &Program) {
+        // Track registered resource names for bidirectional collision detection
+        // (when a resource appears before a struct/enum with the same name)
+        let mut registered_resource_names: HashSet<String> = HashSet::new();
+
         for item in &program.items {
             if self.check_interrupt(item.span.clone()) {
                 break;
@@ -407,6 +411,7 @@ impl<'a> Analyzer<'a> {
                         || self.catalog.enums.contains_key(&decl.name)
                         || self.catalog.primitive_types.contains(&decl.name)
                         || self.catalog.generic_types.contains_key(&decl.name)
+                        || registered_resource_names.contains(&decl.name)
                     {
                         self.diagnostics.push(
                             Diagnostic::error(
@@ -425,6 +430,7 @@ impl<'a> Analyzer<'a> {
                         || self.catalog.enums.contains_key(&decl.name)
                         || self.catalog.primitive_types.contains(&decl.name)
                         || self.catalog.generic_types.contains_key(&decl.name)
+                        || registered_resource_names.contains(&decl.name)
                     {
                         self.diagnostics.push(
                             Diagnostic::error(
@@ -453,7 +459,83 @@ impl<'a> Analyzer<'a> {
                     }
                 }
                 ItemKind::Function(_) => {}
-                ItemKind::Resource(_) => { /* handled in later task */ }
+                ItemKind::Resource(decl) => {
+                    // Name uniqueness: reject collision with struct/enum/primitive/generic
+                    if self.catalog.structs.contains_key(&decl.name)
+                        || self.catalog.enums.contains_key(&decl.name)
+                        || self.catalog.primitive_types.contains(&decl.name)
+                        || self.catalog.generic_types.contains_key(&decl.name)
+                    {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "N3002",
+                                "duplicate type declaration",
+                                item.span.clone(),
+                            )
+                            .with_note(format!("type `{}` is already declared", decl.name)),
+                        );
+                        continue;
+                    }
+
+                    // Validate exactly one @primary field
+                    let primary_count = decl.fields.iter().filter(|f| {
+                        f.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Primary))
+                    }).count();
+
+                    if primary_count == 0 {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "E5001",
+                                "resource requires exactly one @primary field",
+                                item.span.clone(),
+                            )
+                            .with_note(format!("resource `{}` has no @primary field", decl.name))
+                            .with_note("add `@primary` annotation to the identity field"),
+                        );
+                        continue;
+                    }
+
+                    if primary_count > 1 {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "E5002",
+                                "resource cannot have multiple @primary fields",
+                                item.span.clone(),
+                            )
+                            .with_note(format!(
+                                "resource `{}` has {} @primary fields",
+                                decl.name, primary_count
+                            )),
+                        );
+                        continue;
+                    }
+
+                    // Validate all field types are known built-in types
+                    let allowed_types = ["Uuid", "String", "Email", "Int64", "Int", "Time", "Bool"];
+                    for field in &decl.fields {
+                        let type_name = match &field.ty.kind {
+                            crate::ast::TypeExprKind::Named { name, .. } => name,
+                        };
+                        if !allowed_types.contains(&type_name.as_str()) {
+                            self.diagnostics.push(
+                                Diagnostic::error(
+                                    "E5003",
+                                    "resource field type must be a built-in type",
+                                    field.span.clone(),
+                                )
+                                .with_note(format!(
+                                    "field `{}` has type `{}` which is not supported in resource declarations",
+                                    field.name, type_name
+                                ))
+                                .with_note(format!("allowed types: {}", allowed_types.join(", "))),
+                            );
+                        }
+                    }
+
+                    // Register resource name for bidirectional collision detection
+                    // (no catalog entry yet — that's for a later task)
+                    registered_resource_names.insert(decl.name.clone());
+                }
             }
         }
     }

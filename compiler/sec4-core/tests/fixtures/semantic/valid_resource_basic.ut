@@ -1,0 +1,6 @@
+resource Task {
+  id: Uuid @primary,
+  title: String,
+  status: String @default("pending"),
+  created_at: Time @auto,
+}

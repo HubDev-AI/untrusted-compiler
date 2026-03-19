@@ -1,0 +1,8 @@
+struct Task {
+  id: Int,
+}
+
+resource Task {
+  id: Uuid @primary,
+  title: String,
+}
