@@ -440,6 +440,21 @@ enum Commands {
         #[arg(long, default_value = ".")]
         output: PathBuf,
     },
+    /// Generate DDL from resource declarations
+    Migrate {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+        /// Database adapter (sqlite or postgres)
+        #[arg(long, default_value = "sqlite")]
+        adapter: String,
+    },
+    /// Show resource endpoints and fields
+    Describe {
+        /// Path to sec4 project
+        #[arg(long)]
+        path: PathBuf,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -968,6 +983,8 @@ fn main() {
             resources,
             output,
         } => cmd_generate(&name, &resources, &output),
+        Commands::Migrate { path, adapter } => cmd_migrate(&path, &adapter),
+        Commands::Describe { path } => cmd_describe(&path),
     };
 
     if let Err(code) = result {
@@ -1866,6 +1883,12 @@ fn generate_resource_route_plans(
                     default_value: f.annotations.iter().find_map(|a| match a {
                         sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
                         _ => None,
+                    }),
+                    unique: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Unique)
+                    }),
+                    optional: f.annotations.iter().any(|a| {
+                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional)
                     }),
                 }
             }).collect(),
@@ -7907,6 +7930,227 @@ fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i3
     );
 
     Ok(())
+}
+
+fn cmd_migrate(project_path: &Path, adapter: &str) -> Result<(), i32> {
+    let manifest_path = project_path.join("sec4.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
+        eprintln!("migrate failed: failed to read sec4.toml: {}", e);
+        1
+    })?;
+
+    let manifest: toml::Value = toml::from_str(&manifest_str).map_err(|e| {
+        eprintln!("migrate failed: invalid sec4.toml: {}", e);
+        1
+    })?;
+
+    let entry = manifest
+        .get("build")
+        .and_then(|b| b.get("entry"))
+        .and_then(|e| e.as_str())
+        .unwrap_or("src/main.ut");
+
+    let source_path = project_path.join(entry);
+    let source = std::fs::read_to_string(&source_path).map_err(|e| {
+        eprintln!(
+            "migrate failed: failed to read {}: {}",
+            source_path.display(),
+            e
+        );
+        1
+    })?;
+
+    let program =
+        sec4_core::parse_source(std::path::Path::new(entry), &source).map_err(|diags| {
+            for d in &diags {
+                eprintln!("{}", d.render_plain_with_source(&source));
+            }
+            1
+        })?;
+
+    let mut ddl_statements = Vec::new();
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                let snake = to_snake_case(&decl.name);
+                format!("{}s", snake)
+            });
+            ddl_statements.push(generate_ddl(&table, &decl.fields, adapter));
+        }
+    }
+
+    if ddl_statements.is_empty() {
+        eprintln!("no resources found in {}", source_path.display());
+        return Ok(());
+    }
+
+    for ddl in &ddl_statements {
+        println!("{}", ddl);
+    }
+
+    Ok(())
+}
+
+fn cmd_describe(project_path: &Path) -> Result<(), i32> {
+    let manifest_path = project_path.join("sec4.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
+        eprintln!("describe failed: failed to read sec4.toml: {}", e);
+        1
+    })?;
+
+    let manifest: toml::Value = toml::from_str(&manifest_str).map_err(|e| {
+        eprintln!("describe failed: invalid sec4.toml: {}", e);
+        1
+    })?;
+
+    let entry = manifest
+        .get("build")
+        .and_then(|b| b.get("entry"))
+        .and_then(|e| e.as_str())
+        .unwrap_or("src/main.ut");
+
+    let source_path = project_path.join(entry);
+    let source = std::fs::read_to_string(&source_path).map_err(|e| {
+        eprintln!(
+            "describe failed: failed to read {}: {}",
+            source_path.display(),
+            e
+        );
+        1
+    })?;
+
+    let program =
+        sec4_core::parse_source(std::path::Path::new(entry), &source).map_err(|diags| {
+            for d in &diags {
+                eprintln!("{}", d.render_plain_with_source(&source));
+            }
+            1
+        })?;
+
+    let mut found = false;
+    for item in &program.items {
+        if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
+            found = true;
+            let table = decl.table_override.clone().unwrap_or_else(|| {
+                format!("{}s", to_snake_case(&decl.name))
+            });
+            let prefix = format!("/{}", table);
+
+            println!("Resource: {} (table: {})", decl.name, table);
+            println!("  Fields:");
+            for field in &decl.fields {
+                let type_name = match &field.ty.kind {
+                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+                };
+                let mut annotations = Vec::new();
+                for ann in &field.annotations {
+                    match ann {
+                        sec4_core::ast::ResourceFieldAnnotation::Primary => {
+                            annotations.push("@primary".to_string())
+                        }
+                        sec4_core::ast::ResourceFieldAnnotation::Auto => {
+                            annotations.push("@auto".to_string())
+                        }
+                        sec4_core::ast::ResourceFieldAnnotation::Default(v) => {
+                            annotations.push(format!("@default(\"{}\")", v))
+                        }
+                        _ => {}
+                    }
+                }
+                let ann_str = if annotations.is_empty() {
+                    String::new()
+                } else {
+                    format!("  {}", annotations.join(" "))
+                };
+                println!("    {:<12} {:<8}{}", field.name, type_name, ann_str);
+            }
+            println!();
+            println!("  Endpoints:");
+            println!("    POST   {:<24} → create", prefix);
+            println!("    GET    {:<24} → list (paginated)", prefix);
+            println!(
+                "    GET    {:<24} → get by id",
+                format!("{}/:id", prefix)
+            );
+            println!(
+                "    POST   {:<24} → update (PATCH)",
+                format!("{}/:id/update", prefix)
+            );
+            println!(
+                "    POST   {:<24} → delete",
+                format!("{}/:id/delete", prefix)
+            );
+            println!();
+        }
+    }
+
+    if !found {
+        eprintln!("no resources found in {}", source_path.display());
+    }
+
+    Ok(())
+}
+
+fn generate_ddl(
+    table: &str,
+    fields: &[sec4_core::ast::ResourceFieldDecl],
+    adapter: &str,
+) -> String {
+    let mut columns = Vec::new();
+
+    for field in fields {
+        let type_name = match &field.ty.kind {
+            sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+        };
+
+        let is_primary = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary));
+        let is_auto = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
+        let default_value = field.annotations.iter().find_map(|a| match a {
+            sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
+            _ => None,
+        });
+
+        let sql_type = match adapter {
+            "postgres" => match type_name {
+                "Uuid" => "UUID",
+                "String" | "Email" => "TEXT",
+                "Int64" => "BIGINT",
+                "Int" => "INTEGER",
+                "Time" => "TIMESTAMPTZ",
+                "Bool" => "BOOLEAN",
+                _ => "TEXT",
+            },
+            _ => "TEXT", // SQLite: everything is TEXT
+        };
+
+        let mut col = format!("  \"{}\" {}", field.name, sql_type);
+
+        if is_primary {
+            col.push_str(" PRIMARY KEY");
+        } else {
+            col.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &default_value {
+            col.push_str(&format!(" DEFAULT '{}'", default));
+        } else if is_auto && type_name == "Time" && adapter == "postgres" {
+            col.push_str(" DEFAULT NOW()");
+        }
+
+        columns.push(col);
+    }
+
+    format!(
+        "CREATE TABLE IF NOT EXISTS \"{}\" (\n{}\n);",
+        table,
+        columns.join(",\n"),
+    )
 }
 
 fn directory_has_entries(path: &Path) -> Result<bool, std::io::Error> {
