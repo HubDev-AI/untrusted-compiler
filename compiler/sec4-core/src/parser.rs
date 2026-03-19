@@ -1193,10 +1193,31 @@ impl<'a> Parser<'a> {
                             "P2056",
                             "expected `(` after @default",
                         )?;
-                        let (value, _) = self.expect_string_literal(
-                            "P2057",
-                            "expected default value string in @default(...)",
-                        )?;
+                        let token = self.current().clone();
+                        let value = match &token.kind {
+                            TokenKind::String(s) => {
+                                let v = s.clone();
+                                self.advance();
+                                v
+                            }
+                            TokenKind::Number(n) => {
+                                let v = n.clone();
+                                self.advance();
+                                v
+                            }
+                            TokenKind::Bool(b) => {
+                                let v = b.to_string();
+                                self.advance();
+                                v
+                            }
+                            _ => {
+                                return Err(Diagnostic::error(
+                                    "P2057",
+                                    "expected string, integer, or boolean literal in @default(...)",
+                                    token.span,
+                                ));
+                            }
+                        };
                         self.expect_symbol(
                             Symbol::RParen,
                             "P2058",

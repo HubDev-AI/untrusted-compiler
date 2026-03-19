@@ -461,7 +461,7 @@ fn generate_get_sql(plan: &LasmResourcePlan) -> String {
 fn generate_list_sql(plan: &LasmResourcePlan) -> String {
     let pk = primary_key_column(plan);
     format!(
-        "SELECT * FROM {} ORDER BY {} LIMIT $1 OFFSET $2",
+        "SELECT * FROM {} ORDER BY {} DESC LIMIT $1 OFFSET $2",
         quote_ident(&plan.table),
         quote_ident(&pk),
     )
@@ -716,10 +716,73 @@ fn primary_key_column(plan: &LasmResourcePlan) -> String {
         .unwrap_or_else(|| "id".to_string())
 }
 
+fn iso8601_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+    let days_since_epoch = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    // Calculate date from days since epoch (1970-01-01)
+    let mut y = 1970i64;
+    let mut remaining_days = days_since_epoch as i64;
+    loop {
+        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
+            366
+        } else {
+            365
+        };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        y += 1;
+    }
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let month_days: [i64; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut m = 0usize;
+    for md in &month_days {
+        if remaining_days < *md {
+            break;
+        }
+        remaining_days -= *md;
+        m += 1;
+    }
+    let d = remaining_days + 1;
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y,
+        m + 1,
+        d,
+        hours,
+        minutes,
+        seconds
+    )
+}
+
 fn auto_fill_value(field_type: &str) -> Value {
     match field_type {
         "Uuid" => Value::String(generate_uuid()),
-        "Time" => Value::String(epoch_ms().to_string()),
+        "Time" => Value::String(iso8601_now()),
         "Int64" | "Int" => Value::Number(serde_json::Number::from(epoch_ms() as i64)),
         _ => Value::String(generate_uuid()),
     }
