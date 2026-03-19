@@ -1807,6 +1807,7 @@ fn generate_resource_route_plans(
     resource_policy: &sec4_core::policy::ResourcePolicyConfig,
 ) -> Vec<LasmRunRoutePlan> {
     let mut plans = Vec::new();
+    let mut used_prefixes: HashSet<String> = HashSet::new();
 
     for item in &program.items {
         let decl = match &item.kind {
@@ -1820,6 +1821,14 @@ fn generate_resource_route_plans(
         });
 
         let prefix = format!("/{}", table);
+
+        if !used_prefixes.insert(prefix.clone()) {
+            eprintln!(
+                "warning: resource `{}` route prefix `{}` collides with another resource",
+                decl.name, prefix
+            );
+            continue; // Skip this resource's routes
+        }
 
         let resource_plan = LasmResourcePlan {
             name: decl.name.clone(),
@@ -1878,6 +1887,12 @@ fn generate_resource_route_plans(
                 "Content-Type".to_string(),
                 "application/json; charset=utf-8".to_string(),
             );
+            if resource_policy.require_auth {
+                headers.insert(
+                    LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER.to_string(),
+                    "1".to_string(),
+                );
+            }
 
             plans.push(LasmRunRoutePlan {
                 method: method.to_string(),

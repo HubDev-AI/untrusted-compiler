@@ -460,6 +460,19 @@ impl<'a> Analyzer<'a> {
                 }
                 ItemKind::Function(_) => {}
                 ItemKind::Resource(decl) => {
+                    // Name uniqueness: reject duplicate resource names first
+                    if !registered_resource_names.insert(decl.name.clone()) {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "N3002",
+                                "duplicate type declaration",
+                                item.span.clone(),
+                            )
+                            .with_note(format!("resource `{}` is already declared", decl.name)),
+                        );
+                        continue;
+                    }
+
                     // Name uniqueness: reject collision with struct/enum/primitive/generic
                     if self.catalog.structs.contains_key(&decl.name)
                         || self.catalog.enums.contains_key(&decl.name)
@@ -532,9 +545,7 @@ impl<'a> Analyzer<'a> {
                         }
                     }
 
-                    // Register resource name for bidirectional collision detection
-                    // (no catalog entry yet — that's for a later task)
-                    registered_resource_names.insert(decl.name.clone());
+                    // Resource name was already registered at the top of this arm
                 }
             }
         }
