@@ -38,6 +38,8 @@ pub struct LasmResourceFieldPlan {
 // Header constants
 // ---------------------------------------------------------------------------
 
+const UUID_STRING_LEN: usize = 36;
+
 const RESOURCE_OP_HEADER: &str = "X-Sec4-Internal-Resource-Op";
 const RESOURCE_PLAN_HEADER: &str = "X-Sec4-Internal-Resource-Plan";
 
@@ -78,7 +80,7 @@ pub fn try_dispatch_resource_operation(
     };
 
     // Build a DB executor if adapter is SQLite; otherwise fall back to dry-run SQL.
-    let db_exec = ResourceDbExecutor::new(dynamic_state, db_adapter, &plan, trace_id);
+    let db_exec = ResourceDbExecutor::new(dynamic_state, db_adapter, &plan);
 
     match op.as_str() {
         "create" => dispatch_create(response, request_body, &plan, trace_id, &db_exec),
@@ -196,6 +198,8 @@ fn dispatch_create(
 
         // Field not provided — try default, else skip if primary (already handled) or error.
         if let Some(ref default) = field.default_value {
+            // Default values are validated at compile time (semantic.rs E5004).
+            // Runtime trusts the compiler's validation — no re-validation needed.
             columns.push(field.name.clone());
             values.push(Value::String(default.clone()));
             continue;
@@ -327,6 +331,8 @@ fn dispatch_list(
     db_exec: &ResourceDbExecutor,
 ) {
     // Parse limit/offset from request query params, clamping to policy bounds.
+    // Limit is clamped to [1, max_list_limit]. Zero, negative, or non-numeric values
+    // fall through to default_list_limit. This prevents unbounded queries.
     let raw_limit = query_params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok());
@@ -574,7 +580,6 @@ impl<'a> ResourceDbExecutor<'a> {
         dynamic_state: &'a Mutex<LasmDynamicResponseState>,
         adapter: LasmDbRecordsAdapter,
         plan: &LasmResourcePlan,
-        _trace_id: &str,
     ) -> Self {
         let table_ddl = match adapter {
             LasmDbRecordsAdapter::Sqlite => Some(generate_create_table_ddl(plan)),
@@ -1109,7 +1114,7 @@ fn generate_update_sql(
             "error": {
                 "code": "RESOURCE.EMPTY_UPDATE",
                 "kind": "validation",
-                "message": "no fields to update",
+                "message": "no updatable fields provided; primary key cannot be updated — provide at least one non-primary, non-auto field",
             }
         }));
     }
@@ -1139,6 +1144,9 @@ fn generate_delete_sql(plan: &LasmResourcePlan) -> String {
 // ---------------------------------------------------------------------------
 
 fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), String> {
+    if value.is_null() {
+        return Err("null values are not allowed".to_string());
+    }
     match field.field_type.as_str() {
         "Uuid" => {
             let s = value
@@ -1150,20 +1158,17 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
             Ok(())
         }
         "Email" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string for Email".to_string())?;
-            if s.len() < 3 || !s.contains('@') {
-                return Err("invalid email address".to_string());
+            let s = value.as_str().ok_or("expected string for Email field")?;
+            let parts: Vec<&str> = s.split('@').collect();
+            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() || !parts[1].contains('.') {
+                return Err(format!("invalid email: {}", s));
             }
             Ok(())
         }
         "String" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string".to_string())?;
-            if s.is_empty() {
-                return Err("string must not be empty".to_string());
+            let s = value.as_str().ok_or("expected string")?;
+            if s.trim().is_empty() {
+                return Err("string must not be empty or whitespace-only".to_string());
             }
             Ok(())
         }
@@ -1186,11 +1191,9 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
             }
         }
         "Time" => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| "expected string for Time (ISO 8601)".to_string())?;
-            if s.is_empty() {
-                return Err("time string must not be empty".to_string());
+            let s = value.as_str().ok_or("expected ISO 8601 string for Time field")?;
+            if s.len() < 10 || (!s.contains('T') && !s.contains(' ')) {
+                return Err(format!("invalid time format (expected ISO 8601): {}", s));
             }
             Ok(())
         }
@@ -1215,6 +1218,11 @@ fn validate_id_param(plan: &LasmResourcePlan, id: &str) -> Result<(), String> {
                 id.parse::<i64>()
                     .map_err(|_| "invalid integer for :id".to_string())?;
             }
+            "String" => {
+                if id.trim().is_empty() {
+                    return Err("path parameter must not be empty".to_string());
+                }
+            }
             _ => {}
         }
     }
@@ -1227,7 +1235,7 @@ fn validate_id_param(plan: &LasmResourcePlan, id: &str) -> Result<(), String> {
 
 fn is_valid_uuid(value: &str) -> bool {
     // 8-4-4-4-12 hex digits with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    if value.len() != 36 {
+    if value.len() != UUID_STRING_LEN {
         return false;
     }
     for (i, b) in value.as_bytes().iter().enumerate() {
@@ -1334,7 +1342,7 @@ fn primary_key_column(plan: &LasmResourcePlan) -> String {
         .iter()
         .find(|f| f.primary)
         .map(|f| f.name.clone())
-        .unwrap_or_else(|| "id".to_string())
+        .expect("resource must have a @primary field (compiler should have rejected this)")
 }
 
 fn iso8601_now() -> String {
@@ -1402,9 +1410,17 @@ fn iso8601_now() -> String {
 
 fn auto_fill_value(field_type: &str) -> Value {
     match field_type {
-        "Uuid" => Value::String(generate_uuid()),
+        "Uuid" => {
+            let uuid = generate_uuid();
+            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            Value::String(uuid)
+        }
         "Time" => Value::String(iso8601_now()),
         "Int64" | "Int" => Value::Number(serde_json::Number::from(epoch_ms() as i64)),
-        _ => Value::String(generate_uuid()),
+        _ => {
+            let uuid = generate_uuid();
+            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            Value::String(uuid)
+        }
     }
 }

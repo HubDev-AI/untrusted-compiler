@@ -7695,7 +7695,13 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
             .ok_or_else(|| "expected '(' after resource name".to_string())?;
         let name = remaining[..paren_pos].trim().to_string();
         if name.is_empty() {
-            return Err("resource name must not be empty".to_string());
+            return Err("resource name cannot be empty".to_string());
+        }
+        if !name.chars().next().unwrap().is_uppercase() {
+            return Err(format!("resource name '{}' must start with an uppercase letter", name));
+        }
+        if !name.chars().all(|c| c.is_alphanumeric()) {
+            return Err(format!("resource name '{}' must be alphanumeric", name));
         }
         remaining = &remaining[paren_pos + 1..];
 
@@ -7749,6 +7755,12 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
             })?;
             let field_name = field_part[..colon_pos].trim().to_string();
             let field_type = field_part[colon_pos + 1..].trim().to_string();
+
+            let allowed_types = ["Uuid", "String", "Email", "Int64", "Int", "Time", "Bool"];
+            if !allowed_types.contains(&field_type.as_str()) {
+                return Err(format!("unknown field type '{}' for field '{}'; allowed types: {}",
+                    field_type, field_name, allowed_types.join(", ")));
+            }
 
             fields.push(GeneratedField {
                 name: field_name,
@@ -7838,7 +7850,7 @@ fn cmd_generate(name: &str, resources_str: &str, output: &Path) -> Result<(), i3
     };
 
     if resources.is_empty() {
-        eprintln!("generate failed: no resources defined");
+        eprintln!("generate failed: no resources defined; expected format: sec4 generate --name MyApp --resources \"Task(title:String, status:String)\"");
         return Err(1);
     }
 
