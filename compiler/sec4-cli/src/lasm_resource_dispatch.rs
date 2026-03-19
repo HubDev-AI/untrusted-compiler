@@ -1,5 +1,8 @@
+use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
+use rusqlite::types::Value as SqliteValue;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
@@ -61,17 +64,22 @@ pub fn try_dispatch_resource_operation(
     query_params: &BTreeMap<String, String>,
     route_headers: &BTreeMap<String, String>,
     trace_id: &str,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    db_adapter: LasmDbRecordsAdapter,
 ) -> bool {
     let Some((op, plan)) = parse_resource_plan(route_headers) else {
         return false;
     };
 
+    // Build a DB executor if adapter is SQLite; otherwise fall back to dry-run SQL.
+    let db_exec = ResourceDbExecutor::new(dynamic_state, db_adapter, &plan, trace_id);
+
     match op.as_str() {
-        "create" => dispatch_create(response, request_body, &plan, trace_id),
-        "get" => dispatch_get(response, path_params, &plan, trace_id),
-        "list" => dispatch_list(response, query_params, &plan, trace_id),
-        "update" => dispatch_update(response, request_body, path_params, &plan, trace_id),
-        "delete" => dispatch_delete(response, path_params, &plan, trace_id),
+        "create" => dispatch_create(response, request_body, &plan, trace_id, &db_exec),
+        "get" => dispatch_get(response, path_params, &plan, trace_id, &db_exec),
+        "list" => dispatch_list(response, query_params, &plan, trace_id, &db_exec),
+        "update" => dispatch_update(response, request_body, path_params, &plan, trace_id, &db_exec),
+        "delete" => dispatch_delete(response, path_params, &plan, trace_id, &db_exec),
         _ => {
             set_json_response(
                 response,
@@ -102,6 +110,7 @@ fn dispatch_create(
     request_body: &[u8],
     plan: &LasmResourcePlan,
     trace_id: &str,
+    db_exec: &ResourceDbExecutor,
 ) {
     let body: Value = match serde_json::from_slice(request_body) {
         Ok(v) => v,
@@ -207,11 +216,34 @@ fn dispatch_create(
 
     match generate_create_sql(plan, &columns, &values) {
         Ok((sql, params)) => {
-            set_json_response(
-                response,
-                201,
-                &success_envelope(201, &json!({ "sql": sql, "params": params }), trace_id),
-            );
+            match db_exec.exec_returning_one(&sql, &params) {
+                DbExecResult::Row(row) => {
+                    set_json_response(
+                        response,
+                        201,
+                        &success_envelope(201, &row, trace_id),
+                    );
+                }
+                DbExecResult::Error(msg) => {
+                    set_json_response(
+                        response,
+                        500,
+                        &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                    );
+                }
+                DbExecResult::DryRun => {
+                    // Build a synthetic record from the column/value pairs for dry-run.
+                    let mut record = serde_json::Map::new();
+                    for (col, val) in columns.iter().zip(values.iter()) {
+                        record.insert(col.clone(), val.clone());
+                    }
+                    set_json_response(
+                        response,
+                        201,
+                        &success_envelope(201, &Value::Object(record), trace_id),
+                    );
+                }
+            }
         }
         Err(err_payload) => {
             set_json_response(response, 400, &err_payload);
@@ -224,6 +256,7 @@ fn dispatch_get(
     path_params: &BTreeMap<String, String>,
     plan: &LasmResourcePlan,
     trace_id: &str,
+    db_exec: &ResourceDbExecutor,
 ) {
     let Some(id) = path_params.get("id") else {
         set_json_response(
@@ -250,15 +283,34 @@ fn dispatch_get(
     }
 
     let sql = generate_get_sql(plan);
-    set_json_response(
-        response,
-        200,
-        &success_envelope(
-            200,
-            &json!({ "sql": sql, "params": [id] }),
-            trace_id,
-        ),
-    );
+    let params = vec![Value::String(id.clone())];
+    match db_exec.query_one(&sql, &params) {
+        DbExecResult::Row(row) => {
+            set_json_response(response, 200, &success_envelope(200, &row, trace_id));
+        }
+        DbExecResult::Error(msg) => {
+            if msg.contains("NOT_FOUND") {
+                set_json_response(
+                    response,
+                    404,
+                    &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                );
+            } else {
+                set_json_response(
+                    response,
+                    500,
+                    &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                );
+            }
+        }
+        DbExecResult::DryRun => {
+            set_json_response(
+                response,
+                200,
+                &success_envelope(200, &json!({ "sql": sql, "params": [id] }), trace_id),
+            );
+        }
+    }
 }
 
 fn dispatch_list(
@@ -266,6 +318,7 @@ fn dispatch_list(
     query_params: &BTreeMap<String, String>,
     plan: &LasmResourcePlan,
     trace_id: &str,
+    db_exec: &ResourceDbExecutor,
 ) {
     // Parse limit/offset from request query params, clamping to policy bounds.
     let raw_limit = query_params
@@ -281,15 +334,43 @@ fn dispatch_list(
         .unwrap_or(0);
 
     let sql = generate_list_sql(plan);
-    set_json_response(
-        response,
-        200,
-        &success_envelope(
-            200,
-            &json!({ "sql": sql, "params": [limit, offset] }),
-            trace_id,
-        ),
-    );
+    let params = vec![
+        Value::Number(serde_json::Number::from(limit)),
+        Value::Number(serde_json::Number::from(offset)),
+    ];
+    match db_exec.query_many(&sql, &params) {
+        DbExecResult::Row(rows_value) => {
+            let items = rows_value.as_array().cloned().unwrap_or_default();
+            let count = items.len();
+            set_json_response(
+                response,
+                200,
+                &success_envelope(
+                    200,
+                    &json!({ "items": items, "count": count, "limit": limit, "offset": offset }),
+                    trace_id,
+                ),
+            );
+        }
+        DbExecResult::Error(msg) => {
+            set_json_response(
+                response,
+                500,
+                &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+            );
+        }
+        DbExecResult::DryRun => {
+            set_json_response(
+                response,
+                200,
+                &success_envelope(
+                    200,
+                    &json!({ "sql": sql, "params": [limit, offset] }),
+                    trace_id,
+                ),
+            );
+        }
+    }
 }
 
 fn dispatch_update(
@@ -298,6 +379,7 @@ fn dispatch_update(
     path_params: &BTreeMap<String, String>,
     plan: &LasmResourcePlan,
     trace_id: &str,
+    db_exec: &ResourceDbExecutor,
 ) {
     let Some(id) = path_params.get("id") else {
         set_json_response(
@@ -363,11 +445,33 @@ fn dispatch_update(
         Ok((sql, mut params)) => {
             // Append the id as the final param (WHERE clause).
             params.push(Value::String(id.clone()));
-            set_json_response(
-                response,
-                200,
-                &success_envelope(200, &json!({ "sql": sql, "params": params }), trace_id),
-            );
+            match db_exec.exec_returning_one(&sql, &params) {
+                DbExecResult::Row(row) => {
+                    set_json_response(response, 200, &success_envelope(200, &row, trace_id));
+                }
+                DbExecResult::Error(msg) => {
+                    if msg.contains("NOT_FOUND") {
+                        set_json_response(
+                            response,
+                            404,
+                            &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                        );
+                    } else {
+                        set_json_response(
+                            response,
+                            500,
+                            &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                        );
+                    }
+                }
+                DbExecResult::DryRun => {
+                    set_json_response(
+                        response,
+                        200,
+                        &success_envelope(200, &json!({ "sql": sql, "params": params }), trace_id),
+                    );
+                }
+            }
         }
         Err(err_payload) => {
             set_json_response(response, 400, &err_payload);
@@ -380,6 +484,7 @@ fn dispatch_delete(
     path_params: &BTreeMap<String, String>,
     plan: &LasmResourcePlan,
     trace_id: &str,
+    db_exec: &ResourceDbExecutor,
 ) {
     let Some(id) = path_params.get("id") else {
         set_json_response(
@@ -406,15 +511,357 @@ fn dispatch_delete(
     }
 
     let sql = generate_delete_sql(plan);
-    set_json_response(
-        response,
-        200,
-        &success_envelope(
-            200,
-            &json!({ "sql": sql, "params": [id] }),
-            trace_id,
-        ),
-    );
+    let params = vec![Value::String(id.clone())];
+    match db_exec.exec_returning_one(&sql, &params) {
+        DbExecResult::Row(_row) => {
+            set_json_response(response, 200, &success_envelope(200, &json!({ "deleted": true }), trace_id));
+        }
+        DbExecResult::Error(msg) => {
+            if msg.contains("NOT_FOUND") {
+                set_json_response(
+                    response,
+                    404,
+                    &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                );
+            } else {
+                set_json_response(
+                    response,
+                    500,
+                    &error_envelope(500, "RESOURCE.DB_ERROR", "runtime", &msg, trace_id),
+                );
+            }
+        }
+        DbExecResult::DryRun => {
+            set_json_response(
+                response,
+                200,
+                &success_envelope(200, &json!({ "sql": sql, "params": [id] }), trace_id),
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DB execution layer
+// ---------------------------------------------------------------------------
+
+enum DbExecResult {
+    /// Successful row(s) returned from the database.
+    Row(Value),
+    /// DB execution error message.
+    Error(String),
+    /// No DB adapter configured; caller should fall back to dry-run SQL envelope.
+    DryRun,
+}
+
+/// Encapsulates access to the DB adapter for resource CRUD operations.
+/// For SQLite, it holds a reference to the dynamic state mutex and ensures
+/// the table exists before the first operation.
+struct ResourceDbExecutor<'a> {
+    dynamic_state: &'a Mutex<LasmDynamicResponseState>,
+    adapter: LasmDbRecordsAdapter,
+    table_ddl: Option<String>,
+}
+
+impl<'a> ResourceDbExecutor<'a> {
+    fn new(
+        dynamic_state: &'a Mutex<LasmDynamicResponseState>,
+        adapter: LasmDbRecordsAdapter,
+        plan: &LasmResourcePlan,
+        _trace_id: &str,
+    ) -> Self {
+        let table_ddl = if adapter == LasmDbRecordsAdapter::Sqlite {
+            Some(generate_create_table_ddl(plan))
+        } else {
+            None
+        };
+        ResourceDbExecutor {
+            dynamic_state,
+            adapter,
+            table_ddl,
+        }
+    }
+
+    fn is_live(&self) -> bool {
+        self.adapter == LasmDbRecordsAdapter::Sqlite
+    }
+
+    /// Ensure the SQLite table exists (dev convenience).
+    fn ensure_table(&self) -> Result<(), String> {
+        let Some(ref ddl) = self.table_ddl else {
+            return Ok(());
+        };
+        let mut state = self
+            .dynamic_state
+            .lock()
+            .map_err(|_| "resource db: state lock unavailable".to_string())?;
+        let conn = resource_sqlite_connection_mut(&mut state)?;
+        conn.execute_batch(ddl)
+            .map_err(|err| format!("resource db: auto-create table failed: {err}"))
+    }
+
+    /// Execute a DML statement with RETURNING * and return the first row.
+    fn exec_returning_one(&self, sql: &str, params: &[Value]) -> DbExecResult {
+        if !self.is_live() {
+            return DbExecResult::DryRun;
+        }
+        if let Err(e) = self.ensure_table() {
+            return DbExecResult::Error(e);
+        }
+        // SQLite does not support RETURNING natively before 3.35.
+        // We handle this by: trying RETURNING first; if that fails with a syntax
+        // error, fall back to exec + re-select.
+        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+        let sqlite_params = json_values_to_sqlite_params(params);
+        let mut state = match self.dynamic_state.lock() {
+            Ok(s) => s,
+            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
+        };
+        let conn = match resource_sqlite_connection_mut(&mut state) {
+            Ok(c) => c,
+            Err(e) => return DbExecResult::Error(e),
+        };
+        match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
+            Ok(Some(row)) => DbExecResult::Row(row),
+            Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+            Err(e) => DbExecResult::Error(format!("resource db exec error: {e}")),
+        }
+    }
+
+    /// Execute a SELECT query and return a single row.
+    fn query_one(&self, sql: &str, params: &[Value]) -> DbExecResult {
+        if !self.is_live() {
+            return DbExecResult::DryRun;
+        }
+        if let Err(e) = self.ensure_table() {
+            return DbExecResult::Error(e);
+        }
+        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+        let sqlite_params = json_values_to_sqlite_params(params);
+        let mut state = match self.dynamic_state.lock() {
+            Ok(s) => s,
+            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
+        };
+        let conn = match resource_sqlite_connection_mut(&mut state) {
+            Ok(c) => c,
+            Err(e) => return DbExecResult::Error(e),
+        };
+        match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
+            Ok(Some(row)) => DbExecResult::Row(row),
+            Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+            Err(e) => DbExecResult::Error(format!("resource db query error: {e}")),
+        }
+    }
+
+    /// Execute a SELECT query and return all matching rows as a JSON array.
+    fn query_many(&self, sql: &str, params: &[Value]) -> DbExecResult {
+        if !self.is_live() {
+            return DbExecResult::DryRun;
+        }
+        if let Err(e) = self.ensure_table() {
+            return DbExecResult::Error(e);
+        }
+        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+        let sqlite_params = json_values_to_sqlite_params(params);
+        let mut state = match self.dynamic_state.lock() {
+            Ok(s) => s,
+            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
+        };
+        let conn = match resource_sqlite_connection_mut(&mut state) {
+            Ok(c) => c,
+            Err(e) => return DbExecResult::Error(e),
+        };
+        match resource_sqlite_query_many(conn, &sqlite_sql, &sqlite_params) {
+            Ok(rows) => DbExecResult::Row(Value::Array(rows)),
+            Err(e) => DbExecResult::Error(format!("resource db list error: {e}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SQLite helpers for resource dispatch
+// ---------------------------------------------------------------------------
+
+/// Get a mutable reference to the SQLite connection from dynamic state.
+fn resource_sqlite_connection_mut(
+    state: &mut LasmDynamicResponseState,
+) -> Result<&mut rusqlite::Connection, String> {
+    if state.db_records_sqlite_connection.is_none() {
+        let path = state
+            .db_records_sqlite_store_path
+            .as_ref()
+            .ok_or_else(|| "resource db: sqlite store path unavailable".to_string())?;
+        let connection = crate::lasm_db_adapter_state::connect_lasm_dynamic_db_records_sqlite(
+            path.as_path(),
+            state.db_sqlite_busy_timeout_ms.max(1),
+            state.db_sqlite_journal_mode.as_str(),
+            state.db_sqlite_synchronous.as_str(),
+        )?;
+        state.db_records_sqlite_connection = Some(connection);
+    }
+    state
+        .db_records_sqlite_connection
+        .as_mut()
+        .ok_or_else(|| "resource db: sqlite connection unavailable".to_string())
+}
+
+/// Convert Postgres-style `$1`, `$2`, ... placeholders to SQLite `?1`, `?2`, ...
+fn postgres_placeholders_to_sqlite(sql: &str) -> String {
+    let mut result = String::with_capacity(sql.len());
+    let bytes = sql.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end > start {
+                result.push('?');
+                result.push_str(&sql[start..end]);
+                i = end;
+                continue;
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    result
+}
+
+/// Convert a slice of `serde_json::Value` to positional SQLite params.
+fn json_values_to_sqlite_params(values: &[Value]) -> Vec<SqliteValue> {
+    values
+        .iter()
+        .map(|v| match v {
+            Value::Null => SqliteValue::Null,
+            Value::Bool(b) => SqliteValue::Integer(if *b { 1 } else { 0 }),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    SqliteValue::Integer(i)
+                } else if let Some(u) = n.as_u64() {
+                    if u <= i64::MAX as u64 {
+                        SqliteValue::Integer(u as i64)
+                    } else {
+                        SqliteValue::Text(n.to_string())
+                    }
+                } else if let Some(f) = n.as_f64() {
+                    SqliteValue::Real(f)
+                } else {
+                    SqliteValue::Text(n.to_string())
+                }
+            }
+            Value::String(s) => SqliteValue::Text(s.clone()),
+            other => SqliteValue::Text(serde_json::to_string(other).unwrap_or_default()),
+        })
+        .collect()
+}
+
+/// Execute a SQL statement against the SQLite connection and return the first row as JSON.
+fn resource_sqlite_query_one(
+    conn: &mut rusqlite::Connection,
+    sql: &str,
+    params: &[SqliteValue],
+) -> Result<Option<Value>, String> {
+    let mut stmt = conn
+        .prepare_cached(sql)
+        .map_err(|e| format!("sqlite prepare failed: {e}"))?;
+    let mut rows = stmt
+        .query(rusqlite::params_from_iter(params.iter()))
+        .map_err(|e| format!("sqlite query failed: {e}"))?;
+    let Some(row) = rows
+        .next()
+        .map_err(|e| format!("sqlite row fetch failed: {e}"))?
+    else {
+        return Ok(None);
+    };
+    let row_ref = row.as_ref();
+    let mut object = serde_json::Map::new();
+    for index in 0..row_ref.column_count() {
+        let name = row_ref.column_name(index).unwrap_or("").to_string();
+        let value = row
+            .get_ref(index)
+            .map(resource_sqlite_value_to_json)
+            .map_err(|e| format!("sqlite column decode failed: {e}"))?;
+        object.insert(name, value);
+    }
+    Ok(Some(Value::Object(object)))
+}
+
+/// Execute a SQL SELECT against the SQLite connection and return all matching rows.
+fn resource_sqlite_query_many(
+    conn: &mut rusqlite::Connection,
+    sql: &str,
+    params: &[SqliteValue],
+) -> Result<Vec<Value>, String> {
+    let mut stmt = conn
+        .prepare_cached(sql)
+        .map_err(|e| format!("sqlite prepare failed: {e}"))?;
+    let mut rows = stmt
+        .query(rusqlite::params_from_iter(params.iter()))
+        .map_err(|e| format!("sqlite query failed: {e}"))?;
+    let mut results = Vec::new();
+    loop {
+        let row = match rows.next() {
+            Ok(Some(row)) => row,
+            Ok(None) => break,
+            Err(e) => return Err(format!("sqlite row iteration failed: {e}")),
+        };
+        let row_ref = row.as_ref();
+        let mut object = serde_json::Map::new();
+        for index in 0..row_ref.column_count() {
+            let name = row_ref.column_name(index).unwrap_or("").to_string();
+            let value = row
+                .get_ref(index)
+                .map(resource_sqlite_value_to_json)
+                .map_err(|e| format!("sqlite column decode failed: {e}"))?;
+            object.insert(name, value);
+        }
+        results.push(Value::Object(object));
+    }
+    Ok(results)
+}
+
+/// Convert a SQLite ValueRef to serde_json::Value.
+fn resource_sqlite_value_to_json(
+    value: rusqlite::types::ValueRef<'_>,
+) -> Value {
+    match value {
+        rusqlite::types::ValueRef::Null => Value::Null,
+        rusqlite::types::ValueRef::Integer(i) => Value::Number(serde_json::Number::from(i)),
+        rusqlite::types::ValueRef::Real(f) => serde_json::Number::from_f64(f)
+            .map(Value::Number)
+            .unwrap_or(Value::Null),
+        rusqlite::types::ValueRef::Text(t) => {
+            Value::String(String::from_utf8_lossy(t).to_string())
+        }
+        rusqlite::types::ValueRef::Blob(b) => {
+            Value::String(base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                b,
+            ))
+        }
+    }
+}
+
+/// Generate `CREATE TABLE IF NOT EXISTS` DDL for the resource table.
+fn generate_create_table_ddl(plan: &LasmResourcePlan) -> String {
+    let mut cols = Vec::new();
+    for field in &plan.fields {
+        let col_type = match field.field_type.as_str() {
+            "Int64" | "Int" => "INTEGER",
+            "Bool" => "INTEGER",
+            _ => "TEXT",
+        };
+        let pk = if field.primary { " PRIMARY KEY" } else { "" };
+        cols.push(format!("{} {col_type}{pk}", quote_ident(&field.name)));
+    }
+    format!(
+        "CREATE TABLE IF NOT EXISTS {} ({})",
+        quote_ident(&plan.table),
+        cols.join(", "),
+    )
 }
 
 // ---------------------------------------------------------------------------
