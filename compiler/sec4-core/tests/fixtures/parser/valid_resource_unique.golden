@@ -1,0 +1,6 @@
+OK
+program.items=1
+resource User (3 fields)
+  id: Uuid @primary
+  email: Email @unique
+  name: String

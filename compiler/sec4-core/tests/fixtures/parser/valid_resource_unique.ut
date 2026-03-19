@@ -1,0 +1,5 @@
+resource User {
+  id: Uuid @primary,
+  email: Email @unique,
+  name: String,
+}
