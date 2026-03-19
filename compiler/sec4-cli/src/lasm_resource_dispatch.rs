@@ -1,3 +1,9 @@
+use crate::lasm_db_client::build_lasm_postgres_thread_local_config;
+use crate::lasm_db_runtime_postgres::{
+    run_lasm_postgres_exec_returning_one_thread_local, run_lasm_postgres_exec_thread_local,
+    run_lasm_postgres_query_many_thread_local, run_lasm_postgres_query_one_thread_local,
+    LasmPostgresParam,
+};
 use crate::{LasmDbRecordsAdapter, LasmDynamicResponseState};
 use rusqlite::types::Value as SqliteValue;
 use serde_json::{json, Value};
@@ -570,10 +576,10 @@ impl<'a> ResourceDbExecutor<'a> {
         plan: &LasmResourcePlan,
         _trace_id: &str,
     ) -> Self {
-        let table_ddl = if adapter == LasmDbRecordsAdapter::Sqlite {
-            Some(generate_create_table_ddl(plan))
-        } else {
-            None
+        let table_ddl = match adapter {
+            LasmDbRecordsAdapter::Sqlite => Some(generate_create_table_ddl(plan)),
+            LasmDbRecordsAdapter::Postgres => Some(generate_create_table_ddl_postgres(plan)),
+            _ => None,
         };
         ResourceDbExecutor {
             dynamic_state,
@@ -584,20 +590,39 @@ impl<'a> ResourceDbExecutor<'a> {
 
     fn is_live(&self) -> bool {
         self.adapter == LasmDbRecordsAdapter::Sqlite
+            || self.adapter == LasmDbRecordsAdapter::Postgres
     }
 
-    /// Ensure the SQLite table exists (dev convenience).
+    /// Ensure the table exists (dev convenience). Works for both SQLite and Postgres.
     fn ensure_table(&self) -> Result<(), String> {
         let Some(ref ddl) = self.table_ddl else {
             return Ok(());
         };
-        let mut state = self
-            .dynamic_state
-            .lock()
-            .map_err(|_| "resource db: state lock unavailable".to_string())?;
-        let conn = resource_sqlite_connection_mut(&mut state)?;
-        conn.execute_batch(ddl)
-            .map_err(|err| format!("resource db: auto-create table failed: {err}"))
+        match self.adapter {
+            LasmDbRecordsAdapter::Sqlite => {
+                let mut state = self
+                    .dynamic_state
+                    .lock()
+                    .map_err(|_| "resource db: state lock unavailable".to_string())?;
+                let conn = resource_sqlite_connection_mut(&mut state)?;
+                conn.execute_batch(ddl)
+                    .map_err(|err| format!("resource db: auto-create table failed: {err}"))
+            }
+            LasmDbRecordsAdapter::Postgres => {
+                let config = {
+                    let mut state = self
+                        .dynamic_state
+                        .lock()
+                        .map_err(|_| "resource db: state lock unavailable".to_string())?;
+                    build_lasm_postgres_thread_local_config(&mut state)
+                        .map_err(|err| format!("resource db: postgres config unavailable: {err}"))?
+                };
+                run_lasm_postgres_exec_thread_local(&config, ddl, &[])
+                    .map(|_| ())
+                    .map_err(|err| format!("resource db: auto-create table failed: {err}"))
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Execute a DML statement with RETURNING * and return the first row.
@@ -608,23 +633,43 @@ impl<'a> ResourceDbExecutor<'a> {
         if let Err(e) = self.ensure_table() {
             return DbExecResult::Error(e);
         }
-        // SQLite does not support RETURNING natively before 3.35.
-        // We handle this by: trying RETURNING first; if that fails with a syntax
-        // error, fall back to exec + re-select.
-        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
-        let sqlite_params = json_values_to_sqlite_params(params);
-        let mut state = match self.dynamic_state.lock() {
-            Ok(s) => s,
-            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
-        };
-        let conn = match resource_sqlite_connection_mut(&mut state) {
-            Ok(c) => c,
-            Err(e) => return DbExecResult::Error(e),
-        };
-        match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
-            Ok(Some(row)) => DbExecResult::Row(row),
-            Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
-            Err(e) => DbExecResult::Error(format!("resource db exec error: {e}")),
+        match self.adapter {
+            LasmDbRecordsAdapter::Postgres => {
+                let pg_params = json_values_to_postgres_params(params);
+                let config = match self.resource_postgres_config() {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match run_lasm_postgres_exec_returning_one_thread_local(
+                    &config, sql, &pg_params,
+                ) {
+                    Ok(Some(row)) => DbExecResult::Row(row),
+                    Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+                    Err(e) => DbExecResult::Error(format!("resource db exec error: {e}")),
+                }
+            }
+            LasmDbRecordsAdapter::Sqlite => {
+                let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+                let sqlite_params = json_values_to_sqlite_params(params);
+                let mut state = match self.dynamic_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return DbExecResult::Error(
+                            "resource db: state lock unavailable".to_string(),
+                        )
+                    }
+                };
+                let conn = match resource_sqlite_connection_mut(&mut state) {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
+                    Ok(Some(row)) => DbExecResult::Row(row),
+                    Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+                    Err(e) => DbExecResult::Error(format!("resource db exec error: {e}")),
+                }
+            }
+            _ => DbExecResult::DryRun,
         }
     }
 
@@ -636,20 +681,41 @@ impl<'a> ResourceDbExecutor<'a> {
         if let Err(e) = self.ensure_table() {
             return DbExecResult::Error(e);
         }
-        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
-        let sqlite_params = json_values_to_sqlite_params(params);
-        let mut state = match self.dynamic_state.lock() {
-            Ok(s) => s,
-            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
-        };
-        let conn = match resource_sqlite_connection_mut(&mut state) {
-            Ok(c) => c,
-            Err(e) => return DbExecResult::Error(e),
-        };
-        match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
-            Ok(Some(row)) => DbExecResult::Row(row),
-            Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
-            Err(e) => DbExecResult::Error(format!("resource db query error: {e}")),
+        match self.adapter {
+            LasmDbRecordsAdapter::Postgres => {
+                let pg_params = json_values_to_postgres_params(params);
+                let config = match self.resource_postgres_config() {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match run_lasm_postgres_query_one_thread_local(&config, sql, &pg_params) {
+                    Ok(Some(row)) => DbExecResult::Row(row),
+                    Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+                    Err(e) => DbExecResult::Error(format!("resource db query error: {e}")),
+                }
+            }
+            LasmDbRecordsAdapter::Sqlite => {
+                let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+                let sqlite_params = json_values_to_sqlite_params(params);
+                let mut state = match self.dynamic_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return DbExecResult::Error(
+                            "resource db: state lock unavailable".to_string(),
+                        )
+                    }
+                };
+                let conn = match resource_sqlite_connection_mut(&mut state) {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match resource_sqlite_query_one(conn, &sqlite_sql, &sqlite_params) {
+                    Ok(Some(row)) => DbExecResult::Row(row),
+                    Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
+                    Err(e) => DbExecResult::Error(format!("resource db query error: {e}")),
+                }
+            }
+            _ => DbExecResult::DryRun,
         }
     }
 
@@ -661,21 +727,117 @@ impl<'a> ResourceDbExecutor<'a> {
         if let Err(e) = self.ensure_table() {
             return DbExecResult::Error(e);
         }
-        let sqlite_sql = postgres_placeholders_to_sqlite(sql);
-        let sqlite_params = json_values_to_sqlite_params(params);
-        let mut state = match self.dynamic_state.lock() {
-            Ok(s) => s,
-            Err(_) => return DbExecResult::Error("resource db: state lock unavailable".to_string()),
-        };
-        let conn = match resource_sqlite_connection_mut(&mut state) {
-            Ok(c) => c,
-            Err(e) => return DbExecResult::Error(e),
-        };
-        match resource_sqlite_query_many(conn, &sqlite_sql, &sqlite_params) {
-            Ok(rows) => DbExecResult::Row(Value::Array(rows)),
-            Err(e) => DbExecResult::Error(format!("resource db list error: {e}")),
+        match self.adapter {
+            LasmDbRecordsAdapter::Postgres => {
+                let pg_params = json_values_to_postgres_params(params);
+                let config = match self.resource_postgres_config() {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match run_lasm_postgres_query_many_thread_local(&config, sql, &pg_params) {
+                    Ok(rows) => DbExecResult::Row(Value::Array(rows)),
+                    Err(e) => DbExecResult::Error(format!("resource db list error: {e}")),
+                }
+            }
+            LasmDbRecordsAdapter::Sqlite => {
+                let sqlite_sql = postgres_placeholders_to_sqlite(sql);
+                let sqlite_params = json_values_to_sqlite_params(params);
+                let mut state = match self.dynamic_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return DbExecResult::Error(
+                            "resource db: state lock unavailable".to_string(),
+                        )
+                    }
+                };
+                let conn = match resource_sqlite_connection_mut(&mut state) {
+                    Ok(c) => c,
+                    Err(e) => return DbExecResult::Error(e),
+                };
+                match resource_sqlite_query_many(conn, &sqlite_sql, &sqlite_params) {
+                    Ok(rows) => DbExecResult::Row(Value::Array(rows)),
+                    Err(e) => DbExecResult::Error(format!("resource db list error: {e}")),
+                }
+            }
+            _ => DbExecResult::DryRun,
         }
     }
+
+    /// Build a Postgres thread-local config by briefly locking the dynamic state.
+    fn resource_postgres_config(
+        &self,
+    ) -> Result<crate::lasm_db_runtime_postgres::LasmPostgresThreadLocalConfig, String> {
+        let mut state = self
+            .dynamic_state
+            .lock()
+            .map_err(|_| "resource db: state lock unavailable".to_string())?;
+        build_lasm_postgres_thread_local_config(&mut state)
+            .map_err(|err| format!("resource db: postgres config unavailable: {err}"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Postgres helpers for resource dispatch
+// ---------------------------------------------------------------------------
+
+/// Convert a slice of `serde_json::Value` to Postgres typed params.
+fn json_values_to_postgres_params(values: &[Value]) -> Vec<LasmPostgresParam> {
+    values
+        .iter()
+        .map(|v| match v {
+            Value::Null => LasmPostgresParam::Null(None),
+            Value::Bool(b) => LasmPostgresParam::Bool(*b),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    LasmPostgresParam::Int(i)
+                } else if let Some(f) = n.as_f64() {
+                    LasmPostgresParam::Float(f)
+                } else {
+                    LasmPostgresParam::Text(n.to_string())
+                }
+            }
+            Value::String(s) => LasmPostgresParam::Text(s.clone()),
+            other => LasmPostgresParam::Text(serde_json::to_string(other).unwrap_or_default()),
+        })
+        .collect()
+}
+
+/// Generate `CREATE TABLE IF NOT EXISTS` DDL with Postgres-native types.
+fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
+    let mut cols = Vec::new();
+    for field in &plan.fields {
+        // Use TEXT for string-like types (including UUID and Time) to avoid
+        // prepared-statement parameter type mismatches. The postgres crate's
+        // prepared statements infer param types from columns, and TEXT params
+        // cannot be bound to UUID/TIMESTAMPTZ columns at the protocol level.
+        // Numeric and boolean types work because LasmPostgresParam::Int/Bool
+        // send the correct protocol-level type OIDs.
+        let col_type = match field.field_type.as_str() {
+            "Int64" => "BIGINT",
+            "Int" => "INTEGER",
+            "Bool" => "BOOLEAN",
+            _ => "TEXT",
+        };
+        let pk = if field.primary { " PRIMARY KEY" } else { "" };
+        let default_clause: String = if !field.primary {
+            if let Some(val) = field.default_value.as_deref() {
+                format!(" DEFAULT '{}'", val.replace('\'', "''"))
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        cols.push(format!(
+            "{} {col_type}{pk}{default_clause}",
+            quote_ident(&field.name)
+        ));
+    }
+    format!(
+        "CREATE TABLE IF NOT EXISTS {} ({})",
+        quote_ident(&plan.table),
+        cols.join(", "),
+    )
 }
 
 // ---------------------------------------------------------------------------
