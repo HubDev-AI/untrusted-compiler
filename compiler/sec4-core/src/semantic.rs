@@ -453,6 +453,7 @@ impl<'a> Analyzer<'a> {
                     }
                 }
                 ItemKind::Function(_) => {}
+                ItemKind::Resource(_) => { /* handled in later task */ }
             }
         }
     }
@@ -667,6 +668,7 @@ impl<'a> Analyzer<'a> {
                         self.resolve_type_expr(return_type, return_type.span.clone());
                     }
                 }
+                ItemKind::Resource(_) => { /* handled in later task */ }
             }
         }
     }

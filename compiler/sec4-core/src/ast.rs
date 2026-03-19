@@ -24,6 +24,7 @@ pub enum ItemKind {
     Function(FunctionDecl),
     Struct(StructDecl),
     Enum(EnumDecl),
+    Resource(ResourceDecl),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -85,6 +86,28 @@ pub struct VariantField {
     pub name: Option<String>,
     pub ty: TypeExpr,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum ResourceFieldAnnotation {
+    Primary,
+    Auto,
+    Default(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResourceFieldDecl {
+    pub name: String,
+    pub ty: TypeExpr,
+    pub annotations: Vec<ResourceFieldAnnotation>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResourceDecl {
+    pub name: String,
+    pub table_override: Option<String>,
+    pub fields: Vec<ResourceFieldDecl>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
