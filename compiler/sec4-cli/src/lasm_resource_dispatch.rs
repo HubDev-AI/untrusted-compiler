@@ -12,6 +12,8 @@ pub struct LasmResourcePlan {
     pub table: String,
     pub fields: Vec<LasmResourceFieldPlan>,
     pub route_prefix: String,
+    pub max_list_limit: u32,
+    pub default_list_limit: u32,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -56,6 +58,7 @@ pub fn try_dispatch_resource_operation(
     response: &mut sec4_core::HttpResponse,
     request_body: &[u8],
     path_params: &BTreeMap<String, String>,
+    query_params: &BTreeMap<String, String>,
     route_headers: &BTreeMap<String, String>,
     trace_id: &str,
 ) -> bool {
@@ -66,7 +69,7 @@ pub fn try_dispatch_resource_operation(
     match op.as_str() {
         "create" => dispatch_create(response, request_body, &plan, trace_id),
         "get" => dispatch_get(response, path_params, &plan, trace_id),
-        "list" => dispatch_list(response, route_headers, &plan, trace_id),
+        "list" => dispatch_list(response, query_params, &plan, trace_id),
         "update" => dispatch_update(response, request_body, path_params, &plan, trace_id),
         "delete" => dispatch_delete(response, path_params, &plan, trace_id),
         _ => {
@@ -260,17 +263,20 @@ fn dispatch_get(
 
 fn dispatch_list(
     response: &mut sec4_core::HttpResponse,
-    route_headers: &BTreeMap<String, String>,
+    query_params: &BTreeMap<String, String>,
     plan: &LasmResourcePlan,
     trace_id: &str,
 ) {
-    // Parse limit/offset from a synthetic query-param header or use defaults.
-    let limit = route_headers
-        .get("X-Sec4-Internal-Resource-Limit")
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(20);
-    let offset = route_headers
-        .get("X-Sec4-Internal-Resource-Offset")
+    // Parse limit/offset from request query params, clamping to policy bounds.
+    let raw_limit = query_params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok());
+    let limit = match raw_limit {
+        Some(v) => v.max(1).min(plan.max_list_limit as u64),
+        None => plan.default_list_limit as u64,
+    };
+    let offset = query_params
+        .get("offset")
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
 

@@ -1804,6 +1804,7 @@ fn to_snake_case(name: &str) -> String {
 fn generate_resource_route_plans(
     program: &sec4_core::ast::Program,
     explicit_routes: &[(String, String)], // (method, path) pairs
+    resource_policy: &sec4_core::policy::ResourcePolicyConfig,
 ) -> Vec<LasmRunRoutePlan> {
     let mut plans = Vec::new();
 
@@ -1843,17 +1844,21 @@ fn generate_resource_route_plans(
                 }
             }).collect(),
             route_prefix: prefix.clone(),
+            max_list_limit: resource_policy.max_list_limit,
+            default_list_limit: resource_policy.default_list_limit,
         };
 
         let plan_json = serde_json::to_string(&resource_plan).unwrap_or_default();
 
-        let crud_ops: Vec<(&str, String, &str)> = vec![
+        let mut crud_ops: Vec<(&str, String, &str)> = vec![
             ("GET", format!("{}", prefix), "list"),
             ("GET", format!("{}/:id", prefix), "get"),
             ("POST", format!("{}", prefix), "create"),
             ("POST", format!("{}/:id/update", prefix), "update"),
-            ("POST", format!("{}/:id/delete", prefix), "delete"),
         ];
+        if resource_policy.allow_delete {
+            crud_ops.push(("POST", format!("{}/:id/delete", prefix), "delete"));
+        }
 
         for (method, path, op) in crud_ops {
             if explicit_routes.iter().any(|(m, p)| m == method && p == &path) {
@@ -1890,6 +1895,7 @@ fn generate_resource_route_plans(
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
     entry_name: &str,
+    resource_policy: &sec4_core::policy::ResourcePolicyConfig,
 ) -> Vec<LasmRunRoutePlan> {
     let functions = program
         .items
@@ -1984,7 +1990,7 @@ fn collect_lasm_route_plans(
         .collect();
 
     // Generate resource CRUD routes, skipping those with explicit overrides
-    let resource_plans = generate_resource_route_plans(program, &explicit_routes);
+    let resource_plans = generate_resource_route_plans(program, &explicit_routes, resource_policy);
     plans.extend(resource_plans);
 
     plans
@@ -9658,7 +9664,7 @@ fn cmd_run_lasm_backend(
         });
     }
 
-    let routes = collect_lasm_route_plans(&program, entry.name.as_str());
+    let routes = collect_lasm_route_plans(&program, entry.name.as_str(), &policy.resource);
     if routes.is_empty() {
         eprintln!(
             "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
@@ -10444,6 +10450,7 @@ fn process_lasm_connection_with_runtime(
                     &mut response,
                     &request.body,
                     &exchange.path_params,
+                    &request.query_params,
                     &route_headers,
                     trace_id.as_str(),
                 );

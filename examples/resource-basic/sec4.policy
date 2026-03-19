@@ -7,3 +7,9 @@ max_body_bytes = 65536
 
 [auth]
 mode = "token"
+
+[resource]
+max_list_limit = 100
+default_list_limit = 20
+allow_delete = true
+require_auth = true
