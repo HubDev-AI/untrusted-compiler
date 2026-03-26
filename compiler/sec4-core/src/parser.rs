@@ -1,8 +1,8 @@
 use crate::ast::{
     BinaryOp, Block, EffectSpec, EnumDecl, EnumVariant, Expr, ExprKind, FieldDecl, FunctionDecl,
     Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, ResourceDecl,
-    ResourceFieldAnnotation, ResourceFieldDecl, Stmt, StmtKind, StructDecl, TypeExpr,
-    TypeExprKind, UnaryOp, VariantField,
+    ResourceFieldAnnotation, ResourceFieldDecl, Stmt, StmtKind, StructDecl, TypeExpr, TypeExprKind,
+    UnaryOp, VariantField,
 };
 use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::lexer;
@@ -78,7 +78,9 @@ impl<'a> Parser<'a> {
                 let token = self.current().clone();
                 self.diagnostics.push(
                     Diagnostic::error("P2001", "expected top-level declaration", token.span)
-                        .with_note("top-level items must start with `fn`, `struct`, `enum`, or `resource`"),
+                        .with_note(
+                            "top-level items must start with `fn`, `struct`, `enum`, or `resource`",
+                        ),
                 );
                 self.synchronize_top_level();
                 continue;
@@ -1159,8 +1161,8 @@ impl<'a> Parser<'a> {
         // Optional table override: resource Person table "people" { ... }
         let table_override = if self.check_identifier_value("table") {
             self.advance(); // consume "table"
-            let (table_name, _) = self
-                .expect_string_literal("P2051", "expected table name string after `table`")?;
+            let (table_name, _) =
+                self.expect_string_literal("P2051", "expected table name string after `table`")?;
             Some(table_name)
         } else {
             None
@@ -1190,11 +1192,7 @@ impl<'a> Parser<'a> {
                     "unique" => annotations.push(ResourceFieldAnnotation::Unique),
                     "optional" => annotations.push(ResourceFieldAnnotation::Optional),
                     "default" => {
-                        self.expect_symbol(
-                            Symbol::LParen,
-                            "P2056",
-                            "expected `(` after @default",
-                        )?;
+                        self.expect_symbol(Symbol::LParen, "P2056", "expected `(` after @default")?;
                         let token = self.current().clone();
                         let value = match &token.kind {
                             TokenKind::String(s) => {
@@ -1250,13 +1248,10 @@ impl<'a> Parser<'a> {
             if self.check_symbol(Symbol::RBrace) {
                 break;
             }
-            return Err(
-                self.error_current("P2060", "expected `,` or `}` in resource declaration")
-            );
+            return Err(self.error_current("P2060", "expected `,` or `}` in resource declaration"));
         }
 
-        let end =
-            self.expect_symbol(Symbol::RBrace, "P2061", "expected `}` to close resource")?;
+        let end = self.expect_symbol(Symbol::RBrace, "P2061", "expected `}` to close resource")?;
         let span = join_spans(&start.span, &end.span);
 
         Ok(Item {

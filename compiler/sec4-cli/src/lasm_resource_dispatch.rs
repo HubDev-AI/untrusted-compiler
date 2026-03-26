@@ -88,7 +88,14 @@ pub fn try_dispatch_resource_operation(
         "create" => dispatch_create(response, request_body, &plan, trace_id, &db_exec),
         "get" => dispatch_get(response, path_params, &plan, trace_id, &db_exec),
         "list" => dispatch_list(response, query_params, &plan, trace_id, &db_exec),
-        "update" => dispatch_update(response, request_body, path_params, &plan, trace_id, &db_exec),
+        "update" => dispatch_update(
+            response,
+            request_body,
+            path_params,
+            &plan,
+            trace_id,
+            &db_exec,
+        ),
         "delete" => dispatch_delete(response, path_params, &plan, trace_id, &db_exec),
         _ => {
             set_json_response(
@@ -249,11 +256,7 @@ fn dispatch_create(
         Ok((sql, params)) => {
             match db_exec.exec_returning_one(&sql, &params) {
                 DbExecResult::Row(row) => {
-                    set_json_response(
-                        response,
-                        201,
-                        &success_envelope(201, &row, trace_id),
-                    );
+                    set_json_response(response, 201, &success_envelope(201, &row, trace_id));
                 }
                 DbExecResult::Error(msg) => {
                     let is_conflict = msg.to_lowercase().contains("unique")
@@ -341,7 +344,13 @@ fn dispatch_get(
                 set_json_response(
                     response,
                     404,
-                    &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                    &error_envelope(
+                        404,
+                        "RESOURCE.NOT_FOUND",
+                        "not_found",
+                        "resource not found",
+                        trace_id,
+                    ),
                 );
             } else {
                 set_json_response(
@@ -412,7 +421,13 @@ fn dispatch_list(
         .map(|f| f.name.clone());
     let sort_order = query_params
         .get("order")
-        .map(|o| if o.eq_ignore_ascii_case("asc") { "ASC" } else { "DESC" })
+        .map(|o| {
+            if o.eq_ignore_ascii_case("asc") {
+                "ASC"
+            } else {
+                "DESC"
+            }
+        })
         .unwrap_or("DESC");
 
     // --- Build SQL ---
@@ -468,11 +483,7 @@ fn dispatch_list(
             set_json_response(
                 response,
                 200,
-                &success_envelope(
-                    200,
-                    &json!({ "sql": sql, "params": params }),
-                    trace_id,
-                ),
+                &success_envelope(200, &json!({ "sql": sql, "params": params }), trace_id),
             );
         }
     }
@@ -559,7 +570,13 @@ fn dispatch_update(
                         set_json_response(
                             response,
                             404,
-                            &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                            &error_envelope(
+                                404,
+                                "RESOURCE.NOT_FOUND",
+                                "not_found",
+                                "resource not found",
+                                trace_id,
+                            ),
                         );
                     } else {
                         set_json_response(
@@ -619,14 +636,24 @@ fn dispatch_delete(
     let params = vec![Value::String(id.clone())];
     match db_exec.exec_returning_one(&sql, &params) {
         DbExecResult::Row(_row) => {
-            set_json_response(response, 200, &success_envelope(200, &json!({ "deleted": true }), trace_id));
+            set_json_response(
+                response,
+                200,
+                &success_envelope(200, &json!({ "deleted": true }), trace_id),
+            );
         }
         DbExecResult::Error(msg) => {
             if msg.contains("NOT_FOUND") {
                 set_json_response(
                     response,
                     404,
-                    &error_envelope(404, "RESOURCE.NOT_FOUND", "not_found", "resource not found", trace_id),
+                    &error_envelope(
+                        404,
+                        "RESOURCE.NOT_FOUND",
+                        "not_found",
+                        "resource not found",
+                        trace_id,
+                    ),
                 );
             } else {
                 set_json_response(
@@ -738,9 +765,7 @@ impl<'a> ResourceDbExecutor<'a> {
                     Ok(c) => c,
                     Err(e) => return DbExecResult::Error(e),
                 };
-                match run_lasm_postgres_exec_returning_one_thread_local(
-                    &config, sql, &pg_params,
-                ) {
+                match run_lasm_postgres_exec_returning_one_thread_local(&config, sql, &pg_params) {
                     Ok(Some(row)) => DbExecResult::Row(row),
                     Ok(None) => DbExecResult::Error("NOT_FOUND".to_string()),
                     Err(e) => DbExecResult::Error(format!("resource db exec error: {e}")),
@@ -917,8 +942,16 @@ fn generate_create_table_ddl_postgres(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
-        let not_null_clause = if !field.primary && !field.optional { " NOT NULL" } else { "" };
-        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
+        let not_null_clause = if !field.primary && !field.optional {
+            " NOT NULL"
+        } else {
+            ""
+        };
+        let unique_clause = if !field.primary && field.unique {
+            " UNIQUE"
+        } else {
+            ""
+        };
         let default_clause: String = if !field.primary {
             if let Some(val) = field.default_value.as_deref() {
                 format!(" DEFAULT '{}'", val.replace('\'', "''"))
@@ -1086,24 +1119,18 @@ fn resource_sqlite_query_many(
 }
 
 /// Convert a SQLite ValueRef to serde_json::Value.
-fn resource_sqlite_value_to_json(
-    value: rusqlite::types::ValueRef<'_>,
-) -> Value {
+fn resource_sqlite_value_to_json(value: rusqlite::types::ValueRef<'_>) -> Value {
     match value {
         rusqlite::types::ValueRef::Null => Value::Null,
         rusqlite::types::ValueRef::Integer(i) => Value::Number(serde_json::Number::from(i)),
         rusqlite::types::ValueRef::Real(f) => serde_json::Number::from_f64(f)
             .map(Value::Number)
             .unwrap_or(Value::Null),
-        rusqlite::types::ValueRef::Text(t) => {
-            Value::String(String::from_utf8_lossy(t).to_string())
-        }
-        rusqlite::types::ValueRef::Blob(b) => {
-            Value::String(base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                b,
-            ))
-        }
+        rusqlite::types::ValueRef::Text(t) => Value::String(String::from_utf8_lossy(t).to_string()),
+        rusqlite::types::ValueRef::Blob(b) => Value::String(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            b,
+        )),
     }
 }
 
@@ -1117,8 +1144,40 @@ fn generate_create_table_ddl(plan: &LasmResourcePlan) -> String {
             _ => "TEXT",
         };
         let pk = if field.primary { " PRIMARY KEY" } else { "" };
-        let unique_clause = if !field.primary && field.unique { " UNIQUE" } else { "" };
-        cols.push(format!("{} {col_type}{pk}{unique_clause}", quote_ident(&field.name)));
+        let not_null_clause = if !field.primary && !field.optional {
+            " NOT NULL"
+        } else {
+            ""
+        };
+        let unique_clause = if !field.primary && field.unique {
+            " UNIQUE"
+        } else {
+            ""
+        };
+        let default_clause = if field.primary {
+            String::new()
+        } else if let Some(value) = field.default_value.as_deref() {
+            match field.field_type.as_str() {
+                "Int64" | "Int" => format!(" DEFAULT {value}"),
+                "Bool" => {
+                    let sqlite_bool = if value.eq_ignore_ascii_case("true") {
+                        1
+                    } else {
+                        0
+                    };
+                    format!(" DEFAULT {sqlite_bool}")
+                }
+                _ => format!(" DEFAULT '{}'", value.replace('\'', "''")),
+            }
+        } else if field.auto_fill && field.field_type == "Time" {
+            " DEFAULT CURRENT_TIMESTAMP".to_string()
+        } else {
+            String::new()
+        };
+        cols.push(format!(
+            "{} {col_type}{pk}{not_null_clause}{unique_clause}{default_clause}",
+            quote_ident(&field.name)
+        ));
     }
     format!(
         "CREATE TABLE IF NOT EXISTS {} ({})",
@@ -1250,7 +1309,11 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
         "Email" => {
             let s = value.as_str().ok_or("expected string for Email field")?;
             let parts: Vec<&str> = s.split('@').collect();
-            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() || !parts[1].contains('.') {
+            if parts.len() != 2
+                || parts[0].is_empty()
+                || parts[1].is_empty()
+                || !parts[1].contains('.')
+            {
                 return Err(format!("invalid email: {}", s));
             }
             Ok(())
@@ -1281,7 +1344,9 @@ fn validate_field(field: &LasmResourceFieldPlan, value: &Value) -> Result<(), St
             }
         }
         "Time" => {
-            let s = value.as_str().ok_or("expected ISO 8601 string for Time field")?;
+            let s = value
+                .as_str()
+                .ok_or("expected ISO 8601 string for Time field")?;
             if s.len() < 10 || (!s.contains('T') && !s.contains(' ')) {
                 return Err(format!("invalid time format (expected ISO 8601): {}", s));
             }
@@ -1423,7 +1488,10 @@ fn generate_uuid() -> String {
 fn fill_fallback_bytes(bytes: &mut [u8; 16], counter: &std::sync::atomic::AtomicU64) {
     use std::sync::atomic::Ordering;
     use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     let count = counter.fetch_add(1, Ordering::Relaxed);
     let combined = nanos as u64 ^ (count.wrapping_mul(6364136223846793005));
     bytes[..8].copy_from_slice(&combined.to_le_bytes());
@@ -1470,21 +1538,30 @@ fn iso8601_now() -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
 
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, minutes, seconds)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y, m, d, hours, minutes, seconds
+    )
 }
 
 fn auto_fill_value(field_type: &str) -> Value {
     match field_type {
         "Uuid" => {
             let uuid = generate_uuid();
-            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            debug_assert!(
+                uuid.len() == UUID_STRING_LEN,
+                "generated UUID has wrong length"
+            );
             Value::String(uuid)
         }
         "Time" => Value::String(iso8601_now()),
         "Int64" | "Int" => Value::Number(serde_json::Number::from(epoch_ms() as i64)),
         _ => {
             let uuid = generate_uuid();
-            debug_assert!(uuid.len() == UUID_STRING_LEN, "generated UUID has wrong length");
+            debug_assert!(
+                uuid.len() == UUID_STRING_LEN,
+                "generated UUID has wrong length"
+            );
             Value::String(uuid)
         }
     }

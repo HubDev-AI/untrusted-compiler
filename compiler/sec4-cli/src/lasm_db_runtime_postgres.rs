@@ -2944,9 +2944,7 @@ pub(crate) fn run_lasm_postgres_exec_returning_one_thread_local(
 ) -> Result<Option<serde_json::Value>, String> {
     let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
     if normalized_query.trim().is_empty() {
-        return Err(
-            "postgres exec returning one requires non-empty SQL statement".to_string(),
-        );
+        return Err("postgres exec returning one requires non-empty SQL statement".to_string());
     }
     if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());

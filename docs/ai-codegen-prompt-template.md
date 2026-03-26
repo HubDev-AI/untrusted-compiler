@@ -39,7 +39,7 @@ Include:
 
 **Adding constraints**: Append extra rules to the `## Rules` block when you need to constrain output further. For example:
 ```
-- Do not generate DELETE endpoints (set allow_delete = false in the policy)
+- Do not generate the delete operation (set allow_delete = false in the policy; sec4 uses `POST /:id/delete`)
 - Require auth on all endpoints
 - Use a custom table name "blog_posts" for the Post resource
 ```
@@ -49,4 +49,4 @@ Include:
 The compiler reports E1002 on line 12. Fix the untrusted value flow issue.
 ```
 
-**Reference**: See `docs/ai-codegen-guide.md` for the full language quick reference, more examples, and the complete list of effects and typed sinks.
+**Reference**: See `docs/ai-codegen-guide.md` for the full language quick reference, more examples, the generated route shapes (`POST /:id/update`, `POST /:id/delete`), and the follow-up inspection commands (`sec4 describe`, `sec4 migrate`, `sec4 openapi`).

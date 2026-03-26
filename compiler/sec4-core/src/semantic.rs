@@ -491,9 +491,15 @@ impl<'a> Analyzer<'a> {
                     }
 
                     // Validate exactly one @primary field
-                    let primary_count = decl.fields.iter().filter(|f| {
-                        f.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Primary))
-                    }).count();
+                    let primary_count = decl
+                        .fields
+                        .iter()
+                        .filter(|f| {
+                            f.annotations
+                                .iter()
+                                .any(|a| matches!(a, ResourceFieldAnnotation::Primary))
+                        })
+                        .count();
 
                     if primary_count == 0 {
                         self.diagnostics.push(
@@ -564,7 +570,9 @@ impl<'a> Analyzer<'a> {
                                             && parts[2].len() == 4
                                             && parts[3].len() == 4
                                             && parts[4].len() == 12
-                                            && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+                                            && parts
+                                                .iter()
+                                                .all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
                                     }
                                     "Email" => value.contains('@'),
                                     "Time" => !value.is_empty(),
@@ -589,8 +597,14 @@ impl<'a> Analyzer<'a> {
 
                     // Check @optional and @primary cannot coexist on the same field
                     for field in &decl.fields {
-                        let has_primary = field.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Primary));
-                        let has_optional = field.annotations.iter().any(|a| matches!(a, ResourceFieldAnnotation::Optional));
+                        let has_primary = field
+                            .annotations
+                            .iter()
+                            .any(|a| matches!(a, ResourceFieldAnnotation::Primary));
+                        let has_optional = field
+                            .annotations
+                            .iter()
+                            .any(|a| matches!(a, ResourceFieldAnnotation::Optional));
                         if has_primary && has_optional {
                             self.diagnostics.push(
                                 Diagnostic::error(
