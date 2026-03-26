@@ -150,6 +150,17 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
     .expect("entry should be written");
 }
 
+fn write_project_with_entry(project_dir: &PathBuf, policy_source: &str, entry_source: &str) {
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"commands-fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), policy_source).expect("policy should be written");
+    fs::write(project_dir.join("src/main.ut"), entry_source).expect("entry should be written");
+}
+
 fn write_manifest_with_profile(project_dir: &PathBuf, profile: &str) {
     fs::write(
         project_dir.join("sec4.toml"),
@@ -34074,4 +34085,251 @@ fn check_command_succeeds_for_postgres_e2e_example() {
         stdout.contains("package=postgres-e2e"),
         "check output should include postgres-e2e package marker:\n{stdout}"
     );
+}
+
+#[test]
+fn migrate_command_renders_unique_optional_and_defaults() {
+    let project_dir = temp_dir("sec4-resource-migrate-ddl");
+    write_project_with_entry(
+        &project_dir,
+        "",
+        r#"resource Profile {
+  id: Uuid @primary @auto,
+  email: Email @unique,
+  bio: String @optional,
+  score: Int @default(0),
+  active: Bool @default(true),
+  created_at: Time @auto,
+}
+
+fn main() effects { net } -> Int {
+  0
+}
+"#,
+    );
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["migrate", "--path", &project_path, "--adapter", "postgres"]);
+    assert!(
+        output.status.success(),
+        "migrate should succeed for valid resource project.\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("\"email\" TEXT NOT NULL UNIQUE"),
+        "DDL should include UNIQUE and NOT NULL for required unique field:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"bio\" TEXT"),
+        "DDL should include optional field:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("\"bio\" TEXT NOT NULL"),
+        "optional field should not be NOT NULL:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"score\" INTEGER NOT NULL DEFAULT 0"),
+        "integer defaults should render without quotes:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"active\" BOOLEAN NOT NULL DEFAULT TRUE"),
+        "boolean defaults should render with boolean SQL literal:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\"created_at\" TEXT NOT NULL DEFAULT NOW()"),
+        "auto Time fields should get deterministic postgres default:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn migrate_command_fails_for_semantically_invalid_resource() {
+    let project_dir = temp_dir("sec4-resource-migrate-semantic-fail");
+    write_project_with_entry(
+        &project_dir,
+        "",
+        r#"resource Broken {
+  id: Uuid @primary @optional,
+}
+
+fn main() effects { net } -> Int {
+  0
+}
+"#,
+    );
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["migrate", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "migrate should fail for semantically invalid resources"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("error[E5006]"),
+        "migrate should surface semantic diagnostics:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("@primary field cannot be @optional"),
+        "migrate should explain invalid annotation combination:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn describe_command_includes_unique_optional_and_route_shapes() {
+    let project_dir = temp_dir("sec4-resource-describe");
+    write_project_with_entry(
+        &project_dir,
+        "",
+        r#"resource Profile {
+  id: Uuid @primary @auto,
+  email: Email @unique,
+  bio: String @optional,
+}
+
+fn main() effects { net } -> Int {
+  0
+}
+"#,
+    );
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["describe", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "describe should succeed for valid resource project.\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("@unique"),
+        "describe should render @unique annotations:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("@optional"),
+        "describe should render @optional annotations:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("POST   /profiles/:id/update"),
+        "describe should show the actual update route shape:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("POST   /profiles/:id/delete"),
+        "describe should show the actual delete route shape:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn openapi_command_respects_optional_fields_and_success_envelopes() {
+    let project_dir = temp_dir("sec4-resource-openapi");
+    write_project_with_entry(
+        &project_dir,
+        "",
+        r#"resource Profile {
+  id: Uuid @primary @auto,
+  email: Email @unique,
+  bio: String @optional,
+  score: Int @default(0),
+}
+
+fn main() effects { net } -> Int {
+  0
+}
+"#,
+    );
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["openapi", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "openapi should succeed for valid resource project.\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("openapi output should be valid json");
+
+    let create_required = parsed["components"]["schemas"]["ProfileCreate"]["required"]
+        .as_array()
+        .expect("create schema should include required array");
+    assert!(
+        create_required
+            .iter()
+            .any(|item| item.as_str() == Some("email")),
+        "required fields should include non-optional, no-default writable field:\n{stdout}"
+    );
+    assert!(
+        !create_required
+            .iter()
+            .any(|item| item.as_str() == Some("bio")),
+        "optional field should not be required in create schema:\n{stdout}"
+    );
+    assert!(
+        !create_required
+            .iter()
+            .any(|item| item.as_str() == Some("score")),
+        "defaulted field should not be required in create schema:\n{stdout}"
+    );
+
+    assert!(
+        parsed["components"]["schemas"]["ProfileUpdate"]
+            .get("required")
+            .is_none(),
+        "update schema should be PATCH-like with no required fields:\n{stdout}"
+    );
+    assert_eq!(
+        parsed["components"]["schemas"]["Profile"]["properties"]["bio"]["nullable"].as_bool(),
+        Some(true),
+        "optional field schema should be nullable:\n{stdout}"
+    );
+    assert_eq!(
+        parsed["paths"]["/profiles"]["get"]["responses"]["200"]["content"]["application/json"]
+            ["schema"]["properties"]["data"]["properties"]["items"]["type"]
+            .as_str(),
+        Some("array"),
+        "list response should describe the success-envelope data.items array:\n{stdout}"
+    );
+
+    let parameters = parsed["paths"]["/profiles"]["get"]["parameters"]
+        .as_array()
+        .expect("list endpoint should expose query parameters");
+    assert!(
+        parameters
+            .iter()
+            .any(|param| param["name"].as_str() == Some("sort")),
+        "list endpoint should expose sort query parameter:\n{stdout}"
+    );
+    assert!(
+        parameters
+            .iter()
+            .any(|param| param["name"].as_str() == Some("email")),
+        "list endpoint should expose field filter query parameters:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }

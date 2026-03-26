@@ -138,8 +138,8 @@ The runtime generates these endpoints automatically from the `Task` resource:
 - `POST   /tasks`         — create
 - `GET    /tasks`         — list
 - `GET    /tasks/:id`     — get by id
-- `PUT    /tasks/:id`     — update
-- `DELETE /tasks/:id`     — delete
+- `POST   /tasks/:id/update` — update (PATCH semantics)
+- `POST   /tasks/:id/delete` — delete
 
 ---
 
@@ -153,7 +153,7 @@ resource Post {
   title: String,
   body: String,
   author_email: Email,
-  published: Bool @default("false"),
+  published: Bool @default(false),
   created_at: Time @auto,
 }
 
@@ -290,6 +290,7 @@ These commands operate on a sec4 project directory (one containing a `sec4.toml`
 | `sec4 describe --path ./myapp` | Print all resource fields and auto-generated endpoints |
 | `sec4 migrate --path ./myapp --adapter sqlite` | Print `CREATE TABLE` DDL for all resources (SQLite) |
 | `sec4 migrate --path ./myapp --adapter postgres` | Print `CREATE TABLE` DDL for all resources (Postgres) |
+| `sec4 openapi --path ./myapp` | Print an OpenAPI 3.0 spec that matches the resource route envelopes |
 | `sec4 run --path ./myapp` | Build and run the project |
 
 **`sec4 describe`** is useful when verifying what endpoints will be generated before running:
@@ -318,12 +319,14 @@ Resource: Task (table: tasks)
 $ sec4 migrate --path ./myapp --adapter postgres
 
 CREATE TABLE IF NOT EXISTS "tasks" (
-  "id" UUID PRIMARY KEY,
+  "id" TEXT PRIMARY KEY,
   "title" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'pending',
-  "created_at" TIMESTAMPTZ DEFAULT NOW()
+  "created_at" TEXT NOT NULL DEFAULT NOW()
 );
 ```
+
+Postgres DDL currently maps string-like resource fields (`Uuid`, `String`, `Email`, `Time`) to `TEXT` for compatibility with the generated prepared-statement path used by the LASM runtime.
 
 ---
 
@@ -351,4 +354,4 @@ require_auth = true
 
 - `mode = "enforce"` — policy violations are hard errors at runtime, not warnings.
 - `require_auth = true` — all resource endpoints require a valid auth token.
-- `allow_delete = true` — set to `false` to disable the auto-generated `DELETE` route for all resources.
+- `allow_delete = true` — set to `false` to disable the auto-generated delete operation (`POST /:id/delete`) for all resources.

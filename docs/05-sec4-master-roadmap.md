@@ -85,6 +85,34 @@ Important closeout note:
 - The refreshed canonical cross-runtime publication run (`startedAt=2026-03-07T18:29:46Z`, `finishedAt=2026-03-07T18:38:37Z`) now records `passed=4 failed=0 skipped=0` across `sec4-lasm`, `node`, `go`, and `rust` on the same six-endpoint DB-backed workload.
 - For the mixed-workload publication run, the stable LASM topology is `single` mode. Earlier proxy/fixed notes remain targeted tuning evidence for specific routes, not the current publication default.
 
+## Resource Authoring Surface Update (2026-03-26)
+
+Claude's post-alpha resource-authoring branch was reviewed and tightened into a verified compiler/runtime slice.
+
+Verified state:
+
+- `resource` declarations now extend through parser, semantic validation, and LASM dispatch with:
+  - `@unique`
+  - `@optional`
+  - deterministic create/list/get/update/delete resource routes
+- `sec4 describe`, `sec4 migrate`, and `sec4 openapi` now run semantic analysis before emitting output, so semantically invalid resources fail fast with the same diagnostics as `sec4 check`.
+- Generated DDL now respects `@unique`, `@optional`, typed defaults, and adapter-specific timestamp defaults.
+- OpenAPI generation now matches the actual resource success-envelope shape and PATCH-like update semantics instead of exposing bare-row schemas.
+
+Focused verification used for this review pass:
+
+- `cargo test -p sec4-core --test golden_parser parser_fixtures_match_golden_output`
+- `cargo test -p sec4-core --test golden_semantic semantic_fixtures_match_golden_output`
+- targeted `compiler/sec4-cli/tests/commands.rs` coverage for:
+  - `migrate_command_renders_unique_optional_and_defaults`
+  - `migrate_command_fails_for_semantically_invalid_resource`
+  - `describe_command_includes_unique_optional_and_route_shapes`
+  - `openapi_command_respects_optional_fields_and_success_envelopes`
+
+Reference chapter:
+
+- `docs/book/1582-m39-resource-command-verification-and-doc-sync.md`
+
 ## Execution Mode Lock (2026-02-17)
 
 Implementation work is now explicitly prioritized over repeated governance loops.

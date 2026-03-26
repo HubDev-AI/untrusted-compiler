@@ -1874,31 +1874,38 @@ fn generate_resource_route_plans(
         let resource_plan = LasmResourcePlan {
             name: decl.name.clone(),
             table: table.clone(),
-            fields: decl.fields.iter().map(|f| {
-                let field_type = match &f.ty.kind {
-                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.clone(),
-                };
-                LasmResourceFieldPlan {
-                    name: f.name.clone(),
-                    field_type,
-                    primary: f.annotations.iter().any(|a| {
-                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary)
-                    }),
-                    auto_fill: f.annotations.iter().any(|a| {
-                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto)
-                    }),
-                    default_value: f.annotations.iter().find_map(|a| match a {
-                        sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
-                        _ => None,
-                    }),
-                    unique: f.annotations.iter().any(|a| {
-                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Unique)
-                    }),
-                    optional: f.annotations.iter().any(|a| {
-                        matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional)
-                    }),
-                }
-            }).collect(),
+            fields: decl
+                .fields
+                .iter()
+                .map(|f| {
+                    let field_type = match &f.ty.kind {
+                        sec4_core::ast::TypeExprKind::Named { name, .. } => name.clone(),
+                    };
+                    LasmResourceFieldPlan {
+                        name: f.name.clone(),
+                        field_type,
+                        primary: f
+                            .annotations
+                            .iter()
+                            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Primary)),
+                        auto_fill: f
+                            .annotations
+                            .iter()
+                            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto)),
+                        default_value: f.annotations.iter().find_map(|a| match a {
+                            sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
+                            _ => None,
+                        }),
+                        unique: f
+                            .annotations
+                            .iter()
+                            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Unique)),
+                        optional: f.annotations.iter().any(|a| {
+                            matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional)
+                        }),
+                    }
+                })
+                .collect(),
             route_prefix: prefix.clone(),
             max_list_limit: resource_policy.max_list_limit,
             default_list_limit: resource_policy.default_list_limit,
@@ -1917,15 +1924,15 @@ fn generate_resource_route_plans(
         }
 
         for (method, path, op) in crud_ops {
-            if explicit_routes.iter().any(|(m, p)| m == method && p == &path) {
+            if explicit_routes
+                .iter()
+                .any(|(m, p)| m == method && p == &path)
+            {
                 continue; // Developer override — skip auto-generated route
             }
 
             let mut headers = BTreeMap::new();
-            headers.insert(
-                "X-Sec4-Internal-Resource-Op".to_string(),
-                op.to_string(),
-            );
+            headers.insert("X-Sec4-Internal-Resource-Op".to_string(), op.to_string());
             headers.insert(
                 "X-Sec4-Internal-Resource-Plan".to_string(),
                 plan_json.clone(),
@@ -7728,7 +7735,10 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
             return Err("resource name cannot be empty".to_string());
         }
         if !name.chars().next().unwrap().is_uppercase() {
-            return Err(format!("resource name '{}' must start with an uppercase letter", name));
+            return Err(format!(
+                "resource name '{}' must start with an uppercase letter",
+                name
+            ));
         }
         if !name.chars().all(|c| c.is_alphanumeric()) {
             return Err(format!("resource name '{}' must be alphanumeric", name));
@@ -7780,16 +7790,20 @@ fn parse_resource_definitions(input: &str) -> Result<Vec<GeneratedResource>, Str
                 (field_str, None)
             };
 
-            let colon_pos = field_part.find(':').ok_or_else(|| {
-                format!("expected ':' in field definition: {field_part}")
-            })?;
+            let colon_pos = field_part
+                .find(':')
+                .ok_or_else(|| format!("expected ':' in field definition: {field_part}"))?;
             let field_name = field_part[..colon_pos].trim().to_string();
             let field_type = field_part[colon_pos + 1..].trim().to_string();
 
             let allowed_types = ["Uuid", "String", "Email", "Int64", "Int", "Time", "Bool"];
             if !allowed_types.contains(&field_type.as_str()) {
-                return Err(format!("unknown field type '{}' for field '{}'; allowed types: {}",
-                    field_type, field_name, allowed_types.join(", ")));
+                return Err(format!(
+                    "unknown field type '{}' for field '{}'; allowed types: {}",
+                    field_type,
+                    field_name,
+                    allowed_types.join(", ")
+                ));
             }
 
             fields.push(GeneratedField {
@@ -7949,7 +7963,7 @@ fn cmd_migrate(project_path: &Path, adapter: &str) -> Result<(), i32> {
 
     let source_path = manifest.entry_path(project_path);
 
-    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+    let program = analyze_entry(project_path, &manifest).map_err(|diags| {
         for d in &diags {
             eprintln!("{}", d.render_plain());
         }
@@ -7989,7 +8003,7 @@ fn cmd_describe(project_path: &Path) -> Result<(), i32> {
 
     let source_path = manifest.entry_path(project_path);
 
-    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+    let program = analyze_entry(project_path, &manifest).map_err(|diags| {
         for d in &diags {
             eprintln!("{}", d.render_plain());
         }
@@ -8000,9 +8014,10 @@ fn cmd_describe(project_path: &Path) -> Result<(), i32> {
     for item in &program.items {
         if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
             found = true;
-            let table = decl.table_override.clone().unwrap_or_else(|| {
-                format!("{}s", to_snake_case(&decl.name))
-            });
+            let table = decl
+                .table_override
+                .clone()
+                .unwrap_or_else(|| format!("{}s", to_snake_case(&decl.name)));
             let prefix = format!("/{}", table);
 
             println!("Resource: {} (table: {})", decl.name, table);
@@ -8023,7 +8038,12 @@ fn cmd_describe(project_path: &Path) -> Result<(), i32> {
                         sec4_core::ast::ResourceFieldAnnotation::Default(v) => {
                             annotations.push(format!("@default(\"{}\")", v))
                         }
-                        _ => {}
+                        sec4_core::ast::ResourceFieldAnnotation::Unique => {
+                            annotations.push("@unique".to_string())
+                        }
+                        sec4_core::ast::ResourceFieldAnnotation::Optional => {
+                            annotations.push("@optional".to_string())
+                        }
                     }
                 }
                 let ann_str = if annotations.is_empty() {
@@ -8037,10 +8057,7 @@ fn cmd_describe(project_path: &Path) -> Result<(), i32> {
             println!("  Endpoints:");
             println!("    POST   {:<24} → create", prefix);
             println!("    GET    {:<24} → list (paginated)", prefix);
-            println!(
-                "    GET    {:<24} → get by id",
-                format!("{}/:id", prefix)
-            );
+            println!("    GET    {:<24} → get by id", format!("{}/:id", prefix));
             println!(
                 "    POST   {:<24} → update (PATCH)",
                 format!("{}/:id/update", prefix)
@@ -8070,7 +8087,7 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
 
     let source_path = manifest.entry_path(project_path);
 
-    let program = sec4_core::parse_entry_ast(project_path, &manifest).map_err(|diags| {
+    let program = analyze_entry(project_path, &manifest).map_err(|diags| {
         for d in &diags {
             eprintln!("{}", d.render_plain());
         }
@@ -8086,39 +8103,28 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
     for item in &program.items {
         if let sec4_core::ast::ItemKind::Resource(decl) = &item.kind {
             found = true;
-            let table = decl.table_override.clone().unwrap_or_else(|| {
-                format!("{}s", to_snake_case(&decl.name))
-            });
+            let table = decl
+                .table_override
+                .clone()
+                .unwrap_or_else(|| format!("{}s", to_snake_case(&decl.name)));
             let prefix = format!("/{}", table);
 
             let mut all_props = serde_json::Map::new();
             let mut create_props = serde_json::Map::new();
-            let mut required_fields: Vec<serde_json::Value> = Vec::new();
+            let mut create_required_fields: Vec<serde_json::Value> = Vec::new();
+            let mut update_props = serde_json::Map::new();
+
+            let primary_field = decl
+                .fields
+                .iter()
+                .find(|field| {
+                    field.annotations.iter().any(|annotation| {
+                        matches!(annotation, sec4_core::ast::ResourceFieldAnnotation::Primary)
+                    })
+                })
+                .expect("semantic analysis should guarantee exactly one @primary field");
 
             for field in &decl.fields {
-                let type_name = match &field.ty.kind {
-                    sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
-                };
-
-                let json_type = match type_name {
-                    "Uuid" | "String" | "Email" | "Time" => "string",
-                    "Int" | "Int64" => "integer",
-                    "Bool" => "boolean",
-                    _ => "string",
-                };
-                let format_str: Option<&str> = match type_name {
-                    "Uuid" => Some("uuid"),
-                    "Email" => Some("email"),
-                    "Time" => Some("date-time"),
-                    "Int64" => Some("int64"),
-                    _ => None,
-                };
-
-                let mut prop = serde_json::json!({ "type": json_type });
-                if let Some(fmt) = format_str {
-                    prop["format"] = serde_json::json!(fmt);
-                }
-
                 let is_primary = field
                     .annotations
                     .iter()
@@ -8127,16 +8133,23 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                     .annotations
                     .iter()
                     .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
-                let has_default = field.annotations.iter().any(|a| {
-                    matches!(a, sec4_core::ast::ResourceFieldAnnotation::Default(_))
-                });
+                let has_default = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Default(_)));
+                let is_optional = field
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional));
 
+                let prop = openapi_field_schema(field);
                 all_props.insert(field.name.clone(), prop.clone());
 
                 if !is_primary && !is_auto {
-                    create_props.insert(field.name.clone(), prop);
-                    if !has_default {
-                        required_fields.push(serde_json::json!(field.name));
+                    create_props.insert(field.name.clone(), prop.clone());
+                    update_props.insert(field.name.clone(), prop);
+                    if !has_default && !is_optional {
+                        create_required_fields.push(serde_json::json!(field.name));
                     }
                 }
             }
@@ -8147,6 +8160,7 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                 serde_json::json!({
                     "type": "object",
                     "properties": all_props,
+                    "required": decl.fields.iter().map(|field| serde_json::json!(field.name)).collect::<Vec<_>>(),
                 }),
             );
 
@@ -8156,15 +8170,16 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                 serde_json::json!({
                     "type": "object",
                     "properties": create_props,
-                    "required": required_fields,
+                    "required": create_required_fields,
                 }),
             );
 
-            // Update request schema reuses same shape as Create
+            // Update request schema is PATCH-like: same writable fields, none required.
             schemas.insert(
                 format!("{}Update", decl.name),
                 serde_json::json!({
-                    "$ref": format!("#/components/schemas/{}Create", decl.name),
+                    "type": "object",
+                    "properties": update_props,
                 }),
             );
 
@@ -8176,7 +8191,7 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                 "name": "id",
                 "in": "path",
                 "required": true,
-                "schema": { "type": "string", "format": "uuid" },
+                "schema": openapi_non_nullable_schema_for_type(resource_field_type_name(primary_field)),
                 "description": "Resource identifier",
             });
 
@@ -8196,21 +8211,64 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                 "description": "Number of results to skip",
             });
 
+            let sort_param = serde_json::json!({
+                "name": "sort",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string",
+                    "enum": decl.fields.iter().map(|field| serde_json::json!(field.name)).collect::<Vec<_>>(),
+                },
+                "description": "Field name to sort by",
+            });
+
+            let order_param = serde_json::json!({
+                "name": "order",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string",
+                    "enum": ["asc", "desc"],
+                    "default": "desc",
+                },
+                "description": "Sort order",
+            });
+
+            let mut list_parameters = vec![limit_param, offset_param, sort_param, order_param];
+            list_parameters.extend(decl.fields.iter().map(|field| {
+                serde_json::json!({
+                    "name": field.name,
+                    "in": "query",
+                    "required": false,
+                    "schema": openapi_non_nullable_schema_for_type(resource_field_type_name(field)),
+                    "description": format!("Filter by {}", field.name),
+                })
+            }));
+
             // POST + GET on /prefix (collection)
             let collection_path = serde_json::json!({
                 "get": {
                     "operationId": format!("list{}", decl.name),
                     "summary": format!("List {}", decl.name),
-                    "parameters": [limit_param, offset_param],
+                    "parameters": list_parameters,
                     "responses": {
                         "200": {
                             "description": "Successful response",
                             "content": {
                                 "application/json": {
-                                    "schema": {
-                                        "type": "array",
-                                        "items": { "$ref": schema_ref },
-                                    }
+                                    "schema": openapi_success_envelope_schema(serde_json::json!({
+                                        "type": "object",
+                                        "properties": {
+                                            "items": {
+                                                "type": "array",
+                                                "items": { "$ref": schema_ref },
+                                            },
+                                            "count": { "type": "integer" },
+                                            "limit": { "type": "integer" },
+                                            "offset": { "type": "integer" },
+                                        },
+                                        "required": ["items", "count", "limit", "offset"],
+                                    })),
                                 }
                             }
                         },
@@ -8233,11 +8291,12 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                             "description": "Created",
                             "content": {
                                 "application/json": {
-                                    "schema": { "$ref": schema_ref },
+                                    "schema": openapi_success_envelope_schema(serde_json::json!({ "$ref": schema_ref })),
                                 }
                             }
                         },
                         "400": { "description": "Bad request" },
+                        "409": { "description": "Conflict" },
                     }
                 },
             });
@@ -8254,7 +8313,7 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                             "description": "Successful response",
                             "content": {
                                 "application/json": {
-                                    "schema": { "$ref": schema_ref },
+                                    "schema": openapi_success_envelope_schema(serde_json::json!({ "$ref": schema_ref })),
                                 }
                             }
                         },
@@ -8283,12 +8342,13 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                             "description": "Updated",
                             "content": {
                                 "application/json": {
-                                    "schema": { "$ref": schema_ref },
+                                    "schema": openapi_success_envelope_schema(serde_json::json!({ "$ref": schema_ref })),
                                 }
                             }
                         },
                         "400": { "description": "Bad request" },
                         "404": { "description": "Not found" },
+                        "409": { "description": "Conflict" },
                     }
                 },
             });
@@ -8301,7 +8361,20 @@ fn cmd_openapi(project_path: &Path) -> Result<(), i32> {
                     "summary": format!("Delete {}", decl.name),
                     "parameters": [id_param],
                     "responses": {
-                        "200": { "description": "Deleted" },
+                        "200": {
+                            "description": "Deleted",
+                            "content": {
+                                "application/json": {
+                                    "schema": openapi_success_envelope_schema(serde_json::json!({
+                                        "type": "object",
+                                        "properties": {
+                                            "deleted": { "type": "boolean" },
+                                        },
+                                        "required": ["deleted"],
+                                    })),
+                                }
+                            }
+                        },
                         "404": { "description": "Not found" },
                     }
                 },
@@ -8351,6 +8424,14 @@ fn generate_ddl(
             .annotations
             .iter()
             .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Auto));
+        let is_unique = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Unique));
+        let is_optional = field
+            .annotations
+            .iter()
+            .any(|a| matches!(a, sec4_core::ast::ResourceFieldAnnotation::Optional));
         let default_value = field.annotations.iter().find_map(|a| match a {
             sec4_core::ast::ResourceFieldAnnotation::Default(v) => Some(v.clone()),
             _ => None,
@@ -8358,29 +8439,40 @@ fn generate_ddl(
 
         let sql_type = match adapter {
             "postgres" => match type_name {
-                "Uuid" => "UUID",
-                "String" | "Email" => "TEXT",
+                "String" | "Email" | "Uuid" | "Time" => "TEXT",
                 "Int64" => "BIGINT",
                 "Int" => "INTEGER",
-                "Time" => "TIMESTAMPTZ",
                 "Bool" => "BOOLEAN",
                 _ => "TEXT",
             },
-            _ => "TEXT", // SQLite: everything is TEXT
+            _ => match type_name {
+                "Int64" | "Int" => "INTEGER",
+                "Bool" => "INTEGER",
+                _ => "TEXT",
+            },
         };
 
         let mut col = format!("  \"{}\" {}", field.name, sql_type);
 
         if is_primary {
             col.push_str(" PRIMARY KEY");
-        } else {
+        } else if !is_optional {
             col.push_str(" NOT NULL");
         }
 
+        if !is_primary && is_unique {
+            col.push_str(" UNIQUE");
+        }
+
         if let Some(default) = &default_value {
-            col.push_str(&format!(" DEFAULT '{}'", default));
+            col.push_str(" DEFAULT ");
+            col.push_str(&render_resource_default_literal(
+                adapter, type_name, default,
+            ));
         } else if is_auto && type_name == "Time" && adapter == "postgres" {
             col.push_str(" DEFAULT NOW()");
+        } else if is_auto && type_name == "Time" {
+            col.push_str(" DEFAULT CURRENT_TIMESTAMP");
         }
 
         columns.push(col);
@@ -8391,6 +8483,93 @@ fn generate_ddl(
         table,
         columns.join(",\n"),
     )
+}
+
+fn resource_field_type_name(field: &sec4_core::ast::ResourceFieldDecl) -> &str {
+    match &field.ty.kind {
+        sec4_core::ast::TypeExprKind::Named { name, .. } => name.as_str(),
+    }
+}
+
+fn openapi_non_nullable_schema_for_type(type_name: &str) -> serde_json::Value {
+    let mut schema = match type_name {
+        "Uuid" => serde_json::json!({ "type": "string", "format": "uuid" }),
+        "Email" => serde_json::json!({ "type": "string", "format": "email" }),
+        "Time" => serde_json::json!({ "type": "string", "format": "date-time" }),
+        "Int64" => serde_json::json!({ "type": "integer", "format": "int64" }),
+        "Int" => serde_json::json!({ "type": "integer" }),
+        "Bool" => serde_json::json!({ "type": "boolean" }),
+        _ => serde_json::json!({ "type": "string" }),
+    };
+    if type_name == "String" {
+        schema["minLength"] = serde_json::json!(1);
+    }
+    schema
+}
+
+fn openapi_field_schema(field: &sec4_core::ast::ResourceFieldDecl) -> serde_json::Value {
+    let mut schema = openapi_non_nullable_schema_for_type(resource_field_type_name(field));
+    let is_optional = field.annotations.iter().any(|annotation| {
+        matches!(
+            annotation,
+            sec4_core::ast::ResourceFieldAnnotation::Optional
+        )
+    });
+    if is_optional {
+        schema["nullable"] = serde_json::json!(true);
+    }
+    if let Some(default) = field
+        .annotations
+        .iter()
+        .find_map(|annotation| match annotation {
+            sec4_core::ast::ResourceFieldAnnotation::Default(value) => Some(value),
+            _ => None,
+        })
+    {
+        schema["default"] = resource_default_json_value(resource_field_type_name(field), default);
+    }
+    schema
+}
+
+fn openapi_success_envelope_schema(data_schema: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "ok": { "type": "boolean", "enum": [true] },
+            "status": { "type": "integer" },
+            "traceId": { "type": "string" },
+            "timeMs": { "type": "integer", "format": "int64" },
+            "data": data_schema,
+        },
+        "required": ["ok", "status", "traceId", "timeMs", "data"],
+    })
+}
+
+fn render_resource_default_literal(adapter: &str, type_name: &str, default_value: &str) -> String {
+    match type_name {
+        "Int" | "Int64" => default_value.to_string(),
+        "Bool" => {
+            if adapter == "postgres" {
+                default_value.to_ascii_uppercase()
+            } else if default_value.eq_ignore_ascii_case("true") {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
+        }
+        _ => format!("'{}'", default_value.replace('\'', "''")),
+    }
+}
+
+fn resource_default_json_value(type_name: &str, default_value: &str) -> serde_json::Value {
+    match type_name {
+        "Int" | "Int64" => default_value
+            .parse::<i64>()
+            .map(|value| serde_json::json!(value))
+            .unwrap_or_else(|_| serde_json::json!(default_value)),
+        "Bool" => serde_json::json!(default_value.eq_ignore_ascii_case("true")),
+        _ => serde_json::json!(default_value),
+    }
 }
 
 fn directory_has_entries(path: &Path) -> Result<bool, std::io::Error> {
@@ -11219,10 +11398,7 @@ fn process_lasm_connection_with_runtime(
                     db_records_adapter,
                     trace_id.as_str(),
                 );
-                materialize_lasm_internal_runtime_error_envelope(
-                    &mut response,
-                    trace_id.as_str(),
-                );
+                materialize_lasm_internal_runtime_error_envelope(&mut response, trace_id.as_str());
             }
             response
         } else {

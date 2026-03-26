@@ -211,7 +211,7 @@ Resource-declared endpoints use the same DB adapter path as hand-written handler
 The full developer workflow from spec to running service:
 
 ```
-sec4 generate → sec4 check → sec4 describe → sec4 migrate → sec4 run
+sec4 generate → sec4 check → sec4 describe → sec4 migrate → sec4 openapi → sec4 run
 ```
 
 | Step | Command | What it does |
@@ -220,9 +220,10 @@ sec4 generate → sec4 check → sec4 describe → sec4 migrate → sec4 run
 | Verify | `sec4 check --path ./myapp` | Compile and surface type/effect/policy errors |
 | Inspect | `sec4 describe --path ./myapp` | Print resource fields and all generated endpoints |
 | Schema | `sec4 migrate --path ./myapp --adapter postgres` | Emit `CREATE TABLE` DDL ready to pipe to DB |
+| Contract | `sec4 openapi --path ./myapp` | Emit the OpenAPI contract for the generated resource routes |
 | Run | `sec4 run --path ./myapp` | Build and start the live service |
 
-This workflow is designed for AI agents: `generate` → `check` → commit. Every step is deterministic and produces machine-readable output. `describe` can be parsed to verify what was generated before deploying. `migrate` eliminates hand-written schema files — the resource declaration is the single source of truth for both the API contract and the database schema.
+This workflow is designed for AI agents: `generate` → `check` → inspect → contract → commit. Every step is deterministic and produces machine-readable output. `describe` can be parsed to verify what was generated before deploying, `migrate` eliminates hand-written schema files, and `openapi` exposes the generated success-envelope contract to external clients without hand-maintained specs.
 
 ---
 

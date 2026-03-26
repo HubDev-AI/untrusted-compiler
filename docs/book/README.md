@@ -1603,5 +1603,6 @@ Canonical evidence set:
 - `1579-m39-lasm-postgres-hotpath-key-caching-and-persist-queue-reuse.md`
 - `1580-m39-post-alpha-scaling-pass-4-mode-compare-runtime-tuning-and-cross-runtime-rerun.md`
 - `1581-m39-lasm-db-runtime-config-package-extraction.md`
+- `1582-m39-resource-command-verification-and-doc-sync.md`
 
 As milestones progress, chapters will be added and linked from this index.
