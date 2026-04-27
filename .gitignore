@@ -13,3 +13,7 @@ infra/local-postgres/data/
 benchmark-suite/bin/
 benchmark-suite/results/workbench-benchmark-report.md
 benchmark-suite/results/workbench-benchmark-report.html
+
+# Local tool caches
+.hippo/
+.leankg/
